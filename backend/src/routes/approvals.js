@@ -5,7 +5,7 @@ const Approval = require("../models/Approval");
 const Transaction = require("../models/Transaction");
 const Organization = require("../models/Organization");
 const AuditLog = require("../models/AuditLog");
-const { submitApprovalOnChain } = require("../services/blockchain");
+// Removed backend submitApprovalOnChain as it is now done in the frontend
 const { authenticate, requireRole } = require("../middleware/auth");
 
 /// POST /api/approvals/:txId — Submit approval/rejection (Level 1 only)
@@ -14,7 +14,7 @@ router.post("/:txId", authenticate, requireRole(1), async (req, res) => {
   session.startTransaction();
   
   try {
-    const { action, comment } = req.body;
+    const { action, comment, blockchainTxHash } = req.body;
     
     // Input validation
     if (!action || !["approved", "rejected"].includes(action)) {
@@ -36,6 +36,13 @@ router.post("/:txId", authenticate, requireRole(1), async (req, res) => {
     if (txn.status !== "pending_approval") {
       await session.abortTransaction();
       return res.status(400).json({ error: "Transaction is not pending approval" });
+    }
+
+    // BUG-1 FIX: Verify transaction belongs to the claimed organization
+    const claimedOrgId = req.body.organizationId;
+    if (claimedOrgId && txn.organization._id.toString() !== claimedOrgId) {
+      await session.abortTransaction();
+      return res.status(403).json({ error: "Transaction does not belong to this organization" });
     }
 
     // Prevent duplicate votes (within transaction lock)
@@ -68,30 +75,25 @@ router.post("/:txId", authenticate, requireRole(1), async (req, res) => {
     }).session(session);
 
     const org = txn.organization;
-    let blockchainResult = null;
-
     if (action === "approved") {
-      // Submit approval on-chain for every vote (contract tracks per-approver counts)
-      if (txn.onChainTxId) {
-        try {
-          blockchainResult = await submitApprovalOnChain(txn.onChainTxId);
-        } catch (blockchainError) {
-          console.error("Blockchain submitApproval failed:", blockchainError.message);
-          // Non-fatal: off-chain approval count is the source of truth for prototype
-        }
-      }
-
       // Check if approval threshold is now met
       if (approvalCount >= org.requiredApprovals) {
         txn.status = "approved";
-        if (blockchainResult && !blockchainResult.skipped) {
-          txn.blockchainTxHash = blockchainResult.blockchainTxHash;
+        if (blockchainTxHash) {
+          txn.blockchainTxHash = blockchainTxHash;
         }
         await txn.save({ session });
       }
     } else if (action === "rejected") {
-      txn.status = "rejected";
-      await txn.save({ session });
+      // BUG-3 FIX: Rejection also requires threshold (symmetric with approval)
+      const rejectionCount = await Approval.countDocuments({
+        transaction: txn._id,
+        action: "rejected",
+      }).session(session);
+      if (rejectionCount >= org.requiredApprovals) {
+        txn.status = "rejected";
+        await txn.save({ session });
+      }
     }
 
     // Audit log (within transaction)
@@ -104,8 +106,8 @@ router.post("/:txId", authenticate, requireRole(1), async (req, res) => {
         targetType: "Transaction",
         targetId: txn._id,
         details: { action, approvalCount, comment },
-        blockchainTxHash: blockchainResult?.blockchainTxHash,
-        onChainTxId: blockchainResult?.onChainTxId,
+        blockchainTxHash: blockchainTxHash || txn.blockchainTxHash,
+        onChainTxId: txn.onChainTxId,
       }],
       { session }
     );
@@ -113,7 +115,7 @@ router.post("/:txId", authenticate, requireRole(1), async (req, res) => {
     // Commit transaction
     await session.commitTransaction();
 
-    res.json({ approval: approval[0], transaction: txn, blockchain: blockchainResult });
+    res.json({ approval: approval[0], transaction: txn });
   } catch (err) {
     await session.abortTransaction();
     console.error("Approval error:", err.message);
@@ -130,6 +132,34 @@ router.get("/:txId", authenticate, async (req, res) => {
       .populate("approver", "walletAddress displayName");
     res.json(approvals);
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/// PATCH /api/approvals/:txId/hash — Update blockchain hash after MetaMask confirmation
+router.patch("/:txId/hash", authenticate, async (req, res) => {
+  try {
+    const { blockchainTxHash } = req.body;
+    if (!blockchainTxHash) {
+      return res.status(400).json({ error: "blockchainTxHash is required" });
+    }
+
+    const txn = await Transaction.findById(req.params.txId);
+    if (!txn) return res.status(404).json({ error: "Transaction not found" });
+
+    // Update the blockchain hash on the transaction
+    txn.blockchainTxHash = blockchainTxHash;
+    await txn.save();
+
+    // Also update the approval record
+    await Approval.findOneAndUpdate(
+      { transaction: txn._id, approver: req.user._id },
+      { blockchainTxHash }
+    );
+
+    res.json({ success: true, transaction: txn });
+  } catch (err) {
+    console.error("Hash update error:", err.message);
     res.status(500).json({ error: err.message });
   }
 });

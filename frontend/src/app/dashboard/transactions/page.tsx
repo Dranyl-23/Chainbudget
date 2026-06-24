@@ -60,14 +60,16 @@ export default function TransactionsPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [filters, setFilters] = useState({ search: "", type: "", status: "" });
-  const [formData, setFormData] = useState<CreateTxForm>({
-    type: "expense",
-    amount: "",
-    description: "",
-    category: "",
-    referenceNumber: "",
-    notes: "",
+  const [activeTab, setActiveTab] = useState<"expense" | "income">("expense");
+  const [expenseData, setExpenseData] = useState<CreateTxForm>({
+    type: "expense", amount: "", description: "", category: "", referenceNumber: "", notes: "",
   });
+  const [incomeData, setIncomeData] = useState<CreateTxForm>({
+    type: "income", amount: "", description: "", category: "", referenceNumber: "", notes: "",
+  });
+
+  const formData = activeTab === "expense" ? expenseData : incomeData;
+  const setFormData = activeTab === "expense" ? setExpenseData : setIncomeData;
 
   // File upload state
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -110,7 +112,9 @@ export default function TransactionsPage() {
     setUploadError(null);
     setUploadedFile(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
-    setFormData({ type: "expense", amount: "", description: "", category: "", referenceNumber: "", notes: "" });
+    setExpenseData({ type: "expense", amount: "", description: "", category: "", referenceNumber: "", notes: "" });
+    setIncomeData({ type: "income", amount: "", description: "", category: "", referenceNumber: "", notes: "" });
+    setActiveTab("expense");
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -150,7 +154,10 @@ export default function TransactionsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeOrgId) return;
+    if (!activeOrgId) {
+      setError("Please select an Organization from the dropdown on the left before recording a transaction.");
+      return;
+    }
     const orgId = activeOrgId || "";
 
     if (!formData.amount || isNaN(Number(formData.amount)) || Number(formData.amount) <= 0) {
@@ -364,13 +371,13 @@ export default function TransactionsPage() {
                   <button
                     key={t}
                     type="button"
-                    onClick={() => setFormData({ ...formData, type: t })}
+                    onClick={() => setActiveTab(t)}
                     className="flex-1 py-2.5 text-sm font-semibold transition-colors"
                     style={{
-                      background: formData.type === t
+                      background: activeTab === t
                         ? t === "income" ? "rgba(107,85,217,0.1)" : "rgba(224,92,92,0.1)"
                         : "transparent",
-                      color: formData.type === t
+                      color: activeTab === t
                         ? t === "income" ? "#6B55D9" : "#E05C5C"
                         : "#9ca3af",
                     }}
@@ -398,11 +405,13 @@ export default function TransactionsPage() {
 
               {/* Description */}
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">Description</label>
+                <label className="block text-sm font-medium text-gray-600 mb-1">
+                  {formData.type === "expense" ? "Description (What is this for?)" : "Description (Where did this come from?)"}
+                </label>
                 <input
                   id="tx-description"
                   type="text"
-                  placeholder="What is this for?"
+                  placeholder={formData.type === "expense" ? "e.g. Venue Rental" : "e.g. Hackathon Sponsorship"}
                   className="input"
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -417,7 +426,7 @@ export default function TransactionsPage() {
                   <input
                     id="tx-category"
                     type="text"
-                    placeholder="e.g. Events"
+                    placeholder={formData.type === "expense" ? "e.g. Events & Activities" : "e.g. Donations"}
                     className="input"
                     value={formData.category}
                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}

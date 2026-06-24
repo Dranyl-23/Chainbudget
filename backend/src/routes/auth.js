@@ -20,6 +20,11 @@ router.get("/csrf-token", (req, res) => {
   res.json({ csrfToken: token });
 });
 
+/// GET /api/auth/validate — BUG-10 FIX: Validate if stored token is still valid
+router.get("/validate", authenticate, (req, res) => {
+  res.json({ valid: true, userId: req.user._id });
+});
+
 /// GET /api/auth/me
 /// Returns the current user profile (relies on authenticate middleware to check Asgardeo JWT)
 router.get("/me", authenticate, async (req, res) => {
