@@ -58,7 +58,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   });
 
   return (
-    <div className="min-h-screen flex" style={{ background: "var(--color-bg)" }}>
+    <div className="h-screen flex overflow-hidden" style={{ background: "var(--color-bg)" }}>
       {/* ── Sidebar ── */}
       <aside className="w-64 flex flex-col border-r" style={{ background: "#ffffff", minHeight: "100vh", borderRight: "1px solid var(--color-border)" }}>
         {/* Logo */}
@@ -115,7 +115,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
             <div className="flex items-center gap-1.5">
               <span className="chain-dot" />
-              <span className="text-xs text-gray-600">Polygon Amoy</span>
+              <span className="text-xs text-gray-600">
+                {(() => {
+                  // BUG-4 FIX: Dynamic network name
+                  if (typeof window !== "undefined" && (window as any).ethereum) {
+                    const chainId = (window as any).ethereum.chainId;
+                    if (chainId === "0x7a69" || chainId === "0x7A69") return "Hardhat Localhost";
+                    if (chainId === "0x13882") return "Polygon Amoy";
+                    if (chainId === "0x89") return "Polygon Mainnet";
+                    if (chainId === "0x1") return "Ethereum Mainnet";
+                  }
+                  return "Polygon Amoy";
+                })()}
+              </span>
             </div>
           </div>
           <button

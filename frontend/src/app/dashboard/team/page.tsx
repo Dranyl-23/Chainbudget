@@ -105,7 +105,8 @@ export default function TeamPage() {
   };
 
   return (
-    <div className="p-8 pb-20 animate-fade-in">
+    <>
+      <div className="p-8 pb-20 animate-fade-in">
       <header className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold mb-1">Team Management</h1>
@@ -193,11 +194,12 @@ export default function TeamPage() {
         </div>
       )}
 
+      </div>
+
       {/* ── Add Member Modal ── */}
       {showAddModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: "rgba(26,26,46,0.55)", backdropFilter: "blur(4px)" }}
+          className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
           onClick={(e) => { if (e.target === e.currentTarget) setShowAddModal(false); }}
         >
           <div className="glass rounded-2xl p-8 w-full max-w-md shadow-2xl animate-fade-in">
@@ -282,6 +284,6 @@ export default function TeamPage() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { CheckCircle2, XCircle, Clock, AlertCircle } from "lucide-react";
+import { ethers } from "ethers";
+import ChainBudgetABI from "@/lib/ChainBudget.json";
 import api from "@/lib/api";
 import toast from "react-hot-toast";
 
@@ -16,6 +18,7 @@ interface Approval {
   votes: number;
   required: number;
   organization: { highValueThreshold: number };
+  onChainTxId?: string;
 }
 
 export default function ApprovalsPage() {
@@ -50,6 +53,7 @@ export default function ApprovalsPage() {
           votes: tx.approvalCount || 0,
           required: tx.organization?.requiredApprovals || 2,
           organization: { highValueThreshold: tx.organization?.highValueThreshold || 10000 },
+          onChainTxId: tx.onChainTxId,
         }));
 
         setPendingApprovals(approvals);
@@ -64,34 +68,123 @@ export default function ApprovalsPage() {
     fetchApprovals();
   }, [activeOrgId]);
 
-  const handleApprove = async (txId: string) => {
+  // BUG-6 FIX: Re-fetch approvals from server to show updated vote count
+  const refreshApprovals = async () => {
+    if (!activeOrgId) return;
+    try {
+      const res = await api.get("/transactions", {
+        params: { orgId: activeOrgId, status: "pending_approval", limit: 100 },
+      });
+      const approvals = (res.data.transactions || []).map((tx: any) => ({
+        _id: tx._id,
+        description: tx.description,
+        amount: tx.amount,
+        submittedBy: tx.submittedBy,
+        createdAt: tx.createdAt,
+        status: tx.status,
+        votes: tx.approvalCount || 0,
+        required: tx.organization?.requiredApprovals || 2,
+        organization: { highValueThreshold: tx.organization?.highValueThreshold || 10000 },
+        onChainTxId: tx.onChainTxId,
+      }));
+      setPendingApprovals(approvals);
+    } catch (err) {
+      console.error("Failed to refresh approvals:", err);
+    }
+  };
+
+  const handleApprove = async (txId: string, onChainTxId?: string) => {
+    if (!activeOrgId) return;
     setActionLoading(txId);
     try {
+      // BUG-2 FIX: Call backend FIRST to record the vote in MongoDB
+      toast.loading("Recording approval...", { id: "txToast" });
       await api.post(`/approvals/${txId}`, {
         action: "approved",
         comment: "Approved via dashboard",
+        organizationId: activeOrgId,
       });
-      // Refresh approvals
-      setPendingApprovals((prev) => prev.filter((a) => a._id !== txId));
-      toast.success("Transaction approved successfully");
+
+      // THEN do MetaMask on-chain signing (if available)
+      if (onChainTxId && typeof window !== "undefined" && (window as any).ethereum) {
+        const ethereum = (window as any).ethereum;
+        toast.loading("Connecting to Hardhat Network...", { id: "txToast" });
+        
+        // Auto-switch to Localhost 8545 (Chain ID 31337 -> 0x7a69)
+        try {
+          await ethereum.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: '0x7a69' }],
+          });
+        } catch (switchError: any) {
+          if (switchError.code === 4902) {
+            try {
+              await ethereum.request({
+                method: 'wallet_addEthereumChain',
+                params: [
+                  {
+                    chainId: '0x7a69',
+                    chainName: 'Hardhat Localhost',
+                    rpcUrls: ['http://localhost:8545'],
+                    nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+                  },
+                ],
+              });
+            } catch (addError: any) {
+              console.error("Add network error:", addError);
+              toast.error("Failed to add Hardhat network", { id: "txToast" });
+            }
+          }
+        }
+
+        try {
+          toast.loading("Please sign the transaction in MetaMask...", { id: "txToast" });
+          const provider = new ethers.BrowserProvider(ethereum);
+          const signer = await provider.getSigner();
+          const contractAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
+          
+          if (contractAddress) {
+            const contract = new ethers.Contract(contractAddress, ChainBudgetABI.abi, signer);
+            const tx = await contract.submitApproval(onChainTxId);
+            toast.loading("Waiting for blockchain confirmation...", { id: "txToast" });
+            await tx.wait();
+
+            // Update the backend with the blockchain hash
+            await api.patch(`/approvals/${txId}/hash`, {
+              blockchainTxHash: tx.hash,
+            });
+            toast.success("Blockchain verified!", { id: "txToast" });
+          }
+        } catch (chainErr: any) {
+          console.warn("On-chain approval failed (vote already recorded in DB):", chainErr.message);
+          toast.success("Vote recorded! On-chain confirmation pending.", { id: "txToast" });
+        }
+      } else {
+        toast.success("Approval recorded!", { id: "txToast" });
+      }
+
+      // BUG-6 FIX: Re-fetch instead of filtering out
+      await refreshApprovals();
     } catch (err: any) {
       console.error("Approval failed:", err);
-      toast.error(err.response?.data?.error || "Failed to approve transaction");
+      toast.error(err.response?.data?.error || "Failed to approve transaction", { id: "txToast" });
     } finally {
       setActionLoading(null);
     }
   };
 
   const handleReject = async (txId: string) => {
+    if (!activeOrgId) return;
     setActionLoading(txId);
     try {
       await api.post(`/approvals/${txId}`, {
         action: "rejected",
         comment: "Rejected via dashboard",
+        organizationId: activeOrgId,
       });
-      // Refresh approvals
-      setPendingApprovals((prev) => prev.filter((a) => a._id !== txId));
-      toast.success("Transaction rejected");
+      // BUG-6 FIX: Re-fetch to show updated state (BUG-3: rejection now needs threshold)
+      await refreshApprovals();
+      toast.success("Rejection vote recorded");
     } catch (err: any) {
       console.error("Rejection failed:", err);
       toast.error(err.response?.data?.error || "Failed to reject transaction");
@@ -149,15 +242,18 @@ export default function ApprovalsPage() {
                     disabled={actionLoading === req._id}
                     className="flex-1 md:flex-none btn-danger py-2 px-4 whitespace-nowrap disabled:opacity-50"
                   >
-                    <XCircle className="w-4 h-4" /> Reject
+                    {actionLoading === req._id ? "Processing..." : (
+                      <span className="flex items-center gap-2"><XCircle className="w-4 h-4" /> Reject</span>
+                    )}
                   </button>
                   <button
-                    onClick={() => handleApprove(req._id)}
+                    onClick={() => handleApprove(req._id, req.onChainTxId)}
                     disabled={actionLoading === req._id}
                     className="flex-1 md:flex-none btn-primary py-2 px-4 whitespace-nowrap disabled:opacity-50"
-                    style={{ background: "linear-gradient(135deg, #6B55D9, #A892F0)" }}
                   >
-                    <CheckCircle2 className="w-4 h-4" /> Approve
+                    {actionLoading === req._id ? "Processing..." : (
+                      <span className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4" /> Approve</span>
+                    )}
                   </button>
                 </div>
               </div>

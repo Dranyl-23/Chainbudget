@@ -6,7 +6,20 @@ const { authenticate, requireRole } = require("../middleware/auth");
 /// POST /api/organizations — Create organization (any authenticated user)
 router.post("/", authenticate, async (req, res) => {
   try {
-    const org = new Organization({ ...req.body, createdBy: req.user._id });
+    // BUG-8 FIX: Whitelist fields instead of spreading raw req.body
+    const { name, type, description, highValueThreshold, requiredApprovals } = req.body;
+    if (!name || !type) {
+      return res.status(400).json({ error: "name and type are required" });
+    }
+
+    const org = new Organization({
+      name,
+      type,
+      description: description || "",
+      highValueThreshold: highValueThreshold || 10000,
+      requiredApprovals: requiredApprovals || 2,
+      createdBy: req.user._id,
+    });
     await org.save();
 
     // Add creator to organization as Level 1
