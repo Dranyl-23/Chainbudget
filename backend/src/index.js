@@ -15,6 +15,7 @@ const reportRoutes = require("./routes/reports");
 const auditRoutes = require("./routes/audit");
 const budgetRoutes = require("./routes/budget");
 const uploadRoutes = require("./routes/upload");
+const adminRoutes = require("./routes/admin");
 const { generalRateLimiter, csrfProtection } = require("./middleware/security");
 
 const app = express();
@@ -46,6 +47,7 @@ app.use("/api/reports", reportRoutes);
 app.use("/api/audit", auditRoutes);
 app.use("/api/budget", budgetRoutes);
 app.use("/api/upload", uploadRoutes);
+app.use("/api/admin", adminRoutes);
 
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get("/api/health", (req, res) => {

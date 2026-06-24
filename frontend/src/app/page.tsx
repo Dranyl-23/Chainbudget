@@ -3,7 +3,8 @@
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { Wallet, ShieldCheck, Users, BarChart3, ChevronRight, Link2, Lock } from "lucide-react";
+import { Wallet, ShieldCheck, Users, BarChart3, ChevronRight, Link2, Lock, LogIn, UserPlus, Search } from "lucide-react";
+import Link from "next/link";
 
 const features = [
   {
@@ -29,14 +30,14 @@ const features = [
 ];
 
 export default function LandingPage() {
-  const { isConnected, login, isLoading, error, user } = useAuth();
+  const { isConnected, isAsgardeoAuthenticated, login, register, linkMetaMask, isLoading, error, user } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
     if (isConnected && user) {
-      window.location.href = "/dashboard";
+      router.push("/dashboard");
     }
-  }, [isConnected, user]);
+  }, [isConnected, user, router]);
 
   return (
     <main className="min-h-screen flex flex-col" style={{ background: "radial-gradient(ellipse at 20% 20%, rgba(107,85,217,0.08) 0%, transparent 50%), radial-gradient(ellipse at 80% 80%, rgba(168,146,240,0.06) 0%, transparent 50%), var(--color-bg)" }}>
@@ -79,20 +80,51 @@ export default function LandingPage() {
           </div>
         )}
 
-        <button
-          id="connect-wallet-btn"
-          onClick={login}
-          disabled={isLoading}
-          className="btn-primary text-base px-8 py-3 pulse-glow"
-          style={{ borderRadius: "12px" }}
-        >
-          <Wallet className="w-5 h-5" />
-          {isLoading ? "Connecting..." : "Connect MetaMask Wallet"}
-          {!isLoading && <ChevronRight className="w-4 h-4" />}
-        </button>
+        {isAsgardeoAuthenticated && !isConnected ? (
+          <div className="flex flex-col items-center gap-4">
+            <p className="text-sm text-gray-300 font-medium bg-primary/20 px-4 py-2 rounded-lg border border-primary/30">
+              Logged in via Asgardeo. Please link your MetaMask wallet to continue.
+            </p>
+            <button
+              onClick={linkMetaMask}
+              disabled={isLoading}
+              className="btn-primary text-sm px-6 py-3 min-w-[200px]"
+            >
+              <Wallet className="w-4 h-4" />
+              {isLoading ? "Linking..." : "Link MetaMask Wallet"}
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col sm:flex-row items-center gap-4">
+            <button
+              onClick={login}
+              disabled={isLoading}
+              className="btn-primary text-sm px-6 py-3 w-full sm:w-auto min-w-[160px]"
+            >
+              <LogIn className="w-4 h-4" />
+              {isLoading ? "Loading..." : "Login"}
+            </button>
 
-        <p className="mt-4 text-xs text-gray-600">
-          Requires MetaMask browser extension · Polygon Amoy Testnet
+            <button
+              onClick={register}
+              disabled={isLoading}
+              className="btn-secondary text-sm px-6 py-3 w-full sm:w-auto min-w-[160px]"
+            >
+              <UserPlus className="w-4 h-4" />
+              Register
+            </button>
+          </div>
+        )}
+
+        <div className="mt-8 pt-8 border-t border-gray-200/20 max-w-md w-full flex flex-col items-center">
+          <p className="text-sm text-gray-500 mb-4">No account? Public access is available.</p>
+          <Link href="/verify" className="flex items-center gap-2 text-sm text-primary hover:underline font-medium">
+            <Search className="w-4 h-4" /> Verify a Transaction
+          </Link>
+        </div>
+
+        <p className="mt-8 text-xs text-gray-600">
+          Powered by WSO2 Asgardeo · Polygon Amoy Testnet
         </p>
       </section>
 
@@ -102,7 +134,7 @@ export default function LandingPage() {
           {features.map((f, i) => (
             <div key={i} className="stat-card animate-fade-in" style={{ animationDelay: `${i * 80}ms` }}>
               <div className="mb-3">{f.icon}</div>
-              <h3 className="font-semibold text-sm text-white mb-1">{f.title}</h3>
+              <h3 className="font-semibold text-sm text-gray-900 mb-1">{f.title}</h3>
               <p className="text-xs text-gray-500 leading-relaxed">{f.desc}</p>
             </div>
           ))}

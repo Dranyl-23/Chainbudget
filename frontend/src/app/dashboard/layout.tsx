@@ -84,7 +84,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               key={item.href}
               href={item.href}
               id={`nav-${item.label.toLowerCase().replace(" ", "-")}`}
-              className={`nav-item ${pathname.startsWith(item.href) ? "active" : ""}`}
+            className={`nav-item ${
+              item.href === "/dashboard"
+                ? pathname === "/dashboard" ? "active" : ""
+                : pathname.startsWith(item.href) ? "active" : ""
+            }`}
             >
               {item.icon}
               {item.label}

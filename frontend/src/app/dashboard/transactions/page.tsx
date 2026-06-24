@@ -465,11 +465,10 @@ export default function TransactionsPage() {
                       e.preventDefault();
                       (e.currentTarget as HTMLElement).style.borderColor = "var(--color-border)";
                       const file = e.dataTransfer.files?.[0];
-                      if (file && fileInputRef.current) {
-                        const dt = new DataTransfer();
-                        dt.items.add(file);
-                        fileInputRef.current.files = dt.files;
-                        fileInputRef.current.dispatchEvent(new Event("change", { bubbles: true }));
+                      // Call handleFileChange directly — React’s onChange is NOT
+                      // triggered by native dispatchEvent, so we bypass the input.
+                      if (file) {
+                        handleFileChange({ target: { files: [file] } } as any);
                       }
                     }}
                     onClick={() => fileInputRef.current?.click()}

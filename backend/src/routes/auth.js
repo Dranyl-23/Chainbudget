@@ -1,12 +1,11 @@
 const express = require("express");
 const router = express.Router();
 const { ethers } = require("ethers");
-const jwt = require("jsonwebtoken");
 const User = require("../models/User");
+const { authenticate } = require("../middleware/auth");
 const {
   nonceRateLimiter,
   verifyRateLimiter,
-  csrfTokenEndpoint,
   generateCSRFToken,
 } = require("../middleware/security");
 
@@ -16,74 +15,66 @@ function isValidEthereumAddress(address) {
 }
 
 /// GET /api/auth/csrf-token
-/// Get a CSRF token for form submissions
 router.get("/csrf-token", (req, res) => {
   const token = generateCSRFToken();
   res.json({ csrfToken: token });
 });
 
+/// GET /api/auth/me
+/// Returns the current user profile (relies on authenticate middleware to check Asgardeo JWT)
+router.get("/me", authenticate, async (req, res) => {
+  res.json({
+    user: {
+      id: req.user._id,
+      walletAddress: req.user.walletAddress,
+      displayName: req.user.displayName,
+      isSuperAdmin: req.user.isSuperAdmin,
+      memberships: req.user.memberships,
+    }
+  });
+});
+
 /// GET /api/auth/nonce/:walletAddress
-/// Returns a one-time nonce for the wallet to sign
-/// Rate limited: 5 requests per minute per IP
-router.get("/nonce/:walletAddress", nonceRateLimiter, async (req, res) => {
+/// Returns a one-time nonce for the wallet to sign (used for linking)
+router.get("/nonce/:walletAddress", authenticate, nonceRateLimiter, async (req, res) => {
   try {
     const wallet = req.params.walletAddress.toLowerCase();
-    
-    // Validate wallet address format
     if (!isValidEthereumAddress(wallet)) {
       return res.status(400).json({ error: "Invalid Ethereum address format" });
     }
 
-    const nonce = `ChainBudget Sign-In: ${Date.now()}-${Math.random().toString(36).slice(2)}`;
-
-    let user = await User.findOne({ walletAddress: wallet });
-    if (!user) {
-      user = new User({ walletAddress: wallet, nonce });
-    } else {
-      user.nonce = nonce;
-    }
-    await user.save();
+    const nonce = `ChainBudget Link Wallet: ${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    
+    // Store nonce on the CURRENT user
+    req.user.nonce = nonce;
+    await req.user.save();
 
     res.json({ nonce });
   } catch (err) {
-    console.error("Nonce generation error:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
-/// POST /api/auth/verify
-/// Verifies the signed nonce, issues JWT
-/// Rate limited: 10 attempts per minute per IP
-router.post("/verify", verifyRateLimiter, async (req, res) => {
+/// POST /api/auth/link-wallet
+/// Verifies the signed nonce and links the wallet to the Asgardeo user
+router.post("/link-wallet", authenticate, verifyRateLimiter, async (req, res) => {
   try {
     const { walletAddress, signature } = req.body;
     
-    // Input validation
-    if (!walletAddress || typeof walletAddress !== "string") {
-      return res.status(400).json({ error: "walletAddress is required and must be a string" });
-    }
-    if (!signature || typeof signature !== "string") {
-      return res.status(400).json({ error: "signature is required and must be a string" });
+    if (!walletAddress || !signature) {
+      return res.status(400).json({ error: "walletAddress and signature required" });
     }
 
     const wallet = walletAddress.toLowerCase();
     
-    // Validate wallet address format
-    if (!isValidEthereumAddress(wallet)) {
-      return res.status(400).json({ error: "Invalid Ethereum address format" });
-    }
-
-    const user = await User.findOne({ walletAddress: wallet });
-    if (!user || !user.nonce) {
+    if (!req.user.nonce) {
       return res.status(400).json({ error: "No nonce found. Request a nonce first." });
     }
 
-    // Recover signer from signature with error handling
     let recoveredAddress;
     try {
-      recoveredAddress = ethers.verifyMessage(user.nonce, signature);
+      recoveredAddress = ethers.verifyMessage(req.user.nonce, signature);
     } catch (verifyError) {
-      console.error("Signature verification error:", verifyError.message);
       return res.status(401).json({ error: "Signature verification failed" });
     }
 
@@ -91,48 +82,29 @@ router.post("/verify", verifyRateLimiter, async (req, res) => {
       return res.status(401).json({ error: "Signature does not match wallet address" });
     }
 
-    // Clear nonce (one-time use)
-    user.nonce = null;
-    user.lastLogin = new Date();
-    await user.save();
-
-    const token = jwt.sign(
-      { userId: user._id, walletAddress: wallet },
-      process.env.JWT_SECRET,
-      { expiresIn: "7d" }
-    );
-
-    res.json({
-      token,
-      user: {
-        id: user._id,
-        walletAddress: user.walletAddress,
-        displayName: user.displayName,
-        isSuperAdmin: user.isSuperAdmin,
-        memberships: user.memberships,
-      },
-    });
-  } catch (err) {
-    console.error("Auth verify error:", err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-/// GET /api/auth/validate
-/// Validate current JWT token (used for session restoration)
-router.get("/validate", (req, res) => {
-  try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "No token provided" });
+    // Check if wallet is already linked to another user
+    const existing = await User.findOne({ walletAddress: wallet });
+    if (existing && existing._id.toString() !== req.user._id.toString()) {
+      return res.status(400).json({ error: "Wallet already linked to another account" });
     }
 
-    const token = authHeader.split(" ")[1];
-    jwt.verify(token, process.env.JWT_SECRET);
-    
-    res.json({ valid: true });
+    // Link wallet
+    req.user.walletAddress = wallet;
+    req.user.nonce = null; // consume nonce
+    req.user.lastLogin = new Date();
+    await req.user.save();
+
+    res.json({
+      user: {
+        id: req.user._id,
+        walletAddress: req.user.walletAddress,
+        displayName: req.user.displayName,
+        isSuperAdmin: req.user.isSuperAdmin,
+        memberships: req.user.memberships,
+      }
+    });
   } catch (err) {
-    res.status(401).json({ error: "Invalid or expired token" });
+    res.status(500).json({ error: err.message });
   }
 });
 

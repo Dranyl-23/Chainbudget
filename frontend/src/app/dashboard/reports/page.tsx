@@ -27,7 +27,8 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [range, setRange] = useState("6months");
-  const [format, setFormat] = useState("pdf");
+  const [format, setFormat] = useState("csv");
+  const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
     const fetchReportData = async () => {
@@ -43,22 +44,35 @@ export default function ReportsPage() {
           params: { orgId },
         });
 
-        if (res.data?.cashFlow) {
-          setMonthlyData(res.data.cashFlow);
+        const data = res.data;
+
+        // Populate cashFlow chart — API returns last 6 months grouped data.
+        // Add a computed balance field for each month for the area chart.
+        if (Array.isArray(data?.cashFlow) && data.cashFlow.length > 0) {
+          const enriched = data.cashFlow.map((m: any) => ({
+            ...m,
+            balance: (m.income || 0) - (m.expense || 0),
+          }));
+          setMonthlyData(enriched);
         } else {
-          // Generate mock data if not available
           generateDefaultData();
         }
 
-        if (res.data?.summary) {
-          setSummaryStats(res.data.summary);
+        // API returns flat keys: totalIncome, totalExpenses, balance, approvedTransactions
+        if (data?.totalIncome !== undefined) {
+          setSummaryStats({
+            totalTxs: data.approvedTransactions ?? 0,
+            totalIncome: data.totalIncome ?? 0,
+            totalExpenses: data.totalExpenses ?? 0,
+            netBalance: (data.totalIncome ?? 0) - (data.totalExpenses ?? 0),
+          });
         } else {
-          // Calculate from transactions
           calculateStats(orgId);
         }
       } catch (err) {
         console.error("Failed to fetch report data:", err);
         generateDefaultData();
+        calculateStats(activeOrgId!);
       } finally {
         setLoading(false);
       }
@@ -106,7 +120,41 @@ export default function ReportsPage() {
     };
 
     fetchReportData();
-  }, [activeOrgId]);
+  }, [activeOrgId, range]);
+
+  const handleExport = async () => {
+    if (!activeOrgId) return;
+    setIsExporting(true);
+    try {
+      const res = await api.get("/reports/export", {
+        params: { orgId: activeOrgId },
+      });
+      const txs = res.data;
+      // Build CSV
+      const headers = ["Date", "Description", "Type", "Amount", "Status", "Category", "Submitted By"];
+      const rows = txs.map((t: any) => [
+        new Date(t.createdAt).toLocaleDateString(),
+        `"${(t.description || "").replace(/"/g, "'")}"`,
+        t.type,
+        t.amount,
+        t.status,
+        t.category || "",
+        t.submittedBy?.displayName || t.submittedBy?.walletAddress || "",
+      ]);
+      const csv = [headers.join(","), ...rows.map((r: any[]) => r.join(","))].join("\n");
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `chainbudget-report-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Export failed:", err);
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   return (
     <div className="p-8 pb-20 animate-fade-in">
@@ -126,8 +174,8 @@ export default function ReportsPage() {
             <option value="6months">Last 6 Months</option>
             <option value="1year">Last Year</option>
           </select>
-          <button className="btn-primary py-2">
-            <Download className="w-4 h-4" /> Export
+          <button className="btn-primary py-2" onClick={handleExport} disabled={isExporting}>
+            <Download className="w-4 h-4" /> {isExporting ? "Exporting..." : "Export"}
           </button>
         </div>
       </header>
@@ -218,8 +266,8 @@ export default function ReportsPage() {
               <span className="text-sm uppercase font-semibold text-gray-500">.{fmt}</span>
             </label>
           ))}
-          <button className="btn-primary py-2 px-6 ml-auto">
-            <Download className="w-4 h-4" /> Download Report
+          <button className="btn-primary py-2 px-6 ml-auto" onClick={handleExport} disabled={isExporting}>
+            <Download className="w-4 h-4" /> {isExporting ? "Exporting..." : "Download Report"}
           </button>
         </div>
       </div>

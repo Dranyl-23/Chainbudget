@@ -48,7 +48,9 @@ api.interceptors.response.use(
     if (err.response?.status === 401 && typeof window !== "undefined") {
       localStorage.removeItem("cb_token");
       localStorage.removeItem("cb_user");
-      window.location.href = "/";
+      if (window.location.pathname !== "/") {
+        window.location.href = "/";
+      }
     }
 
     // Re-fetch CSRF token if it expired (403)
