@@ -83,9 +83,11 @@ function validateCSRFToken(token) {
   const timestamp = csrfTokenStore.get(token);
   const isValid = Date.now() - timestamp < CSRF_TOKEN_EXPIRY;
 
-  if (isValid) {
-    // Token is valid and has been used; delete it (one-time use)
-    csrfTokenStore.delete(token);
+  // NOTE: Token is NOT deleted after use — it remains valid until expiry (1 hour).
+  // This prevents BUG-5 where the second form submission in a session always
+  // fails 403 because the token was already consumed on the first request.
+  if (!isValid) {
+    csrfTokenStore.delete(token); // Only clean up if expired
   }
 
   return isValid;

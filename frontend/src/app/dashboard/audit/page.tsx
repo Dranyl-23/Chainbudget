@@ -8,11 +8,11 @@ import api from "@/lib/api";
 interface AuditLog {
   _id: string;
   action: string;
-  actor?: { displayName: string };
+  actor?: { displayName: string; walletAddress?: string };
   createdAt: string;
   blockchainTxHash?: string;
   targetType?: string;
-  details?: string;
+  details?: Record<string, unknown> | string | null;
 }
 
 export default function AuditTrailPage() {
@@ -49,7 +49,7 @@ export default function AuditTrailPage() {
     fetchAuditLogs();
   }, [activeOrgId]);
 
-  // Filter logs by search
+  // Search filter
   useEffect(() => {
     if (!search) {
       setFilteredLogs(logs);
@@ -61,10 +61,22 @@ export default function AuditTrailPage() {
       (log) =>
         log.action?.toLowerCase().includes(q) ||
         log.actor?.displayName?.toLowerCase().includes(q) ||
-        log.details?.toLowerCase().includes(q)
+        formatDetails(log.details)?.toLowerCase().includes(q)
     );
     setFilteredLogs(filtered);
   }, [logs, search]);
+
+  /** Format the `details` field (which is a mixed object) into a readable string */
+  function formatDetails(details: AuditLog["details"]): string {
+    if (!details) return "—";
+    if (typeof details === "string") return details;
+    if (typeof details === "object") {
+      return Object.entries(details)
+        .map(([k, v]) => `${k}: ${v}`)
+        .join(" · ");
+    }
+    return String(details);
+  }
   return (
     <div className="p-8 pb-20 animate-fade-in">
       <header className="mb-8 flex items-center justify-between">
@@ -102,13 +114,13 @@ export default function AuditTrailPage() {
                   <td className="whitespace-nowrap font-mono text-xs">
                     {new Date(log.createdAt).toLocaleString()}
                   </td>
-                  <td className="font-medium text-gray-300">{log.actor?.displayName || "System"}</td>
+                  <td className="font-medium text-gray-700">{log.actor?.displayName || "System"}</td>
                   <td>
                     <span className="px-2 py-1 rounded bg-[#F2EEFF] text-xs text-gray-600 font-mono">
                       {log.action}
                     </span>
                   </td>
-                  <td className="text-gray-400">{log.details || log.targetType || "—"}</td>
+                  <td className="text-gray-500 text-xs">{formatDetails(log.details)}</td>
                   <td>
                     {log.blockchainTxHash ? (
                       <a

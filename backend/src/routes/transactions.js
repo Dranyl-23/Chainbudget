@@ -122,7 +122,15 @@ router.get("/", authenticate, async (req, res) => {
     const { orgId, status, type, page = 1, limit = 20 } = req.query;
     if (!orgId) return res.status(400).json({ error: "orgId required" });
 
-    const filter = { organization: orgId };
+    const mongoose = require("mongoose");
+
+    // Validate orgId format before creating ObjectId
+    if (!mongoose.Types.ObjectId.isValid(orgId)) {
+      return res.status(400).json({ error: "Invalid orgId" });
+    }
+
+    const orgObjectId = new mongoose.Types.ObjectId(orgId);
+    const filter = { organization: orgObjectId };
     if (status) filter.status = status;
     if (type) filter.type = type;
 
@@ -132,16 +140,129 @@ router.get("/", authenticate, async (req, res) => {
       filter.status = "approved";
     }
 
-    const transactions = await Transaction.find(filter)
-      .populate("submittedBy", "walletAddress displayName")
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(Number(limit));
+    const skip = (Number(page) - 1) * Number(limit);
 
-    const total = await Transaction.countDocuments(filter);
+    // Aggregate to include approvalCount and organization data in one query
+    const [transactions, total] = await Promise.all([
+      Transaction.aggregate([
+        { $match: filter },
+        { $sort: { createdAt: -1 } },
+        { $skip: skip },
+        { $limit: Number(limit) },
+        // Join submittedBy user
+        {
+          $lookup: {
+            from: "users",
+            localField: "submittedBy",
+            foreignField: "_id",
+            as: "submittedByArr",
+          },
+        },
+        {
+          $addFields: {
+            submittedBy: {
+              $let: {
+                vars: { u: { $arrayElemAt: ["$submittedByArr", 0] } },
+                in: { _id: "$$u._id", walletAddress: "$$u.walletAddress", displayName: "$$u.displayName" },
+              },
+            },
+          },
+        },
+        { $project: { submittedByArr: 0 } },
+        // Join organization (for threshold info)
+        {
+          $lookup: {
+            from: "organizations",
+            localField: "organization",
+            foreignField: "_id",
+            as: "organizationArr",
+          },
+        },
+        {
+          $addFields: {
+            organization: {
+              $let: {
+                vars: { o: { $arrayElemAt: ["$organizationArr", 0] } },
+                in: {
+                  _id: "$$o._id",
+                  name: "$$o.name",
+                  highValueThreshold: "$$o.highValueThreshold",
+                  requiredApprovals: "$$o.requiredApprovals",
+                },
+              },
+            },
+          },
+        },
+        { $project: { organizationArr: 0 } },
+        // Count how many "approved" votes this transaction has received
+        {
+          $lookup: {
+            from: "approvals",
+            let: { txId: "$_id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$transaction", "$$txId"] },
+                      { $eq: ["$action", "approved"] },
+                    ],
+                  },
+                },
+              },
+              { $count: "count" },
+            ],
+            as: "approvalDocs",
+          },
+        },
+        {
+          $addFields: {
+            approvalCount: {
+              $ifNull: [{ $arrayElemAt: ["$approvalDocs.count", 0] }, 0],
+            },
+          },
+        },
+        { $project: { approvalDocs: 0 } },
+      ]),
+      Transaction.countDocuments(filter),
+    ]);
+
     res.json({ transactions, total, page: Number(page), limit: Number(limit) });
   } catch (err) {
+    console.error("GET /transactions error:", err.message);
     res.status(500).json({ error: err.message });
+  }
+});
+
+/// GET /api/transactions/public/:hash — Verify a transaction publicly (No Auth)
+router.get("/public/:hash", async (req, res) => {
+  try {
+    const { hash } = req.params;
+    
+    // Allow searching by blockchainTxHash or short reference if implemented
+    const txn = await Transaction.findOne({
+      $or: [
+        { blockchainTxHash: hash },
+        { _id: hash.length === 24 ? hash : null } // Fallback to ID if it looks like one
+      ]
+    }).populate("organization", "name");
+
+    if (!txn) {
+      return res.status(404).json({ error: "Transaction not found" });
+    }
+
+    // Return safe public fields only
+    res.json({
+      txHash: txn.blockchainTxHash,
+      amount: txn.amount,
+      description: txn.description,
+      category: txn.category || "Uncategorized",
+      status: txn.status === "approved" ? "Approved" : txn.status === "rejected" ? "Rejected" : "Pending",
+      organization: txn.organization?.name || "Unknown",
+      date: txn.createdAt
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Server error during verification" });
   }
 });
 

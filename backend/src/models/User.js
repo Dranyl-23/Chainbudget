@@ -11,10 +11,15 @@ const UserSchema = new mongoose.Schema(
   {
     walletAddress: {
       type: String,
-      required: true,
       unique: true,
+      sparse: true,
       lowercase: true,
       trim: true,
+    },
+    asgardeoId: {
+      type: String,
+      unique: true,
+      sparse: true,
     },
     displayName: { type: String, trim: true },
     email: { type: String, trim: true, lowercase: true },

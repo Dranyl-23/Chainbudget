@@ -72,7 +72,7 @@ export async function switchToAmoy(): Promise<void> {
   }
 }
 
-export async function walletLogin(): Promise<{ token: string; user: any }> {
+export async function linkWallet(): Promise<{ user: any }> {
   if (typeof window === "undefined" || !window.ethereum) {
     throw new Error("MetaMask is not installed");
   }
@@ -155,23 +155,22 @@ export async function walletLogin(): Promise<{ token: string; user: any }> {
       );
     }
 
-    // ── Step 5: Verify with backend ──────────────────────────────────────────
-    let verifyRes;
+    // ── Step 5: Verify and Link with backend ──────────────────────────────────
+    let linkRes;
     try {
-      verifyRes = await api.post("/auth/verify", { walletAddress, signature });
+      linkRes = await api.post("/auth/link-wallet", { walletAddress, signature });
     } catch (verifyError: any) {
       throw new Error(
-        `Verification failed: ${verifyError.response?.data?.error || verifyError.message}`
+        `Linking failed: ${verifyError.response?.data?.error || verifyError.message}`
       );
     }
 
-    const { token, user } = verifyRes.data;
+    const { user } = linkRes.data;
 
-    // ── Step 6: Persist session ──────────────────────────────────────────────
-    localStorage.setItem("cb_token", token);
+    // ── Step 6: Persist user session data ────────────────────────────────────
     localStorage.setItem("cb_user", JSON.stringify(user));
 
-    return { token, user };
+    return { user };
   } catch (error: any) {
     console.error("Wallet login error:", error);
     throw error;

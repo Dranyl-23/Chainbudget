@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { AuthProvider } from "@/context/AuthContext";
-import { Toaster } from "react-hot-toast";
+import { Providers } from "@/components/Providers";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
@@ -21,8 +20,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={inter.variable}>
       <body className="bg-[var(--color-bg)] text-[var(--color-text)] antialiased">
-        <AuthProvider>{children}</AuthProvider>
-        <Toaster position="bottom-right" toastOptions={{ className: "text-sm", duration: 4000 }} />
+        <Providers>{children}</Providers>
       </body>
     </html>
   );
