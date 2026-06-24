@@ -1,0 +1,82 @@
+require("dotenv").config();
+const express = require("express");
+const cors = require("cors");
+const helmet = require("helmet");
+const morgan = require("morgan");
+const mongoose = require("mongoose");
+const path = require("path");
+
+const authRoutes = require("./routes/auth");
+const orgRoutes = require("./routes/organizations");
+const userRoutes = require("./routes/users");
+const transactionRoutes = require("./routes/transactions");
+const approvalRoutes = require("./routes/approvals");
+const reportRoutes = require("./routes/reports");
+const auditRoutes = require("./routes/audit");
+const budgetRoutes = require("./routes/budget");
+const uploadRoutes = require("./routes/upload");
+const { generalRateLimiter, csrfProtection } = require("./middleware/security");
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+// ── Middleware ────────────────────────────────────────────────────────────────
+app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
+app.use(cors({ origin: process.env.FRONTEND_URL || "http://localhost:3000" }));
+app.use(express.json());
+app.use(morgan("dev"));
+
+// ── Static file serving for uploaded receipts ─────────────────────────────────
+app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
+
+// ── Security Middleware ───────────────────────────────────────────────────────
+// Apply general rate limiting to all API routes
+app.use("/api/", generalRateLimiter);
+
+// Apply CSRF protection to all POST/PUT/DELETE requests (except auth endpoints)
+app.use("/api/", csrfProtection);
+
+// ── Routes ────────────────────────────────────────────────────────────────────
+app.use("/api/auth", authRoutes);
+app.use("/api/organizations", orgRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api/transactions", transactionRoutes);
+app.use("/api/approvals", approvalRoutes);
+app.use("/api/reports", reportRoutes);
+app.use("/api/audit", auditRoutes);
+app.use("/api/budget", budgetRoutes);
+app.use("/api/upload", uploadRoutes);
+
+// ── Health check ──────────────────────────────────────────────────────────────
+app.get("/api/health", (req, res) => {
+  res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+// ── 404 handler ───────────────────────────────────────────────────────────────
+app.use((req, res) => {
+  res.status(404).json({ error: "Route not found" });
+});
+
+// ── Error handler ─────────────────────────────────────────────────────────────
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(err.status || 500).json({
+    error: err.message || "Internal Server Error",
+  });
+});
+
+// ── Database & server start ───────────────────────────────────────────────────
+mongoose
+  .connect(process.env.MONGO_URI)
+  .then(() => {
+    console.log("✅ Connected to MongoDB Atlas");
+    app.listen(PORT, () => {
+      console.log(`🚀 ChainBudget API running on http://localhost:${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error("❌ MongoDB connection error:", err.message);
+    process.exit(1);
+  });
+
+module.exports = app;

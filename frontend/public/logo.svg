@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="ChainBudget logo">
+  <defs>
+    <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#6B55D9"/>
+      <stop offset="1" stop-color="#A892F0"/>
+    </linearGradient>
+    <linearGradient id="g2" x1="0" x2="1">
+      <stop offset="0" stop-color="#2B2D6E"/>
+      <stop offset="1" stop-color="#2fb973"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="40" fill="none"/>
+  <g transform="translate(28,28)">
+    <rect x="0" y="0" width="200" height="200" rx="32" fill="url(#g)" opacity="0.12"/>
+    <g transform="translate(34,30)">
+      <!-- chain link shape -->
+      <path d="M10 80 C10 50 60 30 90 36 C120 42 120 78 90 86 C60 94 10 110 10 80 Z" fill="url(#g2)" opacity="0.95"/>
+      <path d="M110 20 C140 -2 190 12 190 48 C190 84 150 96 120 120 C90 144 40 138 20 110" stroke="url(#g)" stroke-width="8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      <!-- bars -->
+      <rect x="60" y="58" width="12" height="48" rx="3" fill="#ffffff" opacity="0.9"/>
+      <rect x="80" y="44" width="12" height="62" rx="3" fill="#ffffff" opacity="0.95"/>
+      <rect x="100" y="28" width="12" height="78" rx="3" fill="#ffffff" opacity="1"/>
+    </g>
+  </g>
+</svg>
