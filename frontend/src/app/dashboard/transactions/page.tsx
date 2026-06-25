@@ -45,6 +45,7 @@ interface Transaction {
   submittedBy?: { displayName?: string; walletAddress?: string };
   documentUrl?: string;
   documentHash?: string;
+  referenceNumber?: string;
 }
 
 interface CreateTxForm {
@@ -127,8 +128,8 @@ export default function TransactionsPage() {
     setUploadError(null);
     setUploadedFile(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
-    setExpenseData({ type: "expense", amount: "", description: "", category: "", referenceNumber: "", notes: "" });
-    setIncomeData({ type: "income", amount: "", description: "", category: "", referenceNumber: "", notes: "" });
+    setExpenseData({ type: "expense", amount: "", description: "", category: "", referenceNumber: "", notes: "", urgency: "normal" });
+    setIncomeData({ type: "income", amount: "", description: "", category: "", referenceNumber: "", notes: "", urgency: "normal" });
     setActiveTab("expense");
   };
 
@@ -318,6 +319,11 @@ export default function TransactionsPage() {
                             </span>
                           )}
                         </span>
+                        {tx.referenceNumber && (
+                          <span className="text-[11px] text-gray-400 mt-0.5">
+                            Ref: {tx.referenceNumber}
+                          </span>
+                        )}
                       </div>
                       <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform duration-200 ${expandedTxId === tx._id ? 'rotate-180' : ''}`} />
                     </div>

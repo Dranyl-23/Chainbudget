@@ -400,6 +400,7 @@ router.get("/public/:hash", async (req, res) => {
     const txn = await Transaction.findOne({
       $or: [
         { blockchainTxHash: hash },
+        { referenceNumber: hash },
         { _id: hash.length === 24 ? hash : null } // Fallback to ID if it looks like one
       ]
     }).populate("organization", "name");

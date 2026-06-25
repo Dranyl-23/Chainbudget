@@ -23,6 +23,7 @@ interface Transaction {
   createdAt: string;
   status: "approved" | "pending_approval" | "rejected";
   isRecordedOnChain: boolean;
+  blockchainTxHash?: string;
 }
 
 interface CashFlowData {
