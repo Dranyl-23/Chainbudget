@@ -22,6 +22,7 @@ interface Approval {
   category?: string;
   type?: string;
   documentUrl?: string;
+  urgency?: "normal" | "urgent";
 }
 
 interface BudgetItem {

@@ -29,10 +29,10 @@ const verifyRateLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// General API rate limit (100 requests per minute per IP)
+// General API rate limit (500 requests per minute per IP to accommodate development)
 const generalRateLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: 100,
+  max: 500,
   message: "Too many requests. Please try again later.",
   standardHeaders: true,
   legacyHeaders: false,

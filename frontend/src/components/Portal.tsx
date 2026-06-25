@@ -8,22 +8,17 @@ import { createPortal } from "react-dom";
  * overflow/transform/backdrop-filter that would clip position:fixed modals.
  */
 export default function Portal({ children }: { children: React.ReactNode }) {
-  const [mounted, setMounted] = useState(false);
-  const elRef = useRef<HTMLDivElement | null>(null);
-
-  if (!elRef.current && typeof window !== "undefined") {
-    elRef.current = document.createElement("div");
-  }
+  const [container, setContainer] = useState<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    const el = elRef.current!;
+    const el = document.createElement("div");
     document.body.appendChild(el);
-    setMounted(true);
+    setContainer(el);
     return () => {
       document.body.removeChild(el);
     };
   }, []);
 
-  if (!mounted || !elRef.current) return null;
-  return createPortal(children, elRef.current);
+  if (!container) return null;
+  return createPortal(children, container);
 }
