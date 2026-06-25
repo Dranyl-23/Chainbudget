@@ -12,8 +12,9 @@ router.get("/", authenticate, async (req, res) => {
     if (!orgId) return res.status(400).json({ error: "orgId required" });
 
     // Ensure the user has access to this org
-    if (!req.user.isSuperAdmin && !req.user.getRoleInOrg(orgId)) {
-      return res.status(403).json({ error: "Access denied" });
+    const role = req.user.getRoleInOrg(orgId);
+    if (!req.user.isSuperAdmin && (!role || role > 3)) {
+      return res.status(403).json({ error: "Access denied. Minimum Level 3 required." });
     }
 
     // 1. Fetch all budget categories for the org

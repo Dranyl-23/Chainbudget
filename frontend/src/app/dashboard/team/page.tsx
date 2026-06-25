@@ -96,18 +96,18 @@ export default function TeamPage() {
 
   const getRoleBadge = (level: number) => {
     switch (level) {
-      case 1: return <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-primary/10 text-primary border border-primary/20">Level 1: Executive</span>;
-      case 2: return <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-600 border border-blue-200">Level 2: Finance</span>;
-      case 3: return <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-600 border border-gray-200">Level 3: Member</span>;
-      case 4: return <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-gray-50 text-gray-500 border border-gray-200">Level 4: Viewer</span>;
+      case 1: return <span className="whitespace-nowrap px-2.5 py-1 rounded-full text-xs font-bold bg-primary/10 text-primary border border-primary/20">Level 1: Executive</span>;
+      case 2: return <span className="whitespace-nowrap px-2.5 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-600 border border-blue-200">Level 2: Finance</span>;
+      case 3: return <span className="whitespace-nowrap px-2.5 py-1 rounded-full text-xs font-bold bg-green-50 text-green-600 border border-green-200">Level 3: Request</span>;
+      case 4: return <span className="whitespace-nowrap px-2.5 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-600 border border-gray-200">Level 4: Read-Only</span>;
       default: return null;
     }
   };
 
   return (
     <>
-      <div className="p-8 pb-20 animate-fade-in">
-      <header className="mb-8 flex items-center justify-between">
+      <div className="p-4 md:p-8 pb-20 animate-fade-in">
+      <header className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold mb-1">Team Management</h1>
           <p className="text-sm text-gray-500">View and manage organization members and their roles.</p>

@@ -16,7 +16,7 @@ router.get("/summary", authenticate, requireRole(4), async (req, res) => {
     const now = new Date();
     const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
 
-    const [income, expenses, pendingCount, txCount, monthlyRaw] = await Promise.all([
+    const [income, expenses, pendingCount, txCount, onChainCount, monthlyRaw] = await Promise.all([
       Transaction.aggregate([
         { $match: { organization: orgObjectId, type: "income", status: "approved" } },
         { $group: { _id: null, total: { $sum: "$amount" } } },
@@ -27,6 +27,7 @@ router.get("/summary", authenticate, requireRole(4), async (req, res) => {
       ]),
       Transaction.countDocuments({ organization: orgId, status: "pending_approval" }),
       Transaction.countDocuments({ organization: orgId, status: "approved" }),
+      Transaction.countDocuments({ organization: orgId, status: "approved", isRecordedOnChain: true }),
       // Monthly grouped cash flow for the last 6 months
       Transaction.aggregate([
         {
@@ -82,6 +83,7 @@ router.get("/summary", authenticate, requireRole(4), async (req, res) => {
       balance,
       pendingApprovals: pendingCount,
       approvedTransactions: txCount,
+      onChainTransactions: onChainCount,
       cashFlow,
     });
   } catch (err) {
@@ -90,7 +92,7 @@ router.get("/summary", authenticate, requireRole(4), async (req, res) => {
 });
 
 /// GET /api/reports/by-category?orgId=xxx — Spending by category
-router.get("/by-category", authenticate, requireRole(2), async (req, res) => {
+router.get("/by-category", authenticate, requireRole(4), async (req, res) => {
   try {
     const { orgId } = req.query;
     if (!orgId) return res.status(400).json({ error: "orgId required" });

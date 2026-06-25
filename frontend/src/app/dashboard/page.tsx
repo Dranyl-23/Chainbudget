@@ -5,7 +5,8 @@ import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import {
   ArrowUpRight, ArrowDownRight, Wallet, Activity,
-  ShieldCheck, FileText, BarChart2,
+  ShieldCheck, FileText, BarChart2, Link2, CheckCircle,
+  AlertTriangle, TrendingDown,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -42,6 +43,8 @@ export default function DashboardPage() {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [transparencyScore, setTransparencyScore] = useState({ approved: 0, onChain: 0, percentage: 0 });
+  const [budgetAlerts, setBudgetAlerts] = useState<Array<{name: string; allocated: number; spent: number; percentage: number}>>([]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -94,6 +97,12 @@ export default function DashboardPage() {
               totalExpenses: data.totalExpenses || 0,
               pendingCount: data.pendingApprovals ?? pending,
             });
+
+            // Compute Transparency Score
+            const approved = data.approvedTransactions || 0;
+            const onChain = data.onChainTransactions || 0;
+            const pct = approved > 0 ? Math.round((onChain / approved) * 100) : 0;
+            setTransparencyScore({ approved, onChain, percentage: pct });
           }
 
           // Use real cashFlow if available, otherwise fall back to mock
@@ -106,6 +115,18 @@ export default function DashboardPage() {
           // Summary API unavailable — keep stats from transactions, use mock chart
           generateMockCashFlow();
         }
+
+        // Fetch budget data for security alerts
+        try {
+          const budgetRes = await api.get("/budget", { params: { orgId } });
+          const budgets = budgetRes.data || [];
+          // Find categories at 80%+ usage
+          const alerts = budgets
+            .map((b: any) => ({ name: b.name, allocated: b.allocated, spent: b.spent, percentage: b.allocated > 0 ? Math.round((b.spent / b.allocated) * 100) : 0 }))
+            .filter((b: any) => b.percentage >= 80)
+            .sort((a: any, b: any) => b.percentage - a.percentage);
+          setBudgetAlerts(alerts);
+        } catch { /* budget alerts are optional */ }
       } catch (err) {
         console.error("Failed to fetch dashboard data:", err);
         setError("Failed to load dashboard data");
@@ -130,7 +151,7 @@ export default function DashboardPage() {
   }, [activeOrgId]);
 
   return (
-    <div className="p-8 pb-20 animate-fade-in">
+    <div className="p-4 md:p-8 pb-20 animate-fade-in">
       <header className="mb-8 flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-bold mb-1">Overview</h1>
@@ -198,6 +219,42 @@ export default function DashboardPage() {
         </Link>
       </div>
 
+      {/* ── Critical Security Alerts ── */}
+      {budgetAlerts.length > 0 && (
+        <div className="mb-8 space-y-3">
+          {budgetAlerts.map((alert) => (
+            <div key={alert.name} className={`flex items-center gap-4 p-4 rounded-xl border ${
+              alert.percentage >= 100 
+                ? 'bg-red-50 border-red-200' 
+                : 'bg-amber-50 border-amber-200'
+            }`}>
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                alert.percentage >= 100 ? 'bg-red-100' : 'bg-amber-100'
+              }`}>
+                {alert.percentage >= 100 
+                  ? <AlertTriangle className="w-5 h-5 text-red-600" />
+                  : <TrendingDown className="w-5 h-5 text-amber-600" />
+                }
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className={`text-sm font-semibold ${alert.percentage >= 100 ? 'text-red-700' : 'text-amber-700'}`}>
+                  {alert.percentage >= 100 ? '🚨 Budget Exceeded' : '⚠️ Budget Running Low'}: "{alert.name}"
+                </p>
+                <p className={`text-xs mt-0.5 ${alert.percentage >= 100 ? 'text-red-600' : 'text-amber-600'}`}>
+                  ₱{Math.round(alert.spent).toLocaleString()} of ₱{Math.round(alert.allocated).toLocaleString()} used ({alert.percentage}%)
+                </p>
+              </div>
+              <div className="w-24 flex-shrink-0">
+                <div className={`w-full rounded-full h-2 ${alert.percentage >= 100 ? 'bg-red-200' : 'bg-amber-200'}`}>
+                  <div className={`h-full rounded-full transition-all ${alert.percentage >= 100 ? 'bg-red-500' : 'bg-amber-500'}`} style={{ width: `${Math.min(alert.percentage, 100)}%` }} />
+                </div>
+                <p className={`text-[10px] text-center mt-1 font-bold ${alert.percentage >= 100 ? 'text-red-600' : 'text-amber-600'}`}>{alert.percentage}%</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* ── Chart ── */}
         <div className="lg:col-span-2 glass p-6 rounded-xl">
@@ -206,18 +263,35 @@ export default function DashboardPage() {
           </h3>
           <div className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={cashFlow} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(107,85,217,0.18)" vertical={false} />
-                <XAxis dataKey="month" stroke="#7A7A9D" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis stroke="#7A7A9D" fontSize={12} tickLine={false} axisLine={false}
+              <BarChart data={cashFlow} margin={{ top: 20, right: 0, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorIncome" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#6B55D9" stopOpacity={1}/>
+                    <stop offset="100%" stopColor="#6B55D9" stopOpacity={0.4}/>
+                  </linearGradient>
+                  <linearGradient id="colorExpense" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#E05C5C" stopOpacity={1}/>
+                    <stop offset="100%" stopColor="#E05C5C" stopOpacity={0.4}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+                <XAxis dataKey="month" stroke="var(--color-text-muted)" fontSize={12} tickLine={false} axisLine={false} dy={10} />
+                <YAxis stroke="var(--color-text-muted)" fontSize={12} tickLine={false} axisLine={false}
                   tickFormatter={(val) => `₱${val / 1000}k`} />
                 <Tooltip
-                  cursor={{ fill: "rgba(107,85,217,0.08)" }}
-                  contentStyle={{ background: "#F8F6FF", border: "1px solid rgba(107,85,217,0.16)", borderRadius: "8px", color: "#1A1A2E" }}
+                  cursor={{ fill: "var(--color-border)" }}
+                  contentStyle={{ 
+                    background: "var(--color-bg)", 
+                    border: "1px solid var(--color-border)", 
+                    borderRadius: "12px", 
+                    color: "var(--color-text)",
+                    boxShadow: "0 10px 30px -10px rgba(0,0,0,0.3)"
+                  }}
+                  itemStyle={{ fontWeight: 600 }}
                   formatter={(v: any) => `₱${Number(v).toLocaleString()}`}
                 />
-                <Bar dataKey="income" fill="#6B55D9" radius={[4, 4, 0, 0]} maxBarSize={40} name="Income" />
-                <Bar dataKey="expense" fill="#E05C5C" radius={[4, 4, 0, 0]} maxBarSize={40} name="Expense" />
+                <Bar dataKey="income" fill="url(#colorIncome)" radius={[6, 6, 0, 0]} maxBarSize={40} name="Income" />
+                <Bar dataKey="expense" fill="url(#colorExpense)" radius={[6, 6, 0, 0]} maxBarSize={40} name="Expense" />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -247,7 +321,20 @@ export default function DashboardPage() {
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-xs text-gray-500">{new Date(tx.createdAt).toLocaleDateString()}</span>
                         {tx.isRecordedOnChain && (
-                          <span className="chain-dot w-1.5 h-1.5" title="Recorded on Blockchain" />
+                          tx.blockchainTxHash ? (
+                            <a 
+                              href={`https://amoy.polygonscan.com/tx/${tx.blockchainTxHash}`} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1 hover:opacity-80 transition-opacity"
+                              title="View on Polygonscan"
+                            >
+                              <span className="chain-dot w-1.5 h-1.5" />
+                              <span className="text-[10px] text-primary font-medium">Verified</span>
+                            </a>
+                          ) : (
+                            <span className="chain-dot w-1.5 h-1.5" title="Recorded on Blockchain" />
+                          )
                         )}
                       </div>
                     </div>
@@ -265,6 +352,65 @@ export default function DashboardPage() {
             ) : (
               <p className="text-xs text-gray-500 text-center py-4">No transactions yet</p>
             )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Transparency Score ── */}
+      <div className="glass p-6 rounded-xl mt-8">
+        <div className="flex flex-col md:flex-row items-center gap-8">
+          {/* Radial Gauge */}
+          <div className="relative w-40 h-40 flex-shrink-0">
+            <svg viewBox="0 0 120 120" className="w-full h-full -rotate-90">
+              {/* Background circle */}
+              <circle cx="60" cy="60" r="52" fill="none" stroke="#e8e1ff" strokeWidth="10" />
+              {/* Progress arc */}
+              <circle 
+                cx="60" cy="60" r="52" fill="none" 
+                stroke="url(#scoreGradient)" 
+                strokeWidth="10" 
+                strokeLinecap="round"
+                strokeDasharray={`${(transparencyScore.percentage / 100) * 327} 327`}
+                className="transition-all duration-1000 ease-out"
+              />
+              <defs>
+                <linearGradient id="scoreGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="#6B55D9" />
+                  <stop offset="100%" stopColor="#22C55E" />
+                </linearGradient>
+              </defs>
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-3xl font-black text-gray-800">{transparencyScore.percentage}%</span>
+              <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Verified</span>
+            </div>
+          </div>
+
+          {/* Info */}
+          <div className="flex-1 text-center md:text-left">
+            <div className="flex items-center justify-center md:justify-start gap-2 mb-2">
+              <Link2 className="w-5 h-5 text-primary" />
+              <h3 className="text-lg font-bold text-gray-800">Blockchain Transparency Score</h3>
+            </div>
+            <p className="text-sm text-gray-500 mb-4 max-w-lg">
+              This score represents the percentage of all approved transactions that have been
+              permanently recorded and verified on the <strong>Polygon Blockchain</strong>.
+              A higher score means greater financial transparency and accountability.
+            </p>
+            <div className="flex flex-wrap items-center justify-center md:justify-start gap-3">
+              <div className="flex items-center gap-2 px-3 py-2 bg-green-50 rounded-lg border border-green-100">
+                <CheckCircle className="w-4 h-4 text-green-600" />
+                <span className="text-sm font-semibold text-green-700">{transparencyScore.onChain} On-Chain</span>
+              </div>
+              <div className="flex items-center gap-2 px-3 py-2 bg-primary/5 rounded-lg border border-primary/10">
+                <ShieldCheck className="w-4 h-4 text-primary" />
+                <span className="text-sm font-semibold text-primary">{transparencyScore.approved} Approved</span>
+              </div>
+              <div className="flex items-center gap-2 px-3 py-2 bg-purple-50 rounded-lg border border-purple-100">
+                <span className="chain-dot w-2 h-2" />
+                <span className="text-sm font-semibold text-purple-700">Polygon Amoy Network</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>

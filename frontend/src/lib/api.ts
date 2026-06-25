@@ -55,7 +55,14 @@ api.interceptors.response.use(
 
     // Re-fetch CSRF token if it expired (403)
     if (err.response?.status === 403 && err.response?.data?.error?.includes("CSRF")) {
-      fetchCSRFToken();
+      return fetchCSRFToken().then(() => {
+        // Retry the original request with the new token
+        if (err.config && csrfToken) {
+          err.config.headers["X-CSRF-Token"] = csrfToken;
+          return axios(err.config);
+        }
+        return Promise.reject(err);
+      });
     }
 
     return Promise.reject(err);

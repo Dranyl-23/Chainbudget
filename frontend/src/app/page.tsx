@@ -45,7 +45,7 @@ export default function LandingPage() {
       <nav className="flex items-center justify-between px-8 py-5 border-b border-white/5">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center bg-white/0">
-            <img src="/images/logo.png" alt="ChainBudget logo" className="w-7 h-7 object-contain" />
+            <img src="/images/logo.png" alt="ChainBudget logo" className="w-7 h-7 object-contain rounded-[8px] shadow-sm" />
           </div>
           <span className="text-lg font-bold tracking-tight">
             Chain<span className="gradient-text">Budget</span>

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { ChevronDown, Check, Plus, Building, X } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import api from "@/lib/api";
+import Portal from "@/components/Portal";
 
 interface Organization {
   _id: string;
@@ -85,8 +86,7 @@ export default function OrgSelector() {
     <div className="px-3 mb-6 relative" ref={dropdownRef}>
       {/* Selector Button */}
       <div 
-        className="flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors hover:bg-gray-100"
-        style={{ background: "rgba(249,249,251,0.8)", border: "1px solid rgba(26,26,46,0.04)" }}
+        className="flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors sidebar-card"
         onClick={() => setDropdownOpen(!dropdownOpen)}
       >
         <div className="overflow-hidden">
@@ -135,9 +135,10 @@ export default function OrgSelector() {
 
       {/* Create Modal */}
       {modalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl animate-fade-in">
-            <div className="flex items-center justify-between mb-6">
+        <Portal>
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl animate-fade-in">
+              <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold flex items-center gap-2">
                 <Building className="w-5 h-5 text-primary" /> New Organization
               </h2>
@@ -220,6 +221,7 @@ export default function OrgSelector() {
             </form>
           </div>
         </div>
+        </Portal>
       )}
     </div>
   );

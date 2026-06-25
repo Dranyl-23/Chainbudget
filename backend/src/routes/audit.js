@@ -3,8 +3,8 @@ const router = express.Router();
 const AuditLog = require("../models/AuditLog");
 const { authenticate, requireRole } = require("../middleware/auth");
 
-/// GET /api/audit?orgId=xxx — Paginated audit trail (Level 1+)
-router.get("/", authenticate, requireRole(1), async (req, res) => {
+/// GET /api/audit?orgId=xxx — Paginated audit trail (Level 1 and 2)
+router.get("/", authenticate, requireRole(2), async (req, res) => {
   try {
     const { orgId, page = 1, limit = 50 } = req.query;
     if (!orgId) return res.status(400).json({ error: "orgId required" });
