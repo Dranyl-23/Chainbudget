@@ -1,0 +1,23 @@
+{
+  "name": "ChainBudget",
+  "short_name": "ChainBudget",
+  "description": "Blockchain-based budget management system for transparent organizational fund monitoring.",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#6B55D9",
+  "icons": [
+    {
+      "src": "/images/logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/images/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -7,8 +7,8 @@ const { recordTransactionOnChain } = require("../services/blockchain");
 const { authenticate, requireRole } = require("../middleware/auth");
 const { ethers } = require("ethers");
 
-/// POST /api/transactions — Create a new transaction (Level 2+)
-router.post("/", authenticate, requireRole(2), async (req, res) => {
+/// POST /api/transactions — Create a new transaction (Level 2+) or Request (Level 3)
+router.post("/", authenticate, requireRole(3), async (req, res) => {
   try {
     const {
       organizationId,
@@ -21,6 +21,7 @@ router.post("/", authenticate, requireRole(2), async (req, res) => {
       notes,
       documentUrl,
       documentHash,
+      urgency,
     } = req.body;
 
     // Input validation
@@ -45,6 +46,17 @@ router.post("/", authenticate, requireRole(2), async (req, res) => {
 
     const isHighValue = amount >= org.highValueThreshold;
 
+    // Determine status based on role
+    const roleLevel = req.user.getRoleInOrg(organizationId);
+    const isRequest = roleLevel === 3;
+    
+    let initialStatus;
+    if (isRequest) {
+      initialStatus = "requested";
+    } else {
+      initialStatus = isHighValue ? "pending_approval" : "approved";
+    }
+
     const txn = new Transaction({
       organization: organizationId,
       submittedBy: req.user._id,
@@ -58,42 +70,44 @@ router.post("/", authenticate, requireRole(2), async (req, res) => {
       documentUrl: documentUrl || undefined,
       documentHash: documentHash || undefined,
       isHighValue,
-      status: isHighValue ? "pending_approval" : "approved",
+      status: initialStatus,
+      urgency: urgency && urgency === "urgent" ? "urgent" : "normal",
     });
 
     await txn.save();
 
-    // Record ALL transactions on blockchain at creation.
-    // Non-high-value → isApproved immediately in contract.
-    // High-value → registered on contract with isApproved=false, awaiting submitApproval votes.
     let blockchainResult = null;
-    try {
-      const payload = JSON.stringify({
-        orgId: organizationId,
-        amount,
-        type,
-        description,
-        submittedBy: req.user.walletAddress,
-        timestamp: new Date().toISOString(),
-        documentHash: documentHash || null,  // Bind receipt hash on-chain
-      });
+    
+    // Only record on blockchain if it's NOT a level 3 request
+    if (!isRequest) {
+      try {
+        const payload = JSON.stringify({
+          orgId: organizationId,
+          amount,
+          type,
+          description,
+          submittedBy: req.user.walletAddress,
+          timestamp: new Date().toISOString(),
+          documentHash: documentHash || null,  // Bind receipt hash on-chain
+        });
 
-      blockchainResult = await recordTransactionOnChain(
-        payload,
-        Math.round(amount),
-        isHighValue
-      );
+        blockchainResult = await recordTransactionOnChain(
+          payload,
+          Math.round(amount),
+          isHighValue
+        );
 
-      if (blockchainResult && !blockchainResult.skipped) {
-        txn.onChainTxId = blockchainResult.onChainTxId;
-        txn.blockchainTxHash = blockchainResult.blockchainTxHash;
-        txn.dataHash = blockchainResult.dataHash;
-        txn.isRecordedOnChain = true;
-        await txn.save();
+        if (blockchainResult && !blockchainResult.skipped) {
+          txn.onChainTxId = blockchainResult.onChainTxId;
+          txn.blockchainTxHash = blockchainResult.blockchainTxHash;
+          txn.dataHash = blockchainResult.dataHash;
+          txn.isRecordedOnChain = true;
+          await txn.save();
+        }
+      } catch (blockchainError) {
+        console.error("Blockchain recording failed:", blockchainError.message);
+        // Continue - blockchain is optional for now
       }
-    } catch (blockchainError) {
-      console.error("Blockchain recording failed:", blockchainError.message);
-      // Continue - blockchain is optional for now
     }
 
     // Audit log
@@ -116,6 +130,36 @@ router.post("/", authenticate, requireRole(2), async (req, res) => {
   }
 });
 
+// GET /api/transactions/pending-count?orgId=xxx
+router.get("/pending-count", authenticate, async (req, res) => {
+  try {
+    const { orgId } = req.query;
+    if (!orgId) return res.status(400).json({ error: "orgId required" });
+
+    // Only Level 1 & Level 2 can approve/reject
+    const roleLevel = req.user.getRoleInOrg(orgId);
+    if (roleLevel > 2 && !req.user.isSuperAdmin) {
+      return res.json({ count: 0 }); // They don't have pending actions
+    }
+
+    const mongoose = require("mongoose");
+    if (!mongoose.Types.ObjectId.isValid(orgId)) {
+      return res.json({ count: 0 });
+    }
+
+    // Count both requested and pending_approval
+    const count = await Transaction.countDocuments({
+      organization: new mongoose.Types.ObjectId(orgId),
+      status: { $in: ["requested", "pending_approval"] }
+    });
+
+    res.json({ count });
+  } catch (err) {
+    console.error("Failed to fetch pending count:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 /// GET /api/transactions?orgId=xxx — List transactions for an org
 router.get("/", authenticate, async (req, res) => {
   try {
@@ -131,13 +175,32 @@ router.get("/", authenticate, async (req, res) => {
 
     const orgObjectId = new mongoose.Types.ObjectId(orgId);
     const filter = { organization: orgObjectId };
-    if (status) filter.status = status;
     if (type) filter.type = type;
 
-    // Level 3+ can only see approved transactions
+    // Security filters based on Role Level
     const roleLevel = req.user.getRoleInOrg(orgId);
-    if (roleLevel >= 3 && !req.user.isSuperAdmin) {
-      filter.status = "approved";
+    if (!req.user.isSuperAdmin) {
+      if (roleLevel === 4) {
+        // Level 4 (Public Viewers) ONLY see approved transactions
+        filter.status = "approved";
+      } else if (roleLevel === 3) {
+        // Level 3 can see approved and their/others' requested transactions
+        if (status) {
+          if (["approved", "requested"].includes(status)) {
+            filter.status = status;
+          } else {
+            filter.status = "unauthorized_status";
+          }
+        } else {
+          filter.status = { $in: ["approved", "requested"] };
+        }
+      } else {
+        // Admins (Level 1 & 2) can filter by any status
+        if (status) filter.status = status;
+      }
+    } else {
+      // SuperAdmins can filter by any status
+      if (status) filter.status = status;
     }
 
     const skip = (Number(page) - 1) * Number(limit);
@@ -230,6 +293,100 @@ router.get("/", authenticate, async (req, res) => {
     res.json({ transactions, total, page: Number(page), limit: Number(limit) });
   } catch (err) {
     console.error("GET /transactions error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/// PATCH /api/transactions/:id/process-request — Approve/Reject Level 3 Request
+router.patch("/:id/process-request", authenticate, requireRole(2), async (req, res) => {
+  try {
+    const { action } = req.body; // 'approve' or 'reject'
+    if (!["approve", "reject"].includes(action)) {
+      return res.status(400).json({ error: "Action must be 'approve' or 'reject'" });
+    }
+
+    const txn = await Transaction.findById(req.params.id).populate("organization");
+    if (!txn) return res.status(404).json({ error: "Transaction not found" });
+
+    if (txn.status !== "requested") {
+      return res.status(400).json({ error: "Transaction is not in requested state" });
+    }
+
+    const orgId = txn.organization._id.toString();
+    const userRole = req.user.getRoleInOrg(orgId);
+    if (!req.user.isSuperAdmin && (!userRole || userRole > 2)) {
+      return res.status(403).json({ error: "Insufficient permissions to process request" });
+    }
+
+    if (action === "reject") {
+      txn.status = "rejected";
+      await txn.save();
+      
+      await AuditLog.create({
+        organization: orgId,
+        actor: req.user._id,
+        actorWallet: req.user.walletAddress,
+        action: "transaction.request_rejected",
+        targetType: "Transaction",
+        targetId: txn._id,
+        details: { reason: "Rejected by admin" }
+      });
+
+      return res.json({ transaction: txn, message: "Request rejected" });
+    }
+
+    // Process Approval
+    const org = txn.organization;
+    const isHighValue = txn.amount >= org.highValueThreshold;
+    txn.isHighValue = isHighValue;
+    txn.status = isHighValue ? "pending_approval" : "approved";
+
+    // Now record on blockchain
+    let blockchainResult = null;
+    try {
+      const payload = JSON.stringify({
+        orgId,
+        amount: txn.amount,
+        type: txn.type,
+        description: txn.description,
+        submittedBy: txn.submittedBy.toString(), // Original requester
+        timestamp: new Date().toISOString(),
+        documentHash: txn.documentHash || null,
+      });
+
+      blockchainResult = await recordTransactionOnChain(
+        payload,
+        Math.round(txn.amount),
+        isHighValue
+      );
+
+      if (blockchainResult && !blockchainResult.skipped) {
+        txn.onChainTxId = blockchainResult.onChainTxId;
+        txn.blockchainTxHash = blockchainResult.blockchainTxHash;
+        txn.dataHash = blockchainResult.dataHash;
+        txn.isRecordedOnChain = true;
+      }
+    } catch (blockchainError) {
+      console.error("Blockchain recording failed for request:", blockchainError.message);
+    }
+
+    await txn.save();
+
+    await AuditLog.create({
+      organization: orgId,
+      actor: req.user._id,
+      actorWallet: req.user.walletAddress,
+      action: "transaction.request_approved",
+      targetType: "Transaction",
+      targetId: txn._id,
+      details: { amount: txn.amount, type: txn.type, isHighValue },
+      blockchainTxHash: blockchainResult?.blockchainTxHash,
+      onChainTxId: blockchainResult?.onChainTxId,
+    });
+
+    res.json({ transaction: txn, blockchain: blockchainResult, message: "Request approved and processed" });
+  } catch (err) {
+    console.error("Process request error:", err);
     res.status(500).json({ error: err.message });
   }
 });

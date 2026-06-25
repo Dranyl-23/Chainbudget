@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import Portal from "@/components/Portal";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -16,6 +16,12 @@ import {
   ExternalLink,
   CheckCircle2,
   Loader2,
+  Clock,
+  ChevronDown,
+  Send,
+  ShieldCheck,
+  Link2,
+  XCircle,
 } from "lucide-react";
 import api from "@/lib/api";
 
@@ -28,8 +34,15 @@ interface Transaction {
   type: "income" | "expense";
   category?: string;
   createdAt: string;
-  status: "approved" | "pending_approval" | "rejected";
+  updatedAt?: string;
+  status: "approved" | "pending_approval" | "requested" | "rejected" | "cancelled";
+  urgency?: "normal" | "urgent";
   isRecordedOnChain: boolean;
+  isHighValue?: boolean;
+  blockchainTxHash?: string;
+  approvalCount?: number;
+  organization?: { requiredApprovals?: number; highValueThreshold?: number };
+  submittedBy?: { displayName?: string; walletAddress?: string };
   documentUrl?: string;
   documentHash?: string;
 }
@@ -41,6 +54,7 @@ interface CreateTxForm {
   category: string;
   referenceNumber: string;
   notes: string;
+  urgency: "normal" | "urgent";
 }
 
 interface UploadedFile {
@@ -61,11 +75,12 @@ export default function TransactionsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [filters, setFilters] = useState({ search: "", type: "", status: "" });
   const [activeTab, setActiveTab] = useState<"expense" | "income">("expense");
+  const [expandedTxId, setExpandedTxId] = useState<string | null>(null);
   const [expenseData, setExpenseData] = useState<CreateTxForm>({
-    type: "expense", amount: "", description: "", category: "", referenceNumber: "", notes: "",
+    type: "expense", amount: "", description: "", category: "", referenceNumber: "", notes: "", urgency: "normal",
   });
   const [incomeData, setIncomeData] = useState<CreateTxForm>({
-    type: "income", amount: "", description: "", category: "", referenceNumber: "", notes: "",
+    type: "income", amount: "", description: "", category: "", referenceNumber: "", notes: "", urgency: "normal",
   });
 
   const formData = activeTab === "expense" ? expenseData : incomeData;
@@ -180,6 +195,7 @@ export default function TransactionsPage() {
         category: formData.category || undefined,
         referenceNumber: formData.referenceNumber || undefined,
         notes: formData.notes || undefined,
+        urgency: formData.urgency || "normal",
         documentUrl: uploadedFile?.documentUrl || undefined,
         documentHash: uploadedFile?.documentHash || undefined,
       });
@@ -192,6 +208,19 @@ export default function TransactionsPage() {
     }
   };
 
+  const handleProcessRequest = async (txId: string, action: "approve" | "reject") => {
+    try {
+      const res = await api.patch(`/transactions/${txId}/process-request`, { action });
+      // Update transaction in state
+      setTransactions((prev) => 
+        prev.map(tx => tx._id === txId ? { ...tx, ...res.data.transaction } : tx)
+      );
+    } catch (err: any) {
+      console.error("Failed to process request:", err);
+      setError(err.response?.data?.error || "Failed to process request");
+    }
+  };
+
   const getFileIcon = (mimeType?: string) => {
     if (!mimeType) return <Paperclip className="w-3.5 h-3.5" />;
     if (mimeType.startsWith("image/")) return <Image className="w-3.5 h-3.5" />;
@@ -199,21 +228,24 @@ export default function TransactionsPage() {
   };
 
   return (
-    <div className="p-8 pb-20 animate-fade-in">
+    <div className="p-4 md:p-8 pb-20 animate-fade-in">
 
       {/* ── Header ── */}
-      <header className="mb-8 flex items-center justify-between">
+      <header className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold mb-1">Transactions</h1>
           <p className="text-sm text-gray-500">View and manage all organization transactions.</p>
         </div>
-        <button
-          id="record-transaction-btn"
-          className="btn-primary py-2"
-          onClick={() => setShowCreateModal(true)}
-        >
-          Record Transaction
-        </button>
+        {/* RBAC Fix: Level 1, 2, and 3 can record/request transactions */}
+        {(user?.isSuperAdmin || (user?.memberships?.find((m: any) => m.organization === activeOrgId || m.organization?._id === activeOrgId)?.roleLevel || 4) <= 3) && (
+          <button
+            id="record-transaction-btn"
+            className="btn-primary py-2"
+            onClick={() => setShowCreateModal(true)}
+          >
+            { (user?.isSuperAdmin || (user?.memberships?.find((m: any) => m.organization === activeOrgId || m.organization?._id === activeOrgId)?.roleLevel || 4) <= 2) ? "Record Transaction" : "Submit Request" }
+          </button>
+        )}
       </header>
 
       {/* ── Filters ── */}
@@ -245,6 +277,7 @@ export default function TransactionsPage() {
           <option value="">All Statuses</option>
           <option value="approved">Approved</option>
           <option value="pending_approval">Pending</option>
+          <option value="requested">Requested</option>
           <option value="rejected">Rejected</option>
         </select>
         <button className="btn-secondary px-3 py-2"><Filter className="w-4 h-4" /></button>
@@ -267,7 +300,8 @@ export default function TransactionsPage() {
           <tbody>
             {filteredTxs.length > 0 ? (
               filteredTxs.map((tx) => (
-                <tr key={tx._id}>
+                <React.Fragment key={tx._id}>
+                <tr onClick={() => setExpandedTxId(expandedTxId === tx._id ? null : tx._id)} className="cursor-pointer hover:bg-gray-50/50 transition-colors">
                   <td>
                     <div className="flex items-center gap-3">
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center ${tx.type === "income" ? "bg-primary/10" : "bg-danger/10"}`}>
@@ -275,7 +309,17 @@ export default function TransactionsPage() {
                           ? <ArrowUpRight className="w-4 h-4 text-primary" />
                           : <ArrowDownRight className="w-4 h-4 text-danger" />}
                       </div>
-                      <span className="font-medium text-gray-700">{tx.description}</span>
+                      <div className="flex flex-col">
+                        <span className="font-medium text-gray-700 flex items-center gap-2">
+                          {tx.description}
+                          {tx.urgency === "urgent" && (
+                            <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-red-100 text-red-700 animate-pulse">
+                              Urgent
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                      <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform duration-200 ${expandedTxId === tx._id ? 'rotate-180' : ''}`} />
                     </div>
                   </td>
                   <td>
@@ -285,15 +329,55 @@ export default function TransactionsPage() {
                   </td>
                   <td>{new Date(tx.createdAt).toLocaleDateString()}</td>
                   <td>
-                    <span className={`badge ${tx.status === "approved" ? "badge-approved" : tx.status === "rejected" ? "badge-rejected" : "badge-pending"}`}>
-                      {tx.status === "approved" ? "Approved" : tx.status === "pending_approval" ? "Pending" : "Rejected"}
-                    </span>
+                    <div className="flex flex-col items-start gap-2">
+                      <span className={`badge ${
+                        tx.status === "approved" ? "badge-approved" : 
+                        tx.status === "rejected" ? "badge-rejected" : 
+                        tx.status === "requested" ? "bg-orange-100 text-orange-700 border-orange-200" :
+                        "badge-pending"
+                      }`}>
+                        {tx.status === "approved" ? "Approved" : 
+                         tx.status === "pending_approval" ? "Pending" : 
+                         tx.status === "requested" ? "Requested" : 
+                         "Rejected"}
+                      </span>
+                      {tx.status === "requested" && (user?.isSuperAdmin || (user?.memberships?.find((m: any) => m.organization === activeOrgId || m.organization?._id === activeOrgId)?.roleLevel || 4) <= 2) && (
+                        <div className="flex gap-1">
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); handleProcessRequest(tx._id, "approve"); }}
+                            className="px-2 py-1 text-[10px] font-bold bg-primary/10 text-primary hover:bg-primary hover:text-white rounded transition-colors"
+                          >
+                            Approve
+                          </button>
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); handleProcessRequest(tx._id, "reject"); }}
+                            className="px-2 py-1 text-[10px] font-bold bg-danger/10 text-danger hover:bg-danger hover:text-white rounded transition-colors"
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </td>
                   <td>
                     {tx.isRecordedOnChain ? (
-                      <span className="badge badge-onchain" title="Recorded on Polygon Amoy">
-                        <span className="chain-dot w-2 h-2 mr-1" /> Verified
-                      </span>
+                      tx.blockchainTxHash ? (
+                        <a 
+                          href={`https://amoy.polygonscan.com/tx/${tx.blockchainTxHash}`} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="badge badge-onchain hover:opacity-80 transition-opacity inline-flex items-center gap-1 w-fit cursor-pointer" 
+                          title="View on Polygonscan"
+                        >
+                          <span className="chain-dot w-2 h-2" /> Verified
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      ) : (
+                        <span className="badge badge-onchain" title="Recorded on Polygon Amoy">
+                          <span className="chain-dot w-2 h-2 mr-1" /> Verified
+                        </span>
+                      )
                     ) : (
                       <span className="text-xs text-gray-500">—</span>
                     )}
@@ -301,10 +385,11 @@ export default function TransactionsPage() {
                   <td>
                     {tx.documentUrl ? (
                       <a
-                        href={`${BACKEND_URL}${tx.documentUrl}`}
+                        href={tx.documentUrl.startsWith("http") ? tx.documentUrl : `${BACKEND_URL}${tx.documentUrl}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         title="View receipt"
+                        onClick={(e) => e.stopPropagation()}
                         className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
                       >
                         <Paperclip className="w-3.5 h-3.5" />
@@ -319,6 +404,90 @@ export default function TransactionsPage() {
                     {tx.type === "income" ? "+" : "-"}&#8369;{Math.round(tx.amount).toLocaleString()}
                   </td>
                 </tr>
+                {/* ── Request Tracking Timeline ── */}
+                {expandedTxId === tx._id && (
+                  <tr className="timeline-row">
+                    <td colSpan={7} className="!p-0">
+                      <div className="bg-gradient-to-r from-gray-50/80 to-white px-8 py-6 border-t border-gray-100">
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-5">Request Tracking Timeline</p>
+                        <div className="flex items-start gap-0">
+                          {/* Step 1: Submitted */}
+                          {(() => {
+                            const steps = [
+                              {
+                                label: "Submitted",
+                                detail: tx.submittedBy?.displayName || "Member",
+                                date: new Date(tx.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }),
+                                icon: <Send className="w-4 h-4" />,
+                                done: true,
+                                color: "bg-primary",
+                              },
+                              {
+                                label: tx.status === "rejected" ? "Rejected" : "Under Review",
+                                detail: tx.status === "rejected" 
+                                  ? "Transaction was rejected" 
+                                  : tx.isHighValue 
+                                    ? `${tx.approvalCount || 0} of ${tx.organization?.requiredApprovals || 2} approvals` 
+                                    : "Pending admin review",
+                                date: tx.status !== "requested" ? new Date(tx.updatedAt || tx.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "",
+                                icon: tx.status === "rejected" ? <XCircle className="w-4 h-4" /> : <Clock className="w-4 h-4" />,
+                                done: tx.status !== "requested",
+                                color: tx.status === "rejected" ? "bg-danger" : "bg-amber-500",
+                                isRejected: tx.status === "rejected",
+                              },
+                              {
+                                label: "Approved",
+                                detail: tx.status === "approved" ? "Verified by admin(s)" : "Awaiting approval",
+                                date: tx.status === "approved" ? new Date(tx.updatedAt || tx.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "",
+                                icon: <ShieldCheck className="w-4 h-4" />,
+                                done: tx.status === "approved",
+                                color: "bg-green-500",
+                              },
+                              {
+                                label: "On Blockchain",
+                                detail: tx.isRecordedOnChain 
+                                  ? tx.blockchainTxHash 
+                                    ? `TX: ${tx.blockchainTxHash.slice(0, 8)}...${tx.blockchainTxHash.slice(-6)}` 
+                                    : "Recorded on chain" 
+                                  : "Pending blockchain record",
+                                date: tx.isRecordedOnChain ? "✓ Immutable" : "",
+                                icon: <Link2 className="w-4 h-4" />,
+                                done: tx.isRecordedOnChain,
+                                color: "bg-purple-600",
+                              },
+                            ];
+
+                            // If rejected, only show first 2 steps
+                            const visibleSteps = tx.status === "rejected" ? steps.slice(0, 2) : steps;
+
+                            return visibleSteps.map((step, idx) => (
+                              <div key={idx} className="flex items-start flex-1">
+                                <div className="flex flex-col items-center">
+                                  <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white shadow-md transition-all duration-300 ${
+                                    step.done 
+                                      ? `${step.color} scale-100` 
+                                      : 'bg-gray-300 scale-90'
+                                  }`}>
+                                    {step.done ? step.icon : <span className="w-2 h-2 bg-white rounded-full" />}
+                                  </div>
+                                  <p className={`text-xs font-semibold mt-2 ${step.done ? (step.isRejected ? 'text-danger' : 'text-gray-800') : 'text-gray-400'}`}>{step.label}</p>
+                                  <p className={`text-[10px] mt-0.5 text-center max-w-[120px] ${step.done ? 'text-gray-500' : 'text-gray-400'}`}>{step.detail}</p>
+                                  {step.date && <p className="text-[10px] text-gray-400 mt-0.5">{step.date}</p>}
+                                </div>
+                                {idx < visibleSteps.length - 1 && (
+                                  <div className={`h-[3px] flex-1 mt-[18px] mx-1 rounded-full transition-all duration-300 ${
+                                    step.done ? step.color : 'bg-gray-200'
+                                  }`} />
+                                )}
+                              </div>
+                            ));
+                          })()}
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                </React.Fragment>
               ))
             ) : (
               <tr>
@@ -348,7 +517,9 @@ export default function TransactionsPage() {
               <div className="glass rounded-2xl p-8 w-full max-w-lg shadow-2xl animate-fade-in">
 
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold">Record Transaction</h2>
+              <h2 className="text-xl font-bold">
+                { (user?.isSuperAdmin || (user?.memberships?.find((m: any) => m.organization === activeOrgId || m.organization?._id === activeOrgId)?.roleLevel || 4) <= 2) ? "Record Transaction" : "Submit Request" }
+              </h2>
               <button
                 onClick={closeModal}
                 className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-primary/10 text-gray-500 hover:text-primary transition-colors"
@@ -419,6 +590,32 @@ export default function TransactionsPage() {
                 />
               </div>
 
+              {/* Urgency Toggle (Level 3 specific) */}
+              {(user?.memberships?.find((m: any) => m.organization === activeOrgId || m.organization?._id === activeOrgId)?.roleLevel === 3) && formData.type === "expense" && (
+                <div className="flex items-center justify-between p-3 bg-red-50 border border-red-100 rounded-lg">
+                  <div>
+                    <label className="block text-sm font-semibold text-red-700 mb-0.5">Mark as Urgent?</label>
+                    <p className="text-[10px] text-red-600">Flags this request for immediate admin attention.</p>
+                  </div>
+                  <div className="flex bg-white rounded-lg p-1 border border-red-200 shadow-sm">
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, urgency: "normal" })}
+                      className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${formData.urgency === "normal" ? "bg-gray-100 text-gray-700 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                    >
+                      Normal
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, urgency: "urgent" })}
+                      className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${formData.urgency === "urgent" ? "bg-red-500 text-white shadow-sm" : "text-red-500 hover:bg-red-50"}`}
+                    >
+                      URGENT
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Category + Reference */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -474,13 +671,10 @@ export default function TransactionsPage() {
                       e.preventDefault();
                       (e.currentTarget as HTMLElement).style.borderColor = "var(--color-border)";
                       const file = e.dataTransfer.files?.[0];
-                      // Call handleFileChange directly — React’s onChange is NOT
-                      // triggered by native dispatchEvent, so we bypass the input.
                       if (file) {
                         handleFileChange({ target: { files: [file] } } as any);
                       }
                     }}
-                    onClick={() => fileInputRef.current?.click()}
                   >
                     <input
                       ref={fileInputRef}

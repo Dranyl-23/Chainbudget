@@ -8,8 +8,8 @@ const AuditLog = require("../models/AuditLog");
 // Removed backend submitApprovalOnChain as it is now done in the frontend
 const { authenticate, requireRole } = require("../middleware/auth");
 
-/// POST /api/approvals/:txId — Submit approval/rejection (Level 1 only)
-router.post("/:txId", authenticate, requireRole(1), async (req, res) => {
+/// POST /api/approvals/:txId — Submit approval/rejection (Level 1 and 2)
+router.post("/:txId", authenticate, requireRole(2), async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
   

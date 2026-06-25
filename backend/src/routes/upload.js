@@ -4,6 +4,8 @@ const multer = require("multer");
 const crypto = require("crypto");
 const path = require("path");
 const fs = require("fs");
+const axios = require("axios");
+const FormData = require("form-data");
 const { authenticate } = require("../middleware/auth");
 
 // Ensure uploads directory exists
@@ -30,39 +32,57 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB limit
 });
 
-/// POST /api/upload — Upload a receipt or document
-router.post("/", authenticate, upload.single("file"), (req, res) => {
+/// POST /api/upload — Upload a receipt or document to IPFS via Pinata
+router.post("/", authenticate, upload.single("file"), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: "No file uploaded" });
   }
 
   try {
-    // Compute SHA-256 hash of the file buffer
-    const hash = crypto
-      .createHash("sha256")
-      .update(req.file.buffer)
-      .digest("hex");
+    const pinataJWT = process.env.PINATA_JWT;
+    if (!pinataJWT) {
+      return res.status(500).json({ error: "Pinata JWT not configured" });
+    }
 
-    // Build a safe filename: timestamp + hash prefix + original extension
-    const ext = path.extname(req.file.originalname).toLowerCase() || ".bin";
-    const safeFilename = `${Date.now()}-${hash.slice(0, 12)}${ext}`;
-    const filePath = path.join(UPLOADS_DIR, safeFilename);
+    // Build FormData to send to Pinata
+    const formData = new FormData();
+    formData.append("file", req.file.buffer, {
+      filename: req.file.originalname,
+      contentType: req.file.mimetype,
+    });
 
-    // Write the buffer to disk
-    fs.writeFileSync(filePath, req.file.buffer);
+    const pinataMetadata = JSON.stringify({
+      name: `ChainBudget_Receipt_${Date.now()}_${req.file.originalname}`,
+    });
+    formData.append("pinataMetadata", pinataMetadata);
+
+    const pinataOptions = JSON.stringify({
+      cidVersion: 1,
+    });
+    formData.append("pinataOptions", pinataOptions);
+
+    // Upload to Pinata
+    const response = await axios.post("https://api.pinata.cloud/pinning/pinFileToIPFS", formData, {
+      maxBodyLength: "Infinity",
+      headers: {
+        "Content-Type": `multipart/form-data; boundary=${formData._boundary}`,
+        Authorization: `Bearer ${pinataJWT}`,
+      },
+    });
+
+    const ipfsHash = response.data.IpfsHash;
+    const documentUrl = `https://gateway.pinata.cloud/ipfs/${ipfsHash}`;
 
     // Return public URL and hash
-    const documentUrl = `/uploads/${safeFilename}`;
     res.status(201).json({
       documentUrl,
-      documentHash: hash,
+      documentHash: ipfsHash,
       originalName: req.file.originalname,
       mimeType: req.file.mimetype,
-      size: req.file.size,
     });
   } catch (err) {
-    console.error("Upload error:", err.message);
-    res.status(500).json({ error: "Failed to process file upload" });
+    console.error("Error uploading to IPFS:", err?.response?.data || err.message);
+    res.status(500).json({ error: "Failed to upload to IPFS" });
   }
 });
 

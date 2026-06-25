@@ -10,6 +10,19 @@ export const metadata: Metadata = {
   description:
     "A blockchain-based budget management system for transparent organizational fund monitoring.",
   keywords: ["blockchain", "budget", "transparency", "organization", "audit"],
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "ChainBudget",
+  },
+};
+
+export const viewport = {
+  themeColor: "#6B55D9",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
 };
 
 export default function RootLayout({

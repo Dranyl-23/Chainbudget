@@ -90,15 +90,18 @@ export default function BudgetPage() {
   const totalSpent = budgetCategories.reduce((s, c) => s + c.spent, 0);
 
   return (
-    <div className="p-8 pb-20 animate-fade-in relative">
-      <header className="mb-8 flex items-center justify-between">
+    <div className="p-4 md:p-8 pb-20 animate-fade-in relative">
+      <header className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold mb-1">Budget</h1>
           <p className="text-sm text-gray-500">Manage and monitor your organizational budget allocations.</p>
         </div>
-        <button className="btn-primary py-2" onClick={() => { setShowAddModal(true); setError(null); }}>
-          <Plus className="w-4 h-4" /> Add Category
-        </button>
+        {/* RBAC Fix: Only Level 1 & 2 can add categories. Level 3 is read-only. */}
+        {(user?.isSuperAdmin || (user?.memberships?.find((m: any) => m.organization === activeOrgId || m.organization?._id === activeOrgId)?.roleLevel || 4) <= 2) && (
+          <button className="btn-primary py-2 w-full sm:w-auto justify-center" onClick={() => { setShowAddModal(true); setError(null); }}>
+            <Plus className="w-4 h-4" /> Add Category
+          </button>
+        )}
       </header>
 
       {loading ? (

@@ -30,8 +30,13 @@ const TransactionSchema = new mongoose.Schema(
     isHighValue: { type: Boolean, default: false },
     status: {
       type: String,
-      enum: ["pending_approval", "approved", "rejected", "cancelled"],
+      enum: ["requested", "pending_approval", "approved", "rejected", "cancelled"],
       default: "pending_approval",
+    },
+    urgency: {
+      type: String,
+      enum: ["normal", "urgent"],
+      default: "normal",
     },
 
     // Blockchain references (populated after on-chain recording)
