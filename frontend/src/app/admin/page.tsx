@@ -206,8 +206,8 @@ export default function AdminPage() {
     <div className="min-h-screen flex flex-col" style={{ background: "var(--color-bg)" }}>
       {/* ── Top bar ────────────────────────────────────────────────────────── */}
       <header
-        className="sticky top-0 z-30 flex flex-col sm:flex-row sm:items-center justify-between px-4 sm:px-6 py-3 border-b gap-4 sm:gap-0"
-        style={{ background: "rgba(255,255,255,0.92)", backdropFilter: "blur(10px)", borderColor: "var(--color-border)" }}
+        className="sticky top-0 z-30 flex flex-col sm:flex-row sm:items-center justify-between px-4 sm:px-6 py-3 border-b gap-4 sm:gap-0 bg-white/90 backdrop-blur-md"
+        style={{ borderColor: "var(--color-border)" }}
       >
         <div className="flex items-center justify-between w-full sm:w-auto">
           <div className="flex items-center gap-3">
@@ -222,7 +222,7 @@ export default function AdminPage() {
                 <Crown className="w-4 h-4 text-white" />
               </div>
               <div>
-                <h1 className="text-sm font-bold leading-tight">Platform Admin</h1>
+                <h1 className="text-sm font-bold leading-tight text-gray-900">Platform Admin</h1>
                 <p className="text-xs text-gray-400 leading-tight hidden sm:block">ChainBudget Super Admin Console</p>
               </div>
             </div>
