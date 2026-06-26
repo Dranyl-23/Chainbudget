@@ -206,41 +206,51 @@ export default function AdminPage() {
     <div className="min-h-screen flex flex-col" style={{ background: "var(--color-bg)" }}>
       {/* ── Top bar ────────────────────────────────────────────────────────── */}
       <header
-        className="sticky top-0 z-30 flex items-center justify-between px-6 py-3 border-b"
+        className="sticky top-0 z-30 flex flex-col sm:flex-row sm:items-center justify-between px-4 sm:px-6 py-3 border-b gap-4 sm:gap-0"
         style={{ background: "rgba(255,255,255,0.92)", backdropFilter: "blur(10px)", borderColor: "var(--color-border)" }}
       >
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => router.push("/dashboard")}
-            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors text-gray-500"
-          >
-            <ChevronLeft className="w-4 h-4" />
+        <div className="flex items-center justify-between w-full sm:w-auto">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => router.push("/dashboard")}
+              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors text-gray-500 flex-shrink-0"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary to-primary-2 flex items-center justify-center flex-shrink-0">
+                <Crown className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <h1 className="text-sm font-bold leading-tight">Platform Admin</h1>
+                <p className="text-xs text-gray-400 leading-tight hidden sm:block">ChainBudget Super Admin Console</p>
+              </div>
+            </div>
+          </div>
+          
+          {/* Mobile Disconnect Button */}
+          <button onClick={logout} className="sm:hidden flex items-center justify-center w-8 h-8 rounded-lg bg-gray-50 text-gray-500 border border-gray-200">
+            <LogOut className="w-4 h-4" />
           </button>
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary to-primary-2 flex items-center justify-center">
-              <Crown className="w-4 h-4 text-white" />
-            </div>
-            <div>
-              <h1 className="text-sm font-bold leading-tight">Platform Admin</h1>
-              <p className="text-xs text-gray-400 leading-tight">ChainBudget Super Admin Console</p>
-            </div>
-          </div>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary/5 border border-primary/10">
-            <Wallet className="w-3.5 h-3.5 text-primary" />
+
+        <div className="flex items-center gap-3 overflow-x-auto pb-1 sm:pb-0 hide-scrollbar">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary/5 border border-primary/10 whitespace-nowrap">
+            <Wallet className="w-3.5 h-3.5 text-primary flex-shrink-0" />
             <span className="text-xs font-mono text-gray-600">{walletAddress ? shortAddr(walletAddress) : ""}</span>
-            <span className="text-xs px-1.5 py-0.5 rounded-full bg-primary text-white font-semibold">SUPER ADMIN</span>
+            <span className="text-[10px] sm:text-xs px-1.5 py-0.5 rounded-full bg-primary text-white font-semibold">SUPER ADMIN</span>
           </div>
-          <button onClick={logout} className="nav-item gap-1.5 text-gray-500 px-3 py-1.5">
+          
+          {/* Desktop Disconnect Button */}
+          <button onClick={logout} className="hidden sm:flex items-center gap-1.5 text-gray-500 px-3 py-1.5 hover:text-gray-700 hover:bg-gray-50 rounded-lg transition-colors">
             <LogOut className="w-4 h-4" /> Disconnect
           </button>
         </div>
       </header>
 
-      <div className="flex-1 max-w-7xl mx-auto w-full px-6 py-8">
+      <div className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
         {/* ── Tabs ─────────────────────────────────────────────────────────── */}
-        <div className="flex gap-1 mb-8 p-1 rounded-xl bg-white border" style={{ borderColor: "var(--color-border)", width: "fit-content" }}>
+        <div className="flex gap-1 mb-8 p-1 rounded-xl bg-white border overflow-x-auto hide-scrollbar w-full sm:w-fit" style={{ borderColor: "var(--color-border)" }}>
           {(["overview", "orgs", "users", "activity"] as const).map((t) => {
             const icons = { overview: BarChart3, orgs: Building2, users: Users, activity: Activity };
             const labels = { overview: "Overview", orgs: "Organizations", users: "Users", activity: "Activity" };
