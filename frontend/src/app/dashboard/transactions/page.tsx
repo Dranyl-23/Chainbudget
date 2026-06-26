@@ -4,6 +4,7 @@ import React, { useEffect, useState, useRef } from "react";
 import Portal from "@/components/Portal";
 import { useAuth } from "@/context/AuthContext";
 import { ethers } from "ethers";
+import ChainBudgetABI from "@/lib/ChainBudget.json";
 import {
   ArrowUpRight,
   ArrowDownRight,
