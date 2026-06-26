@@ -1,5 +1,5 @@
 const { ethers } = require("ethers");
-const ChainBudgetABI = require("../../../contracts/artifacts/contracts/ChainBudget.sol/ChainBudget.json");
+const ChainBudgetABI = require("../lib/ChainBudget.json");
 
 let provider = null;
 let contract = null;
