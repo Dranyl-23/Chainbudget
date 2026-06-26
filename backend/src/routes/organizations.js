@@ -67,11 +67,16 @@ router.post("/", authenticate, upload.single("logo"), async (req, res) => {
 /// GET /api/organizations — List organizations the user belongs to
 router.get("/", authenticate, async (req, res) => {
   try {
-    const orgIds = req.user.memberships
-      .filter((m) => m.isActive)
-      .map((m) => m.organization);
+    let orgs;
+    if (req.user.isSuperAdmin) {
+      orgs = await Organization.find().sort({ createdAt: -1 });
+    } else {
+      const orgIds = req.user.memberships
+        .filter((m) => m.isActive)
+        .map((m) => m.organization);
 
-    const orgs = await Organization.find({ _id: { $in: orgIds }, isActive: true });
+      orgs = await Organization.find({ _id: { $in: orgIds }, isActive: true });
+    }
     res.json(orgs);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -101,6 +106,82 @@ router.patch("/:orgId", authenticate, requireRole(1), async (req, res) => {
     res.json(org);
   } catch (err) {
     res.status(400).json({ error: err.message });
+  }
+});
+
+/// POST /api/organizations/:orgId/submit-liquidation — Org Admin submits liquidation
+router.post("/:orgId/submit-liquidation", authenticate, requireRole(2), async (req, res) => {
+  try {
+    const org = await Organization.findById(req.params.orgId);
+    if (!org) return res.status(404).json({ error: "Organization not found" });
+    if (org.liquidationStatus === "pending") return res.status(400).json({ error: "Liquidation already pending" });
+    
+    org.liquidationStatus = "pending";
+    await org.save();
+    
+    res.json({ success: true, organization: org });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/// POST /api/organizations/:orgId/approve-liquidation — SuperAdmin approves & replenishes
+router.post("/:orgId/approve-liquidation", authenticate, async (req, res) => {
+  try {
+    // Only SuperAdmin can approve
+    if (!req.user.isSuperAdmin) {
+      return res.status(403).json({ error: "Only SuperAdmin can approve liquidations" });
+    }
+
+    const org = await Organization.findById(req.params.orgId);
+    if (!org) return res.status(404).json({ error: "Organization not found" });
+    if (org.liquidationStatus !== "pending") return res.status(400).json({ error: "No pending liquidation to approve" });
+
+    // 1. Approve Liquidation
+    org.liquidationStatus = "approved";
+    await org.save();
+
+    // 2. Automated Budget Replenishment (Record Income Off-Chain)
+    const Transaction = require("../models/Transaction");
+    const txn = new Transaction({
+      organization: org._id,
+      submittedBy: req.user._id, // SuperAdmin triggered
+      type: "income",
+      amount: org.subsidyAmount || 50000,
+      description: "Automated Semester Subsidy Replenishment",
+      category: "University Subsidy",
+      isHighValue: false,
+      status: "approved",
+      executed: true
+    });
+    await txn.save();
+
+    // 3. Automated On-Chain Transfer (Symbolic Gas Subsidy)
+    if (org.contractAddress) {
+      try {
+        const { ethers } = require("ethers");
+        const rpcUrl = process.env.AMOY_RPC_URL;
+        const privateKey = process.env.BACKEND_WALLET_PRIVATE_KEY;
+        const provider = new ethers.JsonRpcProvider(rpcUrl);
+        const signer = new ethers.Wallet(privateKey, provider);
+        
+        // Transfer 0.01 MATIC as a symbolic representation of the subsidy / gas
+        const tx = await signer.sendTransaction({
+          to: org.contractAddress,
+          value: ethers.parseEther("0.01")
+        });
+        
+        // Don't wait for wait() to prevent blocking
+        txn.blockchainTxHash = tx.hash;
+        await txn.save();
+      } catch (chainErr) {
+        console.error("Failed to send on-chain subsidy:", chainErr.message);
+      }
+    }
+
+    res.json({ success: true, organization: org, transaction: txn });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

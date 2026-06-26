@@ -34,9 +34,10 @@ const initBlockchain = () => {
 /// Record a transaction reference on-chain
 /// @param {string} payload - JSON string of the off-chain transaction data
 /// @param {number} amount  - Numeric amount
-/// @param {boolean} isHighValue
+/// @param {string} toAddress - Recipient address of the funds
+/// @param {boolean} isEscrow
 /// @returns {object} { onChainTxId, blockchainTxHash, dataHash }
-const recordTransactionOnChain = async (payload, amount, isHighValue) => {
+const recordTransactionOnChain = async (payload, amount, toAddress, isHighValue, isEscrow) => {
   initBlockchain();
   if (!contract) {
     return { skipped: true, reason: "Blockchain not configured" };
@@ -44,7 +45,7 @@ const recordTransactionOnChain = async (payload, amount, isHighValue) => {
 
   try {
     const dataHash = ethers.keccak256(ethers.toUtf8Bytes(payload));
-    const tx = await contract.recordTransaction(dataHash, amount, isHighValue);
+    const tx = await contract.recordTransaction(dataHash, amount, toAddress, isHighValue, isEscrow);
     
     // Add timeout to prevent hanging indefinitely
     const receipt = await Promise.race([
@@ -120,8 +121,37 @@ const getOnChainTransaction = async (onChainTxId) => {
   return await contract.getTransaction(onChainTxId);
 };
 
+/// Release escrow funds (can be called by backend owner or direct payee)
+const releaseEscrowOnChain = async (onChainTxId) => {
+  initBlockchain();
+  if (!contract) {
+    return { skipped: true, reason: "Blockchain not configured" };
+  }
+
+  try {
+    const tx = await contract.releaseEscrow(onChainTxId);
+    
+    const receipt = await Promise.race([
+      tx.wait(),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Blockchain transaction timeout (60s)")), 60000)
+      ),
+    ]);
+
+    if (!receipt) {
+      throw new Error("Transaction receipt is null");
+    }
+
+    return { blockchainTxHash: receipt.hash };
+  } catch (error) {
+    console.error("Blockchain releaseEscrow error:", error.message);
+    throw error;
+  }
+};
+
 module.exports = {
   recordTransactionOnChain,
   submitApprovalOnChain,
   getOnChainTransaction,
+  releaseEscrowOnChain,
 };

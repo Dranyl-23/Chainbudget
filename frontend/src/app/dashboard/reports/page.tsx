@@ -40,6 +40,8 @@ export default function ReportsPage() {
   const [range, setRange] = useState("6months");
   const [isExporting, setIsExporting] = useState(false);
   const [printData, setPrintData] = useState<any[] | null>(null);
+  const [liquidationStatus, setLiquidationStatus] = useState("none");
+  const [isSubmittingLiquidation, setIsSubmittingLiquidation] = useState(false);
 
   useEffect(() => {
     const fetchReportData = async () => {
@@ -51,11 +53,15 @@ export default function ReportsPage() {
         }
 
         const orgId = activeOrgId || "";
-        const res = await api.get("/reports/summary", {
-          params: { orgId },
-        });
+        const [res, orgRes] = await Promise.all([
+          api.get("/reports/summary", { params: { orgId } }),
+          api.get(`/organizations/${orgId}`)
+        ]);
 
         const data = res.data;
+        if (orgRes.data?.liquidationStatus) {
+          setLiquidationStatus(orgRes.data.liquidationStatus);
+        }
 
         // Populate cashFlow chart — API returns last 6 months grouped data.
         // Add a computed balance field for each month for the area chart.
@@ -178,6 +184,21 @@ export default function ReportsPage() {
     }
   };
 
+  const handleSubmitLiquidation = async () => {
+    if (!activeOrgId) return;
+    setIsSubmittingLiquidation(true);
+    try {
+      const res = await api.post(`/organizations/${activeOrgId}/submit-liquidation`);
+      setLiquidationStatus("pending");
+      toast.success("Liquidation Report submitted successfully! Pending University approval.");
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.response?.data?.error || "Failed to submit liquidation.");
+    } finally {
+      setIsSubmittingLiquidation(false);
+    }
+  };
+
   if (loading) {
     return <DashboardSkeleton />;
   }
@@ -213,6 +234,34 @@ export default function ReportsPage() {
           )}
         </div>
       </header>
+
+      {/* ── Liquidation Banner ── */}
+      {(user?.isSuperAdmin || (user?.memberships?.find((m: any) => m.organization === activeOrgId || m.organization?._id === activeOrgId)?.roleLevel || 4) <= 2) && (
+        <div className="mb-8 p-6 rounded-2xl glass border border-primary/20 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div>
+            <h3 className="font-bold text-lg mb-1">Financial Liquidation</h3>
+            <p className="text-sm text-gray-600">Submit your reports to the University for automated budget replenishment.</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className={`px-3 py-1 rounded-full text-xs font-bold border ${
+              liquidationStatus === "approved" ? "bg-green-100 text-green-700 border-green-200" :
+              liquidationStatus === "pending" ? "bg-orange-100 text-orange-700 border-orange-200" :
+              "bg-gray-100 text-gray-700 border-gray-200"
+            }`}>
+              Status: {liquidationStatus.toUpperCase()}
+            </span>
+            {liquidationStatus !== "pending" && liquidationStatus !== "approved" && (
+              <button 
+                onClick={handleSubmitLiquidation}
+                disabled={isSubmittingLiquidation}
+                className="btn-primary"
+              >
+                {isSubmittingLiquidation ? "Submitting..." : "Submit Liquidation"}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── Summary Cards ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">

@@ -44,6 +44,8 @@ const UserSchema = new mongoose.Schema(
         roleLabel: { type: String, trim: true }, // e.g. "Treasurer", "President"
         isActive: { type: Boolean, default: true },
         joinedAt: { type: Date, default: Date.now },
+        hasSBT: { type: Boolean, default: false },
+        sbtTokenId: { type: String },
       },
     ],
     isActive: { type: Boolean, default: true },

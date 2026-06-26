@@ -67,6 +67,11 @@ export default function DashboardPage() {
   const [transparencyScore, setTransparencyScore] = useState({ approved: 0, onChain: 0, percentage: 0 });
   const [budgetAlerts, setBudgetAlerts] = useState<Array<{name: string; allocated: number; spent: number; percentage: number}>>([]);
 
+  const currentMembership = user?.memberships?.find(
+    (m: any) => m.organization === activeOrgId || m.organization?._id === activeOrgId
+  );
+  const roleLevel = user?.isSuperAdmin ? 0 : (currentMembership?.roleLevel || 4);
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -186,23 +191,30 @@ export default function DashboardPage() {
     <div className="p-4 md:p-8 pb-20 animate-fade-in">
       <header className="mb-8 flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-2xl font-bold mb-1">Overview</h1>
+          <h1 className="text-2xl font-bold mb-1">
+            {roleLevel === 4 ? "Financial Overview" : "Overview"}
+          </h1>
           <p className="text-sm text-gray-500">
-            Welcome back{user?.displayName ? `, ${user.displayName}` : ""}. Here's what's happening with your funds.
+            {roleLevel === 4 
+              ? "Transparent view of the organization's funds and expenditures." 
+              : `Welcome back${user?.displayName ? `, ${user.displayName}` : ""}. Here's what's happening with your funds.`}
           </p>
         </div>
-        <div className="flex gap-3">
-          <Link href="/dashboard/reports" className="btn-secondary py-2">
-            <FileText className="w-4 h-4" /> Export Report
-          </Link>
-          <Link href="/dashboard/transactions" className="btn-primary py-2">
-            <Wallet className="w-4 h-4" /> New Transaction
-          </Link>
-        </div>
+        
+        {roleLevel <= 3 && (
+          <div className="flex gap-3">
+            <Link href="/dashboard/reports" className="btn-secondary py-2">
+              <FileText className="w-4 h-4" /> Export Report
+            </Link>
+            <Link href="/dashboard/transactions" className="btn-primary py-2">
+              <Wallet className="w-4 h-4" /> New Transaction
+            </Link>
+          </div>
+        )}
       </header>
 
       {/* ── Stats Row ── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 mb-8 ${roleLevel <= 2 ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
         <div className="stat-card">
           <div className="flex justify-between items-start mb-4">
             <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-primary/10">
@@ -239,20 +251,22 @@ export default function DashboardPage() {
           <h3 className="text-2xl font-bold">₱{Math.round(stats.totalExpenses).toLocaleString()}</h3>
         </div>
 
-        <Link href="/dashboard/approvals" className="stat-card border-primary/20 bg-primary/5 cursor-pointer block">
-          <div className="flex justify-between items-start mb-4">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-primary/10">
-              <Activity className="w-5 h-5 text-primary/80" />
+        {roleLevel <= 2 && (
+          <Link href="/dashboard/approvals" className="stat-card border-primary/20 bg-primary/5 cursor-pointer block">
+            <div className="flex justify-between items-start mb-4">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-primary/10">
+                <Activity className="w-5 h-5 text-primary/80" />
+              </div>
+              <span className="badge badge-pending">Needs Action</span>
             </div>
-            <span className="badge badge-pending">Needs Action</span>
-          </div>
-          <p className="text-sm text-primary/80 font-medium mb-1">Pending Approvals</p>
-          <h3 className="text-2xl font-bold text-primary">{stats.pendingCount}</h3>
-        </Link>
+            <p className="text-sm text-primary/80 font-medium mb-1">Pending Approvals</p>
+            <h3 className="text-2xl font-bold text-primary">{stats.pendingCount}</h3>
+          </Link>
+        )}
       </div>
 
       {/* ── Critical Security Alerts ── */}
-      {budgetAlerts.length > 0 && (
+      {roleLevel <= 3 && budgetAlerts.length > 0 && (
         <div className="mb-8 space-y-3">
           {budgetAlerts.map((alert) => (
             <div key={alert.name} className={`flex items-center gap-4 p-4 rounded-xl border ${
@@ -270,7 +284,7 @@ export default function DashboardPage() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className={`text-sm font-semibold ${alert.percentage >= 100 ? 'text-red-700' : 'text-amber-700'}`}>
-                  {alert.percentage >= 100 ? '🚨 Budget Exceeded' : '⚠️ Budget Running Low'}: "{alert.name}"
+                  {alert.percentage >= 100 ? '🚨 Budget Exceeded' : 'Budget Running Low'}: "{alert.name}"
                 </p>
                 <p className={`text-xs mt-0.5 ${alert.percentage >= 100 ? 'text-red-600' : 'text-amber-600'}`}>
                   ₱{Math.round(alert.spent).toLocaleString()} of ₱{Math.round(alert.allocated).toLocaleString()} used ({alert.percentage}%)

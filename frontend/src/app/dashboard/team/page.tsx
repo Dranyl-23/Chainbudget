@@ -36,6 +36,7 @@ export default function TeamPage() {
   const [formData, setFormData] = useState({
     walletAddress: "",
     displayName: "",
+    email: "",
     roleLevel: 3,
     roleLabel: "",
   });
@@ -81,11 +82,12 @@ export default function TeamPage() {
       await api.post(`/users/${orgId}/invite`, {
         walletAddress: formData.walletAddress,
         displayName: formData.displayName,
+        email: formData.email,
         roleLevel: Number(formData.roleLevel),
         roleLabel: formData.roleLabel || "Member",
       });
       setShowAddModal(false);
-      setFormData({ walletAddress: "", displayName: "", roleLevel: 3, roleLabel: "" });
+      setFormData({ walletAddress: "", displayName: "", email: "", roleLevel: 3, roleLabel: "" });
       fetchMembers(); // Refresh the list
     } catch (err: any) {
       setError(err.response?.data?.error || "Failed to add member.");
@@ -281,6 +283,21 @@ export default function TeamPage() {
                   value={formData.displayName}
                   onChange={(e) => setFormData({ ...formData, displayName: e.target.value })}
                 />
+              </div>
+
+              {/* Email Address */}
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">Email Address (Optional)</label>
+                <input
+                  type="email"
+                  placeholder="e.g., user@cjc.edu.ph"
+                  className="input text-sm"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Required if you want this member to receive email notifications.
+                </p>
               </div>
 
               {/* Role Level */}

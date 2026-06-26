@@ -16,6 +16,8 @@ export default function SettingsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isLinking, setIsLinking] = useState(false);
   const [walletBalance, setWalletBalance] = useState<string | null>(null);
+  const [pendingLiquidations, setPendingLiquidations] = useState<any[]>([]);
+  const [approvingLiquidationId, setApprovingLiquidationId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchBalance = async () => {
@@ -29,8 +31,21 @@ export default function SettingsPage() {
         console.error("Failed to fetch balance:", error);
       }
     };
+
+    const fetchLiquidations = async () => {
+      if (!user?.isSuperAdmin) return;
+      try {
+        const res = await api.get("/organizations");
+        const pending = res.data.filter((org: any) => org.liquidationStatus === "pending");
+        setPendingLiquidations(pending);
+      } catch (err) {
+        console.error("Failed to fetch liquidations:", err);
+      }
+    };
+    
     fetchBalance();
-  }, [user?.walletAddress]);
+    fetchLiquidations();
+  }, [user?.walletAddress, user?.isSuperAdmin]);
 
   // Get active role
   const activeMembership = user?.memberships?.find((m: any) => {
@@ -113,6 +128,19 @@ export default function SettingsPage() {
       toast.error(err.message || "Failed to link wallet");
     } finally {
       setIsLinking(false);
+    }
+  };
+
+  const handleApproveLiquidation = async (orgId: string) => {
+    try {
+      setApprovingLiquidationId(orgId);
+      await api.post(`/organizations/${orgId}/approve-liquidation`);
+      toast.success("Liquidation approved and budget replenished!");
+      setPendingLiquidations(prev => prev.filter(org => org._id !== orgId));
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || "Failed to approve liquidation");
+    } finally {
+      setApprovingLiquidationId(null);
     }
   };
 
@@ -272,18 +300,123 @@ export default function SettingsPage() {
         
         {/* Info Card */}
         <div className="space-y-6">
-          <div className="glass p-6 rounded-2xl bg-gradient-to-br from-primary/5 to-purple-500/5">
-            <h3 className="font-bold text-gray-800 mb-2">Web3 Identity</h3>
-            <p className="text-sm text-gray-600 mb-4">
-              Your profile picture will be uploaded to the InterPlanetary File System (IPFS) ensuring it remains decentralized and immutable.
-            </p>
-            <div className="flex items-center gap-2 text-xs text-primary font-semibold bg-primary/10 w-fit px-3 py-1 rounded-full">
-              IPFS Powered
-            </div>
+          <div className="glass p-6 rounded-2xl bg-gradient-to-br from-primary/5 to-purple-500/5 border border-primary/20 relative overflow-hidden">
+            {/* Background design */}
+            <div className="absolute -top-10 -right-10 w-32 h-32 bg-primary/10 rounded-full blur-2xl pointer-events-none"></div>
+            
+            <h3 className="font-bold text-gray-800 mb-2 flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-primary" />
+              Digital Member ID
+            </h3>
+            
+            {activeMembership?.hasSBT ? (
+              <div className="mt-4 animate-fade-in">
+                <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-1 rounded-xl shadow-lg">
+                  <div className="bg-gray-900 rounded-lg p-4 text-white relative overflow-hidden">
+                    <div className="absolute opacity-10 right-[-20px] top-[-20px]">
+                      <ShieldCheck className="w-32 h-32" />
+                    </div>
+                    <p className="text-xs text-indigo-300 font-mono tracking-widest uppercase mb-1">ChainBudget</p>
+                    <p className="font-bold text-lg mb-4 leading-tight">Verified Member</p>
+                    
+                    <div className="flex justify-between items-end">
+                      <div>
+                        <p className="text-[10px] text-gray-400 uppercase tracking-wider">Soulbound ID</p>
+                        <p className="font-mono font-medium text-sm text-indigo-200">
+                          #{activeMembership.sbtTokenId?.substring(0, 8) || "0001"}...
+                        </p>
+                      </div>
+                      <div className="bg-green-500/20 text-green-400 text-[10px] font-bold px-2 py-1 rounded border border-green-500/30 uppercase tracking-wider">
+                        Active
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500 mt-3 text-center flex items-center justify-center gap-1">
+                  <ExternalLink className="w-3 h-3" /> Polygon Amoy Testnet
+                </p>
+              </div>
+            ) : (
+              <div className="mt-4 text-center p-4 bg-white/50 rounded-xl border border-dashed border-gray-300">
+                <p className="text-sm text-gray-600 mb-3">
+                  You don't have a Soulbound Token (SBT) yet.
+                </p>
+                {user?.walletAddress ? (
+                  <button 
+                    onClick={async () => {
+                      try {
+                        setIsLinking(true);
+                        await api.post("/auth/mint-sbt");
+                        await refreshUser();
+                        toast.success("Soulbound ID Minted Successfully!");
+                      } catch (err: any) {
+                        toast.error(err.response?.data?.error || "Failed to mint SBT");
+                      } finally {
+                        setIsLinking(false);
+                      }
+                    }}
+                    disabled={isLinking}
+                    className="btn-primary w-full text-sm font-semibold py-3 px-4 rounded-xl flex justify-center items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-lg whitespace-nowrap transition-all hover:scale-[1.02]"
+                  >
+                    {isLinking ? (
+                      <span className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+                    ) : (
+                      <ShieldCheck className="w-5 h-5 flex-shrink-0" />
+                    )}
+                    Mint Member ID
+                  </button>
+                ) : (
+                  <button 
+                    onClick={handleLinkWallet}
+                    disabled={isLinking}
+                    className="btn-primary w-full text-sm py-2 px-4 rounded-lg flex justify-center items-center gap-2"
+                  >
+                    <Wallet className="w-4 h-4" />
+                    Link Wallet to Mint
+                  </button>
+                )}
+                <p className="text-[10px] text-gray-400 mt-2">Gas fees paid by ChainBudget</p>
+              </div>
+            )}
           </div>
         </div>
 
       </div>
+
+      {/* SuperAdmin: Pending Liquidations */}
+      {user?.isSuperAdmin && (
+        <div className="mt-8 glass p-6 rounded-2xl border border-primary/20">
+          <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+            <ShieldCheck className="w-5 h-5 text-primary" />
+            Pending Financial Liquidations
+          </h2>
+          <p className="text-sm text-gray-500 mb-4">Review and approve liquidations to trigger automated budget replenishment.</p>
+          
+          {pendingLiquidations.length === 0 ? (
+            <div className="text-center py-6 text-gray-400 bg-gray-50 rounded-lg border border-dashed border-gray-200">
+              No pending liquidations.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {pendingLiquidations.map(org => (
+                <div key={org._id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-white rounded-xl border border-gray-100 shadow-sm gap-4">
+                  <div>
+                    <h3 className="font-bold text-gray-800">{org.name}</h3>
+                    <p className="text-xs text-gray-500">Requested Subsidy: ₱{(org.subsidyAmount || 50000).toLocaleString()}</p>
+                  </div>
+                  <button
+                    onClick={() => handleApproveLiquidation(org._id)}
+                    disabled={approvingLiquidationId === org._id}
+                    className="btn-primary py-2 px-4 whitespace-nowrap"
+                  >
+                    {approvingLiquidationId === org._id ? "Processing..." : "Approve & Replenish Budget"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

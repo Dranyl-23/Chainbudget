@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import Portal from "@/components/Portal";
 import { useAuth } from "@/context/AuthContext";
+import { ethers } from "ethers";
 import {
   ArrowUpRight,
   ArrowDownRight,
@@ -47,6 +48,12 @@ interface Transaction {
   documentUrl?: string;
   documentHash?: string;
   referenceNumber?: string;
+  isEscrow?: boolean;
+  escrowStatus?: string;
+  payerApproved?: boolean;
+  payeeApproved?: boolean;
+  executed?: boolean;
+  onChainTxId?: string;
 }
 
 interface CreateTxForm {
@@ -57,6 +64,7 @@ interface CreateTxForm {
   referenceNumber: string;
   notes: string;
   urgency: "normal" | "urgent";
+  isEscrow?: boolean;
 }
 
 interface UploadedFile {
@@ -155,8 +163,8 @@ export default function TransactionsPage() {
     setUploadError(null);
     setUploadedFile(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
-    setExpenseData({ type: "expense", amount: "", description: "", category: "", referenceNumber: "", notes: "", urgency: "normal" });
-    setIncomeData({ type: "income", amount: "", description: "", category: "", referenceNumber: "", notes: "", urgency: "normal" });
+    setExpenseData({ type: "expense", amount: "", description: "", category: "", referenceNumber: "", notes: "", urgency: "normal", isEscrow: false });
+    setIncomeData({ type: "income", amount: "", description: "", category: "", referenceNumber: "", notes: "", urgency: "normal", isEscrow: false });
     setActiveTab("expense");
   };
 
@@ -266,6 +274,7 @@ export default function TransactionsPage() {
         referenceNumber: formData.referenceNumber || undefined,
         notes: formData.notes || undefined,
         urgency: formData.urgency || "normal",
+        isEscrow: formData.isEscrow || false,
         documentUrl: uploadedFile?.documentUrl || undefined,
         documentHash: uploadedFile?.documentHash || undefined,
       });
@@ -416,7 +425,7 @@ export default function TransactionsPage() {
                   <td>{new Date(tx.createdAt).toLocaleDateString()}</td>
                   <td>
                     <div className="flex flex-col items-start gap-2">
-                      <span className={`badge ${
+                      <span className={`px-2 py-1 text-[10px] font-bold rounded-full border ${
                         tx.status === "approved" ? "badge-approved" : 
                         tx.status === "rejected" ? "badge-rejected" : 
                         tx.status === "requested" ? "bg-orange-100 text-orange-700 border-orange-200" :
@@ -427,6 +436,80 @@ export default function TransactionsPage() {
                          tx.status === "requested" ? "Requested" : 
                          "Rejected"}
                       </span>
+                      {tx.isEscrow && (
+                        <span className={`px-2 py-1 text-[10px] font-bold rounded-full border ${
+                          tx.escrowStatus === "locked" ? "bg-purple-100 text-purple-700 border-purple-200" : 
+                          tx.escrowStatus === "released" ? "bg-green-100 text-green-700 border-green-200" : 
+                          "bg-gray-100 text-gray-700 border-gray-200"
+                        }`}>
+                          {tx.escrowStatus === "locked" ? "Escrow Locked" : 
+                           tx.escrowStatus === "released" ? "Escrow Released" : 
+                           "Escrow Pending"}
+                        </span>
+                      )}
+                      {tx.status === "approved" && tx.type === "expense" && !tx.executed && (
+                        <div className="flex gap-1 mt-1">
+                          <button 
+                            onClick={(e) => { 
+                              e.stopPropagation(); 
+                              // Call contract to execute the transfer
+                              const executeTx = async () => {
+                                try {
+                                  if (!tx.onChainTxId) return alert("No on-chain ID");
+                                  const ethereum = (window as any).ethereum;
+                                  if (!ethereum) return alert("MetaMask not installed");
+                                  const provider = new ethers.BrowserProvider(ethereum);
+                                  const signer = await provider.getSigner();
+                                  const contractAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
+                                  const contract = new ethers.Contract(contractAddress, ChainBudgetABI.abi, signer);
+                                  const execTx = await contract.executeTransaction(tx.onChainTxId);
+                                  alert("Executing transfer on-chain... Please wait.");
+                                  await execTx.wait();
+                                  await api.patch(`/transactions/${tx._id}/execute`);
+                                  
+                                  // Update state locally
+                                  setTransactions((prev) => 
+                                    prev.map(t => t._id === tx._id ? { ...t, executed: true, escrowStatus: t.isEscrow ? "locked" : "none" } : t)
+                                  );
+                                  
+                                  alert("Transfer executed successfully!");
+                                } catch (err: any) {
+                                  alert("Execution failed: " + err.message);
+                                }
+                              };
+                              executeTx();
+                            }}
+                            className="px-2 py-1 text-[10px] font-bold bg-green-100 text-green-700 hover:bg-green-600 hover:text-white rounded transition-colors"
+                          >
+                            Execute Transfer
+                          </button>
+                        </div>
+                      )}
+                      {tx.status === "approved" && tx.type === "expense" && tx.executed && tx.isEscrow && tx.escrowStatus === "locked" && (user?.isSuperAdmin || (user?.memberships?.find((m: any) => m.organization === activeOrgId || m.organization?._id === activeOrgId)?.roleLevel || 4) <= 2) && (
+                        <div className="flex gap-1 mt-1">
+                          <button 
+                            onClick={(e) => { 
+                              e.stopPropagation(); 
+                              const releaseTx = async () => {
+                                try {
+                                  alert("Releasing escrow funds... Please wait.");
+                                  await api.post(`/transactions/${tx._id}/release-escrow`);
+                                  setTransactions((prev) => 
+                                    prev.map(t => t._id === tx._id ? { ...t, escrowStatus: "released", payeeApproved: true, payerApproved: true } : t)
+                                  );
+                                  alert("Escrow released successfully!");
+                                } catch (err: any) {
+                                  alert("Release failed: " + err.message);
+                                }
+                              };
+                              releaseTx();
+                            }}
+                            className="px-2 py-1 text-[10px] font-bold bg-purple-100 text-purple-700 hover:bg-purple-600 hover:text-white rounded transition-colors border border-purple-200"
+                          >
+                            Release Escrow
+                          </button>
+                        </div>
+                      )}
                       {tx.status === "requested" && (user?.isSuperAdmin || (user?.memberships?.find((m: any) => m.organization === activeOrgId || m.organization?._id === activeOrgId)?.roleLevel || 4) <= 2) && (
                         <div className="flex gap-1">
                           <button 
@@ -839,8 +922,29 @@ export default function TransactionsPage() {
                 )}
               </div>
 
+              {activeTab === "expense" && (
+                <div className="pt-2 border-t border-gray-100">
+                  <label className="flex items-center gap-3 cursor-pointer group">
+                    <div className="relative">
+                      <input 
+                        type="checkbox" 
+                        className="sr-only" 
+                        checked={formData.isEscrow || false}
+                        onChange={(e) => setExpenseData({...expenseData, isEscrow: e.target.checked})}
+                      />
+                      <div className={`block w-10 h-6 rounded-full transition-colors ${formData.isEscrow ? 'bg-purple-500' : 'bg-gray-200'}`}></div>
+                      <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${formData.isEscrow ? 'transform translate-x-4' : ''}`}></div>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-bold text-gray-800">Use Smart Contract Escrow</span>
+                      <span className="text-xs text-gray-500">Lock funds until supplier delivery is confirmed.</span>
+                    </div>
+                  </label>
+                </div>
+              )}
+
               {/* Actions */}
-              <div className="flex gap-3 pt-2">
+              <div className="pt-4 mt-2 flex justify-end gap-3 border-t border-gray-100">
                 <button
                   type="button"
                   className="btn-secondary flex-1 py-2.5"
