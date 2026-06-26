@@ -301,7 +301,7 @@ export default function ReportsPage() {
         </div>
         <div className="h-[300px]">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={monthlyData} margin={{ left: -20, right: 0, top: 4, bottom: 0 }}>
+            <AreaChart data={monthlyData} margin={{ left: 0, right: 0, top: 4, bottom: 0 }}>
               <defs>
                 <linearGradient id="incGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#7B5BD6" stopOpacity={0.24} />
@@ -318,8 +318,14 @@ export default function ReportsPage() {
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(107,85,217,0.18)" vertical={false} />
               <XAxis dataKey="month" stroke="#7A7A9D" fontSize={12} tickLine={false} axisLine={false} />
-              <YAxis stroke="#7A7A9D" fontSize={12} tickLine={false} axisLine={false}
-                tickFormatter={(v) => `₱${v / 1000}k`} />
+              <YAxis 
+                stroke="#7A7A9D" 
+                fontSize={12} 
+                tickLine={false} 
+                axisLine={false} 
+                width={48}
+                tickFormatter={(v) => `₱${v / 1000}k`} 
+              />
               <Tooltip
                 contentStyle={{ background: "#F8F6FF", border: "1px solid rgba(107,85,217,0.16)", borderRadius: "8px", color: "#1A1A2E" }}
                 formatter={(v: any) => `₱${Number(v).toLocaleString()}`}
