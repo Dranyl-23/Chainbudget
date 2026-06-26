@@ -20,6 +20,7 @@ const OrganizationSchema = new mongoose.Schema(
       ],
     },
     description: { type: String, trim: true },
+    logoUrl: { type: String, trim: true },
     // High-value threshold in smallest currency unit
     highValueThreshold: { type: Number, required: true, default: 10000 },
     // Minimum required approvals for high-value transactions

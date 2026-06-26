@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { ShieldAlert, Activity, User, FileText, CheckCircle, XCircle } from "lucide-react";
+import { ShieldAlert, Activity, User, FileText, CheckCircle, XCircle, Download } from "lucide-react";
 import api from "@/lib/api";
+import { exportToCSV, exportToPDF } from "@/lib/exportUtils";
+import TableSkeleton from "@/components/TableSkeleton";
 
 interface AuditLog {
   _id: string;
@@ -18,8 +20,14 @@ interface AuditLog {
 
 export default function AuditPage() {
   const { user, activeOrgId } = useAuth();
-  const [logs, setLogs] = useState<AuditLog[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [logs, setLogs] = useState<AuditLog[]>(() => {
+    if (typeof window !== "undefined") {
+      const cached = sessionStorage.getItem("cb_cache_audit");
+      if (cached) return JSON.parse(cached);
+    }
+    return [];
+  });
+  const [loading, setLoading] = useState(logs.length === 0);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -34,7 +42,9 @@ export default function AuditPage() {
           params: { orgId: activeOrgId, limit: 100 },
         });
 
-        setLogs(res.data.logs || []);
+        const data = res.data.logs || [];
+        setLogs(data);
+        sessionStorage.setItem("cb_cache_audit", JSON.stringify(data));
       } catch (err: any) {
         console.error("Failed to fetch audit logs:", err);
         setError(err.response?.data?.error || "Failed to load audit logs");
@@ -58,6 +68,24 @@ export default function AuditPage() {
     if (action.includes("reject")) return "bg-red-50 border-red-100 text-red-700";
     if (action.includes("create")) return "bg-primary/5 border-primary/10 text-primary";
     return "bg-gray-50 border-gray-200 text-gray-600";
+  };
+
+  const handleExport = (format: 'csv' | 'pdf') => {
+    const headers = ["Timestamp", "Actor", "Wallet Address", "Action", "Details", "Blockchain Tx"];
+    const exportData = logs.map(log => [
+      new Date(log.createdAt).toLocaleString(),
+      log.actor?.displayName || "System",
+      log.actor?.walletAddress || "",
+      log.action,
+      JSON.stringify(log.details || {}),
+      log.blockchainTxHash || "Off-chain event"
+    ]);
+
+    if (format === 'csv') {
+      exportToCSV(headers, exportData, `Audit_Trail_${new Date().toISOString().split('T')[0]}`);
+    } else {
+      exportToPDF(headers, exportData, "System Audit Trail - ChainBudget", `Audit_Trail_${new Date().toISOString().split('T')[0]}`);
+    }
   };
 
   // RBAC: Only super admin, Level 1, or Level 2 can view audit logs
@@ -110,12 +138,22 @@ export default function AuditPage() {
 
   return (
     <div className="p-4 md:p-8 pb-20 animate-fade-in">
-      <header className="mb-8">
-        <h1 className="text-2xl font-bold mb-1 flex items-center gap-2">
-          <ShieldAlert className="w-6 h-6 text-primary" />
-          System Audit Trail
-        </h1>
-        <p className="text-sm text-gray-500">Immutable record of all system activities and blockchain transactions.</p>
+      <header className="mb-8 flex flex-col md:flex-row md:justify-between md:items-start gap-4">
+        <div>
+          <h1 className="text-2xl font-bold mb-1 flex items-center gap-2">
+            <ShieldAlert className="w-6 h-6 text-primary" />
+            System Audit Trail
+          </h1>
+          <p className="text-sm text-gray-500">Immutable record of all system activities and blockchain transactions.</p>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => handleExport('csv')} className="btn border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 text-sm flex items-center gap-2 rounded-lg px-4 py-2 font-medium">
+            <Download className="w-4 h-4" /> Export CSV
+          </button>
+          <button onClick={() => handleExport('pdf')} className="btn bg-primary hover:bg-primary/90 text-white text-sm flex items-center gap-2 rounded-lg px-4 py-2 font-medium">
+            <FileText className="w-4 h-4" /> Export PDF
+          </button>
+        </div>
       </header>
 
       {error && (
@@ -124,80 +162,82 @@ export default function AuditPage() {
         </div>
       )}
 
-      <div className="glass rounded-xl overflow-hidden shadow-sm">
-        {loading ? (
-          <div className="p-8 text-center text-gray-500 animate-pulse">Loading audit logs...</div>
-        ) : logs.length === 0 ? (
-          <div className="p-12 text-center text-gray-500">
-            <Activity className="w-12 h-12 mx-auto mb-3 opacity-20" />
-            <p>No audit logs found for this organization.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-gray-200 bg-gray-50/50">
-                  <th className="p-4 font-semibold text-gray-600">Timestamp</th>
-                  <th className="p-4 font-semibold text-gray-600">Actor</th>
-                  <th className="p-4 font-semibold text-gray-600">Action</th>
-                  <th className="p-4 font-semibold text-gray-600">Details</th>
-                  <th className="p-4 font-semibold text-gray-600">Security / Chain Data</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {logs.map((log) => (
-                  <tr key={log._id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="p-4 align-top whitespace-nowrap text-xs text-gray-500">
-                      {new Date(log.createdAt).toLocaleString()}
-                    </td>
-                    <td className="p-4 align-top">
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
-                          <User className="w-3 h-3 text-gray-500" />
-                        </div>
-                        <div>
-                          <p className="font-medium text-gray-800">{log.actor?.displayName || "System"}</p>
-                          <p className="text-[10px] text-gray-400 font-mono">
-                            {log.actor?.walletAddress 
-                              ? `${log.actor.walletAddress.slice(0, 6)}...${log.actor.walletAddress.slice(-4)}`
-                              : ""}
-                          </p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="p-4 align-top">
-                      <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-medium capitalize ${getActionColor(log.action)}`}>
-                        {getActionIcon(log.action)}
-                        {log.action.replace("transaction.", "").replace("user.", "").replace("_", " ")}
-                      </div>
-                    </td>
-                    <td className="p-4 align-top text-gray-600">
-                      {formatDetails(log.details)}
-                    </td>
-                    <td className="p-4 align-top">
-                      {log.blockchainTxHash ? (
-                        <div className="flex items-center gap-1.5">
-                          <span className="chain-dot w-2 h-2 flex-shrink-0" />
-                          <a 
-                            href={`https://amoy.polygonscan.com/tx/${log.blockchainTxHash}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-xs font-mono text-primary hover:underline truncate max-w-[120px] block"
-                          >
-                            {log.blockchainTxHash.slice(0, 10)}...
-                          </a>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-gray-400 font-mono">Off-chain event</span>
-                      )}
-                    </td>
+      {loading ? (
+        <TableSkeleton />
+      ) : (
+        <div className="glass rounded-xl overflow-hidden shadow-sm">
+          {logs.length === 0 ? (
+            <div className="p-12 text-center text-gray-500">
+              <Activity className="w-12 h-12 mx-auto mb-3 opacity-20" />
+              <p>No audit logs found for this organization.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-gray-200 bg-gray-50/50">
+                    <th className="p-4 font-semibold text-gray-600">Timestamp</th>
+                    <th className="p-4 font-semibold text-gray-600">Actor</th>
+                    <th className="p-4 font-semibold text-gray-600">Action</th>
+                    <th className="p-4 font-semibold text-gray-600">Details</th>
+                    <th className="p-4 font-semibold text-gray-600">Security / Chain Data</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {logs.map((log) => (
+                    <tr key={log._id} className="hover:bg-gray-50/50 transition-colors">
+                      <td className="p-4 align-top whitespace-nowrap text-xs text-gray-500">
+                        {new Date(log.createdAt).toLocaleString()}
+                      </td>
+                      <td className="p-4 align-top">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
+                            <User className="w-3 h-3 text-gray-500" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-gray-800">{log.actor?.displayName || "System"}</p>
+                            <p className="text-[10px] text-gray-400 font-mono">
+                              {log.actor?.walletAddress 
+                                ? `${log.actor.walletAddress.slice(0, 6)}...${log.actor.walletAddress.slice(-4)}`
+                                : ""}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-4 align-top">
+                        <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-medium capitalize ${getActionColor(log.action)}`}>
+                          {getActionIcon(log.action)}
+                          {log.action.replace("transaction.", "").replace("user.", "").replace("_", " ")}
+                        </div>
+                      </td>
+                      <td className="p-4 align-top text-gray-600">
+                        {formatDetails(log.details)}
+                      </td>
+                      <td className="p-4 align-top">
+                        {log.blockchainTxHash ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="chain-dot w-2 h-2 flex-shrink-0" />
+                            <a 
+                              href={`https://amoy.polygonscan.com/tx/${log.blockchainTxHash}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs font-mono text-primary hover:underline truncate max-w-[120px] block"
+                            >
+                              {log.blockchainTxHash.slice(0, 10)}...
+                            </a>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-400 font-mono">Off-chain event</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

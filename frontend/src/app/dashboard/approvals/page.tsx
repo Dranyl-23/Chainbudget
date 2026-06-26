@@ -7,6 +7,8 @@ import { ethers } from "ethers";
 import ChainBudgetABI from "@/lib/ChainBudget.json";
 import api from "@/lib/api";
 import toast from "react-hot-toast";
+import { io } from "socket.io-client";
+import TableSkeleton from "@/components/TableSkeleton";
 
 interface Approval {
   _id: string;
@@ -34,8 +36,14 @@ interface BudgetItem {
 
 export default function ApprovalsPage() {
   const { user, activeOrgId } = useAuth();
-  const [pendingApprovals, setPendingApprovals] = useState<Approval[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [pendingApprovals, setPendingApprovals] = useState<Approval[]>(() => {
+    if (typeof window !== "undefined") {
+      const cached = sessionStorage.getItem("cb_cache_approvals");
+      if (cached) return JSON.parse(cached);
+    }
+    return [];
+  });
+  const [loading, setLoading] = useState(pendingApprovals.length === 0);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [budgetData, setBudgetData] = useState<BudgetItem[]>([]);
@@ -74,6 +82,7 @@ export default function ApprovalsPage() {
         }));
 
         setPendingApprovals(approvals);
+        sessionStorage.setItem("cb_cache_approvals", JSON.stringify(approvals));
 
         // Fetch budget data for overspend detection
         try {
@@ -233,6 +242,9 @@ export default function ApprovalsPage() {
         </div>
       )}
 
+      {loading ? (
+        <TableSkeleton />
+      ) : (
       <div className="space-y-4">
         {pendingApprovals.length > 0 ? (
           pendingApprovals.map((req) => (
@@ -376,6 +388,7 @@ export default function ApprovalsPage() {
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }

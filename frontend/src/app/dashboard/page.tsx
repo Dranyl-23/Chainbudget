@@ -32,17 +32,37 @@ interface CashFlowData {
   expense: number;
 }
 
+import DashboardSkeleton from "@/components/DashboardSkeleton";
+
 export default function DashboardPage() {
   const { user, activeOrgId } = useAuth();
-  const [cashFlow, setCashFlow] = useState<CashFlowData[]>([]);
-  const [recentTxs, setRecentTxs] = useState<Transaction[]>([]);
-  const [stats, setStats] = useState({
-    totalBalance: 0,
-    totalIncome: 0,
-    totalExpenses: 0,
-    pendingCount: 0,
+  const [cashFlow, setCashFlow] = useState<CashFlowData[]>(() => {
+    if (typeof window !== "undefined") {
+      const cached = sessionStorage.getItem("cb_cache_dash_cashflow");
+      if (cached) return JSON.parse(cached);
+    }
+    return [];
   });
-  const [loading, setLoading] = useState(true);
+  const [recentTxs, setRecentTxs] = useState<Transaction[]>(() => {
+    if (typeof window !== "undefined") {
+      const cached = sessionStorage.getItem("cb_cache_dash_txs");
+      if (cached) return JSON.parse(cached);
+    }
+    return [];
+  });
+  const [stats, setStats] = useState(() => {
+    if (typeof window !== "undefined") {
+      const cached = sessionStorage.getItem("cb_cache_dash_stats");
+      if (cached) return JSON.parse(cached);
+    }
+    return {
+      totalBalance: 0,
+      totalIncome: 0,
+      totalExpenses: 0,
+      pendingCount: 0,
+    };
+  });
+  const [loading, setLoading] = useState(cashFlow.length === 0);
   const [error, setError] = useState<string | null>(null);
   const [transparencyScore, setTransparencyScore] = useState({ approved: 0, onChain: 0, percentage: 0 });
   const [budgetAlerts, setBudgetAlerts] = useState<Array<{name: string; allocated: number; spent: number; percentage: number}>>([]);
@@ -63,7 +83,9 @@ export default function DashboardPage() {
           params: { orgId, limit: 6 },
         });
         const allTxs: Transaction[] = txRes.data.transactions || [];
-        setRecentTxs(allTxs.slice(0, 4));
+        const topTxs = allTxs.slice(0, 4);
+        setRecentTxs(topTxs);
+        sessionStorage.setItem("cb_cache_dash_txs", JSON.stringify(topTxs));
 
         // Calculate stats from transactions
         const income = allTxs
@@ -76,12 +98,14 @@ export default function DashboardPage() {
           (t) => t.status === "pending_approval"
         ).length;
 
-        setStats({
+        const computedStats = {
           totalBalance: income - expenses,
           totalIncome: income,
           totalExpenses: expenses,
           pendingCount: pending,
-        });
+        };
+        setStats(computedStats);
+        sessionStorage.setItem("cb_cache_dash_stats", JSON.stringify(computedStats));
 
         // Fetch real summary stats + cashFlow from the reports API
         try {
@@ -92,12 +116,14 @@ export default function DashboardPage() {
 
           // Override stats with the accurate server-computed values
           if (data) {
-            setStats({
+            const accurateStats = {
               totalBalance: (data.totalIncome || 0) - (data.totalExpenses || 0),
               totalIncome: data.totalIncome || 0,
               totalExpenses: data.totalExpenses || 0,
               pendingCount: data.pendingApprovals ?? pending,
-            });
+            };
+            setStats(accurateStats);
+            sessionStorage.setItem("cb_cache_dash_stats", JSON.stringify(accurateStats));
 
             // Compute Transparency Score
             const approved = data.approvedTransactions || 0;
@@ -109,6 +135,7 @@ export default function DashboardPage() {
           // Use real cashFlow if available, otherwise fall back to mock
           if (Array.isArray(data?.cashFlow) && data.cashFlow.length > 0) {
             setCashFlow(data.cashFlow);
+            sessionStorage.setItem("cb_cache_dash_cashflow", JSON.stringify(data.cashFlow));
           } else {
             generateMockCashFlow();
           }
@@ -150,6 +177,10 @@ export default function DashboardPage() {
 
     fetchData();
   }, [activeOrgId]);
+
+  if (loading) {
+    return <DashboardSkeleton />;
+  }
 
   return (
     <div className="p-4 md:p-8 pb-20 animate-fade-in">

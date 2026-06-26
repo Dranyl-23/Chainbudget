@@ -3,8 +3,10 @@ const router = express.Router();
 const Transaction = require("../models/Transaction");
 const Organization = require("../models/Organization");
 const AuditLog = require("../models/AuditLog");
+const User = require("../models/User");
 const { recordTransactionOnChain } = require("../services/blockchain");
 const { authenticate, requireRole } = require("../middleware/auth");
+const { sendEmail } = require("../services/email");
 const { ethers } = require("ethers");
 
 /// POST /api/transactions — Create a new transaction (Level 2+) or Request (Level 3)
@@ -108,6 +110,37 @@ router.post("/", authenticate, requireRole(3), async (req, res) => {
         console.error("Blockchain recording failed:", blockchainError.message);
         // Continue - blockchain is optional for now
       }
+
+      // Send Email to Level 1 Approvers
+      try {
+        const level1Users = await User.find({
+          "memberships": {
+            $elemMatch: { organization: organizationId, roleLevel: 1, isActive: true }
+          },
+          email: { $exists: true, $ne: "" }
+        });
+        const emails = level1Users.map(u => u.email);
+        if (emails.length > 0) {
+          sendEmail(
+            emails.join(","),
+            "Action Required: High-Value Transaction Pending Approval",
+            `
+            <div style="font-family: sans-serif; padding: 20px;">
+              <h2 style="color: #4F46E5;">High-Value Transaction Alert</h2>
+              <p>A new transaction requires your executive approval.</p>
+              <table style="width: 100%; max-width: 400px; border-collapse: collapse; margin-bottom: 20px;">
+                <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Amount:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">₱${amount.toLocaleString()}</td></tr>
+                <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Description:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">${description}</td></tr>
+                <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Requested By:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">${req.user.displayName}</td></tr>
+              </table>
+              <a href="http://localhost:3000/dashboard/approvals" style="display: inline-block; padding: 12px 24px; background-color: #4F46E5; color: white; text-decoration: none; border-radius: 8px; font-weight: bold;">Review in ChainBudget</a>
+            </div>
+            `
+          ).catch(console.error); // don't block
+        }
+      } catch (emailErr) {
+        console.error("Email sending error:", emailErr);
+      }
     }
 
     // Audit log
@@ -122,6 +155,12 @@ router.post("/", authenticate, requireRole(3), async (req, res) => {
       blockchainTxHash: blockchainResult?.blockchainTxHash,
       onChainTxId: blockchainResult?.onChainTxId,
     });
+
+    // Emit socket event
+    const io = req.app.get("io");
+    if (io) {
+      io.emit("transaction_updated", { orgId: organizationId });
+    }
 
     res.status(201).json({ transaction: txn, blockchain: blockchainResult });
   } catch (err) {
@@ -257,7 +296,7 @@ router.get("/", authenticate, async (req, res) => {
           },
         },
         { $project: { organizationArr: 0 } },
-        // Count how many "approved" votes this transaction has received
+        // Fetch the "approved" approvals and their approver details
         {
           $lookup: {
             from: "approvals",
@@ -273,19 +312,29 @@ router.get("/", authenticate, async (req, res) => {
                   },
                 },
               },
-              { $count: "count" },
+              {
+                $lookup: {
+                  from: "users",
+                  localField: "approver",
+                  foreignField: "_id",
+                  as: "approverUser"
+                }
+              },
+              {
+                $project: {
+                  displayName: { $arrayElemAt: ["$approverUser.displayName", 0] },
+                  memberships: { $arrayElemAt: ["$approverUser.memberships", 0] }
+                }
+              }
             ],
-            as: "approvalDocs",
+            as: "approvedBy",
           },
         },
         {
           $addFields: {
-            approvalCount: {
-              $ifNull: [{ $arrayElemAt: ["$approvalDocs.count", 0] }, 0],
-            },
+            approvalCount: { $size: "$approvedBy" },
           },
         },
-        { $project: { approvalDocs: 0 } },
       ]),
       Transaction.countDocuments(filter),
     ]);
@@ -421,6 +470,46 @@ router.get("/public/:hash", async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: "Server error during verification" });
+  }
+});
+
+/// PATCH /api/transactions/:id/receipt — Attach a receipt to an existing transaction
+router.patch("/:id/receipt", authenticate, async (req, res) => {
+  try {
+    const { documentUrl, documentHash } = req.body;
+    if (!documentUrl) return res.status(400).json({ error: "documentUrl is required" });
+
+    const txn = await Transaction.findById(req.params.id);
+    if (!txn) return res.status(404).json({ error: "Transaction not found" });
+
+    // Allow the original requester or admins to attach a receipt
+    const roleLevel = req.user.getRoleInOrg(txn.organization.toString());
+    if (
+      !req.user.isSuperAdmin &&
+      txn.submittedBy.toString() !== req.user._id.toString() &&
+      (!roleLevel || roleLevel > 2)
+    ) {
+      return res.status(403).json({ error: "Unauthorized to attach receipt" });
+    }
+
+    txn.documentUrl = documentUrl;
+    if (documentHash) txn.documentHash = documentHash;
+    
+    await txn.save();
+
+    await AuditLog.create({
+      organization: txn.organization,
+      actor: req.user._id,
+      actorWallet: req.user.walletAddress,
+      action: "transaction.receipt_attached",
+      targetType: "Transaction",
+      targetId: txn._id,
+      details: { documentUrl, documentHash }
+    });
+
+    res.json(txn);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

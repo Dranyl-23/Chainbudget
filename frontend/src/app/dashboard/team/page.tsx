@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { Users, Plus, X, Trash2, Shield, User as UserIcon } from "lucide-react";
 import api from "@/lib/api";
 import toast from "react-hot-toast";
+import TableSkeleton from "@/components/TableSkeleton";
 
 interface Member {
   _id: string;
@@ -20,14 +21,21 @@ interface Member {
 
 export default function TeamPage() {
   const { user, activeOrgId } = useAuth();
-  const [members, setMembers] = useState<Member[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [members, setMembers] = useState<Member[]>(() => {
+    if (typeof window !== "undefined") {
+      const cached = sessionStorage.getItem("cb_cache_team");
+      if (cached) return JSON.parse(cached);
+    }
+    return [];
+  });
+  const [loading, setLoading] = useState(members.length === 0);
   const [error, setError] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [formData, setFormData] = useState({
     walletAddress: "",
+    displayName: "",
     roleLevel: 3,
     roleLabel: "",
   });
@@ -45,7 +53,9 @@ export default function TeamPage() {
     if (!orgId) return;
     try {
       const res = await api.get(`/users/${orgId}/members`);
-      setMembers(res.data || []);
+      const data = res.data || [];
+      setMembers(data);
+      sessionStorage.setItem("cb_cache_team", JSON.stringify(data));
     } catch (err) {
       console.error("Failed to fetch members:", err);
       setError("Failed to load team members.");
@@ -70,11 +80,12 @@ export default function TeamPage() {
     try {
       await api.post(`/users/${orgId}/invite`, {
         walletAddress: formData.walletAddress,
+        displayName: formData.displayName,
         roleLevel: Number(formData.roleLevel),
         roleLabel: formData.roleLabel || "Member",
       });
       setShowAddModal(false);
-      setFormData({ walletAddress: "", roleLevel: 3, roleLabel: "" });
+      setFormData({ walletAddress: "", displayName: "", roleLevel: 3, roleLabel: "" });
       fetchMembers(); // Refresh the list
     } catch (err: any) {
       setError(err.response?.data?.error || "Failed to add member.");
@@ -120,7 +131,7 @@ export default function TeamPage() {
       </header>
 
       {loading ? (
-        <div className="text-center py-12 text-gray-500">Loading team members...</div>
+        <TableSkeleton />
       ) : (
         <div className="glass rounded-xl overflow-hidden border border-[var(--color-border)]">
           <div className="overflow-x-auto">
@@ -134,51 +145,78 @@ export default function TeamPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {members.map((member) => {
-                  const membership = member.memberships.find(
-                    (m) => (typeof m.organization === "string" ? m.organization : (m.organization as any)?._id) === orgId
-                  );
-                  const isSelf = member._id === user?.id || member._id === (user as any)?._id;
+                {[1, 2, 3, 4].map(level => {
+                  const levelMembers = members.filter(member => {
+                    const membership = member.memberships.find(
+                      (m) => (typeof m.organization === "string" ? m.organization : (m.organization as any)?._id) === orgId
+                    );
+                    return (membership?.roleLevel || 4) === level;
+                  });
+
+                  if (levelMembers.length === 0) return null;
+
+                  const levelTitles: Record<number, string> = {
+                    1: "Executive Approvers (Level 1)",
+                    2: "Finance / Transaction Officers (Level 2)",
+                    3: "Members / Contributors (Level 3)",
+                    4: "Public Viewers (Level 4)"
+                  };
 
                   return (
-                    <tr key={member._id} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="p-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center border border-primary/10">
-                            {membership?.roleLevel === 1 ? <Shield className="w-5 h-5 text-primary" /> : <UserIcon className="w-5 h-5 text-gray-500" />}
-                          </div>
-                          <div>
-                            <p className="font-mono text-sm font-medium text-gray-900">
-                              {member.walletAddress.slice(0, 6)}...{member.walletAddress.slice(-4)}
-                              {isSelf && <span className="ml-2 text-xs text-primary font-semibold">(You)</span>}
-                            </p>
-                            {member.displayName && <p className="text-xs text-gray-500">{member.displayName}</p>}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        {getRoleBadge(membership?.roleLevel || 4)}
-                      </td>
-                      <td className="p-4">
-                        <span className="text-sm text-gray-600 font-medium">
-                          {membership?.roleLabel || "Member"}
-                        </span>
-                      </td>
-                      {canManage && (
-                        <td className="p-4 text-right">
-                          <button
-                            onClick={() => handleRemoveMember(member._id)}
-                            disabled={isSelf} // Don't allow removing yourself to prevent lockout
-                            className={`p-2 rounded-lg transition-colors ${
-                              isSelf ? "text-gray-300 cursor-not-allowed" : "text-gray-400 hover:text-danger hover:bg-danger/10"
-                            }`}
-                            title={isSelf ? "Cannot remove yourself" : "Remove member"}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                    <React.Fragment key={`level-${level}`}>
+                      <tr className="bg-gray-50/80 border-y border-gray-100">
+                        <td colSpan={canManage ? 4 : 3} className="px-4 py-2 text-xs font-bold text-gray-700 uppercase tracking-wide">
+                          {levelTitles[level]}
                         </td>
-                      )}
-                    </tr>
+                      </tr>
+                      {levelMembers.map((member) => {
+                        const membership = member.memberships.find(
+                          (m) => (typeof m.organization === "string" ? m.organization : (m.organization as any)?._id) === orgId
+                        );
+                        const isSelf = member._id === user?.id || member._id === (user as any)?._id;
+
+                        return (
+                          <tr key={member._id} className="hover:bg-gray-50/50 transition-colors">
+                            <td className="p-4">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center border border-primary/10">
+                                  {level === 1 ? <Shield className="w-5 h-5 text-primary" /> : <UserIcon className="w-5 h-5 text-gray-500" />}
+                                </div>
+                                <div>
+                                  <p className="font-mono text-sm font-medium text-gray-900">
+                                    {member.walletAddress.slice(0, 6)}...{member.walletAddress.slice(-4)}
+                                    {isSelf && <span className="ml-2 text-xs text-primary font-semibold">(You)</span>}
+                                  </p>
+                                  {member.displayName && <p className="text-xs text-gray-500">{member.displayName}</p>}
+                                </div>
+                              </div>
+                            </td>
+                            <td className="p-4">
+                              {getRoleBadge(level)}
+                            </td>
+                            <td className="p-4">
+                              <span className="text-sm text-gray-600 font-medium">
+                                {membership?.roleLabel || "Member"}
+                              </span>
+                            </td>
+                            {canManage && (
+                              <td className="p-4 text-right">
+                                <button
+                                  onClick={() => handleRemoveMember(member._id)}
+                                  disabled={isSelf} // Don't allow removing yourself to prevent lockout
+                                  className={`p-2 rounded-lg transition-colors ${
+                                    isSelf ? "text-gray-300 cursor-not-allowed" : "text-gray-400 hover:text-danger hover:bg-danger/10"
+                                  }`}
+                                  title={isSelf ? "Cannot remove yourself" : "Remove member"}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })}
+                    </React.Fragment>
                   );
                 })}
                 {members.length === 0 && (
@@ -230,6 +268,18 @@ export default function TeamPage() {
                   value={formData.walletAddress}
                   onChange={(e) => setFormData({ ...formData, walletAddress: e.target.value })}
                   required
+                />
+              </div>
+
+              {/* Name (Optional) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">Name (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="e.g., Alfie Lynard"
+                  className="input text-sm"
+                  value={formData.displayName}
+                  onChange={(e) => setFormData({ ...formData, displayName: e.target.value })}
                 />
               </div>
 

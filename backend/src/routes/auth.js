@@ -33,6 +33,8 @@ router.get("/me", authenticate, async (req, res) => {
       id: req.user._id,
       walletAddress: req.user.walletAddress,
       displayName: req.user.displayName,
+      avatarUrl: req.user.avatarUrl,
+      linkedWallets: req.user.linkedWallets,
       isSuperAdmin: req.user.isSuperAdmin,
       memberships: req.user.memberships,
     }
@@ -90,7 +92,19 @@ router.post("/link-wallet", authenticate, verifyRateLimiter, async (req, res) =>
     // Check if wallet is already linked to another user
     const existing = await User.findOne({ walletAddress: wallet });
     if (existing && existing._id.toString() !== req.user._id.toString()) {
-      return res.status(400).json({ error: "Wallet already linked to another account" });
+      // If it's a dummy user (created via invite without Asgardeo ID), merge it!
+      if (!existing.asgardeoId) {
+        // Merge memberships
+        existing.memberships.forEach(newMem => {
+          const alreadyHas = req.user.memberships.find(m => m.organization.toString() === newMem.organization.toString());
+          if (!alreadyHas) {
+            req.user.memberships.push(newMem);
+          }
+        });
+        await User.findByIdAndDelete(existing._id);
+      } else {
+        return res.status(400).json({ error: "Wallet already linked to another registered account" });
+      }
     }
 
     // Link wallet
@@ -104,6 +118,8 @@ router.post("/link-wallet", authenticate, verifyRateLimiter, async (req, res) =>
         id: req.user._id,
         walletAddress: req.user.walletAddress,
         displayName: req.user.displayName,
+        avatarUrl: req.user.avatarUrl,
+        linkedWallets: req.user.linkedWallets,
         isSuperAdmin: req.user.isSuperAdmin,
         memberships: req.user.memberships,
       }

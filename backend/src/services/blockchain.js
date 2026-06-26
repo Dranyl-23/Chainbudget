@@ -28,7 +28,7 @@ const initBlockchain = () => {
     signer
   );
 
-  console.log("⛓️  Blockchain service initialized. Contract:", contractAddress);
+  console.log("Blockchain service initialized. Contract:", contractAddress);
 };
 
 /// Record a transaction reference on-chain
@@ -77,7 +77,7 @@ const recordTransactionOnChain = async (payload, amount, isHighValue) => {
       dataHash,
     };
   } catch (error) {
-    console.error("❌ Blockchain recordTransaction error:", error.message);
+    console.error("Blockchain recordTransaction error:", error.message);
     throw error; // Re-throw so caller can handle
   }
 };
@@ -108,7 +108,7 @@ const submitApprovalOnChain = async (onChainTxId) => {
 
     return { blockchainTxHash: receipt.hash };
   } catch (error) {
-    console.error("❌ Blockchain submitApproval error:", error.message);
+    console.error("Blockchain submitApproval error:", error.message);
     throw error;
   }
 };
