@@ -12,11 +12,16 @@ const TransactionSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
-    type: {
-      type: String,
-      required: true,
-      enum: ["income", "expense"],
-    },
+    type: { type: String, enum: ["income", "expense"], required: true },
+    isHighValue: { type: Boolean, default: false },
+    isApproved: { type: Boolean, default: false }, // Level 1/2 DAO approvals
+    approvalCount: { type: Number, default: 0 },
+    executed: { type: Boolean, default: false },   // Transferred on-chain
+    isEscrow: { type: Boolean, default: false },   // Is it a smart contract escrow?
+    escrowStatus: { type: String, enum: ["none", "locked", "released"], default: "none" },
+    payerApproved: { type: Boolean, default: false },
+    payeeApproved: { type: Boolean, default: false },
+    approvals: [{ type: String, trim: true }],
     amount: { type: Number, required: true, min: 0 },
     currency: { type: String, default: "PHP" },
     description: { type: String, required: true, trim: true },

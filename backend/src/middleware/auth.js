@@ -37,16 +37,51 @@ const attachUser = async (req, res, next) => {
     }
 
     const asgardeoId = req.auth.sub;
+    const email = req.auth.email || "";
+    const nameFromToken = req.auth.name || req.auth.given_name || req.auth.preferred_username || "New User";
+    const pictureFromToken = req.auth.picture || "";
+
     let user = await User.findOne({ asgardeoId });
     
+    // If not found by asgardeoId but we have an email, check if Admin pre-created them
+    if (!user && email) {
+      user = await User.findOne({ email });
+      if (user) {
+        // Merge the Asgardeo account into the existing user
+        user.asgardeoId = asgardeoId;
+        if (user.displayName === "New User" && nameFromToken !== "New User") {
+          user.displayName = nameFromToken;
+        }
+        if (pictureFromToken && !user.avatarUrl) {
+          user.avatarUrl = pictureFromToken;
+        }
+        await user.save();
+      }
+    }
+
     // Auto-create user on first login from Asgardeo if they don't exist
     if (!user) {
       user = new User({ 
         asgardeoId, 
-        email: req.auth.email || "", 
-        displayName: req.auth.given_name || "New User" 
+        email, 
+        displayName: nameFromToken,
+        avatarUrl: pictureFromToken
       });
       await user.save();
+    } else {
+      // Even if user exists, update their profile picture or name if it was previously empty/default
+      let updated = false;
+      if (user.displayName === "New User" && nameFromToken !== "New User") {
+        user.displayName = nameFromToken;
+        updated = true;
+      }
+      if (!user.avatarUrl && pictureFromToken) {
+        user.avatarUrl = pictureFromToken;
+        updated = true;
+      }
+      if (updated) {
+        await user.save();
+      }
     }
 
     if (!user.isActive) {

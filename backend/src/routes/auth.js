@@ -113,6 +113,21 @@ router.post("/link-wallet", authenticate, verifyRateLimiter, async (req, res) =>
     req.user.lastLogin = new Date();
     await req.user.save();
 
+    // Auto-mint SBT for any active memberships
+    if (req.user.memberships && req.user.memberships.length > 0) {
+      const { mintSBT } = require("../utils/sbtMinter");
+      for (const membership of req.user.memberships) {
+        if (membership.isActive && !membership.hasSBT) {
+          const txHash = await mintSBT(wallet, membership.organization.toString());
+          if (txHash) {
+            membership.hasSBT = true;
+            membership.sbtTokenId = txHash; // We just store txHash for reference
+          }
+        }
+      }
+      await req.user.save();
+    }
+
     res.json({
       user: {
         id: req.user._id,
@@ -123,6 +138,41 @@ router.post("/link-wallet", authenticate, verifyRateLimiter, async (req, res) =>
         isSuperAdmin: req.user.isSuperAdmin,
         memberships: req.user.memberships,
       }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/// POST /api/auth/mint-sbt
+/// Allows an existing user with a wallet to mint their SBT if they haven't already
+router.post("/mint-sbt", authenticate, async (req, res) => {
+  try {
+    if (!req.user.walletAddress) {
+      return res.status(400).json({ error: "No primary wallet linked." });
+    }
+
+    let updated = false;
+    if (req.user.memberships && req.user.memberships.length > 0) {
+      const { mintSBT } = require("../utils/sbtMinter");
+      for (const membership of req.user.memberships) {
+        if (membership.isActive && !membership.hasSBT) {
+          const txHash = await mintSBT(req.user.walletAddress, membership.organization.toString());
+          if (txHash) {
+            membership.hasSBT = true;
+            membership.sbtTokenId = txHash;
+            updated = true;
+          }
+        }
+      }
+      if (updated) {
+        await req.user.save();
+      }
+    }
+
+    res.json({
+      success: updated,
+      memberships: req.user.memberships
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

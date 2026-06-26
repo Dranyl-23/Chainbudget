@@ -27,6 +27,14 @@ const OrganizationSchema = new mongoose.Schema(
     requiredApprovals: { type: Number, required: true, default: 2 },
     // Smart contract address associated with this org (set after deployment)
     contractAddress: { type: String, trim: true },
+    // Liquidation status for budget replenishment
+    liquidationStatus: {
+      type: String,
+      enum: ["none", "pending", "approved"],
+      default: "none",
+    },
+    // The amount to be automatically subsidized on approval (in PHP/smallest unit)
+    subsidyAmount: { type: Number, default: 50000 },
     isActive: { type: Boolean, default: true },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   },

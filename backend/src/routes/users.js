@@ -52,7 +52,7 @@ router.get("/:orgId/members", authenticate, requireRole(4), async (req, res) => 
 /// POST /api/users/:orgId/invite — Invite/add a member (Level 1 only)
 router.post("/:orgId/invite", authenticate, requireRole(1), async (req, res) => {
   try {
-    const { walletAddress, displayName, roleLevel, roleLabel } = req.body;
+    const { walletAddress, displayName, email, roleLevel, roleLabel } = req.body;
     if (!walletAddress || !roleLevel) {
       return res.status(400).json({ error: "walletAddress and roleLevel required" });
     }
@@ -61,11 +61,17 @@ router.post("/:orgId/invite", authenticate, requireRole(1), async (req, res) => 
     if (!user) {
       user = new User({ 
         walletAddress: walletAddress.toLowerCase(),
-        displayName: displayName || "New User"
+        displayName: displayName || "New User",
+        email: email || undefined
       });
-    } else if (displayName && user.displayName === "New User") {
-      // If user exists but is still "New User", we can update their name
-      user.displayName = displayName;
+    } else {
+      if (displayName && user.displayName === "New User") {
+        // If user exists but is still "New User", we can update their name
+        user.displayName = displayName;
+      }
+      if (email && !user.email) {
+        user.email = email;
+      }
     }
 
     // Check for existing membership

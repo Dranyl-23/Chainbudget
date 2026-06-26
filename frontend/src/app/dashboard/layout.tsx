@@ -7,7 +7,7 @@ import Link from "next/link";
 import {
   LayoutDashboard, ArrowLeftRight, PiggyBank,
   ClipboardCheck, FileText, BookOpen, Settings,
-  LogOut, Wallet, Users, Menu, X, AlertTriangle, Moon, Sun, Copy, Vote, ChevronLeft, ChevronRight, UserCircle
+  LogOut, Wallet, Users, Menu, X, AlertTriangle, Moon, Sun, Copy, Vote, ChevronLeft, ChevronRight, UserCircle, ShieldCheck
 } from "lucide-react";
 import toast from "react-hot-toast";
 import OrgSelector from "@/components/OrgSelector";
@@ -254,7 +254,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   <UserCircle className="w-4 h-4 text-primary" />
                 )}
                 <div className="flex flex-col">
-                  {user?.displayName && <span className="text-xs font-bold text-gray-800">{user.displayName}</span>}
+                  {user?.displayName && (
+                    <span className="text-xs font-bold text-gray-800 flex items-center gap-1">
+                      {user.displayName}
+                      {currentMembership?.hasSBT && (
+                        <span title="SBT Verified Member" className="flex items-center">
+                          <ShieldCheck className="w-3 h-3 text-indigo-500" />
+                        </span>
+                      )}
+                    </span>
+                  )}
                   <span className="text-[10px] font-mono text-gray-500 group-hover:text-primary transition-colors">{shortAddress}</span>
                 </div>
               </div>
