@@ -115,6 +115,12 @@ router.post("/:txId", authenticate, requireRole(2), async (req, res) => {
     // Commit transaction
     await session.commitTransaction();
 
+    // Emit socket event
+    const io = req.app.get("io");
+    if (io) {
+      io.emit("transaction_updated", { orgId: org._id });
+    }
+
     res.json({ approval: approval[0], transaction: txn });
   } catch (err) {
     await session.abortTransaction();

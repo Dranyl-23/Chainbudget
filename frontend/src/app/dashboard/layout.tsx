@@ -7,13 +7,15 @@ import Link from "next/link";
 import {
   LayoutDashboard, ArrowLeftRight, PiggyBank,
   ClipboardCheck, FileText, BookOpen, Settings,
-  LogOut, Wallet, Users, Menu, X, AlertTriangle, Moon, Sun, Copy
+  LogOut, Wallet, Users, Menu, X, AlertTriangle, Moon, Sun, Copy, Vote, ChevronLeft, ChevronRight, UserCircle
 } from "lucide-react";
 import toast from "react-hot-toast";
 import OrgSelector from "@/components/OrgSelector";
 import Onboarding from "@/components/Onboarding";
 import Portal from "@/components/Portal";
 import api from "@/lib/api";
+import OnboardingTour from "@/components/OnboardingTour";
+import SessionExpiredModal from "@/components/SessionExpiredModal";
 
 const navItems = [
   { href: "/dashboard",              icon: <LayoutDashboard className="w-4 h-4" />, label: "Dashboard",    minRole: 4 },
@@ -22,7 +24,9 @@ const navItems = [
   { href: "/dashboard/approvals",    icon: <ClipboardCheck  className="w-4 h-4" />, label: "Approvals",    minRole: 2 }, // Treasurer (Level 2) can approve
   { href: "/dashboard/reports",      icon: <FileText        className="w-4 h-4" />, label: "Reports",      minRole: 4 }, // RBAC Fix: Level 4 can view public reports
   { href: "/dashboard/audit",        icon: <BookOpen        className="w-4 h-4" />, label: "Audit Trail",  minRole: 2 }, // Treasurer should see audit logs
+  { href: "/dashboard/dao",          icon: <Vote            className="w-4 h-4" />, label: "DAO Governance", minRole: 4 }, // All members can vote
   { href: "/dashboard/team",         icon: <Users           className="w-4 h-4" />, label: "Team",         minRole: 4 },
+  { href: "/dashboard/settings",     icon: <UserCircle      className="w-4 h-4" />, label: "Profile",      minRole: 4 },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -34,12 +38,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [showDisconnectModal, setShowDisconnectModal] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   // Filter nav items based on role (Super Admins see everything)
   const currentMembership = user?.memberships?.find(
     (m: any) => m.organization === activeOrgId || m.organization?._id === activeOrgId
   );
   const roleLevel = currentMembership?.roleLevel || 4; 
+
+  const backendUrl = process.env.NEXT_PUBLIC_API_URL 
+    ? process.env.NEXT_PUBLIC_API_URL.replace("/api", "") 
+    : "http://localhost:5000";
+
+  const displayLogo = currentMembership?.organization?.logoUrl 
+    ? `${backendUrl}${currentMembership.organization.logoUrl}` 
+    : "/images/logo.png"; 
 
   const visibleNavItems = navItems.filter((item) => {
     if (user?.isSuperAdmin) return true;
@@ -104,10 +117,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="h-screen flex flex-col md:flex-row overflow-hidden" style={{ background: "var(--color-bg)" }}>
+      <OnboardingTour />
+      <SessionExpiredModal />
       {/* ── Mobile Header ── */}
       <div className="md:hidden flex items-center justify-between px-4 py-3 border-b bg-white z-20" style={{ borderColor: "var(--color-border)" }}>
         <div className="flex items-center gap-2">
-          <img src="/images/logo.png" alt="ChainBudget logo" className="w-8 h-8 object-contain rounded-[8px] shadow-sm flex-shrink-0" />
+          <img src={displayLogo} alt="ChainBudget logo" className="w-8 h-8 object-contain rounded-[8px] shadow-sm flex-shrink-0" />
           <span className="font-bold text-lg tracking-tight">
             Chain<span className="gradient-text">Budget</span>
           </span>
@@ -128,56 +143,81 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* ── Sidebar ── */}
       <aside 
         className={`
-          fixed md:static inset-y-0 left-0 z-40 w-64 flex flex-col border-r transform transition-transform duration-300 ease-in-out
+          fixed md:static inset-y-0 left-0 z-40 flex flex-col border-r transform transition-all duration-300 ease-in-out
+          ${isCollapsed ? 'w-20' : 'w-64'}
           ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0
         `} 
         style={{ background: "#ffffff", minHeight: "100vh", borderRight: "1px solid var(--color-border)" }}
       >
         {/* Logo (Hidden on very small screens since it's in the header, but keep it for md+) */}
-        <div className="px-5 mb-8 mt-4 hidden md:block">
+        <div className={`px-5 mb-8 mt-4 hidden md:flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
           <div className="flex items-center gap-3">
-            <img src="/images/logo.png" alt="ChainBudget logo" className="w-8 h-8 object-contain rounded-[8px] shadow-sm flex-shrink-0" />
-            <span className="font-bold text-lg tracking-tight">
+            <img src={displayLogo} alt="ChainBudget logo" className="w-8 h-8 object-contain rounded-[8px] shadow-sm flex-shrink-0" />
+            <span className={`font-bold text-lg tracking-tight transition-all duration-300 overflow-hidden whitespace-nowrap ${isCollapsed ? 'max-w-0 opacity-0' : 'max-w-[150px] opacity-100'}`}>
               Chain<span className="gradient-text">Budget</span>
             </span>
           </div>
+          <button 
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className="p-1 rounded-md hover:bg-gray-100 text-gray-500 transition-colors hidden md:block"
+          >
+            {isCollapsed ? <ChevronRight className="w-5 h-5" /> : <ChevronLeft className="w-5 h-5" />}
+          </button>
         </div>
 
         {/* Org selector component */}
-        <OrgSelector />
+        <div className={`transition-all duration-300 ${isCollapsed ? 'overflow-hidden max-h-0 opacity-0 m-0 p-0' : 'max-h-[500px] opacity-100 z-50 relative'}`}>
+          <OrgSelector />
+        </div>
 
         {/* Nav */}
-        <nav className="flex-1 px-3 space-y-0.5">
-          <p className="px-3 text-xs font-semibold text-gray-600 uppercase tracking-widest mb-2">Main</p>
+        <nav className="flex-1 px-3 space-y-0.5 mt-2 overflow-hidden">
+          <p className={`px-3 text-xs font-semibold text-gray-600 uppercase tracking-widest mb-2 transition-all duration-300 overflow-hidden whitespace-nowrap ${isCollapsed ? 'max-h-0 opacity-0 m-0' : 'max-h-10 opacity-100 mt-2'}`}>Main</p>
           {visibleNavItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}
+              title={isCollapsed ? item.label : ""}
               id={`nav-${item.label.toLowerCase().replace(" ", "-")}`}
             className={`nav-item flex justify-between ${
               item.href === "/dashboard"
                 ? pathname === "/dashboard" ? "active" : ""
                 : pathname.startsWith(item.href) ? "active" : ""
-            }`}
+            } ${isCollapsed ? 'justify-center px-0' : ''}`}
             >
-              <div className="flex items-center gap-3">
-                {item.icon}
-                {item.label}
+              <div className="flex items-center gap-3 overflow-hidden">
+                <div className="flex-shrink-0">{item.icon}</div>
+                <span className={`transition-all duration-300 whitespace-nowrap ${isCollapsed ? 'max-w-0 opacity-0' : 'max-w-[150px] opacity-100'}`}>
+                  {item.label}
+                </span>
               </div>
               {item.label === "Approvals" && pendingCount > 0 && (
-                <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 shadow-sm animate-pulse">
-                  {pendingCount}
-                </span>
+                <>
+                  <span className={`bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 shadow-sm animate-pulse transition-all duration-300 ${isCollapsed ? 'max-w-0 max-h-0 opacity-0 p-0 m-0 border-0 overflow-hidden' : 'max-w-[40px] opacity-100'}`}>
+                    {pendingCount}
+                  </span>
+                  {isCollapsed && (
+                    <span className="absolute top-2 right-2 bg-red-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full flex-shrink-0 shadow-sm animate-pulse">
+                      {pendingCount}
+                    </span>
+                  )}
+                </>
               )}
             </Link>
           ))}
 
           {user?.isSuperAdmin && (
             <>
-              <p className="px-3 text-xs font-semibold text-gray-600 uppercase tracking-widest mb-2 mt-4">Admin</p>
-              <Link href="/admin" className={`nav-item ${pathname.startsWith("/admin") ? "active" : ""}`}>
-                <Settings className="w-4 h-4" />
-                Platform Admin
+              <p className={`px-3 text-xs font-semibold text-gray-600 uppercase tracking-widest transition-all duration-300 overflow-hidden whitespace-nowrap ${isCollapsed ? 'max-h-0 opacity-0 m-0' : 'max-h-10 opacity-100 mt-4 mb-2'}`}>Admin</p>
+              <Link 
+                title={isCollapsed ? "Platform Admin" : ""}
+                href="/admin" 
+                className={`nav-item flex items-center gap-3 transition-all duration-300 ${isCollapsed ? 'justify-center px-0' : ''} ${pathname.startsWith("/admin") ? "active" : ""}`}
+              >
+                <div className="flex-shrink-0"><Settings className="w-4 h-4" /></div>
+                <span className={`transition-all duration-300 whitespace-nowrap ${isCollapsed ? 'max-w-0 opacity-0' : 'max-w-[150px] opacity-100'}`}>
+                  Platform Admin
+                </span>
               </Link>
             </>
           )}
@@ -186,14 +226,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Wallet info */}
         <div className="px-3 mt-auto mb-4">
           <button
+            title={isCollapsed ? (isDarkMode ? "Light Mode" : "Dark Mode") : ""}
             onClick={toggleTheme}
-            className="nav-item w-full mb-2 text-gray-500 hover:text-primary transition-colors"
+            className={`nav-item flex items-center gap-3 w-full transition-all duration-300 mb-2 text-gray-500 hover:text-primary transition-colors ${isCollapsed ? 'justify-center px-0' : ''}`}
           >
-            {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-            {isDarkMode ? "Light Mode" : "Dark Mode"}
+            <div className="flex-shrink-0">{isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}</div>
+            <span className={`transition-all duration-300 whitespace-nowrap ${isCollapsed ? 'max-w-0 opacity-0' : 'max-w-[150px] opacity-100'}`}>
+              {isDarkMode ? "Light Mode" : "Dark Mode"}
+            </span>
           </button>
 
-          <div className="px-3 py-3 rounded-lg sidebar-card">
+          <div className={`transition-all duration-300 overflow-hidden ${isCollapsed ? 'max-h-0 opacity-0 m-0 p-0 border-0' : 'max-h-[200px] opacity-100 px-3 py-3 mb-2 rounded-lg sidebar-card'}`}>
             <div 
               className="flex items-center justify-between mb-2 group cursor-pointer hover:bg-white/5 rounded px-1 -mx-1 transition-colors"
               onClick={() => {
@@ -205,8 +248,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               title="Copy full wallet address"
             >
               <div className="flex items-center gap-2">
-                <Wallet className="w-3.5 h-3.5 text-primary" />
-                <span className="text-xs font-mono text-gray-600 group-hover:text-primary transition-colors">{shortAddress}</span>
+                {user?.avatarUrl ? (
+                  <img src={user.avatarUrl} alt="Avatar" className="w-5 h-5 rounded-full object-cover" />
+                ) : (
+                  <UserCircle className="w-4 h-4 text-primary" />
+                )}
+                <div className="flex flex-col">
+                  {user?.displayName && <span className="text-xs font-bold text-gray-800">{user.displayName}</span>}
+                  <span className="text-[10px] font-mono text-gray-500 group-hover:text-primary transition-colors">{shortAddress}</span>
+                </div>
               </div>
               <Copy className="w-3.5 h-3.5 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
@@ -228,12 +278,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
           </div>
           <button
+            title={isCollapsed ? "Disconnect" : ""}
             onClick={() => setShowDisconnectModal(true)}
             id="logout-btn"
-            className="nav-item w-full mt-2 text-gray-500 hover:text-danger"
+            className={`nav-item flex items-center gap-3 w-full transition-all duration-300 text-gray-500 hover:text-danger ${isCollapsed ? 'justify-center px-0' : ''}`}
           >
-            <LogOut className="w-4 h-4" />
-            Disconnect
+            <div className="flex-shrink-0"><LogOut className="w-4 h-4" /></div>
+            <span className={`transition-all duration-300 whitespace-nowrap ${isCollapsed ? 'max-w-0 opacity-0' : 'max-w-[150px] opacity-100'}`}>
+              Disconnect
+            </span>
           </button>
         </div>
       </aside>

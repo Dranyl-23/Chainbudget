@@ -24,6 +24,7 @@ import {
   XCircle,
 } from "lucide-react";
 import api from "@/lib/api";
+import TableSkeleton from "@/components/TableSkeleton";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL?.replace("/api", "") || "http://localhost:5000";
 
@@ -68,9 +69,15 @@ interface UploadedFile {
 
 export default function TransactionsPage() {
   const { user, activeOrgId } = useAuth();
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [filteredTxs, setFilteredTxs] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [transactions, setTransactions] = useState<Transaction[]>(() => {
+    if (typeof window !== "undefined") {
+      const cached = sessionStorage.getItem("cb_cache_transactions");
+      if (cached) return JSON.parse(cached);
+    }
+    return [];
+  });
+  const [filteredTxs, setFilteredTxs] = useState<Transaction[]>(transactions);
+  const [loading, setLoading] = useState(transactions.length === 0);
   const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -93,13 +100,33 @@ export default function TransactionsPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
+  // Attach receipt later state
+  const attachFileInputRef = useRef<HTMLInputElement>(null);
+  const [attachingTxId, setAttachingTxId] = useState<string | null>(null);
+  const [isAttaching, setIsAttaching] = useState(false);
+
   useEffect(() => {
     const fetchTransactions = async () => {
       try {
         if (!activeOrgId) { setLoading(false); return; }
         const orgId = activeOrgId || "";
         const res = await api.get("/transactions", { params: { orgId, limit: 100 } });
-        setTransactions(res.data.transactions || []);
+        const data = res.data.transactions || [];
+        setTransactions(data);
+        sessionStorage.setItem("cb_cache_transactions", JSON.stringify(data));
+        
+        // Re-apply filters if any exist, otherwise set filtered to all
+        let result = data;
+        if (filters.search) {
+          result = result.filter((t: Transaction) => t.description.toLowerCase().includes(filters.search.toLowerCase()) || (t.referenceNumber && t.referenceNumber.toLowerCase().includes(filters.search.toLowerCase())));
+        }
+        if (filters.type) {
+          result = result.filter((t: Transaction) => t.type === filters.type);
+        }
+        if (filters.status) {
+          result = result.filter((t: Transaction) => t.status === filters.status);
+        }
+        setFilteredTxs(result);
       } catch (err) {
         console.error("Failed to fetch transactions:", err);
         setError("Failed to load transactions");
@@ -159,6 +186,48 @@ export default function TransactionsPage() {
       if (fileInputRef.current) fileInputRef.current.value = "";
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const handleAttachReceipt = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !attachingTxId) return;
+
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      alert("File is too large. Maximum size is 5 MB.");
+      if (attachFileInputRef.current) attachFileInputRef.current.value = "";
+      return;
+    }
+
+    setIsAttaching(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const uploadRes = await api.post("/upload", fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      
+      const { documentUrl, documentHash } = uploadRes.data;
+      
+      // Update transaction
+      await api.patch(`/transactions/${attachingTxId}/receipt`, {
+        documentUrl,
+        documentHash
+      });
+      
+      // Update state
+      setTransactions((prev) => 
+        prev.map(tx => tx._id === attachingTxId ? { ...tx, documentUrl, documentHash } : tx)
+      );
+      
+    } catch (err: any) {
+      console.error("Attach receipt error:", err);
+      alert(err.response?.data?.error || "Failed to attach receipt.");
+    } finally {
+      setIsAttaching(false);
+      setAttachingTxId(null);
+      if (attachFileInputRef.current) attachFileInputRef.current.value = "";
     }
   };
 
@@ -230,6 +299,14 @@ export default function TransactionsPage() {
 
   return (
     <div className="p-4 md:p-8 pb-20 animate-fade-in">
+      {/* Hidden file input for attaching receipts to existing txs */}
+      <input
+        ref={attachFileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,application/pdf"
+        className="hidden"
+        onChange={handleAttachReceipt}
+      />
 
       {/* ── Header ── */}
       <header className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -285,6 +362,9 @@ export default function TransactionsPage() {
       </div>
 
       {/* ── Table ── */}
+      {loading ? (
+        <TableSkeleton />
+      ) : (
       <div className="table-container">
         <table>
           <thead>
@@ -403,7 +483,21 @@ export default function TransactionsPage() {
                         <ExternalLink className="w-3 h-3 opacity-60" />
                       </a>
                     ) : (
-                      <span className="text-xs text-gray-400">—</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-400">—</span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setAttachingTxId(tx._id);
+                            if (attachFileInputRef.current) attachFileInputRef.current.click();
+                          }}
+                          disabled={isAttaching && attachingTxId === tx._id}
+                          className="text-[10px] bg-gray-100 hover:bg-primary/10 hover:text-primary text-gray-500 px-2 py-1 rounded transition-colors disabled:opacity-50"
+                          title="Attach Receipt"
+                        >
+                          {isAttaching && attachingTxId === tx._id ? "..." : "Upload"}
+                        </button>
+                      </div>
                     )}
                   </td>
                   <td className={`text-right font-bold ${tx.type === "income" ? "text-primary" : "text-danger"}`}>
@@ -505,6 +599,7 @@ export default function TransactionsPage() {
           </tbody>
         </table>
       </div>
+      )}
 
       {/* ── Create Transaction Modal ── */}
       {showCreateModal && (

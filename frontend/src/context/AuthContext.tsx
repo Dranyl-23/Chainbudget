@@ -8,6 +8,8 @@ interface User {
   id: string;
   walletAddress: string;
   displayName?: string;
+  avatarUrl?: string;
+  linkedWallets?: string[];
   isSuperAdmin: boolean;
   memberships: any[];
 }
@@ -25,6 +27,7 @@ interface AuthContextType {
   setActiveOrgId: (id: string) => void;
   isAsgardeoAuthenticated: boolean;
   linkMetaMask: () => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -203,12 +206,26 @@ export function ChainBudgetAuthProvider({ children, asgardeoAuth }: { children: 
     }
   }, [signOut]);
 
+  const refreshUser = useCallback(async () => {
+    try {
+      const res = await api.get("/users/me");
+      if (res.data) {
+        setUser(res.data);
+        if (typeof window !== "undefined") {
+          localStorage.setItem("cb_user", JSON.stringify(res.data));
+        }
+      }
+    } catch (err) {
+      console.error("Failed to refresh user:", err);
+    }
+  }, []);
+
   return (
     <AuthContext.Provider
       value={{ 
         user, walletAddress, isLoading: isLoading || (asgardeoState?.isLoading ?? true), 
         isConnected, login, register, logout, error, activeOrgId, setActiveOrgId,
-        isAsgardeoAuthenticated: asgardeoState?.isAuthenticated || false, linkMetaMask
+        isAsgardeoAuthenticated: asgardeoState?.isAuthenticated || false, linkMetaMask, refreshUser
       }}
     >
       {children}

@@ -5,6 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { PiggyBank, TrendingUp, TrendingDown, Plus, X } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import api from "@/lib/api";
+import DashboardSkeleton from "@/components/DashboardSkeleton";
 
 interface BudgetCategory {
   _id: string;
@@ -16,8 +17,14 @@ interface BudgetCategory {
 
 export default function BudgetPage() {
   const { user, activeOrgId } = useAuth();
-  const [budgetCategories, setBudgetCategories] = useState<BudgetCategory[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [budgetCategories, setBudgetCategories] = useState<BudgetCategory[]>(() => {
+    if (typeof window !== "undefined") {
+      const cached = sessionStorage.getItem("cb_cache_budgets");
+      if (cached) return JSON.parse(cached);
+    }
+    return [];
+  });
+  const [loading, setLoading] = useState(budgetCategories.length === 0);
   const [error, setError] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -43,7 +50,9 @@ export default function BudgetPage() {
       const orgId = activeOrgId || "";
       
       const res = await api.get("/budget", { params: { orgId } });
-      setBudgetCategories(res.data || []);
+      const data = res.data || [];
+      setBudgetCategories(data);
+      sessionStorage.setItem("cb_cache_budgets", JSON.stringify(data));
     } catch (err) {
       console.error("Failed to fetch budgets:", err);
       setError("Failed to load budgets");
@@ -88,6 +97,10 @@ export default function BudgetPage() {
 
   const totalAllocated = budgetCategories.reduce((s, c) => s + c.allocated, 0);
   const totalSpent = budgetCategories.reduce((s, c) => s + c.spent, 0);
+
+  if (loading) {
+    return <DashboardSkeleton />;
+  }
 
   return (
     <div className="p-4 md:p-8 pb-20 animate-fade-in relative">

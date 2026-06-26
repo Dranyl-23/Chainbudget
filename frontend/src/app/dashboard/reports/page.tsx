@@ -8,6 +8,9 @@ import {
 } from "recharts";
 import api from "@/lib/api";
 import Portal from "@/components/Portal";
+import { exportToCSV, exportToPDF } from "@/lib/exportUtils";
+import toast from "react-hot-toast";
+import DashboardSkeleton from "@/components/DashboardSkeleton";
 
 interface ReportData {
   month: string;
@@ -18,17 +21,23 @@ interface ReportData {
 
 export default function ReportsPage() {
   const { user, activeOrgId } = useAuth();
-  const [monthlyData, setMonthlyData] = useState<ReportData[]>([]);
-  const [summaryStats, setSummaryStats] = useState({
-    totalTxs: 0,
-    totalIncome: 0,
-    totalExpenses: 0,
-    netBalance: 0,
+  const [monthlyData, setMonthlyData] = useState<ReportData[]>(() => {
+    if (typeof window !== "undefined") {
+      const cached = sessionStorage.getItem("cb_cache_reports_monthly");
+      if (cached) return JSON.parse(cached);
+    }
+    return [];
   });
-  const [loading, setLoading] = useState(true);
+  const [summaryStats, setSummaryStats] = useState(() => {
+    if (typeof window !== "undefined") {
+      const cached = sessionStorage.getItem("cb_cache_reports_stats");
+      if (cached) return JSON.parse(cached);
+    }
+    return { totalTxs: 0, totalIncome: 0, totalExpenses: 0, netBalance: 0 };
+  });
+  const [loading, setLoading] = useState(monthlyData.length === 0);
   const [error, setError] = useState<string | null>(null);
   const [range, setRange] = useState("6months");
-  const [format, setFormat] = useState("pdf");
   const [isExporting, setIsExporting] = useState(false);
   const [printData, setPrintData] = useState<any[] | null>(null);
 
@@ -56,18 +65,21 @@ export default function ReportsPage() {
             balance: (m.income || 0) - (m.expense || 0),
           }));
           setMonthlyData(enriched);
+          sessionStorage.setItem("cb_cache_reports_monthly", JSON.stringify(enriched));
         } else {
           generateDefaultData();
         }
 
         // API returns flat keys: totalIncome, totalExpenses, balance, approvedTransactions
         if (data?.totalIncome !== undefined) {
-          setSummaryStats({
+          const stats = {
             totalTxs: data.approvedTransactions ?? 0,
             totalIncome: data.totalIncome ?? 0,
             totalExpenses: data.totalExpenses ?? 0,
             netBalance: (data.totalIncome ?? 0) - (data.totalExpenses ?? 0),
-          });
+          };
+          setSummaryStats(stats);
+          sessionStorage.setItem("cb_cache_reports_stats", JSON.stringify(stats));
         } else {
           calculateStats(orgId);
         }
@@ -124,7 +136,7 @@ export default function ReportsPage() {
     fetchReportData();
   }, [activeOrgId, range]);
 
-  const handleExport = async () => {
+  const handleExport = async (exportFormat: "pdf" | "csv") => {
     if (!activeOrgId) return;
     setIsExporting(true);
     try {
@@ -133,45 +145,42 @@ export default function ReportsPage() {
       });
       const txs = res.data;
       
-      if (format === "pdf") {
+      if (exportFormat === "pdf") {
         setPrintData(txs);
+        // Wait for React to render the print portal
         setTimeout(() => {
           window.print();
+          // We don't nullify printData immediately because the print dialog pauses execution in some browsers
+          // It will be hidden on screen anyway because of the 'hidden print:block' tailwind classes
           setIsExporting(false);
-          // Optional: clear printData after print window closes
-          setTimeout(() => setPrintData(null), 1000);
-        }, 300);
-        return; // exit early, don't build CSV
+        }, 500);
+        return;
       }
 
-      // Build CSV
-      const headers = ["Date", "Description", "Type", "Amount", "Status", "Category", "Submitted By"];
+      const headers = ["Date", "Description", "Type", "Amount (Php)", "Status", "Category", "Submitted By"];
       const rows = txs.map((t: any) => [
         new Date(t.createdAt).toLocaleDateString(),
-        `"${(t.description || "").replace(/"/g, "'")}"`,
-        t.type,
-        t.amount,
-        t.status,
-        t.category || "",
-        t.submittedBy?.displayName || t.submittedBy?.walletAddress || "",
+        t.description,
+        t.type.toUpperCase(),
+        t.amount.toLocaleString(),
+        t.status.toUpperCase(),
+        t.category || "General",
+        t.submittedBy?.displayName || "Unknown"
       ]);
-      const csv = [headers.join(","), ...rows.map((r: any[]) => r.join(","))].join("\n");
-      const blob = new Blob([csv], { type: "text/csv" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `chainbudget-report-${new Date().toISOString().slice(0, 10)}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error("Export failed:", err);
+
+      exportToCSV(headers, rows, "Financial_Report");
+      toast.success(`Exported to CSV successfully`);
       setIsExporting(false);
-    } finally {
-      if (format !== "pdf") {
-        setIsExporting(false);
-      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to export data");
+      setIsExporting(false);
     }
   };
+
+  if (loading) {
+    return <DashboardSkeleton />;
+  }
 
   return (
     <div className="p-4 md:p-8 pb-20 animate-fade-in">
@@ -193,9 +202,14 @@ export default function ReportsPage() {
           </select>
           {/* RBAC Fix: Only Level 1 & 2 can export reports. Level 3 & 4 are read-only. */}
           {(user?.isSuperAdmin || (user?.memberships?.find((m: any) => m.organization === activeOrgId || m.organization?._id === activeOrgId)?.roleLevel || 4) <= 2) && (
-            <button className="btn-primary py-2" onClick={handleExport} disabled={isExporting}>
-              <Download className="w-4 h-4" /> {isExporting ? "Exporting..." : "Export"}
-            </button>
+            <div className="flex gap-2">
+              <button className="btn-secondary py-2" onClick={() => handleExport("csv")} disabled={isExporting}>
+                <Download className="w-4 h-4" /> CSV
+              </button>
+              <button className="btn-primary py-2" onClick={() => handleExport("pdf")} disabled={isExporting}>
+                <FileText className="w-4 h-4" /> PDF
+              </button>
+            </div>
           )}
         </div>
       </header>
@@ -269,33 +283,7 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      {/* ── Export Options ── */}
-      {/* RBAC Fix: Only Level 1 & 2 can export reports */}
-      {(user?.isSuperAdmin || (user?.memberships?.find((m: any) => m.organization === activeOrgId || m.organization?._id === activeOrgId)?.roleLevel || 4) <= 2) && (
-        <div className="glass p-6 rounded-xl">
-          <h3 className="text-base font-semibold mb-4 flex items-center gap-2">
-            <Download className="w-4 h-4 text-gray-400" /> Export Report
-          </h3>
-          <div className="flex flex-col sm:flex-row flex-wrap sm:items-center gap-4">
-            <div className="flex gap-3 overflow-x-auto pb-1">
-              {["pdf", "xlsx", "csv"].map((fmt) => (
-                <label key={fmt} className="flex items-center gap-2 px-4 py-2 rounded-lg cursor-pointer border transition-colors flex-shrink-0"
-                  style={{
-                    borderColor: format === fmt ? "#6B55D9" : "#D8D2F5",
-                    background: format === fmt ? "rgba(107,85,217,0.1)" : "transparent",
-                  }}>
-                  <input type="radio" name="format" value={fmt} checked={format === fmt}
-                    onChange={() => setFormat(fmt)} style={{ accentColor: "var(--color-primary)" }} />
-                  <span className="text-sm uppercase font-semibold text-gray-500">.{fmt}</span>
-                </label>
-              ))}
-            </div>
-            <button className="btn-primary w-full sm:w-auto py-2 px-6 sm:ml-auto justify-center" onClick={handleExport} disabled={isExporting}>
-              <Download className="w-4 h-4" /> {isExporting ? "Generating..." : (format === "pdf" ? "Print PDF" : "Download CSV")}
-            </button>
-          </div>
-        </div>
-      )}
+
 
       {/* ── Print View (Hidden on screen, visible on print) ── */}
       {printData && (

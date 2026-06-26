@@ -22,6 +22,8 @@ const UserSchema = new mongoose.Schema(
       sparse: true,
     },
     displayName: { type: String, trim: true },
+    avatarUrl: { type: String },
+    linkedWallets: [{ type: String, lowercase: true, trim: true }],
     email: { type: String, trim: true, lowercase: true },
     // Platform-level role (super admin or not)
     isSuperAdmin: { type: Boolean, default: false },

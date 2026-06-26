@@ -10,6 +10,7 @@ interface Organization {
   _id: string;
   name: string;
   type: string;
+  logoUrl?: string;
 }
 
 export default function OrgSelector() {
@@ -26,6 +27,7 @@ export default function OrgSelector() {
     type: "student_org",
     highValueThreshold: 10000,
   });
+  const [logoFile, setLogoFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -67,13 +69,24 @@ export default function OrgSelector() {
     setIsSubmitting(true);
     setError(null);
     try {
-      const res = await api.post("/organizations", formData);
+      const data = new FormData();
+      data.append("name", formData.name);
+      data.append("type", formData.type);
+      data.append("highValueThreshold", formData.highValueThreshold.toString());
+      if (logoFile) {
+        data.append("logo", logoFile);
+      }
+
+      const res = await api.post("/organizations", data, {
+        headers: { "Content-Type": "multipart/form-data" }
+      });
       const newOrg = res.data;
       setOrgs([...orgs, newOrg]);
       setActiveOrgId(newOrg._id);
       setModalOpen(false);
       setDropdownOpen(false);
       setFormData({ name: "", type: "student_org", highValueThreshold: 10000 });
+      setLogoFile(null);
       // Force reload to refresh user memberships from token/backend if needed
       window.location.reload(); 
     } catch (err: any) {
@@ -86,7 +99,7 @@ export default function OrgSelector() {
     <div className="px-3 mb-6 relative" ref={dropdownRef}>
       {/* Selector Button */}
       <div 
-        className="flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors sidebar-card"
+        className="flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors sidebar-card select-none"
         onClick={() => setDropdownOpen(!dropdownOpen)}
       >
         <div className="overflow-hidden">
@@ -166,6 +179,16 @@ export default function OrgSelector() {
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                   value={formData.name}
                   onChange={e => setFormData({...formData, name: e.target.value})}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Organization Logo (Optional)</label>
+                <input 
+                  type="file" 
+                  accept="image/png, image/jpeg, image/webp"
+                  onChange={e => setLogoFile(e.target.files?.[0] || null)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
                 />
               </div>
 

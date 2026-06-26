@@ -1,4 +1,5 @@
 import axios from "axios";
+import toast from "react-hot-toast";
 
 const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api",
@@ -46,10 +47,15 @@ api.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err.response?.status === 401 && typeof window !== "undefined") {
-      localStorage.removeItem("cb_token");
-      localStorage.removeItem("cb_user");
-      if (window.location.pathname !== "/") {
-        window.location.href = "/";
+      // Prevent multiple alerts if multiple concurrent requests fail
+      if (!sessionStorage.getItem("session_expired_alert")) {
+        sessionStorage.setItem("session_expired_alert", "true");
+        
+        setTimeout(() => {
+          localStorage.removeItem("cb_token");
+          localStorage.removeItem("cb_user");
+          window.dispatchEvent(new CustomEvent("cb_session_expired"));
+        }, 100); // Small delay to let React finish rendering current state
       }
     }
 
