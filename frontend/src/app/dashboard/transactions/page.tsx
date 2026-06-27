@@ -190,7 +190,7 @@ export default function TransactionsPage() {
 
       if (format === "pdf") {
         const title = `Transactions Report - ${new Date().toLocaleDateString()}`;
-        exportToPDF(title, headers, rows, "Transactions_Report");
+        exportToPDF(headers, rows, title, "Transactions_Report");
         toast.success(`Exported to PDF successfully`);
       } else {
         exportToCSV(headers, rows, "Transactions_Report");
