@@ -96,7 +96,7 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [suspending, setSuspending] = useState<string | null>(null);
 
-  const shortAddr = (addr: string) => `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+  const shortAddr = (addr?: string) => addr ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : "No Wallet";
 
   // Guard: redirect non-super-admins
   useEffect(() => {
@@ -579,15 +579,15 @@ export default function AdminPage() {
                       </td>
                       <td>
                         <div className="flex flex-wrap gap-1">
-                          {u.memberships.slice(0, 3).map((m, i) => (
+                          {(u.memberships || []).slice(0, 3).map((m, i) => (
                             <span key={i} className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
                               {m.organization?.name || "Unknown"} · {ROLE_LABELS[m.roleLevel] || `L${m.roleLevel}`}
                             </span>
                           ))}
-                          {u.memberships.length > 3 && (
-                            <span className="text-xs text-gray-400">+{u.memberships.length - 3} more</span>
+                          {(u.memberships || []).length > 3 && (
+                            <span className="text-xs text-gray-400">+{(u.memberships || []).length - 3} more</span>
                           )}
-                          {u.memberships.length === 0 && <span className="text-xs text-gray-400">No memberships</span>}
+                          {(!u.memberships || u.memberships.length === 0) && <span className="text-xs text-gray-400">No memberships</span>}
                         </div>
                       </td>
                       <td className="text-xs text-gray-400">
