@@ -23,6 +23,10 @@ router.post("/", authenticate, upload.single("logo"), async (req, res) => {
       return res.status(400).json({ error: "name and type are required" });
     }
 
+    if (!req.user.walletAddress) {
+      return res.status(400).json({ error: "You must link a wallet before creating an organization." });
+    }
+
     let logoUrl = "";
     if (req.file) {
       try {

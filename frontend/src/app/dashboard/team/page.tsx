@@ -186,7 +186,7 @@ export default function TeamPage() {
                                 </div>
                                 <div>
                                   <p className="font-mono text-sm font-medium text-gray-900">
-                                    {member.walletAddress.slice(0, 6)}...{member.walletAddress.slice(-4)}
+                                    {member.walletAddress ? `${member.walletAddress.slice(0, 6)}...${member.walletAddress.slice(-4)}` : "No Wallet"}
                                     {isSelf && <span className="ml-2 text-xs text-primary font-semibold">(You)</span>}
                                   </p>
                                   {member.displayName && <p className="text-xs text-gray-500">{member.displayName}</p>}
