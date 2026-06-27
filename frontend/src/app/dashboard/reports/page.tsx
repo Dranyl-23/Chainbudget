@@ -237,12 +237,12 @@ export default function ReportsPage() {
 
       {/* ── Liquidation Banner ── */}
       {(user?.isSuperAdmin || (user?.memberships?.find((m: any) => m.organization === activeOrgId || m.organization?._id === activeOrgId)?.roleLevel || 4) <= 2) && (
-        <div className="mb-8 p-6 rounded-2xl glass border border-primary/20 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="mb-8 p-6 rounded-2xl glass border border-primary/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <h3 className="font-bold text-lg mb-1">Financial Liquidation</h3>
             <p className="text-sm text-gray-600">Submit your reports to the University for automated budget replenishment.</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 self-start sm:self-auto">
             <span className={`px-3 py-1 rounded-full text-xs font-bold border ${
               liquidationStatus === "approved" ? "bg-green-100 text-green-700 border-green-200" :
               liquidationStatus === "pending" ? "bg-orange-100 text-orange-700 border-orange-200" :
@@ -289,11 +289,11 @@ export default function ReportsPage() {
 
       {/* ── Area Chart ── */}
       <div className="glass p-6 rounded-xl mb-8">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-3">
           <h3 className="text-base font-semibold flex items-center gap-2">
             <BarChart3 className="w-4 h-4 text-primary" /> Cash Flow Over Time
           </h3>
-          <div className="flex items-center gap-4 text-xs text-gray-500">
+          <div className="flex items-center gap-3 md:gap-4 text-xs text-gray-500 flex-wrap">
             <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-primary inline-block" /> Income</span>
             <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-danger inline-block" /> Expenses</span>
             <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-primary/70 inline-block" /> Balance</span>
@@ -301,7 +301,7 @@ export default function ReportsPage() {
         </div>
         <div className="h-[300px]">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={monthlyData} margin={{ left: 0, right: 0, top: 4, bottom: 0 }}>
+            <AreaChart data={monthlyData} margin={{ left: 0, right: 20, top: 4, bottom: 0 }}>
               <defs>
                 <linearGradient id="incGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#7B5BD6" stopOpacity={0.24} />
