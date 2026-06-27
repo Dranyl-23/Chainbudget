@@ -214,53 +214,77 @@ export default function DashboardPage() {
       </header>
 
       {/* ── Stats Row ── */}
-      <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 mb-8 ${roleLevel <= 2 ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
-        <div className="stat-card">
-          <div className="flex justify-between items-start mb-4">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-primary/10">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div className="bg-white border border-gray-100 rounded-xl md:rounded-2xl p-4 md:p-6 shadow-sm flex items-center md:items-start md:flex-col justify-between relative">
+          <div className="flex items-center gap-3 md:block md:w-full">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-primary/10 shrink-0 md:mb-4">
               <Wallet className="w-5 h-5 text-primary" />
             </div>
-            <span className="badge badge-approved">
-              {stats.totalBalance >= 0 ? "+" : ""}
-              {Math.round((stats.totalBalance / (stats.totalIncome || 1)) * 100)}%
-            </span>
+            <div className="md:hidden">
+              <p className="text-xs text-gray-500 font-medium">Total Balance</p>
+              <h3 className="text-lg font-bold leading-tight">₱{Math.round(stats.totalBalance).toLocaleString()}</h3>
+            </div>
+            <div className="hidden md:block">
+              <p className="text-sm text-gray-500 font-medium mb-1">Total Balance</p>
+              <h3 className="text-2xl font-bold">₱{Math.round(stats.totalBalance).toLocaleString()}</h3>
+            </div>
           </div>
-          <p className="text-sm text-gray-500 font-medium mb-1">Total Balance</p>
-          <h3 className="text-2xl font-bold">₱{Math.round(stats.totalBalance).toLocaleString()}</h3>
+          <span className="badge badge-approved md:absolute md:top-6 md:right-6 md:mt-0">
+            {stats.totalBalance >= 0 ? "+" : ""}
+            {Math.round((stats.totalBalance / (stats.totalIncome || 1)) * 100)}%
+          </span>
         </div>
 
-        <div className="stat-card">
-          <div className="flex justify-between items-start mb-4">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-primary/10">
+        <div className="bg-white border border-gray-100 rounded-xl md:rounded-2xl p-4 md:p-6 shadow-sm flex items-center md:items-start md:flex-col justify-between relative">
+          <div className="flex items-center gap-3 md:block md:w-full">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-primary/10 shrink-0 md:mb-4">
               <ArrowUpRight className="w-5 h-5 text-primary/80" />
             </div>
-            <span className="text-xs text-gray-500">This Month</span>
+            <div className="md:hidden">
+              <p className="text-xs text-gray-500 font-medium">Total Income</p>
+              <h3 className="text-lg font-bold leading-tight">₱{Math.round(stats.totalIncome).toLocaleString()}</h3>
+            </div>
+            <div className="hidden md:block">
+              <p className="text-sm text-gray-500 font-medium mb-1">Total Income</p>
+              <h3 className="text-2xl font-bold">₱{Math.round(stats.totalIncome).toLocaleString()}</h3>
+            </div>
           </div>
-          <p className="text-sm text-gray-500 font-medium mb-1">Total Income</p>
-          <h3 className="text-2xl font-bold">₱{Math.round(stats.totalIncome).toLocaleString()}</h3>
+          <span className="text-xs text-gray-400 font-medium md:absolute md:top-6 md:right-6">This Month</span>
         </div>
 
-        <div className="stat-card">
-          <div className="flex justify-between items-start mb-4">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-danger/10">
+        <div className="bg-white border border-gray-100 rounded-xl md:rounded-2xl p-4 md:p-6 shadow-sm flex items-center md:items-start md:flex-col justify-between relative">
+          <div className="flex items-center gap-3 md:block md:w-full">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-danger/10 shrink-0 md:mb-4">
               <ArrowDownRight className="w-5 h-5 text-danger" />
             </div>
-            <span className="text-xs text-gray-500">This Month</span>
+            <div className="md:hidden">
+              <p className="text-xs text-gray-500 font-medium">Total Expenses</p>
+              <h3 className="text-lg font-bold leading-tight">₱{Math.round(stats.totalExpenses).toLocaleString()}</h3>
+            </div>
+            <div className="hidden md:block">
+              <p className="text-sm text-gray-500 font-medium mb-1">Total Expenses</p>
+              <h3 className="text-2xl font-bold">₱{Math.round(stats.totalExpenses).toLocaleString()}</h3>
+            </div>
           </div>
-          <p className="text-sm text-gray-500 font-medium mb-1">Total Expenses</p>
-          <h3 className="text-2xl font-bold">₱{Math.round(stats.totalExpenses).toLocaleString()}</h3>
+          <span className="text-xs text-gray-400 font-medium md:absolute md:top-6 md:right-6">This Month</span>
         </div>
 
         {roleLevel <= 2 && (
-          <Link href="/dashboard/approvals" className="stat-card border-primary/20 bg-primary/5 cursor-pointer block">
-            <div className="flex justify-between items-start mb-4">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-primary/10">
+          <Link href="/dashboard/approvals" className="bg-primary/5 border border-primary/20 rounded-xl md:rounded-2xl p-4 md:p-6 shadow-sm flex items-center md:items-start md:flex-col justify-between cursor-pointer transition-colors hover:bg-primary/10 relative">
+            <div className="flex items-center gap-3 md:block md:w-full">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-primary/10 shrink-0 md:mb-4">
                 <Activity className="w-5 h-5 text-primary/80" />
               </div>
-              <span className="badge badge-pending">Needs Action</span>
+              <div className="md:hidden">
+                <p className="text-xs text-primary/80 font-medium">Pending Approvals</p>
+                <h3 className="text-lg font-bold text-primary leading-tight">{stats.pendingCount}</h3>
+              </div>
+              <div className="hidden md:block">
+                <p className="text-sm text-primary/80 font-medium mb-1">Pending Approvals</p>
+                <h3 className="text-2xl font-bold text-primary">{stats.pendingCount}</h3>
+              </div>
             </div>
-            <p className="text-sm text-primary/80 font-medium mb-1">Pending Approvals</p>
-            <h3 className="text-2xl font-bold text-primary">{stats.pendingCount}</h3>
+            <span className="badge badge-pending md:absolute md:top-6 md:right-6">Needs Action</span>
           </Link>
         )}
       </div>
