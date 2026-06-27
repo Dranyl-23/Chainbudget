@@ -202,12 +202,12 @@ export default function DashboardPage() {
         </div>
         
         {roleLevel <= 3 && (
-          <div className="flex gap-3">
-            <Link href="/dashboard/reports" className="btn-secondary py-2">
-              <FileText className="w-4 h-4" /> Export Report
+          <div className="flex gap-2 w-full md:w-auto">
+            <Link href="/dashboard/reports" className="btn-secondary py-2 px-3 text-xs md:text-sm whitespace-nowrap flex-1 md:flex-none justify-center">
+              <FileText className="w-3.5 h-3.5 md:w-4 md:h-4" /> Export
             </Link>
-            <Link href="/dashboard/transactions" className="btn-primary py-2">
-              <Wallet className="w-4 h-4" /> New Transaction
+            <Link href="/dashboard/transactions" className="btn-primary py-2 px-3 text-xs md:text-sm whitespace-nowrap flex-1 md:flex-none justify-center">
+              <Wallet className="w-3.5 h-3.5 md:w-4 md:h-4" /> New Transaction
             </Link>
           </div>
         )}
