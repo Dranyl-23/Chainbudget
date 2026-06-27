@@ -698,11 +698,11 @@ export default function TransactionsPage() {
             onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}
           >
             {/* Flex centering wrapper */}
-            <div className="flex min-h-full items-center justify-center p-4 py-8">
-              <div className="glass rounded-2xl p-8 w-full max-w-lg shadow-2xl animate-fade-in">
+            <div className="flex min-h-full items-center justify-center p-3 md:p-4 py-6 md:py-8">
+              <div className="glass rounded-xl md:rounded-2xl p-5 md:p-8 w-full max-w-lg shadow-2xl animate-fade-in">
 
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold">
+            <div className="flex items-center justify-between mb-4 md:mb-6">
+              <h2 className="text-lg md:text-xl font-bold">
                 { (user?.isSuperAdmin || (user?.memberships?.find((m: any) => m.organization === activeOrgId || m.organization?._id === activeOrgId)?.roleLevel || 4) <= 2) ? "Record Transaction" : "Submit Request" }
               </h2>
               <button
@@ -719,7 +719,7 @@ export default function TransactionsPage() {
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-3 md:space-y-4">
 
               {/* Income / Expense toggle */}
               <div className="flex rounded-lg overflow-hidden border" style={{ borderColor: "var(--color-border)" }}>
@@ -777,12 +777,12 @@ export default function TransactionsPage() {
 
               {/* Urgency Toggle (Level 3 specific) */}
               {(user?.memberships?.find((m: any) => m.organization === activeOrgId || m.organization?._id === activeOrgId)?.roleLevel === 3) && formData.type === "expense" && (
-                <div className="flex items-center justify-between p-3 bg-red-50 border border-red-100 rounded-lg">
+                <div className="flex items-center justify-between p-2 md:p-3 bg-red-50 border border-red-100 rounded-lg">
                   <div>
-                    <label className="block text-sm font-semibold text-red-700 mb-0.5">Mark as Urgent?</label>
-                    <p className="text-[10px] text-red-600">Flags this request for immediate admin attention.</p>
+                    <label className="block text-sm font-semibold text-red-700 mb-0 md:mb-0.5">Mark as Urgent?</label>
+                    <p className="text-[9px] md:text-[10px] text-red-600 leading-tight">Flags this request for immediate admin attention.</p>
                   </div>
-                  <div className="flex bg-white rounded-lg p-1 border border-red-200 shadow-sm">
+                  <div className="flex bg-white rounded-lg p-1 border border-red-200 shadow-sm shrink-0">
                     <button
                       type="button"
                       onClick={() => setFormData({ ...formData, urgency: "normal" })}
@@ -802,7 +802,7 @@ export default function TransactionsPage() {
               )}
 
               {/* Category + Reference */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2 md:gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-600 mb-1">Category</label>
                   <input
@@ -842,13 +842,13 @@ export default function TransactionsPage() {
 
               {/* ── Receipt / Attachment Upload ── */}
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-2">
+                <label className="block text-sm font-medium text-gray-600 mb-1.5 md:mb-2">
                   Receipt / Attachment <span className="text-gray-400 font-normal">(optional)</span>
                 </label>
 
                 {!uploadedFile ? (
                   <div
-                    className="relative border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-all duration-200"
+                    className="relative border-2 border-dashed rounded-xl p-4 md:p-5 text-center cursor-pointer transition-all duration-200"
                     style={{ borderColor: "var(--color-border)" }}
                     onDragOver={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement).style.borderColor = "#6B55D9"; }}
                     onDragLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "var(--color-border)"; }}
@@ -945,10 +945,10 @@ export default function TransactionsPage() {
               )}
 
               {/* Actions */}
-              <div className="pt-4 mt-2 flex justify-end gap-3 border-t border-gray-100">
+              <div className="pt-3 md:pt-4 mt-1 md:mt-2 flex justify-end gap-2 md:gap-3 border-t border-gray-100">
                 <button
                   type="button"
-                  className="btn-secondary flex-1 py-2.5"
+                  className="btn-secondary flex-1 py-2 md:py-2.5 text-sm md:text-base"
                   onClick={closeModal}
                 >
                   Cancel
@@ -957,7 +957,7 @@ export default function TransactionsPage() {
                   id="tx-submit-btn"
                   type="submit"
                   disabled={isSubmitting || isUploading}
-                  className="btn-primary flex-1 py-2.5"
+                  className="btn-primary flex-1 py-2 md:py-2.5 text-sm md:text-base whitespace-nowrap"
                 >
                   {isSubmitting ? "Recording..." : "Record Transaction"}
                 </button>
