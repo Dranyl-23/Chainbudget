@@ -28,17 +28,22 @@ router.get("/validate", authenticate, (req, res) => {
 /// GET /api/auth/me
 /// Returns the current user profile (relies on authenticate middleware to check Asgardeo JWT)
 router.get("/me", authenticate, async (req, res) => {
-  res.json({
-    user: {
-      id: req.user._id,
-      walletAddress: req.user.walletAddress,
-      displayName: req.user.displayName,
-      avatarUrl: req.user.avatarUrl,
-      linkedWallets: req.user.linkedWallets,
-      isSuperAdmin: req.user.isSuperAdmin,
-      memberships: req.user.memberships,
-    }
-  });
+  try {
+    await req.user.populate("memberships.organization", "name type logoUrl");
+    res.json({
+      user: {
+        id: req.user._id,
+        walletAddress: req.user.walletAddress,
+        displayName: req.user.displayName,
+        avatarUrl: req.user.avatarUrl,
+        linkedWallets: req.user.linkedWallets,
+        isSuperAdmin: req.user.isSuperAdmin,
+        memberships: req.user.memberships,
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 /// GET /api/auth/nonce/:walletAddress
