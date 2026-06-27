@@ -26,6 +26,7 @@ import {
   Link2,
   XCircle,
 } from "lucide-react";
+import confetti from "canvas-confetti";
 import api from "@/lib/api";
 import TableSkeleton from "@/components/TableSkeleton";
 
@@ -282,6 +283,13 @@ export default function TransactionsPage() {
       });
       setTransactions((prev) => [res.data.transaction, ...prev]);
       closeModal();
+      toast.success(res.data.transaction.status === 'requested' ? "Request submitted!" : "Transaction recorded!");
+      confetti({
+        particleCount: 80,
+        spread: 60,
+        origin: { y: 0.6 },
+        colors: ['#6B55D9', '#7DBD9B', '#4F46E5', '#10B981']
+      });
     } catch (err: any) {
       setError(err.response?.data?.error || "Failed to record transaction.");
     } finally {
