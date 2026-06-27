@@ -24,6 +24,7 @@ router.post("/", authenticate, requireRole(3), async (req, res) => {
       documentHash,
       urgency,
       isEscrow,
+      documentUrl,
     } = req.body;
 
     // Input validation
