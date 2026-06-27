@@ -14,6 +14,7 @@ import {
   Paperclip,
   Upload,
   FileText,
+  Receipt,
   Image,
   ExternalLink,
   CheckCircle2,
@@ -674,8 +675,16 @@ export default function TransactionsPage() {
               ))
             ) : (
               <tr>
-                <td colSpan={7} className="text-center py-8 text-gray-500">
-                  {loading ? "Loading transactions..." : "No transactions found"}
+                <td colSpan={7} className="py-16">
+                  <div className="flex flex-col items-center justify-center text-center">
+                    <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4 border border-gray-100">
+                      <Receipt className="w-8 h-8 text-gray-400" />
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-700 mb-1">No transactions found</h3>
+                    <p className="text-sm text-gray-500 max-w-sm">
+                      {loading ? "Loading your financial records..." : "There are no transactions matching your current filters or organization."}
+                    </p>
+                  </div>
                 </td>
               </tr>
             )}

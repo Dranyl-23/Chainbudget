@@ -382,9 +382,14 @@ export default function ApprovalsPage() {
             </div>
           ))
         ) : (
-          <div className="text-center py-12 text-gray-500">
-            <Clock className="w-12 h-12 mx-auto mb-3 opacity-20" />
-            <p>{loading ? "Loading pending approvals..." : "No pending approvals at this time"}</p>
+          <div className="text-center py-20 glass rounded-2xl border border-dashed border-primary/20 bg-white/40 flex flex-col items-center justify-center">
+            <div className="w-20 h-20 bg-gradient-to-br from-green-100 to-green-50 rounded-full flex items-center justify-center mb-5 shadow-sm border border-green-200/50">
+              <CheckCircle2 className="w-10 h-10 text-green-500" />
+            </div>
+            <h3 className="text-xl font-bold text-gray-800 mb-2">You're all caught up!</h3>
+            <p className="text-sm text-gray-500 max-w-sm mx-auto">
+              There are no pending high-value transactions requiring your approval at this time.
+            </p>
           </div>
         )}
       </div>
