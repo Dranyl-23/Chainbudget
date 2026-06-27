@@ -51,7 +51,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     : "http://localhost:5000";
 
   const displayLogo = currentMembership?.organization?.logoUrl 
-    ? `${backendUrl}${currentMembership.organization.logoUrl}` 
+    ? (currentMembership.organization.logoUrl.startsWith('http') 
+        ? currentMembership.organization.logoUrl 
+        : `${backendUrl}${currentMembership.organization.logoUrl}`)
+
     : "/images/logo.png"; 
 
   const visibleNavItems = navItems.filter((item) => {
