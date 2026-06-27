@@ -450,6 +450,52 @@ router.patch("/:id/process-request", authenticate, requireRole(2), async (req, r
   }
 });
 
+/// GET /api/transactions/public-overview — Get public stats and recent transactions
+router.get("/public-overview", async (req, res) => {
+  try {
+    // 1. Calculate Stats
+    // We consider "secured on blockchain" as those with blockchainTxHash and status "approved" or "completed" (if completed exists)
+    const approvedTxns = await Transaction.find({
+      blockchainTxHash: { $exists: true, $ne: null }
+    });
+
+    const totalVerified = approvedTxns.length;
+    const totalFunds = approvedTxns.reduce((sum, tx) => sum + tx.amount, 0);
+
+    const activeOrgs = await Organization.countDocuments({ isActive: true });
+
+    // 2. Fetch Recent 5
+    const recentTxns = await Transaction.find({
+      blockchainTxHash: { $exists: true, $ne: null }
+    })
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .populate("organization", "name");
+
+    const formattedRecent = recentTxns.map(txn => ({
+      txHash: txn.blockchainTxHash,
+      amount: txn.amount,
+      description: txn.description,
+      category: txn.category || "Uncategorized",
+      status: txn.status === "approved" ? "Approved" : txn.status === "rejected" ? "Rejected" : "Pending",
+      organization: txn.organization?.name || "Unknown",
+      date: txn.createdAt
+    }));
+
+    res.json({
+      stats: {
+        totalVerified,
+        totalFunds,
+        activeOrgs
+      },
+      recent: formattedRecent
+    });
+  } catch (error) {
+    console.error("Public overview error:", error);
+    res.status(500).json({ error: "Failed to fetch public overview" });
+  }
+});
+
 /// GET /api/transactions/public/:hash — Verify a transaction publicly (No Auth)
 router.get("/public/:hash", async (req, res) => {
   try {

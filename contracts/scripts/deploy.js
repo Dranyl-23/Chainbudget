@@ -11,8 +11,8 @@ async function main() {
   // Initial Level-1 approvers
   const signers = await ethers.getSigners();
   const initialApprovers = [
-    signers[1].address, // Deployer and Level-1 approver 1
-    signers[2].address, // Level-1 approver 2
+    deployer.address,
+    "0x20b27B77e153837bCAE263328D6E82666eecCBF6",
   ];
 
   const requiredApprovals = 2; // 2-of-N threshold
