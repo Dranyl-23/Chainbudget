@@ -25,11 +25,13 @@ import {
   ShieldCheck,
   Link2,
   XCircle,
+  Download,
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import toast from "react-hot-toast";
 import api from "@/lib/api";
 import TableSkeleton from "@/components/TableSkeleton";
+import { exportToCSV, exportToPDF } from "@/lib/exportUtils";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL?.replace("/api", "") || "http://localhost:5000";
 
@@ -90,6 +92,7 @@ export default function TransactionsPage() {
   });
   const [filteredTxs, setFilteredTxs] = useState<Transaction[]>(transactions);
   const [loading, setLoading] = useState(transactions.length === 0);
+  const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -170,6 +173,34 @@ export default function TransactionsPage() {
     setExpenseData({ type: "expense", amount: "", description: "", category: "", referenceNumber: "", notes: "", urgency: "normal", isEscrow: false });
     setIncomeData({ type: "income", amount: "", description: "", category: "", referenceNumber: "", notes: "", urgency: "normal", isEscrow: false });
     setActiveTab("expense");
+  };
+
+  const handleExport = async (format: "pdf" | "csv") => {
+    setIsExporting(true);
+    try {
+      const headers = ["Date", "Description", "Type", "Amount", "Status", "Category"];
+      const rows = filteredTxs.map((t) => [
+        new Date(t.createdAt).toLocaleDateString(),
+        t.description,
+        t.type,
+        t.amount.toString(),
+        t.status,
+        t.category || "—",
+      ]);
+
+      if (format === "pdf") {
+        const title = `Transactions Report - ${new Date().toLocaleDateString()}`;
+        exportToPDF(title, headers, rows, "Transactions_Report");
+        toast.success(`Exported to PDF successfully`);
+      } else {
+        exportToCSV(headers, rows, "Transactions_Report");
+        toast.success(`Exported to CSV successfully`);
+      }
+    } catch (err) {
+      toast.error(`Failed to export to ${format.toUpperCase()}`);
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -334,16 +365,37 @@ export default function TransactionsPage() {
           <h1 className="text-2xl font-bold mb-1">Transactions</h1>
           <p className="text-sm text-gray-500">View and manage all organization transactions.</p>
         </div>
-        {/* RBAC Fix: Level 1, 2, and 3 can record/request transactions */}
-        {(user?.isSuperAdmin || (user?.memberships?.find((m: any) => m.organization === activeOrgId || m.organization?._id === activeOrgId)?.roleLevel || 4) <= 3) && (
-          <button
-            id="record-transaction-btn"
-            className="btn-primary py-2"
-            onClick={() => setShowCreateModal(true)}
-          >
-            { (user?.isSuperAdmin || (user?.memberships?.find((m: any) => m.organization === activeOrgId || m.organization?._id === activeOrgId)?.roleLevel || 4) <= 2) ? "Record Transaction" : "Submit Request" }
-          </button>
-        )}
+        <div className="flex flex-col sm:flex-row gap-3">
+          {/* Export Buttons */}
+          {(user?.isSuperAdmin || (user?.memberships?.find((m: any) => m.organization === activeOrgId || m.organization?._id === activeOrgId)?.roleLevel || 4) <= 2) && (
+            <div className="flex items-center gap-2 mr-2">
+              <button
+                className="btn-secondary py-2 px-3 text-xs flex items-center gap-2"
+                onClick={() => handleExport("csv")}
+                disabled={isExporting || filteredTxs.length === 0}
+              >
+                <Download className="w-3.5 h-3.5" /> CSV
+              </button>
+              <button
+                className="btn-secondary py-2 px-3 text-xs flex items-center gap-2"
+                onClick={() => handleExport("pdf")}
+                disabled={isExporting || filteredTxs.length === 0}
+              >
+                <Download className="w-3.5 h-3.5" /> PDF
+              </button>
+            </div>
+          )}
+          {/* RBAC Fix: Level 1, 2, and 3 can record/request transactions */}
+          {(user?.isSuperAdmin || (user?.memberships?.find((m: any) => m.organization === activeOrgId || m.organization?._id === activeOrgId)?.roleLevel || 4) <= 3) && (
+            <button
+              id="record-transaction-btn"
+              className="btn-primary py-2"
+              onClick={() => setShowCreateModal(true)}
+            >
+              { (user?.isSuperAdmin || (user?.memberships?.find((m: any) => m.organization === activeOrgId || m.organization?._id === activeOrgId)?.roleLevel || 4) <= 2) ? "Record Transaction" : "Submit Request" }
+            </button>
+          )}
+        </div>
       </header>
 
       {/* ── Filters ── */}
