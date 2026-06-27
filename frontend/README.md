@@ -1,36 +1,49 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ChainBudget - Frontend
 
-## Getting Started
+This directory contains the user interface and frontend logic for ChainBudget. It is built using **Next.js 14** (App Router) and is designed to provide a seamless, modern, and mobile-responsive experience for requesters, approvers, and administrators.
 
-First, run the development server:
+## 🛠️ Technology Stack
 
+*   **Framework:** [Next.js 14](https://nextjs.org/) (React framework with App Router)
+*   **Styling:** [Tailwind CSS](https://tailwindcss.com/) (Utility-first CSS)
+*   **Authentication:** [Asgardeo by WSO2](https://wso2.com/asgardeo/) (OIDC Authentication Provider)
+*   **Icons:** [Lucide React](https://lucide.dev/)
+*   **Data Visualization:** [Recharts](https://recharts.org/) (for the Cash Flow graph)
+
+## 📂 Folder Structure
+
+*   `/src/app`: Contains all the Next.js routes/pages (e.g., `/dashboard`, `/admin`, `/reports`).
+*   `/src/components`: Reusable UI components (buttons, modals, headers).
+*   `/src/lib`: Utility functions, API helpers, and configuration files (e.g., wallet helpers).
+
+## 🔐 Authentication (Asgardeo)
+
+ChainBudget uses Asgardeo to handle secure user logins and identity management. 
+Users are assigned specific roles (e.g., `Secretary`, `Vice-President`, `OrgAdmin`) within the Asgardeo console. The frontend decodes the JWT token returned by Asgardeo to determine the user's role and restrict access to specific dashboard features (like the "Approve" button or the Super Admin console).
+
+## 🚀 Local Development Setup
+
+### 1. Install Dependencies
+Make sure you are inside the `/frontend` directory, then run:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
+### 2. Environment Variables
+Create a `.env.local` file in the root of the `/frontend` directory and add the following variables:
+```env
+NEXT_PUBLIC_ASGARDEO_BASE_URL=https://api.asgardeo.io/t/your_org_name
+NEXT_PUBLIC_ASGARDEO_CLIENT_ID=your_client_id
+NEXT_PUBLIC_ASGARDEO_REDIRECT_URL=http://localhost:3000
+NEXT_PUBLIC_CONTRACT_ADDRESS=your_deployed_smart_contract_address
+```
+*(Contact the backend team or check your Asgardeo dashboard for the correct credentials).*
+
+### 3. Run the Development Server
+```bash
+npm run dev
+```
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 📱 Mobile Responsiveness
+The UI is fully responsive. We utilize Tailwind's standard breakpoints (e.g., `sm:`, `md:`, `lg:`) to ensure tables, graphs, and approval modals fit perfectly on mobile devices.

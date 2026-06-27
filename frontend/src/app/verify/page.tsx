@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Search, ShieldCheck, ArrowLeft, ExternalLink, Calendar, Building, DollarSign } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Search, ShieldCheck, ArrowLeft, ExternalLink, Calendar, Building, DollarSign, Activity } from "lucide-react";
 import Link from "next/link";
 import api from "@/lib/api";
 import toast from "react-hot-toast";
@@ -20,15 +20,31 @@ export default function VerifyPage() {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<PublicTx | null>(null);
+  
+  const [overviewData, setOverviewData] = useState<{ stats: any, recent: PublicTx[] } | null>(null);
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!query.trim()) return;
+  useEffect(() => {
+    const fetchOverview = async () => {
+      try {
+        const res = await api.get("/transactions/public-overview");
+        setOverviewData(res.data);
+      } catch (error) {
+        console.error("Failed to fetch overview", error);
+      }
+    };
+    fetchOverview();
+  }, []);
 
+  const handleSearch = async (e?: React.FormEvent, directQuery?: string) => {
+    if (e) e.preventDefault();
+    const q = directQuery || query.trim();
+    if (!q) return;
+
+    setQuery(q);
     setLoading(true);
     setResult(null);
     try {
-      const res = await api.get(`/transactions/public/${query.trim()}`);
+      const res = await api.get(`/transactions/public/${q}`);
       setResult(res.data);
     } catch (err: any) {
       if (err.response?.status === 404) {
@@ -86,8 +102,89 @@ export default function VerifyPage() {
             </button>
           </form>
 
+          {overviewData && overviewData.recent.length > 0 && !result && (
+            <div className="text-center mb-8">
+              <button
+                onClick={() => handleSearch(undefined, overviewData.recent[0].txHash)}
+                className="text-sm font-medium text-primary hover:text-primary-hover underline underline-offset-4"
+              >
+                👉 Try it out: Click to verify a sample transaction
+              </button>
+            </div>
+          )}
+
+          {!result && overviewData && (
+            <div className="animate-fade-in w-full max-w-3xl mx-auto space-y-10">
+              {/* Stats */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm text-center">
+                  <div className="mx-auto w-10 h-10 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-3">
+                    <ShieldCheck className="w-5 h-5" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-900">{overviewData.stats.totalVerified}</h3>
+                  <p className="text-sm text-gray-500 font-medium">Verified Transactions</p>
+                </div>
+                <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm text-center">
+                  <div className="mx-auto w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mb-3">
+                    <DollarSign className="w-5 h-5" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-900">₱{overviewData.stats.totalFunds.toLocaleString()}</h3>
+                  <p className="text-sm text-gray-500 font-medium">Secured on Blockchain</p>
+                </div>
+                <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm text-center">
+                  <div className="mx-auto w-10 h-10 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center mb-3">
+                    <Building className="w-5 h-5" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-900">{overviewData.stats.activeOrgs}</h3>
+                  <p className="text-sm text-gray-500 font-medium">Active Organizations</p>
+                </div>
+              </div>
+
+              {/* Recent Transactions List */}
+              {overviewData.recent.length > 0 && (
+                <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+                  <div className="px-6 py-4 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
+                    <Activity className="w-5 h-5 text-gray-400" />
+                    <h3 className="font-semibold text-gray-900">Recent Public Transactions</h3>
+                  </div>
+                  <ul className="divide-y divide-gray-100">
+                    {overviewData.recent.map((tx, idx) => (
+                      <li key={idx} className="p-6 hover:bg-gray-50 transition-colors">
+                        <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+                          <div>
+                            <p className="font-semibold text-gray-900">{tx.description}</p>
+                            <div className="flex items-center gap-3 text-sm text-gray-500 mt-1">
+                              <span>{tx.organization}</span>
+                              <span className="w-1 h-1 rounded-full bg-gray-300"></span>
+                              <span>{new Date(tx.date).toLocaleDateString()}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-4 text-right">
+                            <div>
+                              <p className="font-bold text-gray-900">₱{tx.amount.toLocaleString()}</p>
+                              <span className="inline-block mt-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+                                Verified
+                              </span>
+                            </div>
+                            <button
+                              onClick={() => handleSearch(undefined, tx.txHash)}
+                              className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600 transition-colors"
+                              title="View details"
+                            >
+                              <Search className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
           {result && (
-            <div className="bg-white border border-gray-200 rounded-2xl p-8 shadow-sm animate-fade-in">
+            <div className="bg-white border border-gray-200 rounded-2xl p-8 shadow-sm animate-fade-in w-full max-w-3xl mx-auto">
               <div className="flex items-center justify-between mb-8 pb-6 border-b border-gray-100">
                 <div>
                   <p className="text-sm font-medium text-gray-500 mb-1">Status</p>
