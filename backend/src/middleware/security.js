@@ -97,8 +97,8 @@ function validateCSRFToken(token) {
  * Middleware to validate CSRF token for POST/PUT/DELETE requests
  */
 function csrfProtection(req, res, next) {
-  // Skip CSRF check for GET requests
-  if (req.method === "GET") {
+  // Skip CSRF check for GET, HEAD, and OPTIONS requests
+  if (["GET", "HEAD", "OPTIONS"].includes(req.method)) {
     return next();
   }
 
