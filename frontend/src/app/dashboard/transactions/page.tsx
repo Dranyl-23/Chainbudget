@@ -368,7 +368,6 @@ export default function TransactionsPage() {
           <option value="requested">Requested</option>
           <option value="rejected">Rejected</option>
         </select>
-        <button className="btn-secondary px-3 py-2"><Filter className="w-4 h-4" /></button>
       </div>
 
       {/* ── Table ── */}
