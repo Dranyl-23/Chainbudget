@@ -85,18 +85,18 @@ export default function VerifyPage() {
           </div>
 
           <form onSubmit={handleSearch} className="relative mb-12">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <Search className="absolute left-3 md:left-4 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 md:w-5 md:h-5" />
             <input
               type="text"
               placeholder="e.g. 0xabc123... or CB-12345"
-              className="w-full pl-12 pr-32 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-0 outline-none transition-colors text-lg"
+              className="w-full pl-10 md:pl-12 pr-[85px] md:pr-32 py-3 md:py-4 rounded-xl md:rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-0 outline-none transition-colors text-sm md:text-lg"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
             <button
               type="submit"
               disabled={loading || !query.trim()}
-              className="absolute right-2 top-1/2 -translate-y-1/2 bg-primary text-white px-6 py-2.5 rounded-xl font-medium hover:bg-primary-hover disabled:opacity-50 transition-colors"
+              className="absolute right-1.5 md:right-2 top-1/2 -translate-y-1/2 bg-primary text-white px-4 md:px-6 py-2 md:py-2.5 rounded-lg md:rounded-xl text-sm md:text-base font-medium hover:bg-primary-hover disabled:opacity-50 transition-colors"
             >
               {loading ? "Searching..." : "Verify"}
             </button>
