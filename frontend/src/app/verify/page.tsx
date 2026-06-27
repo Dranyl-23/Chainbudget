@@ -116,27 +116,33 @@ export default function VerifyPage() {
           {!result && overviewData && (
             <div className="animate-fade-in w-full max-w-3xl mx-auto space-y-10">
               {/* Stats */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm text-center">
-                  <div className="mx-auto w-10 h-10 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-3">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
+                <div className="bg-white border border-gray-200 rounded-xl md:rounded-2xl p-4 md:p-6 shadow-sm flex items-center md:flex-col md:text-center gap-4 md:gap-0">
+                  <div className="w-10 h-10 md:mx-auto bg-green-100 text-green-600 rounded-full flex items-center justify-center shrink-0 md:mb-3">
                     <ShieldCheck className="w-5 h-5" />
                   </div>
-                  <h3 className="text-2xl font-bold text-gray-900">{overviewData.stats.totalVerified}</h3>
-                  <p className="text-sm text-gray-500 font-medium">Verified Transactions</p>
+                  <div>
+                    <h3 className="text-lg md:text-2xl font-bold text-gray-900 md:leading-tight">{overviewData.stats.totalVerified}</h3>
+                    <p className="text-xs md:text-sm text-gray-500 font-medium">Verified Transactions</p>
+                  </div>
                 </div>
-                <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm text-center">
-                  <div className="mx-auto w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mb-3">
+                <div className="bg-white border border-gray-200 rounded-xl md:rounded-2xl p-4 md:p-6 shadow-sm flex items-center md:flex-col md:text-center gap-4 md:gap-0">
+                  <div className="w-10 h-10 md:mx-auto bg-blue-100 text-blue-600 rounded-full flex items-center justify-center shrink-0 md:mb-3">
                     <DollarSign className="w-5 h-5" />
                   </div>
-                  <h3 className="text-2xl font-bold text-gray-900">₱{overviewData.stats.totalFunds.toLocaleString()}</h3>
-                  <p className="text-sm text-gray-500 font-medium">Secured on Blockchain</p>
+                  <div>
+                    <h3 className="text-lg md:text-2xl font-bold text-gray-900 md:leading-tight">₱{overviewData.stats.totalFunds.toLocaleString()}</h3>
+                    <p className="text-xs md:text-sm text-gray-500 font-medium">Secured on Blockchain</p>
+                  </div>
                 </div>
-                <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm text-center">
-                  <div className="mx-auto w-10 h-10 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center mb-3">
+                <div className="bg-white border border-gray-200 rounded-xl md:rounded-2xl p-4 md:p-6 shadow-sm flex items-center md:flex-col md:text-center gap-4 md:gap-0">
+                  <div className="w-10 h-10 md:mx-auto bg-purple-100 text-purple-600 rounded-full flex items-center justify-center shrink-0 md:mb-3">
                     <Building className="w-5 h-5" />
                   </div>
-                  <h3 className="text-2xl font-bold text-gray-900">{overviewData.stats.activeOrgs}</h3>
-                  <p className="text-sm text-gray-500 font-medium">Active Organizations</p>
+                  <div>
+                    <h3 className="text-lg md:text-2xl font-bold text-gray-900 md:leading-tight">{overviewData.stats.activeOrgs}</h3>
+                    <p className="text-xs md:text-sm text-gray-500 font-medium">Active Organizations</p>
+                  </div>
                 </div>
               </div>
 
