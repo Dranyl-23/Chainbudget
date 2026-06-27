@@ -116,7 +116,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const shortAddress = walletAddress
     ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`
-    : "";
+    : "No Wallet Linked";
 
   return (
     <div className="h-screen flex flex-col md:flex-row overflow-hidden" style={{ background: "var(--color-bg)" }}>

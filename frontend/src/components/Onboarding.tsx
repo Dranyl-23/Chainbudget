@@ -54,7 +54,12 @@ export default function Onboarding() {
               {/* Option 1: Create Org */}
               <button
                 onClick={() => setStep("create")}
-                className="glass p-6 rounded-2xl text-left transition-all hover:shadow-lg hover:-translate-y-1 group border-2 border-transparent hover:border-primary/30"
+                disabled={!user?.walletAddress}
+                className={`glass p-6 rounded-2xl text-left transition-all group border-2 border-transparent ${
+                  !user?.walletAddress 
+                    ? "opacity-60 cursor-not-allowed grayscale"
+                    : "hover:shadow-lg hover:-translate-y-1 hover:border-primary/30"
+                }`}
               >
                 <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-4" style={{ background: "linear-gradient(135deg, var(--color-primary), var(--color-primary-2))" }}>
                   <Building className="w-6 h-6 text-white" />
@@ -63,13 +68,19 @@ export default function Onboarding() {
                   Create Organization
                   <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity text-primary" />
                 </h3>
-                <p className="text-sm text-gray-500 leading-relaxed">
+                <p className="text-sm text-gray-500 leading-relaxed mb-3">
                   Set up a new organization and become its <strong className="text-primary">Level 1 Admin</strong>. You can invite members and manage budgets.
                 </p>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">Full Control</span>
-                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">Invite Members</span>
-                </div>
+                {!user?.walletAddress ? (
+                  <p className="text-xs font-bold text-red-500 bg-red-50 p-2 rounded-md border border-red-100 inline-block">
+                    ⚠️ Link your MetaMask wallet first
+                  </p>
+                ) : (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">Full Control</span>
+                    <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">Invite Members</span>
+                  </div>
+                )}
               </button>
 
               {/* Option 2: I Was Invited */}
