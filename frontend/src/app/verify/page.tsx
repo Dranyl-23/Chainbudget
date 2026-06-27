@@ -108,7 +108,7 @@ export default function VerifyPage() {
                 onClick={() => handleSearch(undefined, overviewData.recent[0].txHash)}
                 className="text-sm font-medium text-primary hover:text-primary-hover underline underline-offset-4"
               >
-                👉 Try it out: Click to verify a sample transaction
+                Try it out: Click to verify a sample transaction
               </button>
             </div>
           )}
@@ -155,26 +155,26 @@ export default function VerifyPage() {
                   </div>
                   <ul className="divide-y divide-gray-100">
                     {overviewData.recent.map((tx, idx) => (
-                      <li key={idx} className="p-6 hover:bg-gray-50 transition-colors">
-                        <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
-                          <div>
-                            <p className="font-semibold text-gray-900">{tx.description}</p>
-                            <div className="flex items-center gap-3 text-sm text-gray-500 mt-1">
+                      <li key={idx} className="p-4 md:p-6 hover:bg-gray-50 transition-colors">
+                        <div className="flex items-start sm:items-center justify-between gap-3">
+                          <div className="flex-1 pr-2">
+                            <p className="font-semibold text-gray-900 text-sm md:text-base leading-tight mb-1 md:mb-0">{tx.description}</p>
+                            <div className="flex items-center flex-wrap gap-2 md:gap-3 text-xs md:text-sm text-gray-500 mt-0.5 md:mt-1">
                               <span>{tx.organization}</span>
                               <span className="w-1 h-1 rounded-full bg-gray-300"></span>
                               <span>{new Date(tx.date).toLocaleDateString()}</span>
                             </div>
                           </div>
-                          <div className="flex items-center gap-4 text-right">
+                          <div className="flex items-center gap-3 sm:gap-4 text-right shrink-0">
                             <div>
-                              <p className="font-bold text-gray-900">₱{tx.amount.toLocaleString()}</p>
-                              <span className="inline-block mt-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+                              <p className="font-bold text-gray-900 text-sm md:text-base">₱{tx.amount.toLocaleString()}</p>
+                              <span className="inline-block mt-0.5 md:mt-1 px-2 py-0.5 rounded-full text-[10px] md:text-xs font-semibold bg-green-100 text-green-700">
                                 Verified
                               </span>
                             </div>
                             <button
                               onClick={() => handleSearch(undefined, tx.txHash)}
-                              className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600 transition-colors"
+                              className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600 transition-colors shrink-0"
                               title="View details"
                             >
                               <Search className="w-4 h-4" />
