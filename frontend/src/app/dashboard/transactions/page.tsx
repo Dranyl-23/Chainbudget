@@ -27,6 +27,7 @@ import {
   XCircle,
 } from "lucide-react";
 import confetti from "canvas-confetti";
+import toast from "react-hot-toast";
 import api from "@/lib/api";
 import TableSkeleton from "@/components/TableSkeleton";
 
