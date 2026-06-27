@@ -9,6 +9,7 @@ import api from "@/lib/api";
 import toast from "react-hot-toast";
 import { io } from "socket.io-client";
 import TableSkeleton from "@/components/TableSkeleton";
+import confetti from "canvas-confetti";
 
 interface Approval {
   _id: string;
@@ -190,6 +191,12 @@ export default function ApprovalsPage() {
               blockchainTxHash: tx.hash,
             });
             toast.success("Blockchain verified!", { id: "txToast" });
+            confetti({
+              particleCount: 150,
+              spread: 70,
+              origin: { y: 0.6 },
+              colors: ['#6B55D9', '#7DBD9B', '#4F46E5', '#10B981']
+            });
           }
         } catch (chainErr: any) {
           console.warn("On-chain approval failed (vote already recorded in DB):", chainErr.message);
@@ -197,6 +204,12 @@ export default function ApprovalsPage() {
         }
       } else {
         toast.success("Approval recorded!", { id: "txToast" });
+        confetti({
+          particleCount: 100,
+          spread: 70,
+          origin: { y: 0.6 },
+          colors: ['#6B55D9', '#7DBD9B', '#4F46E5', '#10B981']
+        });
       }
 
       // BUG-6 FIX: Re-fetch instead of filtering out
