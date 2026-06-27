@@ -294,7 +294,7 @@ export default function ReportsPage() {
             <BarChart3 className="w-4 h-4 text-primary" /> Cash Flow Over Time
           </h3>
           <div className="flex items-center gap-3 md:gap-4 text-xs text-gray-500 flex-wrap">
-            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-primary inline-block" /> Income</span>
+            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" /> Income</span>
             <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-danger inline-block" /> Expenses</span>
             <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-primary/70 inline-block" /> Balance</span>
           </div>
@@ -304,8 +304,8 @@ export default function ReportsPage() {
             <AreaChart data={monthlyData} margin={{ left: 0, right: 20, top: 4, bottom: 0 }}>
               <defs>
                 <linearGradient id="incGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#7B5BD6" stopOpacity={0.24} />
-                  <stop offset="95%" stopColor="#7B5BD6" stopOpacity={0} />
+                  <stop offset="5%" stopColor="#10B981" stopOpacity={0.24} />
+                  <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
                 </linearGradient>
                 <linearGradient id="expGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#E05C5C" stopOpacity={0.18} />
@@ -330,7 +330,7 @@ export default function ReportsPage() {
                 contentStyle={{ background: "#F8F6FF", border: "1px solid rgba(107,85,217,0.16)", borderRadius: "8px", color: "#1A1A2E" }}
                 formatter={(v: any) => `₱${Number(v).toLocaleString()}`}
               />
-              <Area type="monotone" dataKey="income"  stroke="#7B5BD6" strokeWidth={2} fill="url(#incGrad)" dot={false} />
+              <Area type="monotone" dataKey="income"  stroke="#10B981" strokeWidth={2} fill="url(#incGrad)" dot={false} />
               <Area type="monotone" dataKey="expense" stroke="#E05C5C" strokeWidth={2} fill="url(#expGrad)" dot={false} />
               <Area type="monotone" dataKey="balance" stroke="#6B55D9" strokeWidth={2} fill="url(#balGrad)" dot={false} />
             </AreaChart>
