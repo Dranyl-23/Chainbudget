@@ -250,8 +250,8 @@ export default function ApprovalsPage() {
           pendingApprovals.map((req) => (
             <div key={req._id} className="glass p-6 rounded-xl flex flex-col md:flex-row gap-6 items-start md:items-center justify-between">
               <div className="flex-1">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="badge badge-pending"><Clock className="w-3 h-3" /> Action Required</span>
+                <div className="flex flex-wrap items-center gap-2 mb-2">
+                  <span className="badge badge-pending whitespace-nowrap"><Clock className="w-3 h-3" /> Action Required</span>
                   {req.urgency === "urgent" && (
                     <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-red-100 text-red-700 animate-pulse">
                       Urgent
@@ -376,7 +376,7 @@ export default function ApprovalsPage() {
                   </button>
                 </div>
                 {!verifiedReceipts[req._id] && (
-                  <p className="text-[10px] text-amber-600 text-center mt-1">✓ Verify receipt first</p>
+                  <p className="text-[10px] text-amber-600 w-full text-center mt-1">✓ Verify receipt first</p>
                 )}
               </div>
             </div>
