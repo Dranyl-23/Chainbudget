@@ -82,7 +82,7 @@ export default function LandingPage() {
 
         {isAsgardeoAuthenticated && !isConnected ? (
           <div className="flex flex-col items-center gap-4">
-            <p className="text-sm text-gray-300 font-medium bg-primary/20 px-4 py-2 rounded-lg border border-primary/30">
+            <p className="text-sm text-primary font-medium bg-primary/20 px-4 py-2 rounded-lg border border-primary/30">
               Logged in via Asgardeo. Please link your MetaMask wallet to continue.
             </p>
             <button
