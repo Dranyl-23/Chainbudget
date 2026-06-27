@@ -149,11 +149,11 @@ export default function OrgSelector() {
       {/* Create Modal */}
       {modalOpen && (
         <Portal>
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl animate-fade-in">
-              <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold flex items-center gap-2">
-                <Building className="w-5 h-5 text-primary" /> New Organization
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 md:p-4 bg-black/40 backdrop-blur-sm">
+            <div className="bg-white rounded-xl md:rounded-2xl p-5 md:p-6 w-full max-w-md shadow-2xl animate-fade-in">
+              <div className="flex items-center justify-between mb-4 md:mb-6">
+              <h2 className="text-lg md:text-xl font-bold flex items-center gap-2">
+                <Building className="w-4 h-4 md:w-5 md:h-5 text-primary" /> New Organization
               </h2>
               <button 
                 onClick={() => setModalOpen(false)}
@@ -164,38 +164,38 @@ export default function OrgSelector() {
             </div>
 
             {error && (
-              <div className="mb-4 p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100">
+              <div className="mb-3 md:mb-4 p-2 md:p-3 bg-red-50 text-red-600 text-xs md:text-sm rounded-lg border border-red-100">
                 {error}
               </div>
             )}
 
-            <form onSubmit={handleCreateOrg} className="space-y-4">
+            <form onSubmit={handleCreateOrg} className="space-y-3 md:space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Organization Name</label>
+                <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1">Organization Name</label>
                 <input 
                   type="text" 
                   required
                   placeholder="e.g. Computer Science Society"
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                   value={formData.name}
                   onChange={e => setFormData({...formData, name: e.target.value})}
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Organization Logo (Optional)</label>
+                <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1">Organization Logo (Optional)</label>
                 <input 
                   type="file" 
                   accept="image/png, image/jpeg, image/webp"
                   onChange={e => setLogoFile(e.target.files?.[0] || null)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+                  className="w-full px-3 py-1.5 md:py-2 border border-gray-200 rounded-lg text-[10px] md:text-sm text-gray-600 file:mr-2 md:file:mr-4 file:py-1 file:px-2 md:file:px-3 file:rounded-full file:border-0 file:text-[10px] md:file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Organization Type</label>
+                <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1">Organization Type</label>
                 <select 
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                   value={formData.type}
                   onChange={e => setFormData({...formData, type: e.target.value})}
                 >
@@ -213,30 +213,30 @@ export default function OrgSelector() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">High-Value Transaction Threshold (₱)</label>
-                <p className="text-xs text-gray-500 mb-2">Transactions above this amount will require multi-sig approval.</p>
+                <label className="block text-xs md:text-sm font-medium text-gray-700 mb-0.5 md:mb-1">High-Value Transaction Threshold (₱)</label>
+                <p className="text-[10px] md:text-xs text-gray-500 mb-1.5 md:mb-2">Transactions above this amount will require multi-sig approval.</p>
                 <input 
                   type="number" 
                   required
                   min="0"
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                   value={formData.highValueThreshold}
                   onChange={e => setFormData({...formData, highValueThreshold: Number(e.target.value)})}
                 />
               </div>
 
-              <div className="pt-4 flex gap-3">
+              <div className="pt-2 md:pt-4 flex gap-2 md:gap-3">
                 <button 
                   type="button" 
                   onClick={() => setModalOpen(false)}
-                  className="flex-1 py-2 px-4 border border-gray-200 text-gray-600 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+                  className="flex-1 py-1.5 md:py-2 px-3 md:px-4 text-sm md:text-base border border-gray-200 text-gray-600 rounded-lg font-medium hover:bg-gray-50 transition-colors"
                 >
                   Cancel
                 </button>
                 <button 
                   type="submit" 
                   disabled={isSubmitting}
-                  className="flex-1 btn-primary justify-center disabled:opacity-70"
+                  className="flex-1 btn-primary py-1.5 md:py-2.5 text-sm md:text-base justify-center disabled:opacity-70 whitespace-nowrap"
                 >
                   {isSubmitting ? "Creating..." : "Create Organization"}
                 </button>
