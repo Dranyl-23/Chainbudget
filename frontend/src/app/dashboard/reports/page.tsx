@@ -242,19 +242,19 @@ export default function ReportsPage() {
             <h3 className="font-bold text-lg mb-1">Financial Liquidation</h3>
             <p className="text-sm text-gray-600">Submit your reports to the University for automated budget replenishment.</p>
           </div>
-          <div className="flex items-center gap-3 self-start sm:self-auto">
+          <div className="flex flex-wrap items-center gap-3 self-start sm:self-auto">
             <span className={`px-3 py-1 rounded-full text-xs font-bold border ${
               liquidationStatus === "approved" ? "bg-green-100 text-green-700 border-green-200" :
               liquidationStatus === "pending" ? "bg-orange-100 text-orange-700 border-orange-200" :
               "bg-gray-100 text-gray-700 border-gray-200"
             }`}>
-              Status: {liquidationStatus.toUpperCase()}
+              Status: {liquidationStatus.toUpperCase() || "NONE"}
             </span>
             {liquidationStatus !== "pending" && liquidationStatus !== "approved" && (
               <button 
                 onClick={handleSubmitLiquidation}
                 disabled={isSubmittingLiquidation}
-                className="btn-primary"
+                className="btn-primary whitespace-nowrap"
               >
                 {isSubmittingLiquidation ? "Submitting..." : "Submit Liquidation"}
               </button>
@@ -264,26 +264,26 @@ export default function ReportsPage() {
       )}
 
       {/* ── Summary Cards ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="stat-card">
-          <p className="text-xs text-gray-500 font-medium uppercase tracking-widest mb-2">Total Transactions</p>
-          <h3 className="text-xl font-bold mb-1">{summaryStats.totalTxs}</h3>
-          <p className="text-xs text-gray-500">This Period</p>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-8">
+        <div className="stat-card p-4 md:p-6">
+          <p className="text-[10px] md:text-xs text-gray-500 font-medium uppercase tracking-wider md:tracking-widest mb-2 truncate">Total Transactions</p>
+          <h3 className="text-lg md:text-xl font-bold mb-1">{summaryStats.totalTxs}</h3>
+          <p className="text-[10px] md:text-xs text-gray-500">This Period</p>
         </div>
-        <div className="stat-card">
-          <p className="text-xs text-gray-500 font-medium uppercase tracking-widest mb-2">Total Income</p>
-          <h3 className="text-xl font-bold mb-1">₱{Math.round(summaryStats.totalIncome).toLocaleString()}</h3>
-          <p className="text-xs text-gray-500">+12% vs last period</p>
+        <div className="stat-card p-4 md:p-6">
+          <p className="text-[10px] md:text-xs text-gray-500 font-medium uppercase tracking-wider md:tracking-widest mb-2 truncate">Total Income</p>
+          <h3 className="text-lg md:text-xl font-bold mb-1">₱{Math.round(summaryStats.totalIncome).toLocaleString()}</h3>
+          <p className="text-[10px] md:text-xs text-gray-500">+12% vs last period</p>
         </div>
-        <div className="stat-card">
-          <p className="text-xs text-gray-500 font-medium uppercase tracking-widest mb-2">Total Expenses</p>
-          <h3 className="text-xl font-bold mb-1">₱{Math.round(summaryStats.totalExpenses).toLocaleString()}</h3>
-          <p className="text-xs text-gray-500">-5% vs last period</p>
+        <div className="stat-card p-4 md:p-6">
+          <p className="text-[10px] md:text-xs text-gray-500 font-medium uppercase tracking-wider md:tracking-widest mb-2 truncate">Total Expenses</p>
+          <h3 className="text-lg md:text-xl font-bold mb-1">₱{Math.round(summaryStats.totalExpenses).toLocaleString()}</h3>
+          <p className="text-[10px] md:text-xs text-gray-500">-5% vs last period</p>
         </div>
-        <div className="stat-card">
-          <p className="text-xs text-gray-500 font-medium uppercase tracking-widest mb-2">Net Balance</p>
-          <h3 className="text-xl font-bold mb-1">₱{Math.round(summaryStats.netBalance).toLocaleString()}</h3>
-          <p className="text-xs text-gray-500">{summaryStats.netBalance > 0 ? "Surplus" : "Deficit"}</p>
+        <div className="stat-card p-4 md:p-6">
+          <p className="text-[10px] md:text-xs text-gray-500 font-medium uppercase tracking-wider md:tracking-widest mb-2 truncate">Net Balance</p>
+          <h3 className="text-lg md:text-xl font-bold mb-1">₱{Math.round(summaryStats.netBalance).toLocaleString()}</h3>
+          <p className="text-[10px] md:text-xs text-gray-500">{summaryStats.netBalance > 0 ? "Surplus" : summaryStats.netBalance < 0 ? "Deficit" : "Neutral"}</p>
         </div>
       </div>
 
