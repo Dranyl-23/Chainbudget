@@ -123,26 +123,50 @@ export default function BudgetPage() {
         <>
           {/* ── Summary Cards ── */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-            <div className="stat-card">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-primary/10 mb-4">
-                <PiggyBank className="w-5 h-5 text-primary" />
+            <div className="bg-white border border-gray-100 rounded-xl md:rounded-2xl p-4 md:p-6 shadow-sm flex items-center md:items-start md:flex-col justify-between relative">
+              <div className="flex items-center gap-3 md:block md:w-full">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-primary/10 shrink-0 md:mb-4">
+                  <PiggyBank className="w-5 h-5 text-primary" />
+                </div>
+                <div className="md:hidden">
+                  <p className="text-xs text-gray-500 font-medium">Total Budget</p>
+                  <h3 className="text-lg font-bold leading-tight">&#8369;{totalAllocated.toLocaleString()}</h3>
+                </div>
+                <div className="hidden md:block">
+                  <p className="text-sm text-gray-500 font-medium mb-1">Total Budget</p>
+                  <h3 className="text-2xl font-bold">&#8369;{totalAllocated.toLocaleString()}</h3>
+                </div>
               </div>
-              <p className="text-sm text-gray-500 mb-1">Total Budget</p>
-              <h3 className="text-2xl font-bold">&#8369;{totalAllocated.toLocaleString()}</h3>
             </div>
-            <div className="stat-card">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-danger/10 mb-4">
-                <TrendingDown className="w-5 h-5 text-danger" />
+            <div className="bg-white border border-gray-100 rounded-xl md:rounded-2xl p-4 md:p-6 shadow-sm flex items-center md:items-start md:flex-col justify-between relative">
+              <div className="flex items-center gap-3 md:block md:w-full">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-danger/10 shrink-0 md:mb-4">
+                  <TrendingDown className="w-5 h-5 text-danger" />
+                </div>
+                <div className="md:hidden">
+                  <p className="text-xs text-gray-500 font-medium">Total Spent</p>
+                  <h3 className="text-lg font-bold text-danger leading-tight">&#8369;{totalSpent.toLocaleString()}</h3>
+                </div>
+                <div className="hidden md:block">
+                  <p className="text-sm text-gray-500 font-medium mb-1">Total Spent</p>
+                  <h3 className="text-2xl font-bold text-danger">&#8369;{totalSpent.toLocaleString()}</h3>
+                </div>
               </div>
-              <p className="text-sm text-gray-500 mb-1">Total Spent</p>
-              <h3 className="text-2xl font-bold text-danger">&#8369;{totalSpent.toLocaleString()}</h3>
             </div>
-            <div className="stat-card">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-primary/10 mb-4">
-                <TrendingUp className="w-5 h-5 text-primary/80" />
+            <div className="bg-white border border-gray-100 rounded-xl md:rounded-2xl p-4 md:p-6 shadow-sm flex items-center md:items-start md:flex-col justify-between relative">
+              <div className="flex items-center gap-3 md:block md:w-full">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-primary/10 shrink-0 md:mb-4">
+                  <TrendingUp className="w-5 h-5 text-primary/80" />
+                </div>
+                <div className="md:hidden">
+                  <p className="text-xs text-gray-500 font-medium">Remaining</p>
+                  <h3 className="text-lg font-bold text-primary leading-tight">&#8369;{(totalAllocated - totalSpent).toLocaleString()}</h3>
+                </div>
+                <div className="hidden md:block">
+                  <p className="text-sm text-gray-500 font-medium mb-1">Remaining</p>
+                  <h3 className="text-2xl font-bold text-primary">&#8369;{(totalAllocated - totalSpent).toLocaleString()}</h3>
+                </div>
               </div>
-              <p className="text-sm text-gray-500 mb-1">Remaining</p>
-              <h3 className="text-2xl font-bold text-primary">&#8369;{(totalAllocated - totalSpent).toLocaleString()}</h3>
             </div>
           </div>
 
