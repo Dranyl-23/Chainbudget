@@ -230,18 +230,18 @@ export default function LandingPage() {
 
       {/* ── Stats Banner ── */}
       <section className="relative z-10 px-6 md:px-16 pb-16 md:pb-24 max-w-7xl mx-auto w-full">
-        <div className="rounded-3xl bg-[#160B2E]/40 backdrop-blur-lg border border-purple-500/20 py-8 md:py-10 px-6 md:px-8 flex flex-col md:flex-row justify-around items-center gap-6 md:gap-8 text-center divide-y md:divide-y-0 md:divide-x divide-purple-500/20">
-          <div className="flex flex-col items-center px-4 w-full">
-            <span className="text-3xl md:text-4xl font-bold text-white mb-1 md:mb-2">100%</span>
-            <span className="text-[10px] md:text-xs text-white/50 uppercase tracking-widest">On-Chain Transparency</span>
+        <div className="rounded-3xl bg-[#160B2E]/60 backdrop-blur-xl border border-purple-500/30 py-8 md:py-10 px-6 md:px-8 flex flex-col md:flex-row justify-around items-center text-center divide-y md:divide-y-0 md:divide-x divide-purple-500/30 shadow-[0_0_40px_rgba(139,92,246,0.1)]">
+          <div className="flex flex-col items-center px-4 py-5 md:py-0 w-full">
+            <span className="text-3xl md:text-5xl font-extrabold text-white mb-2 drop-shadow-lg">100%</span>
+            <span className="text-[10px] md:text-xs text-cyan-300 font-bold uppercase tracking-[0.2em]">On-Chain Transparency</span>
           </div>
-          <div className="flex flex-col items-center px-4 w-full pt-6 md:pt-0">
-            <span className="text-3xl md:text-4xl font-bold text-white mb-1 md:mb-2">&lt; 2s</span>
-            <span className="text-[10px] md:text-xs text-white/50 uppercase tracking-widest">Transaction Speed</span>
+          <div className="flex flex-col items-center px-4 py-6 md:py-0 w-full">
+            <span className="text-3xl md:text-5xl font-extrabold text-white mb-2 drop-shadow-lg">&lt; 2s</span>
+            <span className="text-[10px] md:text-xs text-cyan-300 font-bold uppercase tracking-[0.2em]">Transaction Speed</span>
           </div>
-          <div className="flex flex-col items-center px-4 w-full pt-6 md:pt-0">
-            <span className="text-3xl md:text-4xl font-bold text-white mb-1 md:mb-2">Multi-Sig</span>
-            <span className="text-[10px] md:text-xs text-white/50 uppercase tracking-widest">Enterprise Security</span>
+          <div className="flex flex-col items-center px-4 py-5 md:py-0 w-full">
+            <span className="text-3xl md:text-5xl font-extrabold text-white mb-2 drop-shadow-lg">Multi-Sig</span>
+            <span className="text-[10px] md:text-xs text-cyan-300 font-bold uppercase tracking-[0.2em]">Enterprise Security</span>
           </div>
         </div>
       </section>
