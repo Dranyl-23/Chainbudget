@@ -224,6 +224,36 @@ body {
   color: var(--color-primary); 
 }
 
+/* ── Custom Animations ──────────────────────────────────────────────────────── */
+@keyframes float {
+  0% { transform: translateY(0px) rotateX(10deg) rotateY(-10deg); }
+  50% { transform: translateY(-20px) rotateX(12deg) rotateY(-8deg); }
+  100% { transform: translateY(0px) rotateX(10deg) rotateY(-10deg); }
+}
+
+@keyframes float-delayed {
+  0% { transform: translateY(0px) translateZ(30px); }
+  50% { transform: translateY(-10px) translateZ(40px); }
+  100% { transform: translateY(0px) translateZ(30px); }
+}
+
+@keyframes spin-slow-3d {
+  0% { transform: rotateY(0deg) rotateX(15deg); }
+  100% { transform: rotateY(360deg) rotateX(15deg); }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.animate-float-delayed {
+  animation: float-delayed 7s ease-in-out infinite;
+}
+
+.animate-spin-slow-3d {
+  animation: spin-slow-3d 12s linear infinite;
+}
+
 /* ── Animations ─────────────────────────────────────────────────────────────── */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(8px); }
