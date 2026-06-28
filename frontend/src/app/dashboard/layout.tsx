@@ -329,18 +329,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {showDisconnectModal && (
         <Portal>
           <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">
-            <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
-              <div className="flex items-center gap-3 mb-4 text-danger">
-                <AlertTriangle className="w-6 h-6" />
-                <h2 className="text-xl font-bold text-gray-900">Disconnect Wallet</h2>
+            <div className="glass rounded-2xl p-6 w-full max-w-sm shadow-[0_0_40px_rgba(239,68,68,0.15)] border border-red-500/20 animate-modal-pop">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center shrink-0">
+                    <AlertTriangle className="w-5 h-5 text-red-400 drop-shadow-[0_0_8px_rgba(239,68,68,0.8)]" />
+                  </div>
+                  <h2 className="text-xl font-bold text-white drop-shadow-sm">Disconnect Wallet</h2>
+                </div>
+                <button onClick={() => setShowDisconnectModal(false)} className="text-white/40 hover:text-white transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
               </div>
-              <p className="text-gray-600 mb-6 text-sm">
+              <p className="text-white/60 mb-6 text-sm">
                 Are you sure you want to disconnect? You will need to sign in again with your wallet to access the dashboard.
               </p>
               <div className="flex gap-3">
                 <button
                   onClick={() => setShowDisconnectModal(false)}
-                  className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                  className="flex-1 px-4 py-2.5 text-sm font-medium text-white/70 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg transition-colors"
                 >
                   Cancel
                 </button>
@@ -349,7 +356,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     setShowDisconnectModal(false);
                     logout();
                   }}
-                  className="flex-1 px-4 py-2 text-sm font-medium text-white bg-danger hover:bg-red-600 rounded-lg transition-colors"
+                  className="flex-1 px-4 py-2.5 text-sm font-bold text-red-100 bg-red-500/80 hover:bg-red-500 border border-red-500/50 rounded-lg transition-all duration-300 shadow-[0_0_15px_rgba(239,68,68,0.4)] hover:shadow-[0_0_25px_rgba(239,68,68,0.6)] hover:-translate-y-0.5"
                 >
                   Disconnect
                 </button>
