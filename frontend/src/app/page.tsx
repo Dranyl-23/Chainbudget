@@ -71,17 +71,17 @@ export default function LandingPage() {
       </nav>
 
       {/* ── Hero ── */}
-      <section className="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-8 xl:gap-12 items-center px-6 md:px-16 pt-16 md:pt-20 pb-20 md:pb-32 max-w-7xl mx-auto w-full">
+      <section className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-4 xl:gap-12 items-center px-6 md:px-16 pt-16 md:pt-20 pb-20 md:pb-32 max-w-7xl mx-auto w-full">
         {/* Left Content */}
-        <div className="flex flex-col items-start w-full">
-          <h1 className="text-[2.5rem] leading-[1.1] sm:text-5xl md:text-6xl lg:text-6xl xl:text-[5.5rem] font-extrabold tracking-tight mb-6 md:mb-8 md:leading-[1.05] text-white max-w-4xl drop-shadow-2xl uppercase w-full">
+        <div className="flex flex-col items-start w-full lg:col-span-7 z-20">
+          <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-5xl xl:text-[4.5rem] font-extrabold tracking-tight mb-6 md:mb-8 leading-[1.1] text-white drop-shadow-2xl uppercase w-full">
             SIMPLIFY YOUR <br className="hidden sm:block" />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-fuchsia-400 to-purple-500 block sm:inline mt-2 sm:mt-0">
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-fuchsia-400 to-purple-500 block mt-2 sm:mt-1 xl:mt-2">
               TRANSACTIONS
             </span>
           </h1>
 
-          <p className="text-white/70 text-base md:text-xl max-w-xl mb-10 md:mb-12 leading-relaxed">
+          <p className="text-white/70 text-base md:text-lg xl:text-xl max-w-xl mb-10 md:mb-12 leading-relaxed">
             Seamless, secure and fast transparent fund management in an easy-to-understand app for organizations of all sizes.
           </p>
 
@@ -140,61 +140,65 @@ export default function LandingPage() {
         </div>
 
         {/* Right Content: 3D Dashboard Preview */}
-        <div className="hidden lg:flex justify-center items-center w-full mt-10 lg:mt-0" style={{ perspective: '2000px' }}>
-          <div className="relative w-full max-w-[420px] animate-float" style={{ transformStyle: 'preserve-3d' }}>
-            
-            {/* Main Glass Panel */}
-            <div className="relative bg-[#160B2E]/60 backdrop-blur-2xl border border-purple-500/40 rounded-3xl p-7 shadow-[0_0_80px_rgba(139,92,246,0.3)] overflow-hidden">
-              <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-fuchsia-500/20 via-transparent to-cyan-500/10 opacity-100 pointer-events-none" />
+        <div className="hidden lg:flex justify-end items-center w-full lg:col-span-5 mt-10 lg:mt-0" style={{ perspective: '1200px' }}>
+          {/* Static Tilt Container */}
+          <div style={{ transformStyle: 'preserve-3d', transform: 'rotateX(15deg) rotateY(-20deg) scale(0.95)' }}>
+            {/* Floating Container */}
+            <div className="relative w-full max-w-[380px] xl:max-w-[420px]" style={{ transformStyle: 'preserve-3d', animation: 'float-delayed 6s ease-in-out infinite' }}>
               
-              <div className="relative z-10 flex items-center justify-between mb-8">
-                <div>
-                  <p className="text-xs text-white/60 uppercase tracking-widest font-bold mb-1.5">Total Balance</p>
-                  <p className="text-4xl font-extrabold text-white tracking-tight drop-shadow-md">₱ 1.25M</p>
-                </div>
-                <div className="w-12 h-12 rounded-2xl bg-cyan-500/30 flex items-center justify-center border border-cyan-400/50 shadow-[0_0_30px_rgba(34,211,238,0.4)]">
-                  <Wallet className="w-6 h-6 text-cyan-200" />
-                </div>
-              </div>
-
-              {/* Mock Chart Area */}
-              <div className="relative z-10 h-28 w-full flex items-end gap-3 mb-8 border-b border-white/20 pb-3">
-                {[30, 50, 40, 80, 60, 100, 75].map((h, i) => (
-                  <div key={i} className="group flex-1 relative flex justify-center">
-                    <div className="w-full bg-gradient-to-t from-purple-500 to-cyan-300 rounded-t-md transition-all duration-300 shadow-[0_0_15px_rgba(139,92,246,0.5)]" style={{ height: `${h}%` }}></div>
+              {/* Main Glass Panel */}
+              <div className="relative bg-[#160B2E]/70 backdrop-blur-3xl border border-purple-500/40 rounded-3xl p-7 shadow-[0_30px_60px_rgba(0,0,0,0.6),_0_0_80px_rgba(139,92,246,0.3)] overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-fuchsia-500/20 via-transparent to-cyan-500/10 opacity-100 pointer-events-none" />
+                
+                <div className="relative z-10 flex items-center justify-between mb-8">
+                  <div>
+                    <p className="text-xs text-white/60 uppercase tracking-widest font-bold mb-1.5">Total Balance</p>
+                    <p className="text-4xl font-extrabold text-white tracking-tight drop-shadow-md">₱ 1.25M</p>
                   </div>
-                ))}
-              </div>
+                  <div className="w-12 h-12 rounded-2xl bg-cyan-500/30 flex items-center justify-center border border-cyan-400/50 shadow-[0_0_30px_rgba(34,211,238,0.4)]">
+                    <Wallet className="w-6 h-6 text-cyan-200" />
+                  </div>
+                </div>
 
-              {/* Mock Transactions */}
-              <div className="relative z-10 space-y-3">
-                <p className="text-[10px] font-bold text-white/50 uppercase tracking-widest mb-3">Recent On-Chain Activity</p>
-                {[
-                  { title: "Office Supplies", amount: "-₱ 15,000", color: "text-red-300", bg: "bg-red-500/30", dot: "bg-red-400" },
-                  { title: "Dept Funding", amount: "+₱ 500,000", color: "text-green-300", bg: "bg-green-500/30", dot: "bg-green-400" },
-                  { title: "Server Costs", amount: "-₱ 8,500", color: "text-red-300", bg: "bg-red-500/30", dot: "bg-red-400" },
-                ].map((tx, i) => (
-                  <div key={i} className="flex items-center justify-between bg-white/10 rounded-2xl p-3.5 border border-white/10 hover:bg-white/20 hover:border-white/20 transition-all cursor-default">
-                    <div className="flex items-center gap-3.5">
-                      <div className={`w-10 h-10 rounded-full ${tx.bg} flex items-center justify-center border border-white/10`}>
-                        <div className={`w-2.5 h-2.5 rounded-full ${tx.dot} shadow-[0_0_10px_currentColor]`}></div>
-                      </div>
-                      <span className="text-sm font-bold text-white">{tx.title}</span>
+                {/* Mock Chart Area */}
+                <div className="relative z-10 h-28 w-full flex items-end gap-3 mb-8 border-b border-white/20 pb-3">
+                  {[30, 50, 40, 80, 60, 100, 75].map((h, i) => (
+                    <div key={i} className="group flex-1 relative flex justify-center">
+                      <div className="w-full bg-gradient-to-t from-purple-500 to-cyan-300 rounded-t-md transition-all duration-300 shadow-[0_0_15px_rgba(139,92,246,0.5)]" style={{ height: `${h}%` }}></div>
                     </div>
-                    <span className={`text-sm font-extrabold tracking-wide ${tx.color}`}>{tx.amount}</span>
-                  </div>
-                ))}
+                  ))}
+                </div>
+
+                {/* Mock Transactions */}
+                <div className="relative z-10 space-y-3">
+                  <p className="text-[10px] font-bold text-white/50 uppercase tracking-widest mb-3">Recent On-Chain Activity</p>
+                  {[
+                    { title: "Office Supplies", amount: "-₱ 15,000", color: "text-red-300", bg: "bg-red-500/30", dot: "bg-red-400" },
+                    { title: "Dept Funding", amount: "+₱ 500,000", color: "text-green-300", bg: "bg-green-500/30", dot: "bg-green-400" },
+                    { title: "Server Costs", amount: "-₱ 8,500", color: "text-red-300", bg: "bg-red-500/30", dot: "bg-red-400" },
+                  ].map((tx, i) => (
+                    <div key={i} className="flex items-center justify-between bg-white/10 rounded-2xl p-3.5 border border-white/10 hover:bg-white/20 hover:border-white/20 transition-all cursor-default shadow-sm">
+                      <div className="flex items-center gap-3.5">
+                        <div className={`w-10 h-10 rounded-full ${tx.bg} flex items-center justify-center border border-white/10`}>
+                          <div className={`w-2.5 h-2.5 rounded-full ${tx.dot} shadow-[0_0_10px_currentColor]`}></div>
+                        </div>
+                        <span className="text-sm font-bold text-white">{tx.title}</span>
+                      </div>
+                      <span className={`text-sm font-extrabold tracking-wide ${tx.color}`}>{tx.amount}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
 
-            {/* Floating Decorative Elements */}
-            <div className="absolute -top-10 -right-10 w-28 h-28 bg-purple-500/30 border border-purple-400/50 rounded-3xl backdrop-blur-xl animate-float-delayed flex items-center justify-center shadow-[0_0_50px_rgba(139,92,246,0.5)] z-20" style={{ transform: 'translateZ(60px)' }}>
-              <ShieldCheck className="w-12 h-12 text-fuchsia-300 drop-shadow-lg" />
-            </div>
-            <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-cyan-500/20 border border-cyan-400/40 rounded-full backdrop-blur-xl animate-float flex items-center justify-center shadow-[0_0_50px_rgba(34,211,238,0.4)] z-0" style={{ transform: 'translateZ(-40px)', animationDelay: '1.5s' }}>
-              <Users className="w-14 h-14 text-cyan-200 drop-shadow-lg" />
-            </div>
+              {/* Floating Decorative Elements */}
+              <div className="absolute -top-10 -right-10 w-28 h-28 bg-purple-500/30 border border-purple-400/50 rounded-3xl backdrop-blur-xl animate-float-delayed flex items-center justify-center shadow-[0_20px_40px_rgba(0,0,0,0.5),_0_0_50px_rgba(139,92,246,0.5)] z-20" style={{ transform: 'translateZ(80px)' }}>
+                <ShieldCheck className="w-12 h-12 text-fuchsia-300 drop-shadow-lg" />
+              </div>
+              <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-cyan-500/20 border border-cyan-400/40 rounded-full backdrop-blur-xl flex items-center justify-center shadow-[0_20px_40px_rgba(0,0,0,0.5),_0_0_50px_rgba(34,211,238,0.4)] z-0" style={{ transform: 'translateZ(-50px)', animation: 'float 7s ease-in-out infinite' }}>
+                <Users className="w-14 h-14 text-cyan-200 drop-shadow-lg" />
+              </div>
 
+            </div>
           </div>
         </div>
       </section>
