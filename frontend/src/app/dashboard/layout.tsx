@@ -70,15 +70,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const savedTheme = localStorage.getItem("chainbudget-theme");
-      if (savedTheme === "light") {
-        setIsDarkMode(false);
-        document.documentElement.removeAttribute("data-theme");
-      } else {
-        setIsDarkMode(true);
-        document.documentElement.setAttribute("data-theme", "dark");
-        if (!savedTheme) localStorage.setItem("chainbudget-theme", "dark");
-      }
+      setIsDarkMode(true);
+      document.documentElement.setAttribute("data-theme", "dark");
+      localStorage.setItem("chainbudget-theme", "dark");
     }
   }, []);
 
@@ -98,10 +92,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [pathname]);
 
   const toggleTheme = () => {
-    const newTheme = !isDarkMode ? "dark" : "light";
-    setIsDarkMode(!isDarkMode);
-    document.documentElement.setAttribute("data-theme", newTheme);
-    localStorage.setItem("chainbudget-theme", newTheme);
+    // Disabled: Fully committed to Dark Premium Web3
   };
 
   if (isLoading || !isConnected) {
@@ -232,17 +223,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* Wallet info */}
         <div className="px-3 mt-auto mb-4">
-          <button
-            title={isCollapsed ? (isDarkMode ? "Light Mode" : "Dark Mode") : ""}
-            onClick={toggleTheme}
-            className={`nav-item flex items-center gap-3 w-full transition-all duration-300 mb-2 text-gray-500 hover:text-primary transition-colors ${isCollapsed ? 'justify-center px-0' : ''}`}
-          >
-            <div className="flex-shrink-0">{isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}</div>
-            <span className={`transition-all duration-300 whitespace-nowrap ${isCollapsed ? 'max-w-0 opacity-0' : 'max-w-[150px] opacity-100'}`}>
-              {isDarkMode ? "Light Mode" : "Dark Mode"}
-            </span>
-          </button>
-
           <div className={`transition-all duration-300 overflow-hidden ${isCollapsed ? 'max-h-0 opacity-0 m-0 p-0 border-0' : 'max-h-[200px] opacity-100 px-3 py-3 mb-2 rounded-lg sidebar-card'}`}>
             <div 
               className="flex items-center justify-between mb-2 group cursor-pointer hover:bg-white/5 rounded px-1 -mx-1 transition-colors"
