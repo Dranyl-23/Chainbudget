@@ -143,7 +143,7 @@ export default function PublicDashboardPage() {
             <div className="w-24 h-24 md:w-32 md:h-32 rounded-2xl bg-white/5 border border-white/10 p-2 shrink-0">
               <img 
                 src={org.logoUrl ? (org.logoUrl.startsWith('http') ? org.logoUrl : `${backendUrl}${org.logoUrl}`) : "/images/logo.png"} 
-                alt={org.name} 
+                alt={org.name || "Organization"} 
                 className="w-full h-full object-contain rounded-xl" 
               />
             </div>
@@ -158,14 +158,14 @@ export default function PublicDashboardPage() {
                   </a>
                 )}
               </div>
-              <h1 className="text-3xl md:text-5xl font-black tracking-tight drop-shadow-md mb-2">{org.name}</h1>
+              <h1 className="text-3xl md:text-5xl font-black tracking-tight drop-shadow-md mb-2">{org.name || "Unknown Organization"}</h1>
               <p className="text-white/60 max-w-2xl">{org.description || "Public organization ledger."}</p>
             </div>
           </div>
 
-          <div className={`p-6 rounded-2xl glass border ${getScoreColor(org.transparencyScore)} flex flex-col items-center justify-center min-w-[200px]`}>
+          <div className={`p-6 rounded-2xl glass border ${getScoreColor(org.transparencyScore || 0)} flex flex-col items-center justify-center min-w-[200px]`}>
             <span className="text-[10px] uppercase tracking-widest font-bold mb-1 opacity-70">Transparency Score</span>
-            <div className="text-5xl font-black tracking-tighter drop-shadow-lg">{org.transparencyScore}%</div>
+            <div className="text-5xl font-black tracking-tighter drop-shadow-lg">{org.transparencyScore || 0}%</div>
           </div>
         </div>
 
@@ -181,7 +181,7 @@ export default function PublicDashboardPage() {
             <div className="flex-1 flex flex-col justify-center relative z-10">
               <div className="flex items-baseline gap-2">
                 <span className="text-5xl md:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-cyan-500 drop-shadow-lg">
-                  {balance}
+                  {balance || "0.0000"}
                 </span>
                 <span className="text-xl font-bold text-cyan-500/50">POL</span>
               </div>
@@ -205,19 +205,19 @@ export default function PublicDashboardPage() {
               </div>
               <div className="text-right">
                 <p className="text-xs text-white/40 font-bold uppercase tracking-widest mb-1">Total Allocated</p>
-                <p className="text-lg font-bold text-white">₱{totalAllocated.toLocaleString()}</p>
+                <p className="text-lg font-bold text-white">₱{(totalAllocated || 0).toLocaleString()}</p>
               </div>
             </div>
 
             <div className="mb-6">
               <div className="flex justify-between text-sm font-bold mb-2">
                 <span className="text-white/70">Total Spend</span>
-                <span className="text-fuchsia-400">{totalBudgetPercentage}%</span>
+                <span className="text-fuchsia-400">{totalBudgetPercentage || 0}%</span>
               </div>
               <div className="w-full bg-white/5 rounded-full h-3 overflow-hidden border border-white/10">
                 <div 
                   className="bg-gradient-to-r from-purple-500 to-fuchsia-500 h-full rounded-full relative"
-                  style={{ width: `${totalBudgetPercentage}%` }}
+                  style={{ width: `${totalBudgetPercentage || 0}%` }}
                 >
                   <div className="absolute inset-0 bg-white/20 w-full h-full animate-[shimmer_2s_infinite]" />
                 </div>
@@ -226,13 +226,13 @@ export default function PublicDashboardPage() {
 
             {/* Top Categories */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              {budgets.slice(0, 4).map((b) => (
+              {(budgets || []).slice(0, 4).map((b) => (
                 <div key={b._id} className="bg-white/5 rounded-xl p-3 border border-white/5">
-                  <p className="text-xs text-white/50 font-bold uppercase truncate mb-1" title={b.name}>{b.name}</p>
-                  <p className="text-sm font-bold text-white">₱{b.spent.toLocaleString()}</p>
+                  <p className="text-xs text-white/50 font-bold uppercase truncate mb-1" title={b.name || "Budget"}>{b.name || "Budget"}</p>
+                  <p className="text-sm font-bold text-white">₱{(b.spent || 0).toLocaleString()}</p>
                 </div>
               ))}
-              {budgets.length === 0 && (
+              {(!budgets || budgets.length === 0) && (
                 <div className="col-span-full text-center text-sm text-white/30 py-4">No public budget data available.</div>
               )}
             </div>
@@ -260,7 +260,7 @@ export default function PublicDashboardPage() {
                 </tr>
               </thead>
               <tbody className="text-sm">
-                {transactions.length === 0 ? (
+                {(!transactions || transactions.length === 0) ? (
                   <tr>
                     <td colSpan={5} className="py-12 text-center text-white/30">
                       No verified on-chain transactions yet.
@@ -270,10 +270,10 @@ export default function PublicDashboardPage() {
                   transactions.map((tx) => (
                     <tr key={tx._id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors group">
                       <td className="py-4 pl-2 text-white/60 whitespace-nowrap">
-                        {new Date(tx.createdAt).toLocaleDateString()}
+                        {tx.createdAt ? new Date(tx.createdAt).toLocaleDateString() : "Unknown"}
                       </td>
                       <td className="py-4 text-white font-medium">
-                        {tx.description}
+                        {tx.description || "No description"}
                       </td>
                       <td className="py-4">
                         <span className="px-2 py-1 rounded bg-white/5 text-[10px] uppercase tracking-widest text-white/50 border border-white/10">
@@ -281,7 +281,7 @@ export default function PublicDashboardPage() {
                         </span>
                       </td>
                       <td className={`py-4 text-right font-bold whitespace-nowrap ${tx.type === "income" ? "text-green-400" : "text-white"}`}>
-                        {tx.type === "income" ? "+" : "-"}₱{tx.amount.toLocaleString()}
+                        {tx.type === "income" ? "+" : "-"}₱{(tx.amount || 0).toLocaleString()}
                       </td>
                       <td className="py-4 text-center pr-2">
                         {tx.blockchainTxHash ? (
