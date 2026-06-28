@@ -727,12 +727,11 @@ export default function TransactionsPage() {
                               },
                             ];
 
-                            // If rejected, only show first 2 steps
                             const visibleSteps = tx.status === "rejected" ? steps.slice(0, 2) : steps;
 
                             return visibleSteps.map((step, idx) => (
-                              <div key={idx} className="flex items-start flex-1">
-                                <div className="flex flex-col items-center">
+                              <div key={idx} className={`flex items-start ${idx < visibleSteps.length - 1 ? 'flex-1' : 'w-32'}`}>
+                                <div className="flex flex-col items-center w-32 shrink-0">
                                   <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white shadow-md transition-all duration-300 ${
                                     step.done 
                                       ? `${step.color} scale-100 shadow-[0_0_15px_rgba(var(--${step.color.replace('bg-', '')}),0.4)]` 
