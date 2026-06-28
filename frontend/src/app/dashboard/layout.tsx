@@ -36,7 +36,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const [pendingCount, setPendingCount] = useState(0);
   const [showDisconnectModal, setShowDisconnectModal] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(true);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
 
@@ -71,9 +71,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useEffect(() => {
     if (typeof window !== "undefined") {
       const savedTheme = localStorage.getItem("chainbudget-theme");
-      if (savedTheme === "dark") {
+      if (savedTheme === "light") {
+        setIsDarkMode(false);
+        document.documentElement.removeAttribute("data-theme");
+      } else {
         setIsDarkMode(true);
         document.documentElement.setAttribute("data-theme", "dark");
+        if (!savedTheme) localStorage.setItem("chainbudget-theme", "dark");
       }
     }
   }, []);
