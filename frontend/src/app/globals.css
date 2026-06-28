@@ -222,7 +222,6 @@ body {
 .nav-item.active { 
   background: linear-gradient(90deg, rgba(107,85,217,0.15) 0%, transparent 100%);
   color: var(--color-primary); 
-  border-left: 3px solid var(--color-primary);
 }
 
 /* ── Animations ─────────────────────────────────────────────────────────────── */
