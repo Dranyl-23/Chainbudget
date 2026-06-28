@@ -442,3 +442,52 @@ body {
 
 [data-theme='dark'] aside { background-color: #0F1015 !important; border-right-color: var(--color-border) !important; }
 [data-theme='dark'] .md\:hidden.bg-white { background-color: #0F1015 !important; }
+
+/* ── Web3 NFT Avatars & Glowing Role Badges ─────────────────────────────── */
+.nft-avatar-wrapper {
+  position: relative;
+  display: inline-block;
+  /* Tricky CSS to get a drop-shadow on a clip-path element */
+  filter: drop-shadow(0 0 8px rgba(139, 92, 246, 0.5));
+}
+
+.nft-avatar {
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+  background-color: rgba(22, 11, 46, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Level 1: Super Admin / Executive */
+.role-badge-superadmin {
+  background-color: rgba(234, 179, 8, 0.1);
+  color: #FDE047;
+  border: 1px solid rgba(234, 179, 8, 0.3);
+  box-shadow: 0 0 10px rgba(234, 179, 8, 0.2);
+  text-shadow: 0 0 5px rgba(253, 224, 71, 0.5);
+}
+
+/* Level 2: Approver / Finance */
+.role-badge-approver {
+  background-color: rgba(34, 211, 238, 0.1);
+  color: #67E8F9;
+  border: 1px solid rgba(34, 211, 238, 0.3);
+  box-shadow: 0 0 10px rgba(34, 211, 238, 0.2);
+  text-shadow: 0 0 5px rgba(103, 232, 249, 0.5);
+}
+
+/* Level 3: Member / Requestor */
+.role-badge-member {
+  background-color: rgba(143, 120, 245, 0.1);
+  color: #BCAEFA;
+  border: 1px solid rgba(143, 120, 245, 0.3);
+  box-shadow: 0 0 10px rgba(143, 120, 245, 0.15);
+}
+
+/* Level 4: Read Only / Public */
+.role-badge-readonly {
+  background-color: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
