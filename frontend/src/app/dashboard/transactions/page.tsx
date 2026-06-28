@@ -429,8 +429,9 @@ export default function TransactionsPage() {
             <option value="approved">Approved</option>
             <option value="pending_approval">Pending</option>
             <option value="requested">Requested</option>
-          <option value="rejected">Rejected</option>
-        </select>
+            <option value="rejected">Rejected</option>
+          </select>
+        </div>
       </div>
 
       {/* ── Table ── */}
