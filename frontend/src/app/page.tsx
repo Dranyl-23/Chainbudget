@@ -40,7 +40,11 @@ export default function LandingPage() {
   }, [isConnected, user, router]);
 
   return (
-    <main className="min-h-screen flex flex-col" style={{ background: "radial-gradient(ellipse at 20% 20%, rgba(107,85,217,0.08) 0%, transparent 50%), radial-gradient(ellipse at 80% 80%, rgba(168,146,240,0.06) 0%, transparent 50%), var(--color-bg)" }}>
+    <main className="min-h-screen flex flex-col relative overflow-hidden bg-[#faf9ff] dark:bg-[#0B0C10]">
+      {/* ── Background Orbs ── */}
+      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-primary/20 dark:bg-primary/10 blur-[120px] pointer-events-none animate-pulse" style={{ animationDuration: '8s' }} />
+      <div className="absolute bottom-[-10%] right-[-5%] w-[50%] h-[50%] rounded-full bg-purple-400/20 dark:bg-purple-900/20 blur-[120px] pointer-events-none animate-pulse" style={{ animationDuration: '12s' }} />
+
       {/* ── Nav ── */}
       <nav className="flex items-center justify-between px-8 py-5 border-b border-white/5">
         <div className="flex items-center gap-3">
@@ -58,18 +62,25 @@ export default function LandingPage() {
       </nav>
 
       {/* ── Hero ── */}
-      <section className="flex-1 flex flex-col items-center justify-center text-center px-6 py-24 animate-fade-in">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium mb-8"
-          style={{ background: "rgba(107,85,217,0.12)", border: "1px solid rgba(107,85,217,0.2)", color: "#5A3EAE" }}>
-          <ShieldCheck className="w-3.5 h-3.5" /> Blockchain-Powered Transparency
+      <section className="flex-1 flex flex-col items-center justify-center text-center px-6 py-24 animate-fade-in relative z-10">
+        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold mb-8 shadow-sm backdrop-blur-md relative group cursor-default border border-primary/20 bg-primary/5 dark:bg-primary/10 text-primary">
+          <div className="absolute inset-0 rounded-full bg-primary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+          <ShieldCheck className="w-4 h-4" /> 
+          Blockchain-Powered Transparency
+          <span className="relative flex h-2 w-2 ml-1">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+          </span>
         </div>
 
-        <h1 className="text-5xl md:text-7xl font-bold tracking-tight mb-6 leading-tight">
+        <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight mb-6 leading-[1.1] text-gray-900 dark:text-white">
           Transparent Fund<br />
-          <span className="gradient-text">Management</span>
+          <span className="bg-clip-text text-transparent bg-gradient-to-r from-primary via-purple-500 to-indigo-500 animate-gradient-x drop-shadow-sm pb-2 inline-block">
+            Management
+          </span>
         </h1>
 
-        <p className="text-gray-400 text-lg md:text-xl max-w-2xl mb-12 leading-relaxed">
+        <p className="text-gray-500 dark:text-gray-400 text-lg md:text-xl max-w-2xl mb-12 leading-relaxed">
           ChainBudget helps organizations monitor shared funds with verifiable blockchain records,
           smart contract approvals, and role-based accountability.
         </p>
@@ -88,10 +99,14 @@ export default function LandingPage() {
             <button
               onClick={linkMetaMask}
               disabled={isLoading}
-              className="btn-primary text-sm px-6 py-3 min-w-[200px]"
+              className="relative group overflow-hidden rounded-xl text-sm font-bold px-8 py-3.5 w-full sm:w-auto min-w-[200px] text-white shadow-[0_0_30px_-10px_rgba(107,85,217,0.5)] hover:shadow-[0_0_40px_-10px_rgba(107,85,217,0.7)] transition-all duration-300"
+              style={{ background: 'linear-gradient(135deg, var(--color-primary), #8B5CF6)' }}
             >
-              <Wallet className="w-4 h-4" />
-              {isLoading ? "Linking..." : "Link MetaMask Wallet"}
+              <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-in-out" />
+              <span className="relative flex items-center justify-center gap-2">
+                <Wallet className="w-5 h-5" />
+                {isLoading ? "Linking..." : "Link MetaMask Wallet"}
+              </span>
             </button>
           </div>
         ) : (
@@ -99,19 +114,25 @@ export default function LandingPage() {
             <button
               onClick={login}
               disabled={isLoading}
-              className="btn-primary text-sm px-6 py-3 w-full sm:w-auto min-w-[160px]"
+              className="relative group overflow-hidden rounded-xl text-sm font-bold px-8 py-3.5 w-full sm:w-auto min-w-[180px] text-white shadow-[0_0_30px_-10px_rgba(107,85,217,0.5)] hover:shadow-[0_0_50px_-10px_rgba(107,85,217,0.8)] transition-all duration-300 hover:-translate-y-1"
+              style={{ background: 'linear-gradient(135deg, var(--color-primary), #8B5CF6)' }}
             >
-              <LogIn className="w-4 h-4" />
-              {isLoading ? "Loading..." : "Login"}
+              <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-in-out" />
+              <span className="relative flex items-center justify-center gap-2">
+                <LogIn className="w-5 h-5" />
+                {isLoading ? "Loading..." : "Login to Portal"}
+              </span>
             </button>
 
             <button
               onClick={register}
               disabled={isLoading}
-              className="btn-secondary text-sm px-6 py-3 w-full sm:w-auto min-w-[160px]"
+              className="relative group rounded-xl text-sm font-bold px-8 py-3.5 w-full sm:w-auto min-w-[180px] text-gray-800 dark:text-gray-100 bg-white/50 dark:bg-white/5 backdrop-blur-md border border-gray-200 dark:border-white/10 hover:border-primary/40 hover:bg-white/80 dark:hover:bg-white/10 transition-all duration-300 shadow-sm hover:shadow-md hover:-translate-y-1"
             >
-              <UserPlus className="w-4 h-4" />
-              Register
+              <span className="flex items-center justify-center gap-2">
+                <UserPlus className="w-5 h-5" />
+                Register Account
+              </span>
             </button>
           </div>
         )}
@@ -129,13 +150,16 @@ export default function LandingPage() {
       </section>
 
       {/* ── Feature grid ── */}
-      <section className="px-6 pb-20 max-w-5xl mx-auto w-full">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <section className="px-6 pb-24 max-w-6xl mx-auto w-full relative z-10">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {features.map((f, i) => (
-            <div key={i} className="stat-card animate-fade-in" style={{ animationDelay: `${i * 80}ms` }}>
-              <div className="mb-3">{f.icon}</div>
-              <h3 className="font-semibold text-sm text-gray-900 mb-1">{f.title}</h3>
-              <p className="text-xs text-gray-500 leading-relaxed">{f.desc}</p>
+            <div key={i} className="group glass p-6 rounded-2xl animate-fade-in hover:-translate-y-2 hover:shadow-[0_20px_40px_-15px_rgba(107,85,217,0.15)] transition-all duration-300 border border-transparent hover:border-primary/20 dark:hover:border-primary/30 relative overflow-hidden bg-white/60 dark:bg-gray-900/40" style={{ animationDelay: `${i * 100}ms` }}>
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+              <div className="mb-5 w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform duration-300 shadow-sm border border-primary/10">
+                {f.icon}
+              </div>
+              <h3 className="font-bold text-base text-gray-900 dark:text-white mb-2">{f.title}</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">{f.desc}</p>
             </div>
           ))}
         </div>
