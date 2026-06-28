@@ -1046,8 +1046,6 @@ export default function TransactionsPage() {
         </div>
         </Portal>
       )}
-
-    </div>
       <TxExplorerModal 
         isOpen={!!selectedExplorerHash} 
         onClose={() => setSelectedExplorerHash(null)} 
