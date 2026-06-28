@@ -678,8 +678,8 @@ export default function TransactionsPage() {
                 {expandedTxId === tx._id && (
                   <tr className="timeline-row">
                     <td colSpan={7} className="!p-0">
-                      <div className="bg-gradient-to-r from-gray-50/80 to-white px-8 py-6 border-t border-gray-100">
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-5">Request Tracking Timeline</p>
+                      <div className="bg-black/40 px-8 py-6 border-t border-white/5 shadow-inner">
+                        <p className="text-xs font-semibold text-white/50 uppercase tracking-widest mb-5">Request Tracking Timeline</p>
                         <div className="flex items-start gap-0">
                           {/* Step 1: Submitted */}
                           {(() => {
@@ -735,18 +735,18 @@ export default function TransactionsPage() {
                                 <div className="flex flex-col items-center">
                                   <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white shadow-md transition-all duration-300 ${
                                     step.done 
-                                      ? `${step.color} scale-100` 
-                                      : 'bg-gray-300 scale-90'
+                                      ? `${step.color} scale-100 shadow-[0_0_15px_rgba(var(--${step.color.replace('bg-', '')}),0.4)]` 
+                                      : 'bg-white/10 border border-white/20 scale-90'
                                   }`}>
-                                    {step.done ? step.icon : <span className="w-2 h-2 bg-white rounded-full" />}
+                                    {step.done ? step.icon : <span className="w-2 h-2 bg-white/20 rounded-full" />}
                                   </div>
-                                  <p className={`text-xs font-semibold mt-2 ${step.done ? (step.isRejected ? 'text-danger' : 'text-gray-800') : 'text-gray-400'}`}>{step.label}</p>
-                                  <p className={`text-[10px] mt-0.5 text-center max-w-[120px] ${step.done ? 'text-gray-500' : 'text-gray-400'}`}>{step.detail}</p>
-                                  {step.date && <p className="text-[10px] text-gray-400 mt-0.5">{step.date}</p>}
+                                  <p className={`text-xs font-semibold mt-2 ${step.done ? (step.isRejected ? 'text-red-400' : 'text-white/90') : 'text-white/40'}`}>{step.label}</p>
+                                  <p className={`text-[10px] mt-0.5 text-center max-w-[120px] ${step.done ? 'text-white/60' : 'text-white/30'}`}>{step.detail}</p>
+                                  {step.date && <p className="text-[10px] text-white/40 mt-0.5">{step.date}</p>}
                                 </div>
                                 {idx < visibleSteps.length - 1 && (
                                   <div className={`h-[3px] flex-1 mt-[18px] mx-1 rounded-full transition-all duration-300 ${
-                                    step.done ? step.color : 'bg-gray-200'
+                                    step.done ? step.color : 'bg-white/10'
                                   }`} />
                                 )}
                               </div>
