@@ -26,6 +26,7 @@ const ApprovalSchema = new mongoose.Schema(
     // On-chain reference for this specific approval action
     blockchainTxHash: { type: String },
     walletAddress: { type: String, lowercase: true },
+    digitalSignature: { type: String },
   },
   { timestamps: true }
 );

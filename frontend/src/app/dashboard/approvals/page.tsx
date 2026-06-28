@@ -130,16 +130,47 @@ export default function ApprovalsPage() {
     }
   };
 
-  const handleApprove = async (txId: string, onChainTxId?: string) => {
+  const requestSignature = async (action: string, req: Approval) => {
+    if (typeof window === "undefined" || !(window as any).ethereum) {
+      throw new Error("MetaMask is not installed. Web3 signatures require MetaMask.");
+    }
+    const ethereum = (window as any).ethereum;
+    const provider = new ethers.BrowserProvider(ethereum);
+    const signer = await provider.getSigner();
+    
+    const domain = { name: "ChainBudget", version: "1" };
+    const types = {
+      Approval: [
+        { name: "action", type: "string" },
+        { name: "txId", type: "string" },
+        { name: "amount", type: "string" },
+        { name: "description", type: "string" }
+      ]
+    };
+    const message = {
+      action,
+      txId: req._id,
+      amount: req.amount.toString(),
+      description: req.description
+    };
+    
+    toast.loading(`Please sign the ${action} action in MetaMask...`, { id: "txToast" });
+    const signature = await signer.signTypedData(domain, types, message);
+    return signature;
+  };
+
+  const handleApprove = async (req: Approval) => {
     if (!activeOrgId) return;
-    setActionLoading(txId);
+    setActionLoading(req._id);
     try {
-      // FIX: Do MetaMask on-chain signing FIRST. If it fails, do not update the database.
-      if (onChainTxId && typeof window !== "undefined" && (window as any).ethereum) {
+      // 1. Request Web3 Signature (EIP-712)
+      const signature = await requestSignature("approved", req);
+
+      // 2. Do MetaMask on-chain signing FIRST (if applicable)
+      if (req.onChainTxId && typeof window !== "undefined" && (window as any).ethereum) {
         const ethereum = (window as any).ethereum;
         toast.loading("Connecting to Hardhat Network...", { id: "txToast" });
         
-        // Auto-switch to Localhost 8545 (Chain ID 31337 -> 0x7a69)
         try {
           await ethereum.request({
             method: 'wallet_switchEthereumChain',
@@ -167,14 +198,14 @@ export default function ApprovalsPage() {
         }
 
         try {
-          toast.loading("Please sign the transaction in MetaMask...", { id: "txToast" });
+          toast.loading("Please approve the blockchain transaction in MetaMask...", { id: "txToast" });
           const provider = new ethers.BrowserProvider(ethereum);
           const signer = await provider.getSigner();
           const contractAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
           
           if (contractAddress) {
             const contract = new ethers.Contract(contractAddress, ChainBudgetABI.abi, signer);
-            const tx = await contract.submitApproval(onChainTxId);
+            const tx = await contract.submitApproval(req.onChainTxId);
             toast.loading("Waiting for blockchain confirmation...", { id: "txToast" });
             await tx.wait();
             toast.success("Blockchain verified!", { id: "txToast" });
@@ -187,12 +218,13 @@ export default function ApprovalsPage() {
         }
       }
 
-      // NOW call backend to record the vote in MongoDB
+      // 3. Call backend to record the vote with the digital signature
       toast.loading("Recording approval...", { id: "txToast" });
-      await api.post(`/approvals/${txId}`, {
+      await api.post(`/approvals/${req._id}`, {
         action: "approved",
         comment: "Approved via dashboard",
         organizationId: activeOrgId,
+        signature
       });
 
       toast.success("Approval recorded successfully!", { id: "txToast" });
@@ -203,31 +235,34 @@ export default function ApprovalsPage() {
         colors: ['#6B55D9', '#7DBD9B', '#4F46E5', '#10B981']
       });
 
-      // BUG-6 FIX: Re-fetch instead of filtering out
       await refreshApprovals();
     } catch (err: any) {
       console.error("Approval failed:", err);
-      toast.error(err.response?.data?.error || "Failed to approve transaction", { id: "txToast" });
+      toast.error(err.response?.data?.error || err.message || "Failed to approve transaction", { id: "txToast" });
     } finally {
       setActionLoading(null);
     }
   };
 
-  const handleReject = async (txId: string) => {
+  const handleReject = async (req: Approval) => {
     if (!activeOrgId) return;
-    setActionLoading(txId);
+    setActionLoading(req._id);
     try {
-      await api.post(`/approvals/${txId}`, {
+      // 1. Request Web3 Signature (EIP-712)
+      const signature = await requestSignature("rejected", req);
+
+      toast.loading("Recording rejection...", { id: "txToast" });
+      await api.post(`/approvals/${req._id}`, {
         action: "rejected",
         comment: "Rejected via dashboard",
         organizationId: activeOrgId,
+        signature
       });
-      // BUG-6 FIX: Re-fetch to show updated state (BUG-3: rejection now needs threshold)
       await refreshApprovals();
-      toast.success("Rejection vote recorded");
+      toast.success("Rejection vote recorded", { id: "txToast" });
     } catch (err: any) {
       console.error("Rejection failed:", err);
-      toast.error(err.response?.data?.error || "Failed to reject transaction");
+      toast.error(err.response?.data?.error || err.message || "Failed to reject transaction", { id: "txToast" });
     } finally {
       setActionLoading(null);
     }
@@ -361,7 +396,7 @@ export default function ApprovalsPage() {
                 <div className="text-2xl font-bold text-gray-800">₱{Math.round(req.amount).toLocaleString()}</div>
                 <div className="flex w-full gap-2">
                   <button
-                    onClick={() => handleReject(req._id)}
+                    onClick={() => handleReject(req)}
                     disabled={actionLoading === req._id}
                     className="flex-1 md:flex-none btn-danger py-2 px-4 whitespace-nowrap disabled:opacity-50"
                   >
@@ -370,7 +405,7 @@ export default function ApprovalsPage() {
                     )}
                   </button>
                   <button
-                    onClick={() => handleApprove(req._id, req.onChainTxId)}
+                    onClick={() => handleApprove(req)}
                     disabled={actionLoading === req._id || !verifiedReceipts[req._id]}
                     className="flex-1 md:flex-none btn-primary py-2 px-4 whitespace-nowrap disabled:opacity-50"
                   >
