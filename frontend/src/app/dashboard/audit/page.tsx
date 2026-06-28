@@ -196,7 +196,7 @@ export default function AuditPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {logs.map((log) => (
-                    <tr key={log._id} className="hover:bg-gray-50/50 transition-colors">
+                    <tr key={log._id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors">
                       <td className="p-4 align-top whitespace-nowrap text-xs text-gray-500">
                         {new Date(log.createdAt).toLocaleString()}
                       </td>

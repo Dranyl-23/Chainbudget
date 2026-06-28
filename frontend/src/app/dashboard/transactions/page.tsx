@@ -449,11 +449,11 @@ export default function TransactionsPage() {
               <th className="text-right">Amount</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-gray-100 dark:divide-gray-800 text-sm">
             {filteredTxs.length > 0 ? (
               filteredTxs.map((tx) => (
                 <React.Fragment key={tx._id}>
-                <tr onClick={() => setExpandedTxId(expandedTxId === tx._id ? null : tx._id)} className="cursor-pointer hover:bg-gray-50/50 transition-colors">
+                <tr onClick={() => setExpandedTxId(expandedTxId === tx._id ? null : tx._id)} className="cursor-pointer hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors">
                   <td>
                     <div className="flex items-center gap-3">
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center ${tx.type === "income" ? "bg-primary/10" : "bg-danger/10"}`}>
