@@ -278,8 +278,8 @@ export default function LandingPage() {
       {/* ── Info Modal ── */}
       {infoModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setInfoModal(null)} />
-          <div className="relative glass border border-purple-500/30 p-8 rounded-3xl max-w-lg w-full shadow-[0_0_50px_rgba(139,92,246,0.2)] animate-in fade-in zoom-in-95 duration-300">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm animate-backdrop-fade" onClick={() => setInfoModal(null)} />
+          <div className="relative glass border border-purple-500/30 p-8 rounded-3xl max-w-lg w-full shadow-[0_0_50px_rgba(139,92,246,0.2)] animate-modal-pop">
             <h2 className="text-2xl font-bold text-white mb-4">{infoModal.title}</h2>
             <div className="text-white/70 leading-relaxed whitespace-pre-line text-sm md:text-base">
               {infoModal.content}
@@ -295,6 +295,24 @@ export default function LandingPage() {
           </div>
         </div>
       )}
+
+      <style jsx global>{`
+        @keyframes modal-pop {
+          0% { opacity: 0; transform: scale(0.95) translateY(20px); }
+          100% { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        .animate-modal-pop {
+          animation: modal-pop 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        @keyframes backdrop-fade {
+          0% { opacity: 0; }
+          100% { opacity: 1; }
+        }
+        .animate-backdrop-fade {
+          animation: backdrop-fade 0.3s ease-out forwards;
+        }
+      `}</style>
     </main>
   );
 }
