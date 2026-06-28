@@ -139,66 +139,54 @@ export default function LandingPage() {
           </div>
         </div>
 
-        {/* Right Content: 3D Dashboard Preview */}
+        {/* Right Content: 3D Glowing Coin */}
         <div className="hidden lg:flex justify-end items-center w-full lg:col-span-5 mt-10 lg:mt-0" style={{ perspective: '1200px' }}>
-          {/* Static Tilt Container */}
-          <div style={{ transformStyle: 'preserve-3d', transform: 'rotateX(15deg) rotateY(-20deg) scale(0.95)' }}>
-            {/* Floating Container */}
-            <div className="relative w-full max-w-[380px] xl:max-w-[420px]" style={{ transformStyle: 'preserve-3d', animation: 'float-delayed 6s ease-in-out infinite' }}>
+          <div className="relative animate-float w-full max-w-[380px] xl:max-w-[420px] flex justify-center h-[400px] items-center" style={{ transformStyle: 'preserve-3d' }}>
+            
+            {/* The 3D Spinning Coin */}
+            <div className="relative w-64 h-64 sm:w-80 sm:h-80 animate-spin-slow-3d" style={{ transformStyle: 'preserve-3d' }}>
               
-              {/* Main Glass Panel */}
-              <div className="relative bg-[#160B2E]/70 backdrop-blur-3xl border border-purple-500/40 rounded-3xl p-7 shadow-[0_30px_60px_rgba(0,0,0,0.6),_0_0_80px_rgba(139,92,246,0.3)] overflow-hidden">
-                <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-fuchsia-500/20 via-transparent to-cyan-500/10 opacity-100 pointer-events-none" />
+              {/* Back Face */}
+              <div className="absolute inset-0 rounded-full border-[6px] border-fuchsia-500/80 bg-gradient-to-br from-[#160B2E] to-purple-900/60 backdrop-blur-xl shadow-[0_0_80px_rgba(217,70,239,0.4)]" style={{ transform: 'translateZ(-16px) rotateY(180deg)' }}>
+                <div className="w-full h-full rounded-full border-4 border-white/5 opacity-50 flex items-center justify-center">
+                   <div className="w-3/4 h-3/4 rounded-full border border-fuchsia-400/30"></div>
+                </div>
+              </div>
+              
+              {/* Inner Core / Edge Thickness */}
+              {[...Array(16)].map((_, i) => (
+                <div key={i} className="absolute inset-0 rounded-full border-[3px] border-purple-500/30 bg-[#0A0216]/50" style={{ transform: `translateZ(${-15 + i * 2}px)` }}></div>
+              ))}
+
+              {/* Front Face */}
+              <div className="absolute inset-0 rounded-full border-[6px] border-cyan-400 bg-gradient-to-tr from-[#160B2E]/90 to-purple-900/80 backdrop-blur-2xl flex items-center justify-center shadow-[inset_0_0_60px_rgba(34,211,238,0.3),_0_0_100px_rgba(34,211,238,0.5)]" style={{ transform: 'translateZ(16px)' }}>
+                <div className="absolute inset-2 rounded-full border border-white/10" />
+                <div className="absolute inset-4 rounded-full border border-white/5" />
                 
-                <div className="relative z-10 flex items-center justify-between mb-8">
-                  <div>
-                    <p className="text-xs text-white/60 uppercase tracking-widest font-bold mb-1.5">Total Balance</p>
-                    <p className="text-4xl font-extrabold text-white tracking-tight drop-shadow-md">₱ 1.25M</p>
+                <div className="flex flex-col items-center justify-center z-10 relative">
+                  {/* Outer glowing ring for the logo */}
+                  <div className="w-24 h-24 rounded-full bg-white/5 border border-white/20 flex items-center justify-center shadow-[0_0_30px_rgba(255,255,255,0.1)] mb-4">
+                    <img src="/images/logo.png" alt="ChainBudget" className="w-16 h-16 object-contain drop-shadow-[0_0_15px_rgba(255,255,255,0.9)]" />
                   </div>
-                  <div className="w-12 h-12 rounded-2xl bg-cyan-500/30 flex items-center justify-center border border-cyan-400/50 shadow-[0_0_30px_rgba(34,211,238,0.4)]">
-                    <Wallet className="w-6 h-6 text-cyan-200" />
-                  </div>
+                  <span className="text-white font-extrabold tracking-[0.2em] text-lg uppercase drop-shadow-[0_0_10px_rgba(255,255,255,0.5)] bg-clip-text text-transparent bg-gradient-to-r from-white to-white/70">
+                    ChainBudget
+                  </span>
+                  <span className="text-cyan-300 font-bold tracking-widest text-[10px] uppercase mt-1">
+                    Powered By Polygon
+                  </span>
                 </div>
-
-                {/* Mock Chart Area */}
-                <div className="relative z-10 h-28 w-full flex items-end gap-3 mb-8 border-b border-white/20 pb-3">
-                  {[30, 50, 40, 80, 60, 100, 75].map((h, i) => (
-                    <div key={i} className="group flex-1 relative flex justify-center">
-                      <div className="w-full bg-gradient-to-t from-purple-500 to-cyan-300 rounded-t-md transition-all duration-300 shadow-[0_0_15px_rgba(139,92,246,0.5)]" style={{ height: `${h}%` }}></div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Mock Transactions */}
-                <div className="relative z-10 space-y-3">
-                  <p className="text-[10px] font-bold text-white/50 uppercase tracking-widest mb-3">Recent On-Chain Activity</p>
-                  {[
-                    { title: "Office Supplies", amount: "-₱ 15,000", color: "text-red-300", bg: "bg-red-500/30", dot: "bg-red-400" },
-                    { title: "Dept Funding", amount: "+₱ 500,000", color: "text-green-300", bg: "bg-green-500/30", dot: "bg-green-400" },
-                    { title: "Server Costs", amount: "-₱ 8,500", color: "text-red-300", bg: "bg-red-500/30", dot: "bg-red-400" },
-                  ].map((tx, i) => (
-                    <div key={i} className="flex items-center justify-between bg-white/10 rounded-2xl p-3.5 border border-white/10 hover:bg-white/20 hover:border-white/20 transition-all cursor-default shadow-sm">
-                      <div className="flex items-center gap-3.5">
-                        <div className={`w-10 h-10 rounded-full ${tx.bg} flex items-center justify-center border border-white/10`}>
-                          <div className={`w-2.5 h-2.5 rounded-full ${tx.dot} shadow-[0_0_10px_currentColor]`}></div>
-                        </div>
-                        <span className="text-sm font-bold text-white">{tx.title}</span>
-                      </div>
-                      <span className={`text-sm font-extrabold tracking-wide ${tx.color}`}>{tx.amount}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Floating Decorative Elements */}
-              <div className="absolute -top-10 -right-10 w-28 h-28 bg-purple-500/30 border border-purple-400/50 rounded-3xl backdrop-blur-xl animate-float-delayed flex items-center justify-center shadow-[0_20px_40px_rgba(0,0,0,0.5),_0_0_50px_rgba(139,92,246,0.5)] z-20" style={{ transform: 'translateZ(80px)' }}>
-                <ShieldCheck className="w-12 h-12 text-fuchsia-300 drop-shadow-lg" />
-              </div>
-              <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-cyan-500/20 border border-cyan-400/40 rounded-full backdrop-blur-xl flex items-center justify-center shadow-[0_20px_40px_rgba(0,0,0,0.5),_0_0_50px_rgba(34,211,238,0.4)] z-0" style={{ transform: 'translateZ(-50px)', animation: 'float 7s ease-in-out infinite' }}>
-                <Users className="w-14 h-14 text-cyan-200 drop-shadow-lg" />
               </div>
 
             </div>
+
+            {/* Floating Decorative Elements around the coin */}
+            <div className="absolute top-10 -right-10 w-24 h-24 bg-purple-500/20 border border-purple-400/40 rounded-3xl backdrop-blur-xl animate-float flex items-center justify-center shadow-[0_20px_40px_rgba(0,0,0,0.5),_0_0_50px_rgba(139,92,246,0.5)] z-20" style={{ transform: 'translateZ(60px)' }}>
+              <ShieldCheck className="w-10 h-10 text-fuchsia-300 drop-shadow-lg" />
+            </div>
+            <div className="absolute bottom-10 -left-10 w-28 h-28 bg-cyan-500/20 border border-cyan-400/40 rounded-full backdrop-blur-xl flex items-center justify-center shadow-[0_20px_40px_rgba(0,0,0,0.5),_0_0_50px_rgba(34,211,238,0.4)] z-0" style={{ transform: 'translateZ(-40px)', animation: 'float-delayed 7s ease-in-out infinite' }}>
+              <Users className="w-12 h-12 text-cyan-200 drop-shadow-lg" />
+            </div>
+
           </div>
         </div>
       </section>
