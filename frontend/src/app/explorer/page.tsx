@@ -172,13 +172,13 @@ export default function ExplorerPage() {
                     {org.name}
                   </h3>
                   <p className="text-sm text-white/50 line-clamp-2 mb-6 flex-1 relative z-10">
-                    {org.description || `A ${org.type.replace('_', ' ')} organization on ChainBudget.`}
+                    {org.description || `A ${org.type ? org.type.replace('_', ' ') : 'registered'} organization on ChainBudget.`}
                   </p>
 
                   <div className="flex items-center justify-between pt-4 border-t border-white/5 mt-auto relative z-10">
                     <div className="flex items-center gap-1.5 text-xs text-white/40">
                       <ShieldCheck className="w-4 h-4 text-cyan-500/50" />
-                      {org.type.replace('_', ' ').toUpperCase()}
+                      {org.type ? org.type.replace('_', ' ').toUpperCase() : 'ORG'}
                     </div>
                     <div className="flex items-center gap-1 text-sm font-bold text-fuchsia-400 group-hover:text-fuchsia-300 transition-colors">
                       View Ledger <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
