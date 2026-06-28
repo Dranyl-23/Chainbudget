@@ -2,7 +2,7 @@
 
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Wallet, ShieldCheck, Users, BarChart3, Lock, LogIn, UserPlus, Search } from "lucide-react";
 import Link from "next/link";
 
@@ -33,6 +33,23 @@ export default function LandingPage() {
   const { isConnected, isAsgardeoAuthenticated, login, register, linkMetaMask, isLoading, error, user } = useAuth();
   const router = useRouter();
 
+  const [infoModal, setInfoModal] = useState<{title: string, content: string} | null>(null);
+
+  const modalData = {
+    whyUs: {
+      title: "Why ChainBudget?",
+      content: "ChainBudget brings 100% financial transparency to organizations and decentralized teams.\n\nBy leveraging the immutable Polygon blockchain, we eliminate hidden spending and build public trust. Organizations can publicly prove exactly where their funds go without compromising operational speed."
+    },
+    features: {
+      title: "Key Features",
+      content: "• Real-Time Tracking: Instantly monitor treasury balances and expenditures.\n• EIP-712 Signatures: Approve transactions using cryptographically secure wallet signatures.\n• Gasless Relayer: Enjoy Web3 security with Web2 convenience—our backend pays the gas fees!\n• Public Transparency Explorer: Anyone can verify your organization's financial health and ledger."
+    },
+    security: {
+      title: "Enterprise-Grade Security",
+      content: "Our Smart Contract Treasury acts as a decentralized vault for your funds.\n\nUnlike traditional bank accounts, no single person can withdraw money. High-value transactions automatically require multi-signature consensus (e.g., 2 out of 3 executives) before the smart contract releases funds directly to the payee."
+    }
+  };
+
   useEffect(() => {
     if (isConnected && user) {
       router.push("/dashboard");
@@ -60,9 +77,9 @@ export default function LandingPage() {
           </span>
         </div>
         <div className="hidden md:flex items-center gap-8 text-sm font-medium text-white/70">
-          <span className="hover:text-white cursor-pointer transition-colors">Why us</span>
-          <span className="hover:text-white cursor-pointer transition-colors">Features</span>
-          <span className="hover:text-white cursor-pointer transition-colors">Security</span>
+          <span onClick={() => setInfoModal(modalData.whyUs)} className="hover:text-white cursor-pointer transition-colors">Why us</span>
+          <span onClick={() => setInfoModal(modalData.features)} className="hover:text-white cursor-pointer transition-colors">Features</span>
+          <span onClick={() => setInfoModal(modalData.security)} className="hover:text-white cursor-pointer transition-colors">Security</span>
         </div>
         <div className="hidden sm:flex items-center gap-2 text-xs text-white/50 bg-white/5 px-4 py-2 rounded-full border border-white/10 backdrop-blur-md">
           <span className="w-2 h-2 rounded-full bg-fuchsia-500 animate-pulse inline-block" />
@@ -258,6 +275,26 @@ export default function LandingPage() {
       <footer className="relative z-10 text-center py-6 md:py-8 text-[10px] md:text-xs text-white/30 border-t border-white/5 mt-auto bg-[#05010B]/50 backdrop-blur-md">
         ChainBudget · Cor Jesu College Capstone 2025–2026 · Powered by Polygon
       </footer>
+      {/* ── Info Modal ── */}
+      {infoModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setInfoModal(null)} />
+          <div className="relative glass border border-purple-500/30 p-8 rounded-3xl max-w-lg w-full shadow-[0_0_50px_rgba(139,92,246,0.2)] animate-in fade-in zoom-in-95 duration-300">
+            <h2 className="text-2xl font-bold text-white mb-4">{infoModal.title}</h2>
+            <div className="text-white/70 leading-relaxed whitespace-pre-line text-sm md:text-base">
+              {infoModal.content}
+            </div>
+            <div className="mt-8 flex justify-end">
+              <button 
+                onClick={() => setInfoModal(null)}
+                className="px-6 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white font-medium transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
