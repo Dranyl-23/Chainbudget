@@ -614,7 +614,28 @@ export default function TransactionsPage() {
                         </span>
                       )
                     ) : (
-                      <span className="text-xs text-white/30 font-medium">—</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-white/30 font-medium">—</span>
+                        {tx.status === "approved" && (user?.isSuperAdmin || (user?.memberships?.find((m: any) => m.organization === activeOrgId || m.organization?._id === activeOrgId)?.roleLevel || 4) <= 2) && (
+                          <button 
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              try {
+                                alert("Retrying blockchain sync... Please ensure your local node (Hardhat) is running.");
+                                const res = await api.post(`/transactions/${tx._id}/retry-sync`);
+                                setTransactions(prev => prev.map(t => t._id === tx._id ? { ...t, ...res.data.transaction } : t));
+                                toast.success("Successfully synced to blockchain!");
+                              } catch (err: any) {
+                                alert(err.response?.data?.error || "Failed to sync to blockchain.");
+                              }
+                            }}
+                            className="text-[9px] font-bold uppercase tracking-widest bg-fuchsia-500/10 hover:bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30 px-2 py-1 rounded-sm transition-colors shadow-[0_0_10px_rgba(217,70,239,0.1)]"
+                            title="Retry sync to blockchain"
+                          >
+                            Retry Sync
+                          </button>
+                        )}
+                      </div>
                     )}
                   </td>
                   <td className="p-4">
