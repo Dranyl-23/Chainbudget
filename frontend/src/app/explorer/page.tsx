@@ -128,7 +128,7 @@ export default function ExplorerPage() {
             <input
               type="text"
               placeholder="Search for an organization..."
-              className="w-full bg-transparent border-none outline-none focus:outline-none focus:ring-0 text-white placeholder-white/40 px-4 py-4 text-lg"
+              className="w-full bg-transparent !border-none !outline-none !ring-0 focus:!border-transparent focus:!ring-0 focus:!outline-none text-white placeholder-white/40 px-4 py-4 text-lg rounded-r-xl shadow-none"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
