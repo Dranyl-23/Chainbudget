@@ -276,6 +276,36 @@ body {
   animation: pulse-glow 2s ease-in-out infinite;
 }
 
+@keyframes shimmer-web3 {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.animate-shimmer-web3 {
+  position: relative;
+  overflow: hidden;
+  background-color: rgba(22, 11, 46, 0.5);
+}
+
+.animate-shimmer-web3::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(143, 120, 245, 0.1),
+    rgba(34, 211, 238, 0.3),
+    rgba(143, 120, 245, 0.1),
+    transparent
+  );
+  animation: shimmer-web3 2s infinite;
+}
+
 @media print {
   body * {
     visibility: hidden;
