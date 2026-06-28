@@ -204,14 +204,14 @@ export default function DAOGovernancePage() {
                 <h3 className="text-base md:text-lg font-bold text-gray-800 mb-1 md:mb-2 leading-tight">{p.title}</h3>
                 <p className="text-xs md:text-sm text-gray-500 mb-3 md:mb-4 line-clamp-3 flex-1">{p.description}</p>
                 
-                <div className="bg-gray-50/50 p-3 md:p-4 rounded-xl mb-4 md:mb-6">
+                <div className="bg-gray-50/50 dark:bg-gray-800/30 p-3 md:p-4 rounded-xl mb-4 md:mb-6">
                   <div className="flex justify-between items-center mb-1.5 md:mb-2">
-                    <span className="text-[10px] md:text-xs text-gray-500">Requested Amount</span>
-                    <span className="text-sm font-bold text-primary">₱{p.amount.toLocaleString()}</span>
+                    <span className="text-[10px] md:text-xs text-gray-500 dark:text-gray-400">Requested Amount</span>
+                    <span className="text-sm font-bold text-primary dark:text-primary/90">₱{p.amount.toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-[10px] md:text-xs text-gray-500">Proposed By</span>
-                    <span className="text-xs md:text-sm font-medium text-gray-700">{getCreatorLabel(p.creator)}</span>
+                    <span className="text-[10px] md:text-xs text-gray-500 dark:text-gray-400">Proposed By</span>
+                    <span className="text-xs md:text-sm font-medium text-gray-700 dark:text-gray-300">{getCreatorLabel(p.creator)}</span>
                   </div>
                 </div>
 
@@ -220,14 +220,14 @@ export default function DAOGovernancePage() {
                     <button 
                       onClick={() => handleVote(p, true)}
                       disabled={votingOn === p._id}
-                      className="btn-primary bg-emerald-500 hover:bg-emerald-600 border-none w-full py-2 md:py-2.5 text-sm md:text-base"
+                      className="btn-primary bg-emerald-500 hover:bg-emerald-600 border-none w-full py-2 md:py-2.5 text-sm md:text-base dark:bg-emerald-600 dark:hover:bg-emerald-500"
                     >
                       {votingOn === p._id ? "..." : "Vote Yes"}
                     </button>
                     <button 
                       onClick={() => handleVote(p, false)}
                       disabled={votingOn === p._id}
-                      className="btn-outline border-red-200 text-red-600 hover:bg-red-50 w-full py-2 md:py-2.5 text-sm md:text-base"
+                      className="btn-outline border-red-200 text-red-600 hover:bg-red-50 w-full py-2 md:py-2.5 text-sm md:text-base dark:border-red-900/50 dark:text-red-400 dark:hover:bg-red-900/20"
                     >
                       {votingOn === p._id ? "..." : "Vote No"}
                     </button>
@@ -235,20 +235,20 @@ export default function DAOGovernancePage() {
                 )}
 
                 {p.hasVoted && (
-                  <div className="mt-auto bg-gray-100 text-gray-500 text-center py-2 rounded-xl text-xs md:text-sm font-medium flex items-center justify-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500" /> You have already voted
+                  <div className="mt-auto bg-gray-100 dark:bg-gray-800/50 text-gray-500 dark:text-gray-400 text-center py-2 rounded-xl text-xs md:text-sm font-medium flex items-center justify-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500 dark:text-emerald-400" /> You have already voted
                   </div>
                 )}
 
                 {/* Display Voters Count Only */}
-                <div className="mt-3 pt-3 md:mt-4 md:pt-4 border-t border-gray-100 flex gap-2 md:gap-4">
-                  <div className="flex-1 bg-emerald-50/50 py-1.5 px-2 md:p-2 rounded-lg text-center border border-emerald-100/50">
-                    <span className="text-[9px] md:text-[10px] font-semibold uppercase tracking-wider text-emerald-600 block mb-0.5 md:mb-1">Yes Votes</span>
-                    <span className="text-lg md:text-xl font-bold text-emerald-700">{p.yesVotes}</span>
+                <div className="mt-3 pt-3 md:mt-4 md:pt-4 border-t border-gray-100 dark:border-gray-800 flex gap-2 md:gap-4">
+                  <div className="flex-1 bg-emerald-50/50 dark:bg-emerald-900/20 py-1.5 px-2 md:p-2 rounded-lg text-center border border-emerald-100/50 dark:border-emerald-800/30">
+                    <span className="text-[9px] md:text-[10px] font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 block mb-0.5 md:mb-1">Yes Votes</span>
+                    <span className="text-lg md:text-xl font-bold text-emerald-700 dark:text-emerald-300">{p.yesVotes}</span>
                   </div>
-                  <div className="flex-1 bg-red-50/50 py-1.5 px-2 md:p-2 rounded-lg text-center border border-red-100/50">
-                    <span className="text-[9px] md:text-[10px] font-semibold uppercase tracking-wider text-red-600 block mb-0.5 md:mb-1">No Votes</span>
-                    <span className="text-lg md:text-xl font-bold text-red-700">{p.noVotes}</span>
+                  <div className="flex-1 bg-red-50/50 dark:bg-red-900/20 py-1.5 px-2 md:p-2 rounded-lg text-center border border-red-100/50 dark:border-red-800/30">
+                    <span className="text-[9px] md:text-[10px] font-semibold uppercase tracking-wider text-red-600 dark:text-red-400 block mb-0.5 md:mb-1">No Votes</span>
+                    <span className="text-lg md:text-xl font-bold text-red-700 dark:text-red-300">{p.noVotes}</span>
                   </div>
                 </div>
               </div>
