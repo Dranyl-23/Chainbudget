@@ -484,7 +484,7 @@ export default function TransactionsPage() {
                     </div>
                   </td>
                   <td className="p-4">
-                    <span className="px-2 py-1 rounded-sm bg-white/5 border border-white/10 text-[10px] uppercase tracking-widest font-bold text-white/70">
+                    <span className="inline-block whitespace-nowrap px-2 py-1 rounded-sm bg-white/5 border border-white/10 text-[10px] uppercase tracking-widest font-bold text-white/70">
                       {tx.category || "—"}
                     </span>
                   </td>
