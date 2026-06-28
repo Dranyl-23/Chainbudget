@@ -656,6 +656,69 @@ router.patch("/:id/receipt", authenticate, async (req, res) => {
   }
 });
 
+/// POST /api/transactions/:id/retry-sync — Manually retry blockchain recording
+router.post("/:id/retry-sync", authenticate, requireRole(2), async (req, res) => {
+  try {
+    const txn = await Transaction.findById(req.params.id);
+    if (!txn) return res.status(404).json({ error: "Transaction not found" });
+
+    if (txn.isRecordedOnChain && txn.blockchainTxHash) {
+      return res.status(400).json({ error: "Transaction is already recorded on chain" });
+    }
+
+    const orgId = txn.organization.toString();
+
+    const payload = JSON.stringify({
+      orgId,
+      amount: txn.amount,
+      type: txn.type,
+      description: txn.description,
+      submittedBy: txn.submittedBy.toString(),
+      timestamp: new Date().toISOString(),
+      documentHash: txn.documentHash || null,
+    });
+
+    // Retrieve requester wallet address
+    const requester = await User.findById(txn.submittedBy);
+    const toAddress = requester ? requester.walletAddress : "0x0000000000000000000000000000000000000000";
+
+    const blockchainResult = await recordTransactionOnChain(
+      payload,
+      Math.round(txn.amount),
+      toAddress,
+      txn.isHighValue,
+      txn.isEscrow === true
+    );
+
+    if (blockchainResult && !blockchainResult.skipped) {
+      txn.onChainTxId = blockchainResult.onChainTxId;
+      txn.blockchainTxHash = blockchainResult.blockchainTxHash;
+      txn.dataHash = blockchainResult.dataHash;
+      txn.isRecordedOnChain = true;
+      await txn.save();
+
+      await AuditLog.create({
+        organization: orgId,
+        actor: req.user._id,
+        actorWallet: req.user.walletAddress,
+        action: "transaction.sync_retry",
+        targetType: "Transaction",
+        targetId: txn._id,
+        details: { amount: txn.amount, type: txn.type },
+        blockchainTxHash: blockchainResult.blockchainTxHash,
+        onChainTxId: blockchainResult.onChainTxId,
+      });
+
+      return res.json({ success: true, transaction: txn, blockchain: blockchainResult });
+    } else {
+      return res.status(500).json({ error: "Blockchain sync failed. Is the RPC node running?" });
+    }
+  } catch (err) {
+    console.error("Retry sync error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 /// GET /api/transactions/:id — Get single transaction
 router.get("/:id", authenticate, async (req, res) => {
   try {
