@@ -193,7 +193,7 @@ export default function SettingsPage() {
                     type="text"
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
-                    className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                    className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all dark:text-white"
                     placeholder="Enter your display name"
                   />
                 </div>
@@ -215,7 +215,7 @@ export default function SettingsPage() {
                     type="text"
                     readOnly
                     value={user?.walletAddress || ""}
-                    className="w-full px-4 py-2 bg-gray-100 border border-gray-200 rounded-lg text-gray-500 font-mono text-sm cursor-not-allowed mb-4"
+                    className="w-full px-4 py-2 bg-gray-100 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-500 dark:text-gray-400 font-mono text-sm cursor-not-allowed mb-4"
                   />
                   
                   {/* Live Wallet Balance */}
@@ -277,7 +277,7 @@ export default function SettingsPage() {
             <div className="space-y-3">
               {user?.linkedWallets && user.linkedWallets.length > 0 ? (
                 user.linkedWallets.map((w) => (
-                  <div key={w} className="flex items-center justify-between bg-gray-50 p-3 rounded-lg border border-gray-200">
+                  <div key={w} className="flex items-center justify-between bg-gray-50 dark:bg-gray-800/30 p-3 rounded-lg border border-gray-200 dark:border-gray-700">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center">
                         <Wallet className="w-4 h-4 text-indigo-600" />
@@ -290,7 +290,7 @@ export default function SettingsPage() {
                   </div>
                 ))
               ) : (
-                <div className="text-center py-6 text-gray-400 bg-gray-50 rounded-lg border border-dashed border-gray-200">
+                <div className="text-center py-6 text-gray-400 bg-gray-50 dark:bg-gray-800/30 rounded-lg border border-dashed border-gray-200 dark:border-gray-700">
                   No additional wallets linked.
                 </div>
               )}
@@ -337,8 +337,8 @@ export default function SettingsPage() {
                 </p>
               </div>
             ) : (
-              <div className="mt-4 text-center p-4 bg-white/50 rounded-xl border border-dashed border-gray-300">
-                <p className="text-sm text-gray-600 mb-3">
+              <div className="mt-4 text-center p-4 bg-white/50 dark:bg-gray-800/50 rounded-xl border border-dashed border-gray-300 dark:border-gray-700">
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
                   You don't have a Soulbound Token (SBT) yet.
                 </p>
                 {user?.walletAddress ? (
@@ -393,7 +393,7 @@ export default function SettingsPage() {
           <p className="text-sm text-gray-500 mb-4">Review and approve liquidations to trigger automated budget replenishment.</p>
           
           {pendingLiquidations.length === 0 ? (
-            <div className="text-center py-6 text-gray-400 bg-gray-50 rounded-lg border border-dashed border-gray-200">
+            <div className="text-center py-6 text-gray-400 bg-gray-50 dark:bg-gray-800/30 rounded-lg border border-dashed border-gray-200 dark:border-gray-700">
               No pending liquidations.
             </div>
           ) : (
