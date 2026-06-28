@@ -15,27 +15,37 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <Toaster 
         position="top-center" 
         toastOptions={{ 
-          className: "text-sm font-medium", 
+          className: "text-sm font-bold tracking-wide", 
           duration: 4000,
           style: {
-            background: "var(--color-bg)",
-            color: "var(--color-text)",
-            border: "1px solid var(--color-border)",
-            boxShadow: "0 10px 30px -10px rgba(0,0,0,0.3)",
+            background: "rgba(16, 17, 26, 0.95)",
+            backdropFilter: "blur(12px)",
+            WebkitBackdropFilter: "blur(12px)",
+            color: "#FFFFFF",
+            border: "1px solid rgba(139, 92, 246, 0.4)",
+            boxShadow: "0 10px 30px -10px rgba(139, 92, 246, 0.3), inset 0 0 10px rgba(139, 92, 246, 0.1)",
             borderRadius: "12px",
             padding: "12px 16px",
           },
           success: {
             iconTheme: {
-              primary: "#34d399",
-              secondary: "var(--color-bg)",
+              primary: "#4ADE80",
+              secondary: "#10111A",
             },
+            style: {
+              border: "1px solid rgba(74, 222, 128, 0.4)",
+              boxShadow: "0 10px 30px -10px rgba(74, 222, 128, 0.2), inset 0 0 10px rgba(74, 222, 128, 0.1)",
+            }
           },
           error: {
             iconTheme: {
-              primary: "#f87171",
-              secondary: "var(--color-bg)",
+              primary: "#F87171",
+              secondary: "#10111A",
             },
+            style: {
+              border: "1px solid rgba(248, 113, 113, 0.4)",
+              boxShadow: "0 10px 30px -10px rgba(248, 113, 113, 0.2), inset 0 0 10px rgba(248, 113, 113, 0.1)",
+            }
           },
         }} 
       />
