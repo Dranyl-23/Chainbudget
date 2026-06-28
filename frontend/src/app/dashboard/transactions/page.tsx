@@ -490,8 +490,8 @@ export default function TransactionsPage() {
                   </td>
                   <td className="p-4 text-white/60 font-medium">{new Date(tx.createdAt).toLocaleDateString()}</td>
                   <td className="p-4">
-                    <div className="flex flex-col items-start gap-2">
-                      <span className={`px-2 py-1 text-[9px] font-bold uppercase tracking-widest rounded-sm border ${
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className={`whitespace-nowrap px-2 py-1 text-[9px] font-bold uppercase tracking-widest rounded-sm border ${
                         tx.status === "approved" ? "bg-green-500/20 text-green-300 border-green-500/30 shadow-[0_0_10px_rgba(34,197,94,0.2)]" : 
                         tx.status === "rejected" ? "bg-red-500/20 text-red-300 border-red-500/30 shadow-[0_0_10px_rgba(239,68,68,0.2)]" : 
                         tx.status === "requested" ? "bg-blue-500/20 text-blue-300 border-blue-500/30 shadow-[0_0_10px_rgba(59,130,246,0.2)]" :
@@ -503,7 +503,7 @@ export default function TransactionsPage() {
                          "Rejected"}
                       </span>
                       {tx.isEscrow && (
-                        <span className={`px-2 py-1 text-[9px] font-bold uppercase tracking-widest rounded-sm border ${
+                        <span className={`whitespace-nowrap px-2 py-1 text-[9px] font-bold uppercase tracking-widest rounded-sm border ${
                           tx.escrowStatus === "locked" ? "bg-fuchsia-500/20 text-fuchsia-300 border-fuchsia-500/30 shadow-[0_0_10px_rgba(217,70,239,0.2)]" : 
                           tx.escrowStatus === "released" ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/30 shadow-[0_0_10px_rgba(34,211,238,0.2)]" : 
                           "bg-white/10 text-white/50 border-white/20"
@@ -514,83 +514,79 @@ export default function TransactionsPage() {
                         </span>
                       )}
                       {tx.status === "approved" && tx.type === "expense" && !tx.executed && (
-                        <div className="flex gap-1 mt-1">
-                          <button 
-                            onClick={(e) => { 
-                              e.stopPropagation(); 
-                              // Call contract to execute the transfer
-                              const executeTx = async () => {
-                                try {
-                                  if (!tx.onChainTxId) return alert("No on-chain ID");
-                                  const ethereum = (window as any).ethereum;
-                                  if (!ethereum) return alert("MetaMask not installed");
-                                  const provider = new ethers.BrowserProvider(ethereum);
-                                  const signer = await provider.getSigner();
-                                  const contractAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
-                                  const contract = new ethers.Contract(contractAddress, ChainBudgetABI.abi, signer);
-                                  const execTx = await contract.executeTransaction(tx.onChainTxId);
-                                  alert("Executing transfer on-chain... Please wait.");
-                                  await execTx.wait();
-                                  await api.patch(`/transactions/${tx._id}/execute`);
-                                  
-                                  // Update state locally
-                                  setTransactions((prev) => 
-                                    prev.map(t => t._id === tx._id ? { ...t, executed: true, escrowStatus: t.isEscrow ? "locked" : "none" } : t)
-                                  );
-                                  
-                                  alert("Transfer executed successfully!");
-                                } catch (err: any) {
-                                  alert("Execution failed: " + err.message);
-                                }
-                              };
-                              executeTx();
-                            }}
-                            className="px-2 py-1 text-[9px] font-bold uppercase tracking-widest bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 hover:bg-cyan-500/40 rounded-sm transition-colors shadow-[0_0_10px_rgba(34,211,238,0.2)]"
-                          >
-                            Execute Transfer
-                          </button>
-                        </div>
+                        <button 
+                          onClick={(e) => { 
+                            e.stopPropagation(); 
+                            // Call contract to execute the transfer
+                            const executeTx = async () => {
+                              try {
+                                if (!tx.onChainTxId) return alert("No on-chain ID");
+                                const ethereum = (window as any).ethereum;
+                                if (!ethereum) return alert("MetaMask not installed");
+                                const provider = new ethers.BrowserProvider(ethereum);
+                                const signer = await provider.getSigner();
+                                const contractAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
+                                const contract = new ethers.Contract(contractAddress, ChainBudgetABI.abi, signer);
+                                const execTx = await contract.executeTransaction(tx.onChainTxId);
+                                alert("Executing transfer on-chain... Please wait.");
+                                await execTx.wait();
+                                await api.patch(`/transactions/${tx._id}/execute`);
+                                
+                                // Update state locally
+                                setTransactions((prev) => 
+                                  prev.map(t => t._id === tx._id ? { ...t, executed: true, escrowStatus: t.isEscrow ? "locked" : "none" } : t)
+                                );
+                                
+                                alert("Transfer executed successfully!");
+                              } catch (err: any) {
+                                alert("Execution failed: " + err.message);
+                              }
+                            };
+                            executeTx();
+                          }}
+                          className="whitespace-nowrap px-2 py-1 text-[9px] font-bold uppercase tracking-widest bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 hover:bg-cyan-500/40 rounded-sm transition-colors shadow-[0_0_10px_rgba(34,211,238,0.2)]"
+                        >
+                          Execute Transfer
+                        </button>
                       )}
                       {tx.status === "approved" && tx.type === "expense" && tx.executed && tx.isEscrow && tx.escrowStatus === "locked" && (user?.isSuperAdmin || (user?.memberships?.find((m: any) => m.organization === activeOrgId || m.organization?._id === activeOrgId)?.roleLevel || 4) <= 2) && (
-                        <div className="flex gap-1 mt-1">
-                          <button 
-                            onClick={(e) => { 
-                              e.stopPropagation(); 
-                              const releaseTx = async () => {
-                                try {
-                                  alert("Releasing escrow funds... Please wait.");
-                                  await api.post(`/transactions/${tx._id}/release-escrow`);
-                                  setTransactions((prev) => 
-                                    prev.map(t => t._id === tx._id ? { ...t, escrowStatus: "released", payeeApproved: true, payerApproved: true } : t)
-                                  );
-                                  alert("Escrow released successfully!");
-                                } catch (err: any) {
-                                  alert("Release failed: " + err.message);
-                                }
-                              };
-                              releaseTx();
-                            }}
-                            className="px-2 py-1 text-[9px] font-bold uppercase tracking-widest bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30 hover:bg-fuchsia-500/40 rounded-sm transition-colors shadow-[0_0_10px_rgba(217,70,239,0.2)]"
-                          >
-                            Release Escrow
-                          </button>
-                        </div>
+                        <button 
+                          onClick={(e) => { 
+                            e.stopPropagation(); 
+                            const releaseTx = async () => {
+                              try {
+                                alert("Releasing escrow funds... Please wait.");
+                                await api.post(`/transactions/${tx._id}/release-escrow`);
+                                setTransactions((prev) => 
+                                  prev.map(t => t._id === tx._id ? { ...t, escrowStatus: "released", payeeApproved: true, payerApproved: true } : t)
+                                );
+                                alert("Escrow released successfully!");
+                              } catch (err: any) {
+                                alert("Release failed: " + err.message);
+                              }
+                            };
+                            releaseTx();
+                          }}
+                          className="whitespace-nowrap px-2 py-1 text-[9px] font-bold uppercase tracking-widest bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30 hover:bg-fuchsia-500/40 rounded-sm transition-colors shadow-[0_0_10px_rgba(217,70,239,0.2)]"
+                        >
+                          Release Escrow
+                        </button>
                       )}
                       {tx.status === "requested" && (user?.isSuperAdmin || (user?.memberships?.find((m: any) => m.organization === activeOrgId || m.organization?._id === activeOrgId)?.roleLevel || 4) <= 2) && (
-                        <div className="flex gap-1 mt-1">
+                        <>
                           <button 
                             onClick={(e) => { e.stopPropagation(); handleProcessRequest(tx._id, "approve"); }}
-                            className="px-2 py-1 text-[9px] font-bold uppercase tracking-widest bg-green-500/20 text-green-300 border border-green-500/30 hover:bg-green-500/40 rounded-sm transition-colors shadow-[0_0_10px_rgba(34,197,94,0.2)]"
+                            className="whitespace-nowrap px-2 py-1 text-[9px] font-bold uppercase tracking-widest bg-green-500/20 text-green-300 border border-green-500/30 hover:bg-green-500/40 rounded-sm transition-colors shadow-[0_0_10px_rgba(34,197,94,0.2)]"
                           >
                             Approve
                           </button>
                           <button 
                             onClick={(e) => { e.stopPropagation(); handleProcessRequest(tx._id, "reject"); }}
-                            className="px-2 py-1 text-[9px] font-bold uppercase tracking-widest bg-red-500/20 text-red-300 border border-red-500/30 hover:bg-red-500/40 rounded-sm transition-colors shadow-[0_0_10px_rgba(239,68,68,0.2)]"
+                            className="whitespace-nowrap px-2 py-1 text-[9px] font-bold uppercase tracking-widest bg-red-500/20 text-red-300 border border-red-500/30 hover:bg-red-500/40 rounded-sm transition-colors shadow-[0_0_10px_rgba(239,68,68,0.2)]"
                           >
                             Reject
                           </button>
-                        </div>
+                        </>
                       )}
                     </div>
                   </td>
