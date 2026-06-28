@@ -91,14 +91,14 @@ export default function LandingPage() {
             </div>
           )}
 
-          <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
+          <div className="flex flex-col min-[480px]:flex-row items-center gap-4 w-full sm:w-auto mt-2">
             {isAsgardeoAuthenticated && !isConnected ? (
               <button
                 onClick={linkMetaMask}
                 disabled={isLoading}
-                style={{ backgroundColor: 'white' }}
-                className="group relative overflow-hidden rounded-full text-sm font-bold px-8 py-4 w-full sm:w-auto min-w-[200px] text-[#0A0216] hover:scale-105 transition-all duration-300 shadow-[0_0_30px_rgba(255,255,255,0.3)]"
+                className="group relative overflow-hidden rounded-full text-sm font-bold px-8 py-4 w-full min-[480px]:w-auto min-w-[200px] text-white bg-gradient-to-r from-fuchsia-500 to-cyan-500 hover:scale-105 transition-all duration-300 shadow-[0_0_30px_rgba(217,70,239,0.4)] border border-white/20"
               >
+                <div className="absolute inset-0 bg-white/20 group-hover:translate-x-full -skew-x-12 -translate-x-full transition-transform duration-700 ease-out" />
                 <span className="relative flex items-center justify-center gap-2">
                   <Wallet className="w-5 h-5" />
                   {isLoading ? "Linking..." : "Link MetaMask"}
@@ -109,9 +109,9 @@ export default function LandingPage() {
                 <button
                   onClick={login}
                   disabled={isLoading}
-                  style={{ backgroundColor: 'white' }}
-                  className="group relative overflow-hidden rounded-full text-sm font-bold px-10 py-4 w-full sm:w-auto min-w-[180px] text-[#0A0216] hover:scale-105 transition-all duration-300 shadow-[0_0_40px_rgba(255,255,255,0.2)]"
+                  className="group relative overflow-hidden rounded-full text-sm font-bold px-8 py-4 w-full min-[480px]:w-auto min-w-[200px] text-white bg-gradient-to-r from-fuchsia-500 to-cyan-500 hover:scale-105 transition-all duration-300 shadow-[0_0_30px_rgba(217,70,239,0.4)] hover:shadow-[0_0_40px_rgba(34,211,238,0.5)] border border-white/20"
                 >
+                  <div className="absolute inset-0 bg-white/20 group-hover:translate-x-full -skew-x-12 -translate-x-full transition-transform duration-700 ease-out" />
                   <span className="relative flex items-center justify-center gap-2">
                     <LogIn className="w-5 h-5" />
                     {isLoading ? "Loading..." : "Get Started"}
@@ -121,9 +121,9 @@ export default function LandingPage() {
                 <button
                   onClick={register}
                   disabled={isLoading}
-                  className="group rounded-full text-sm font-bold px-10 py-4 w-full sm:w-auto min-w-[180px] text-white bg-white/5 backdrop-blur-md border border-white/20 hover:bg-white/10 hover:border-white/40 transition-all duration-300"
+                  className="group relative overflow-hidden rounded-full text-sm font-bold px-8 py-4 w-full min-[480px]:w-auto min-w-[200px] text-white bg-[#160B2E]/60 backdrop-blur-xl border border-purple-500/30 hover:bg-white/10 hover:border-fuchsia-400/50 hover:scale-105 transition-all duration-300 shadow-[0_0_20px_rgba(139,92,246,0.15)]"
                 >
-                  <span className="flex items-center justify-center gap-2">
+                  <span className="relative flex items-center justify-center gap-2">
                     <UserPlus className="w-5 h-5" />
                     Register
                   </span>
