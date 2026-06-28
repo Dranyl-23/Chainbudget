@@ -165,6 +165,16 @@ router.post("/", authenticate, requireRole(3), async (req, res) => {
     const io = req.app.get("io");
     if (io) {
       io.emit("transaction_updated", { orgId: organizationId });
+      io.emit("new_notification", {
+        orgId: organizationId,
+        id: txn._id,
+        title: isRequest ? (urgency === "urgent" ? "Urgent Request" : "Budget Request") : "New Transaction",
+        message: isRequest 
+          ? `${req.user.displayName || 'A member'} requested ${amount} for ${description.substring(0,20)}...`
+          : `A new transaction of ${amount} was created.`,
+        type: (isRequest || urgency === "urgent") ? "urgent" : "blockchain",
+        timestamp: new Date().toISOString()
+      });
     }
 
     res.status(201).json({ transaction: txn, blockchain: blockchainResult });
