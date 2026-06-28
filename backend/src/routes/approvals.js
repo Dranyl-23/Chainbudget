@@ -117,6 +117,58 @@ router.post("/:txId", authenticate, requireRole(2), async (req, res) => {
           txn.blockchainTxHash = blockchainTxHash;
         }
         await txn.save({ session });
+
+        // Trigger Gasless Relayer Execution if Smart Contract is linked
+        if (org.contractAddress) {
+          try {
+            // Setup relayer using local Hardhat node for demo purposes
+            const provider = new ethers.JsonRpcProvider(process.env.POLYGON_RPC_URL || "http://127.0.0.1:8545");
+            const relayerPrivateKey = process.env.BACKEND_PRIVATE_KEY || "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"; // Default Hardhat Account #0
+            const relayerWallet = new ethers.Wallet(relayerPrivateKey, provider);
+            
+            let treasuryAbi;
+            try {
+              treasuryAbi = require("../lib/ChainBudgetTreasury.json").abi;
+            } catch {
+              console.warn("ChainBudgetTreasury ABI not found. Skipping gasless execution.");
+            }
+
+            if (treasuryAbi) {
+              const contract = new ethers.Contract(org.contractAddress, treasuryAbi, relayerWallet);
+              
+              // Gather all digital signatures from the database
+              const approvalsList = await Approval.find({ transaction: txn._id, action: "approved" }).session(session);
+              const signatures = approvalsList.map(a => a.digitalSignature).filter(Boolean);
+              
+              if (signatures.length >= org.requiredApprovals) {
+                console.log(`[Relayer] Executing Gasless Transaction ${txn._id}...`);
+                const txData = await Transaction.findById(txn._id).populate("submittedBy").session(session);
+                const toAddress = txData.submittedBy?.walletAddress || "0x000000000000000000000000000000000000dEaD";
+                
+                // We convert PHP amount to WEI equivalent (e.g., 1 PHP = 1 WEI for simplicity in demo)
+                const amountWei = txn.amount.toString(); 
+                
+                const txResponse = await contract.executeWithSignatures(
+                  "approved",
+                  txn._id.toString(),
+                  txn.amount.toString(),
+                  amountWei,
+                  txn.description,
+                  toAddress,
+                  signatures
+                );
+                
+                console.log(`[Relayer] Transaction broadcasted! Hash: ${txResponse.hash}`);
+                txn.blockchainTxHash = txResponse.hash;
+                txn.executed = true;
+                await txn.save({ session });
+              }
+            }
+          } catch (relayerErr) {
+            console.error("[Relayer] Gasless execution failed:", relayerErr.message);
+            // We don't abort the DB transaction here to ensure the approval is still saved.
+          }
+        }
       }
     } else if (action === "rejected") {
       // BUG-3 FIX: Rejection also requires threshold (symmetric with approval)
