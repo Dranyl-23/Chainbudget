@@ -761,7 +761,7 @@ export default function TransactionsPage() {
         <Portal>
         <div
           className="fixed inset-0 z-50"
-          style={{ background: "rgba(26,26,46,0.55)", backdropFilter: "blur(4px)" }}
+          style={{ background: "rgba(11, 12, 16, 0.75)", backdropFilter: "blur(8px)" }}
         >
           {/* Scrollable container that fills the backdrop */}
           <div
@@ -770,22 +770,22 @@ export default function TransactionsPage() {
           >
             {/* Flex centering wrapper */}
             <div className="flex min-h-full items-center justify-center p-3 md:p-4 py-6 md:py-8">
-              <div className="glass rounded-xl md:rounded-2xl p-5 md:p-8 w-full max-w-lg shadow-2xl animate-fade-in">
+              <div className="glass rounded-xl md:rounded-2xl p-5 md:p-8 w-full max-w-lg shadow-[0_0_30px_rgba(139,92,246,0.15)] animate-fade-in border border-purple-500/30">
 
             <div className="flex items-center justify-between mb-4 md:mb-6">
-              <h2 className="text-lg md:text-xl font-bold">
+              <h2 className="text-lg md:text-xl font-bold text-white drop-shadow-sm">
                 { (user?.isSuperAdmin || (user?.memberships?.find((m: any) => m.organization === activeOrgId || m.organization?._id === activeOrgId)?.roleLevel || 4) <= 2) ? "Record Transaction" : "Submit Request" }
               </h2>
               <button
                 onClick={closeModal}
-                className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-primary/10 text-gray-500 hover:text-primary transition-colors"
+                className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-white/10 text-white/50 hover:text-white transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {error && (
-              <div className="mb-4 px-4 py-3 rounded-lg text-sm text-danger border border-danger/20 bg-danger/10">
+              <div className="mb-4 px-4 py-3 rounded-lg text-sm text-red-300 border border-red-500/30 bg-red-500/10 shadow-[0_0_10px_rgba(239,68,68,0.1)]">
                 {error}
               </div>
             )}
@@ -793,20 +793,26 @@ export default function TransactionsPage() {
             <form onSubmit={handleSubmit} className="space-y-3 md:space-y-4">
 
               {/* Income / Expense toggle */}
-              <div className="flex rounded-lg overflow-hidden border" style={{ borderColor: "var(--color-border)" }}>
+              <div className="flex rounded-lg overflow-hidden border border-white/10 bg-black/20 p-1 gap-1">
                 {(["expense", "income"] as const).map((t) => (
                   <button
                     key={t}
                     type="button"
                     onClick={() => setActiveTab(t)}
-                    className="flex-1 py-2.5 text-sm font-semibold transition-colors"
+                    className="flex-1 py-2 text-sm font-bold uppercase tracking-widest rounded-md transition-all duration-300"
                     style={{
                       background: activeTab === t
-                        ? t === "income" ? "rgba(107,85,217,0.1)" : "rgba(224,92,92,0.1)"
+                        ? t === "income" ? "rgba(34, 211, 238, 0.15)" : "rgba(239, 68, 68, 0.15)"
                         : "transparent",
                       color: activeTab === t
-                        ? t === "income" ? "#6B55D9" : "#E05C5C"
-                        : "#9ca3af",
+                        ? t === "income" ? "#22d3ee" : "#ef4444"
+                        : "rgba(255, 255, 255, 0.4)",
+                      boxShadow: activeTab === t 
+                        ? t === "income" ? "inset 0 0 10px rgba(34, 211, 238, 0.1), 0 0 10px rgba(34, 211, 238, 0.2)" : "inset 0 0 10px rgba(239, 68, 68, 0.1), 0 0 10px rgba(239, 68, 68, 0.2)"
+                        : "none",
+                      border: activeTab === t
+                        ? t === "income" ? "1px solid rgba(34, 211, 238, 0.3)" : "1px solid rgba(239, 68, 68, 0.3)"
+                        : "1px solid transparent"
                     }}
                   >
                     {t === "income" ? "+ Income" : "− Expense"}
@@ -816,7 +822,7 @@ export default function TransactionsPage() {
 
               {/* Amount */}
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">Amount (&#8369;)</label>
+                <label className="block text-sm font-bold text-white/70 mb-1 drop-shadow-sm">Amount (&#8369;)</label>
                 <input
                   id="tx-amount"
                   type="number"
@@ -832,7 +838,7 @@ export default function TransactionsPage() {
 
               {/* Description */}
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">
+                <label className="block text-sm font-bold text-white/70 mb-1 drop-shadow-sm">
                   {formData.type === "expense" ? "Description (What is this for?)" : "Description (Where did this come from?)"}
                 </label>
                 <input
@@ -848,23 +854,23 @@ export default function TransactionsPage() {
 
               {/* Urgency Toggle (Level 3 specific) */}
               {(user?.memberships?.find((m: any) => m.organization === activeOrgId || m.organization?._id === activeOrgId)?.roleLevel === 3) && formData.type === "expense" && (
-                <div className="flex items-center justify-between p-2 md:p-3 bg-red-50 border border-red-100 rounded-lg">
+                <div className="flex items-center justify-between p-2 md:p-3 bg-red-500/10 border border-red-500/30 rounded-lg shadow-[inset_0_0_15px_rgba(239,68,68,0.05)]">
                   <div>
-                    <label className="block text-sm font-semibold text-red-700 mb-0 md:mb-0.5">Mark as Urgent?</label>
-                    <p className="text-[9px] md:text-[10px] text-red-600 leading-tight">Flags this request for immediate admin attention.</p>
+                    <label className="block text-sm font-bold text-red-400 mb-0 md:mb-0.5 drop-shadow-sm">Mark as Urgent?</label>
+                    <p className="text-[9px] md:text-[10px] text-red-300/70 leading-tight">Flags this request for immediate admin attention.</p>
                   </div>
-                  <div className="flex bg-white rounded-lg p-1 border border-red-200 shadow-sm shrink-0">
+                  <div className="flex bg-black/40 rounded-lg p-1 border border-red-500/20 shadow-sm shrink-0 gap-1">
                     <button
                       type="button"
                       onClick={() => setFormData({ ...formData, urgency: "normal" })}
-                      className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${formData.urgency === "normal" ? "bg-gray-100 text-gray-700 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                      className={`px-3 py-1 text-[10px] uppercase tracking-widest font-bold rounded-md transition-all duration-300 ${formData.urgency === "normal" ? "bg-white/10 text-white shadow-sm border border-white/10" : "text-white/40 hover:text-white/70"}`}
                     >
                       Normal
                     </button>
                     <button
                       type="button"
                       onClick={() => setFormData({ ...formData, urgency: "urgent" })}
-                      className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${formData.urgency === "urgent" ? "bg-red-500 text-white shadow-sm" : "text-red-500 hover:bg-red-50"}`}
+                      className={`px-3 py-1 text-[10px] uppercase tracking-widest font-bold rounded-md transition-all duration-300 ${formData.urgency === "urgent" ? "bg-red-500/80 text-white shadow-[0_0_10px_rgba(239,68,68,0.5)] border border-red-400" : "text-red-500/50 hover:bg-red-500/20 hover:text-red-300"}`}
                     >
                       URGENT
                     </button>
@@ -875,7 +881,7 @@ export default function TransactionsPage() {
               {/* Category + Reference */}
               <div className="grid grid-cols-2 gap-2 md:gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-600 mb-1">Category</label>
+                  <label className="block text-sm font-bold text-white/70 mb-1 drop-shadow-sm">Category</label>
                   <input
                     id="tx-category"
                     type="text"
@@ -886,7 +892,7 @@ export default function TransactionsPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-600 mb-1">Reference #</label>
+                  <label className="block text-sm font-bold text-white/70 mb-1 drop-shadow-sm">Reference #</label>
                   <input
                     id="tx-reference"
                     type="text"
@@ -900,7 +906,7 @@ export default function TransactionsPage() {
 
               {/* Notes */}
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">Notes (optional)</label>
+                <label className="block text-sm font-bold text-white/70 mb-1 drop-shadow-sm">Notes (optional)</label>
                 <textarea
                   id="tx-notes"
                   rows={2}
@@ -913,19 +919,18 @@ export default function TransactionsPage() {
 
               {/* ── Receipt / Attachment Upload ── */}
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1.5 md:mb-2">
-                  Receipt / Attachment <span className="text-gray-400 font-normal">(optional)</span>
+                <label className="block text-sm font-bold text-white/70 mb-1.5 md:mb-2 drop-shadow-sm">
+                  Receipt / Attachment <span className="text-white/40 font-medium">(optional)</span>
                 </label>
 
                 {!uploadedFile ? (
                   <div
-                    className="relative border-2 border-dashed rounded-xl p-4 md:p-5 text-center cursor-pointer transition-all duration-200"
-                    style={{ borderColor: "var(--color-border)" }}
-                    onDragOver={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement).style.borderColor = "#6B55D9"; }}
-                    onDragLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "var(--color-border)"; }}
+                    className="relative border-2 border-dashed rounded-xl p-4 md:p-5 text-center cursor-pointer transition-all duration-300 border-white/20 hover:border-cyan-400/50 hover:bg-cyan-400/5"
+                    onDragOver={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement).style.borderColor = "#22D3EE"; }}
+                    onDragLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.2)"; }}
                     onDrop={(e) => {
                       e.preventDefault();
-                      (e.currentTarget as HTMLElement).style.borderColor = "var(--color-border)";
+                      (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.2)";
                       const file = e.dataTransfer.files?.[0];
                       if (file) {
                         handleFileChange({ target: { files: [file] } } as any);
@@ -942,35 +947,34 @@ export default function TransactionsPage() {
                     />
                     {isUploading ? (
                       <div className="flex flex-col items-center gap-2">
-                        <Loader2 className="w-7 h-7 text-primary animate-spin" />
-                        <p className="text-sm text-gray-500">Uploading file...</p>
+                        <Loader2 className="w-7 h-7 text-cyan-400 drop-shadow-[0_0_5px_rgba(34,211,238,0.8)] animate-spin" />
+                        <p className="text-sm font-bold text-white drop-shadow-sm">Uploading file...</p>
                       </div>
                     ) : (
                       <div className="flex flex-col items-center gap-2">
-                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                          <Upload className="w-5 h-5 text-primary" />
+                        <div className="w-10 h-10 rounded-full bg-cyan-500/10 border border-cyan-500/20 shadow-[0_0_10px_rgba(34,211,238,0.1)] flex items-center justify-center">
+                          <Upload className="w-5 h-5 text-cyan-400 drop-shadow-[0_0_5px_rgba(34,211,238,0.8)]" />
                         </div>
-                        <p className="text-sm text-gray-600">
-                          <span className="font-semibold text-primary">Click to upload</span> or drag & drop
+                        <p className="text-sm text-white/70">
+                          <span className="font-bold text-cyan-400">Click to upload</span> or drag & drop
                         </p>
-                        <p className="text-xs text-gray-400">JPEG, PNG, WebP, PDF — max 5 MB</p>
+                        <p className="text-xs text-white/40 font-medium tracking-wide">JPEG, PNG, WebP, PDF — max 5 MB</p>
                       </div>
                     )}
                   </div>
                 ) : (
                   <div
-                    className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border"
-                    style={{ borderColor: "rgba(107,85,217,0.3)", background: "rgba(107,85,217,0.05)" }}
+                    className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-cyan-500/30 bg-cyan-500/10 shadow-[inset_0_0_10px_rgba(34,211,238,0.05)]"
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0 text-primary">
+                      <div className="w-9 h-9 rounded-lg bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center flex-shrink-0 text-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.1)]">
                         {getFileIcon(uploadedFile.mimeType)}
                       </div>
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-700 truncate">{uploadedFile.originalName}</p>
-                        <p className="text-xs text-gray-400">{(uploadedFile.size / 1024).toFixed(1)} KB</p>
+                        <p className="text-sm font-bold text-white drop-shadow-sm truncate">{uploadedFile.originalName}</p>
+                        <p className="text-xs text-cyan-300/70 font-medium tracking-wide">{(uploadedFile.size / 1024).toFixed(1)} KB</p>
                       </div>
-                      <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
+                      <CheckCircle2 className="w-4 h-4 text-green-400 flex-shrink-0 drop-shadow-[0_0_5px_rgba(74,222,128,0.8)]" />
                     </div>
                     <button
                       type="button"
@@ -995,7 +999,7 @@ export default function TransactionsPage() {
               </div>
 
               {activeTab === "expense" && (
-                <div className="pt-2 border-t border-gray-100">
+                <div className="pt-2 border-t border-white/10">
                   <label className="flex items-center gap-3 cursor-pointer group">
                     <div className="relative">
                       <input 
@@ -1004,22 +1008,22 @@ export default function TransactionsPage() {
                         checked={formData.isEscrow || false}
                         onChange={(e) => setExpenseData({...expenseData, isEscrow: e.target.checked})}
                       />
-                      <div className={`block w-10 h-6 rounded-full transition-colors ${formData.isEscrow ? 'bg-purple-500' : 'bg-gray-200'}`}></div>
-                      <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${formData.isEscrow ? 'transform translate-x-4' : ''}`}></div>
+                      <div className={`block w-10 h-6 rounded-full transition-colors ${formData.isEscrow ? 'bg-fuchsia-500 shadow-[0_0_10px_rgba(217,70,239,0.5)]' : 'bg-white/10 border border-white/20'}`}></div>
+                      <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform shadow-sm ${formData.isEscrow ? 'transform translate-x-4' : ''}`}></div>
                     </div>
                     <div className="flex flex-col">
-                      <span className="text-sm font-bold text-gray-800">Use Smart Contract Escrow</span>
-                      <span className="text-xs text-gray-500">Lock funds until supplier delivery is confirmed.</span>
+                      <span className="text-sm font-bold text-white drop-shadow-sm">Use Smart Contract Escrow</span>
+                      <span className="text-xs text-white/50">Lock funds until supplier delivery is confirmed.</span>
                     </div>
                   </label>
                 </div>
               )}
 
               {/* Actions */}
-              <div className="pt-3 md:pt-4 mt-1 md:mt-2 flex justify-end gap-2 md:gap-3 border-t border-gray-100">
+              <div className="pt-3 md:pt-4 mt-1 md:mt-2 flex justify-end gap-2 md:gap-3 border-t border-white/10">
                 <button
                   type="button"
-                  className="btn-secondary flex-1 py-2 md:py-2.5 text-sm md:text-base"
+                  className="px-4 py-2 md:py-2.5 text-sm md:text-base font-bold text-white/50 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg transition-colors flex-1"
                   onClick={closeModal}
                 >
                   Cancel
@@ -1028,7 +1032,7 @@ export default function TransactionsPage() {
                   id="tx-submit-btn"
                   type="submit"
                   disabled={isSubmitting || isUploading}
-                  className="btn-primary flex-1 py-2 md:py-2.5 text-sm md:text-base whitespace-nowrap"
+                  className="px-4 py-2 md:py-2.5 text-sm md:text-base font-bold text-white bg-cyan-500/20 border border-cyan-400 hover:bg-cyan-500/40 rounded-lg shadow-[0_0_15px_rgba(34,211,238,0.3)] transition-all flex-1 whitespace-nowrap disabled:opacity-50"
                 >
                   {isSubmitting ? "Recording..." : "Record Transaction"}
                 </button>
