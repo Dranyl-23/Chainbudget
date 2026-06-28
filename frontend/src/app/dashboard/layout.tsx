@@ -7,7 +7,7 @@ import Link from "next/link";
 import {
   LayoutDashboard, ArrowLeftRight, PiggyBank,
   ClipboardCheck, FileText, BookOpen, Settings,
-  LogOut, Wallet, Users, Menu, X, AlertTriangle, Moon, Sun, Copy, Vote, ChevronLeft, ChevronRight, UserCircle, ShieldCheck
+  LogOut, Wallet, Users, Menu, X, AlertTriangle, Moon, Sun, Copy, Vote, ChevronLeft, ChevronRight, UserCircle, ShieldCheck, Box
 } from "lucide-react";
 import toast from "react-hot-toast";
 import OrgSelector from "@/components/OrgSelector";
@@ -23,6 +23,7 @@ const navItems = [
   { href: "/dashboard/transactions", icon: <ArrowLeftRight  className="w-4 h-4" />, label: "Transactions", minRole: 4 },
   { href: "/dashboard/budget",       icon: <PiggyBank       className="w-4 h-4" />, label: "Budget",       minRole: 3 }, // RBAC Fix: Level 3 can view budgets
   { href: "/dashboard/approvals",    icon: <ClipboardCheck  className="w-4 h-4" />, label: "Approvals",    minRole: 2 }, // Treasurer (Level 2) can approve
+  { href: "/dashboard/treasury",     icon: <Box             className="w-4 h-4" />, label: "Treasury",     minRole: 1 }, // Executive (Level 1)
   { href: "/dashboard/reports",      icon: <FileText        className="w-4 h-4" />, label: "Reports",      minRole: 4 }, // RBAC Fix: Level 4 can view public reports
   { href: "/dashboard/audit",        icon: <BookOpen        className="w-4 h-4" />, label: "Audit Trail",  minRole: 2 }, // Treasurer should see audit logs
   { href: "/dashboard/dao",          icon: <Vote            className="w-4 h-4" />, label: "DAO Governance", minRole: 4 }, // All members can vote
