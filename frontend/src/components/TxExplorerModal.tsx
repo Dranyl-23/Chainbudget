@@ -33,8 +33,8 @@ export default function TxExplorerModal({ isOpen, onClose, txHash }: TxExplorerM
 
     const fetchTxData = async () => {
       try {
-        // Use a public Polygon RPC
-        const provider = new ethers.JsonRpcProvider("https://polygon-rpc.com");
+        // Use a public Polygon Amoy RPC
+        const provider = new ethers.JsonRpcProvider("https://rpc-amoy.polygon.technology");
         
         // Ensure we show the scanning animation for at least 1.5 seconds for the UX effect
         const minWait = new Promise((resolve) => setTimeout(resolve, 1500));
@@ -119,7 +119,7 @@ export default function TxExplorerModal({ isOpen, onClose, txHash }: TxExplorerM
             </div>
             <div>
               <h2 className="text-xl font-bold text-white drop-shadow-sm">Blockchain Explorer</h2>
-              <p className="text-xs text-purple-300/70 uppercase tracking-widest font-bold">Live Polygon Network</p>
+              <p className="text-xs text-purple-300/70 uppercase tracking-widest font-bold">Polygon Amoy Testnet</p>
             </div>
           </div>
           <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-white/10 text-white/50 hover:text-white transition-colors">
@@ -220,12 +220,12 @@ export default function TxExplorerModal({ isOpen, onClose, txHash }: TxExplorerM
               {/* Action */}
               <div className="mt-6">
                 <a 
-                  href={`https://polygonscan.com/tx/${txHash}`}
+                  href={`https://amoy.polygonscan.com/tx/${txHash}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center justify-center gap-2 w-full py-3 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/50 rounded-xl text-sm font-bold text-white shadow-[0_0_20px_rgba(168,85,247,0.2)] transition-all"
                 >
-                  View on Polygonscan <ExternalLink className="w-4 h-4" />
+                  View on Polygonscan (Amoy) <ExternalLink className="w-4 h-4" />
                 </a>
               </div>
             </div>
