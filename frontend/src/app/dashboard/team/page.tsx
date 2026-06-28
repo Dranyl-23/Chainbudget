@@ -178,7 +178,7 @@ export default function TeamPage() {
                         const isSelf = member._id === user?.id || member._id === (user as any)?._id;
 
                         return (
-                          <tr key={member._id} className="hover:bg-gray-50/50 transition-colors">
+                          <tr key={member._id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors">
                             <td className="p-4">
                               <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center border border-primary/10">
