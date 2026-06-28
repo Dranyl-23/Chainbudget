@@ -32,7 +32,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={inter.variable} data-scroll-behavior="smooth">
+    <html lang="en" className={inter.variable} data-scroll-behavior="smooth" data-theme="dark">
       <body className="bg-[var(--color-bg)] text-[var(--color-text)] antialiased">
         <Providers>
           {children}
