@@ -438,62 +438,62 @@ export default function TransactionsPage() {
       {loading ? (
         <TableSkeleton />
       ) : (
-      <div className="table-container">
-        <table>
-          <thead>
+      <div className="glass rounded-xl overflow-hidden border border-purple-500/30 shadow-[0_0_20px_rgba(139,92,246,0.1)] w-full overflow-x-auto">
+        <table className="w-full text-left border-collapse">
+          <thead className="bg-white/5 border-b border-purple-500/30 text-white/60 uppercase tracking-widest text-[10px]">
             <tr>
-              <th>Description</th>
-              <th>Category</th>
-              <th>Date</th>
-              <th>Status</th>
-              <th>Blockchain</th>
-              <th>Receipt</th>
-              <th className="text-right">Amount</th>
+              <th className="p-4 font-bold">Description</th>
+              <th className="p-4 font-bold">Category</th>
+              <th className="p-4 font-bold">Date</th>
+              <th className="p-4 font-bold">Status</th>
+              <th className="p-4 font-bold">Blockchain</th>
+              <th className="p-4 font-bold">Receipt</th>
+              <th className="p-4 font-bold text-right">Amount</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100 dark:divide-gray-800 text-sm">
+          <tbody className="divide-y divide-white/5 text-sm">
             {filteredTxs.length > 0 ? (
               filteredTxs.map((tx) => (
                 <React.Fragment key={tx._id}>
-                <tr onClick={() => setExpandedTxId(expandedTxId === tx._id ? null : tx._id)} className="cursor-pointer hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors">
-                  <td>
+                <tr onClick={() => setExpandedTxId(expandedTxId === tx._id ? null : tx._id)} className="cursor-pointer hover:bg-white/10 transition-colors group">
+                  <td className="p-4">
                     <div className="flex items-center gap-3">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${tx.type === "income" ? "bg-primary/10" : "bg-danger/10"}`}>
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 border ${tx.type === "income" ? "bg-cyan-500/10 border-cyan-400/20 shadow-[0_0_10px_rgba(34,211,238,0.1)]" : "bg-red-500/10 border-red-400/20 shadow-[0_0_10px_rgba(239,68,68,0.1)]"}`}>
                         {tx.type === "income"
-                          ? <ArrowUpRight className="w-4 h-4 text-primary" />
-                          : <ArrowDownRight className="w-4 h-4 text-danger" />}
+                          ? <ArrowUpRight className="w-5 h-5 text-cyan-400 drop-shadow-[0_0_5px_rgba(34,211,238,0.8)]" />
+                          : <ArrowDownRight className="w-5 h-5 text-red-400 drop-shadow-[0_0_5px_rgba(239,68,68,0.8)]" />}
                       </div>
                       <div className="flex flex-col">
-                        <span className="font-medium text-gray-700 flex items-center gap-2">
+                        <span className="font-bold text-white drop-shadow-sm flex items-center gap-2">
                           {tx.description}
                           {tx.urgency === "urgent" && (
-                            <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-red-100 text-red-700 animate-pulse">
+                            <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-sm bg-red-500/20 border border-red-500/40 text-red-300 shadow-[0_0_10px_rgba(239,68,68,0.3)] animate-pulse">
                               Urgent
                             </span>
                           )}
                         </span>
                         {tx.referenceNumber && (
-                          <span className="text-[11px] text-gray-400 mt-0.5">
+                          <span className="text-[10px] text-white/50 mt-0.5 font-medium tracking-wide">
                             Ref: {tx.referenceNumber}
                           </span>
                         )}
                       </div>
-                      <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform duration-200 ${expandedTxId === tx._id ? 'rotate-180' : ''}`} />
+                      <ChevronDown className={`w-3.5 h-3.5 text-white/30 transition-transform duration-200 group-hover:text-white/70 ${expandedTxId === tx._id ? 'rotate-180' : ''}`} />
                     </div>
                   </td>
-                  <td>
-                    <span className="px-2 py-1 rounded bg-[#F2EEFF] text-xs text-gray-500">
+                  <td className="p-4">
+                    <span className="px-2 py-1 rounded-sm bg-white/5 border border-white/10 text-[10px] uppercase tracking-widest font-bold text-white/70">
                       {tx.category || "—"}
                     </span>
                   </td>
-                  <td>{new Date(tx.createdAt).toLocaleDateString()}</td>
-                  <td>
+                  <td className="p-4 text-white/60 font-medium">{new Date(tx.createdAt).toLocaleDateString()}</td>
+                  <td className="p-4">
                     <div className="flex flex-col items-start gap-2">
-                      <span className={`px-2 py-1 text-[10px] font-bold rounded-full border ${
-                        tx.status === "approved" ? "badge-approved" : 
-                        tx.status === "rejected" ? "badge-rejected" : 
-                        tx.status === "requested" ? "bg-orange-100 text-orange-700 border-orange-200" :
-                        "badge-pending"
+                      <span className={`px-2 py-1 text-[9px] font-bold uppercase tracking-widest rounded-sm border ${
+                        tx.status === "approved" ? "bg-green-500/20 text-green-300 border-green-500/30 shadow-[0_0_10px_rgba(34,197,94,0.2)]" : 
+                        tx.status === "rejected" ? "bg-red-500/20 text-red-300 border-red-500/30 shadow-[0_0_10px_rgba(239,68,68,0.2)]" : 
+                        tx.status === "requested" ? "bg-blue-500/20 text-blue-300 border-blue-500/30 shadow-[0_0_10px_rgba(59,130,246,0.2)]" :
+                        "bg-amber-500/20 text-amber-300 border-amber-500/30 shadow-[0_0_10px_rgba(245,158,11,0.2)]"
                       }`}>
                         {tx.status === "approved" ? "Approved" : 
                          tx.status === "pending_approval" ? "Pending" : 
@@ -501,10 +501,10 @@ export default function TransactionsPage() {
                          "Rejected"}
                       </span>
                       {tx.isEscrow && (
-                        <span className={`px-2 py-1 text-[10px] font-bold rounded-full border ${
-                          tx.escrowStatus === "locked" ? "bg-purple-100 text-purple-700 border-purple-200" : 
-                          tx.escrowStatus === "released" ? "bg-green-100 text-green-700 border-green-200" : 
-                          "bg-gray-100 text-gray-700 border-gray-200"
+                        <span className={`px-2 py-1 text-[9px] font-bold uppercase tracking-widest rounded-sm border ${
+                          tx.escrowStatus === "locked" ? "bg-fuchsia-500/20 text-fuchsia-300 border-fuchsia-500/30 shadow-[0_0_10px_rgba(217,70,239,0.2)]" : 
+                          tx.escrowStatus === "released" ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/30 shadow-[0_0_10px_rgba(34,211,238,0.2)]" : 
+                          "bg-white/10 text-white/50 border-white/20"
                         }`}>
                           {tx.escrowStatus === "locked" ? "Escrow Locked" : 
                            tx.escrowStatus === "released" ? "Escrow Released" : 
@@ -543,7 +543,7 @@ export default function TransactionsPage() {
                               };
                               executeTx();
                             }}
-                            className="px-2 py-1 text-[10px] font-bold bg-green-100 text-green-700 hover:bg-green-600 hover:text-white rounded transition-colors"
+                            className="px-2 py-1 text-[9px] font-bold uppercase tracking-widest bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 hover:bg-cyan-500/40 rounded-sm transition-colors shadow-[0_0_10px_rgba(34,211,238,0.2)]"
                           >
                             Execute Transfer
                           </button>
@@ -568,23 +568,23 @@ export default function TransactionsPage() {
                               };
                               releaseTx();
                             }}
-                            className="px-2 py-1 text-[10px] font-bold bg-purple-100 text-purple-700 hover:bg-purple-600 hover:text-white rounded transition-colors border border-purple-200"
+                            className="px-2 py-1 text-[9px] font-bold uppercase tracking-widest bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30 hover:bg-fuchsia-500/40 rounded-sm transition-colors shadow-[0_0_10px_rgba(217,70,239,0.2)]"
                           >
                             Release Escrow
                           </button>
                         </div>
                       )}
                       {tx.status === "requested" && (user?.isSuperAdmin || (user?.memberships?.find((m: any) => m.organization === activeOrgId || m.organization?._id === activeOrgId)?.roleLevel || 4) <= 2) && (
-                        <div className="flex gap-1">
+                        <div className="flex gap-1 mt-1">
                           <button 
                             onClick={(e) => { e.stopPropagation(); handleProcessRequest(tx._id, "approve"); }}
-                            className="px-2 py-1 text-[10px] font-bold bg-primary/10 text-primary hover:bg-primary hover:text-white rounded transition-colors"
+                            className="px-2 py-1 text-[9px] font-bold uppercase tracking-widest bg-green-500/20 text-green-300 border border-green-500/30 hover:bg-green-500/40 rounded-sm transition-colors shadow-[0_0_10px_rgba(34,197,94,0.2)]"
                           >
                             Approve
                           </button>
                           <button 
                             onClick={(e) => { e.stopPropagation(); handleProcessRequest(tx._id, "reject"); }}
-                            className="px-2 py-1 text-[10px] font-bold bg-danger/10 text-danger hover:bg-danger hover:text-white rounded transition-colors"
+                            className="px-2 py-1 text-[9px] font-bold uppercase tracking-widest bg-red-500/20 text-red-300 border border-red-500/30 hover:bg-red-500/40 rounded-sm transition-colors shadow-[0_0_10px_rgba(239,68,68,0.2)]"
                           >
                             Reject
                           </button>
@@ -592,7 +592,7 @@ export default function TransactionsPage() {
                       )}
                     </div>
                   </td>
-                  <td>
+                  <td className="p-4">
                     {tx.isRecordedOnChain ? (
                       tx.blockchainTxHash ? (
                         <a 
@@ -600,22 +600,22 @@ export default function TransactionsPage() {
                           target="_blank" 
                           rel="noopener noreferrer"
                           onClick={(e) => e.stopPropagation()}
-                          className="badge badge-onchain hover:opacity-80 transition-opacity inline-flex items-center gap-1 w-fit cursor-pointer" 
+                          className="px-2 py-1 rounded-sm bg-fuchsia-500/10 border border-fuchsia-500/20 text-fuchsia-300 text-[10px] uppercase tracking-widest font-bold hover:bg-fuchsia-500/20 transition-colors inline-flex items-center gap-1 w-fit cursor-pointer shadow-[0_0_10px_rgba(217,70,239,0.1)]" 
                           title="View on Polygonscan"
                         >
-                          <span className="chain-dot w-2 h-2" /> Verified
+                          <span className="chain-dot w-2 h-2 shadow-[0_0_8px_rgba(217,70,239,0.8)]" /> Verified
                           <ExternalLink className="w-3 h-3" />
                         </a>
                       ) : (
-                        <span className="badge badge-onchain" title="Recorded on Polygon Amoy">
-                          <span className="chain-dot w-2 h-2 mr-1" /> Verified
+                        <span className="px-2 py-1 rounded-sm bg-fuchsia-500/10 border border-fuchsia-500/20 text-fuchsia-300 text-[10px] uppercase tracking-widest font-bold shadow-[0_0_10px_rgba(217,70,239,0.1)]" title="Recorded on Polygon Amoy">
+                          <span className="chain-dot w-2 h-2 mr-1 shadow-[0_0_8px_rgba(217,70,239,0.8)]" /> Verified
                         </span>
                       )
                     ) : (
-                      <span className="text-xs text-gray-500">—</span>
+                      <span className="text-xs text-white/30 font-medium">—</span>
                     )}
                   </td>
-                  <td>
+                  <td className="p-4">
                     {tx.documentUrl ? (
                       <a
                         href={tx.documentUrl.startsWith("http") ? tx.documentUrl : `${BACKEND_URL}${tx.documentUrl}`}
@@ -623,7 +623,7 @@ export default function TransactionsPage() {
                         rel="noopener noreferrer"
                         title="View receipt"
                         onClick={(e) => e.stopPropagation()}
-                        className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                        className="inline-flex items-center gap-1 text-xs font-bold text-cyan-400 hover:text-cyan-300 hover:underline"
                       >
                         <Paperclip className="w-3.5 h-3.5" />
                         Receipt
@@ -631,7 +631,7 @@ export default function TransactionsPage() {
                       </a>
                     ) : (
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-400">—</span>
+                        <span className="text-xs text-white/30 font-medium">—</span>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -639,7 +639,7 @@ export default function TransactionsPage() {
                             if (attachFileInputRef.current) attachFileInputRef.current.click();
                           }}
                           disabled={isAttaching && attachingTxId === tx._id}
-                          className="text-[10px] bg-gray-100 hover:bg-primary/10 hover:text-primary text-gray-500 px-2 py-1 rounded transition-colors disabled:opacity-50"
+                          className="text-[10px] font-bold uppercase tracking-widest bg-white/5 hover:bg-cyan-500/20 hover:text-cyan-300 text-white/50 border border-white/10 px-2 py-1 rounded-sm transition-colors disabled:opacity-50"
                           title="Attach Receipt"
                         >
                           {isAttaching && attachingTxId === tx._id ? "..." : "Upload"}
@@ -647,7 +647,7 @@ export default function TransactionsPage() {
                       </div>
                     )}
                   </td>
-                  <td className={`text-right font-bold ${tx.type === "income" ? "text-primary" : "text-danger"}`}>
+                  <td className={`p-4 text-right font-black tracking-tight text-lg drop-shadow-md ${tx.type === "income" ? "text-cyan-400" : "text-red-400"}`}>
                     {tx.type === "income" ? "+" : "-"}&#8369;{Math.round(tx.amount).toLocaleString()}
                   </td>
                 </tr>
