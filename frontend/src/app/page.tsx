@@ -94,7 +94,8 @@ export default function LandingPage() {
             <button
               onClick={linkMetaMask}
               disabled={isLoading}
-              className="group relative overflow-hidden rounded-full text-sm font-bold px-8 py-4 w-full sm:w-auto min-w-[200px] text-[#0A0216] bg-white hover:scale-105 transition-all duration-300 shadow-[0_0_30px_rgba(255,255,255,0.3)]"
+              style={{ backgroundColor: 'white' }}
+              className="group relative overflow-hidden rounded-full text-sm font-bold px-8 py-4 w-full sm:w-auto min-w-[200px] text-[#0A0216] hover:scale-105 transition-all duration-300 shadow-[0_0_30px_rgba(255,255,255,0.3)]"
             >
               <span className="relative flex items-center justify-center gap-2">
                 <Wallet className="w-5 h-5" />
@@ -106,7 +107,8 @@ export default function LandingPage() {
               <button
                 onClick={login}
                 disabled={isLoading}
-                className="group relative overflow-hidden rounded-full text-sm font-bold px-10 py-4 w-full sm:w-auto min-w-[180px] text-[#0A0216] bg-white hover:scale-105 transition-all duration-300 shadow-[0_0_40px_rgba(255,255,255,0.2)]"
+                style={{ backgroundColor: 'white' }}
+                className="group relative overflow-hidden rounded-full text-sm font-bold px-10 py-4 w-full sm:w-auto min-w-[180px] text-[#0A0216] hover:scale-105 transition-all duration-300 shadow-[0_0_40px_rgba(255,255,255,0.2)]"
               >
                 <span className="relative flex items-center justify-center gap-2">
                   <LogIn className="w-5 h-5" />
