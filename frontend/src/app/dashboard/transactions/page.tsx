@@ -621,7 +621,7 @@ export default function TransactionsPage() {
                             onClick={async (e) => {
                               e.stopPropagation();
                               try {
-                                alert("Retrying blockchain sync... Please ensure your local node (Hardhat) is running.");
+                                alert("Retrying blockchain sync on Polygon Amoy network...");
                                 const res = await api.post(`/transactions/${tx._id}/retry-sync`);
                                 setTransactions(prev => prev.map(t => t._id === tx._id ? { ...t, ...res.data.transaction } : t));
                                 toast.success("Successfully synced to blockchain!");
