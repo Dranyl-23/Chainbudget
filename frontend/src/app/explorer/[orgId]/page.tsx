@@ -150,7 +150,7 @@ export default function PublicDashboardPage() {
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <span className="px-2 py-1 rounded bg-white/5 text-[10px] font-bold text-white/50 uppercase tracking-widest border border-white/10">
-                  {org.type.replace('_', ' ')}
+                  {org.type ? org.type.replace('_', ' ') : 'ORG'}
                 </span>
                 {org.contractAddress && (
                   <a href={`https://amoy.polygonscan.com/address/${org.contractAddress}`} target="_blank" rel="noopener noreferrer" className="px-2 py-1 rounded bg-purple-500/10 text-[10px] font-bold text-purple-400 uppercase tracking-widest border border-purple-500/20 flex items-center gap-1 hover:bg-purple-500/20 transition-colors">
