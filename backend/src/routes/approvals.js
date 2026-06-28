@@ -1,11 +1,11 @@
 const express = require("express");
 const mongoose = require("mongoose");
+const { ethers } = require("ethers");
 const router = express.Router();
 const Approval = require("../models/Approval");
 const Transaction = require("../models/Transaction");
 const Organization = require("../models/Organization");
 const AuditLog = require("../models/AuditLog");
-// Removed backend submitApprovalOnChain as it is now done in the frontend
 const { authenticate, requireRole } = require("../middleware/auth");
 
 /// POST /api/approvals/:txId — Submit approval/rejection (Level 1 and 2)
@@ -14,7 +14,7 @@ router.post("/:txId", authenticate, requireRole(2), async (req, res) => {
   session.startTransaction();
   
   try {
-    const { action, comment, blockchainTxHash } = req.body;
+    const { action, comment, blockchainTxHash, signature } = req.body;
     
     // Input validation
     if (!action || !["approved", "rejected"].includes(action)) {
@@ -24,6 +24,10 @@ router.post("/:txId", authenticate, requireRole(2), async (req, res) => {
     if (comment && typeof comment !== "string") {
       await session.abortTransaction();
       return res.status(400).json({ error: "comment must be a string" });
+    }
+    if (!signature) {
+      await session.abortTransaction();
+      return res.status(400).json({ error: "Web3 digital signature is required" });
     }
 
     const txn = await Transaction.findById(req.params.txId)
@@ -55,6 +59,35 @@ router.post("/:txId", authenticate, requireRole(2), async (req, res) => {
       return res.status(400).json({ error: "You have already voted on this transaction" });
     }
 
+    // Verify EIP-712 Signature
+    try {
+      const domain = { name: "ChainBudget", version: "1" };
+      const types = {
+        Approval: [
+          { name: "action", type: "string" },
+          { name: "txId", type: "string" },
+          { name: "amount", type: "string" },
+          { name: "description", type: "string" }
+        ]
+      };
+      const message = {
+        action,
+        txId: txn._id.toString(),
+        amount: txn.amount.toString(),
+        description: txn.description
+      };
+      
+      const recoveredAddress = ethers.verifyTypedData(domain, types, message, signature);
+      if (recoveredAddress.toLowerCase() !== req.user.walletAddress.toLowerCase()) {
+        await session.abortTransaction();
+        return res.status(401).json({ error: "Cryptographic signature verification failed. Wallet mismatch." });
+      }
+    } catch (sigErr) {
+      console.error("Signature verification error:", sigErr);
+      await session.abortTransaction();
+      return res.status(400).json({ error: "Invalid digital signature format." });
+    }
+
     // Record approval within transaction
     const approval = await Approval.create(
       [{
@@ -64,6 +97,7 @@ router.post("/:txId", authenticate, requireRole(2), async (req, res) => {
         action,
         comment,
         walletAddress: req.user.walletAddress,
+        digitalSignature: signature,
       }],
       { session }
     );
