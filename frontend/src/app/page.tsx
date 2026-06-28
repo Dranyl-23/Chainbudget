@@ -147,9 +147,24 @@ export default function LandingPage() {
             <div className="relative w-64 h-64 sm:w-80 sm:h-80 animate-spin-slow-3d" style={{ transformStyle: 'preserve-3d' }}>
               
               {/* Back Face */}
-              <div className="absolute inset-0 rounded-full border-[6px] border-fuchsia-500/80 bg-gradient-to-br from-[#160B2E] to-purple-900/60 backdrop-blur-xl shadow-[0_0_80px_rgba(217,70,239,0.4)]" style={{ transform: 'translateZ(-16px) rotateY(180deg)' }}>
-                <div className="w-full h-full rounded-full border-4 border-white/5 opacity-50 flex items-center justify-center">
-                   <div className="w-3/4 h-3/4 rounded-full border border-fuchsia-400/30"></div>
+              <div className="absolute inset-0 rounded-full border-[6px] border-fuchsia-500/80 bg-gradient-to-br from-[#160B2E] to-purple-900/60 backdrop-blur-xl shadow-[0_0_80px_rgba(217,70,239,0.4)] flex items-center justify-center" style={{ transform: 'translateZ(-16px) rotateY(180deg)' }}>
+                <div className="absolute inset-2 rounded-full border border-fuchsia-400/20" />
+                <div className="absolute inset-4 rounded-full border border-fuchsia-400/10" />
+                
+                <div className="flex flex-col items-center justify-center z-10 relative">
+                  <div className="w-24 h-24 rounded-full bg-fuchsia-500/10 border border-fuchsia-400/30 flex items-center justify-center shadow-[0_0_30px_rgba(217,70,239,0.2)] mb-4">
+                    {/* Simulated Polygon Logo */}
+                    <svg width="60" height="60" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="drop-shadow-[0_0_15px_rgba(217,70,239,0.8)]">
+                      <path d="M50 5L90 25V75L50 95L10 75V25L50 5Z" stroke="#E879F9" strokeWidth="6" fill="#8B5CF6" fillOpacity="0.5" />
+                      <circle cx="50" cy="50" r="15" fill="#E879F9" />
+                    </svg>
+                  </div>
+                  <span className="text-white font-extrabold tracking-[0.2em] text-lg uppercase drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]">
+                    Polygon
+                  </span>
+                  <span className="text-fuchsia-300 font-bold tracking-widest text-[10px] uppercase mt-1">
+                    Network
+                  </span>
                 </div>
               </div>
               
