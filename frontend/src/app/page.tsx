@@ -71,12 +71,12 @@ export default function LandingPage() {
       </nav>
 
       {/* ── Hero ── */}
-      <section className="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center px-6 md:px-16 pt-16 md:pt-20 pb-20 md:pb-32 max-w-7xl mx-auto w-full">
+      <section className="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-8 xl:gap-12 items-center px-6 md:px-16 pt-16 md:pt-20 pb-20 md:pb-32 max-w-7xl mx-auto w-full">
         {/* Left Content */}
         <div className="flex flex-col items-start w-full">
-          <h1 className="text-[2.5rem] leading-[1.1] sm:text-5xl md:text-7xl lg:text-[5.5rem] font-extrabold tracking-tight mb-6 md:mb-8 md:leading-[1.05] text-white max-w-4xl drop-shadow-2xl uppercase break-words hyphens-auto w-full">
+          <h1 className="text-[2.5rem] leading-[1.1] sm:text-5xl md:text-6xl lg:text-6xl xl:text-[5.5rem] font-extrabold tracking-tight mb-6 md:mb-8 md:leading-[1.05] text-white max-w-4xl drop-shadow-2xl uppercase w-full">
             SIMPLIFY YOUR <br className="hidden sm:block" />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-fuchsia-400 to-purple-500 break-words block sm:inline">
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-fuchsia-400 to-purple-500 block sm:inline mt-2 sm:mt-0">
               TRANSACTIONS
             </span>
           </h1>
@@ -140,46 +140,46 @@ export default function LandingPage() {
         </div>
 
         {/* Right Content: 3D Dashboard Preview */}
-        <div className="hidden lg:flex justify-center items-center perspective-[2000px] w-full mt-10 lg:mt-0">
+        <div className="hidden lg:flex justify-center items-center w-full mt-10 lg:mt-0" style={{ perspective: '2000px' }}>
           <div className="relative w-full max-w-[420px] animate-float" style={{ transformStyle: 'preserve-3d' }}>
             
             {/* Main Glass Panel */}
-            <div className="relative bg-[#160B2E]/60 backdrop-blur-2xl border border-purple-500/30 rounded-3xl p-7 shadow-[0_0_60px_rgba(139,92,246,0.15)] overflow-hidden">
-              <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-fuchsia-500/10 via-transparent to-cyan-500/5 opacity-80 pointer-events-none" />
+            <div className="relative bg-[#160B2E]/60 backdrop-blur-2xl border border-purple-500/40 rounded-3xl p-7 shadow-[0_0_80px_rgba(139,92,246,0.3)] overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-fuchsia-500/20 via-transparent to-cyan-500/10 opacity-100 pointer-events-none" />
               
               <div className="relative z-10 flex items-center justify-between mb-8">
                 <div>
-                  <p className="text-xs text-white/50 uppercase tracking-widest font-bold mb-1.5">Total Balance</p>
+                  <p className="text-xs text-white/60 uppercase tracking-widest font-bold mb-1.5">Total Balance</p>
                   <p className="text-4xl font-extrabold text-white tracking-tight drop-shadow-md">₱ 1.25M</p>
                 </div>
-                <div className="w-12 h-12 rounded-2xl bg-cyan-500/20 flex items-center justify-center border border-cyan-400/30 shadow-[0_0_20px_rgba(34,211,238,0.2)]">
-                  <Wallet className="w-6 h-6 text-cyan-400" />
+                <div className="w-12 h-12 rounded-2xl bg-cyan-500/30 flex items-center justify-center border border-cyan-400/50 shadow-[0_0_30px_rgba(34,211,238,0.4)]">
+                  <Wallet className="w-6 h-6 text-cyan-200" />
                 </div>
               </div>
 
               {/* Mock Chart Area */}
-              <div className="relative z-10 h-28 w-full flex items-end gap-3 mb-8 border-b border-white/10 pb-3">
+              <div className="relative z-10 h-28 w-full flex items-end gap-3 mb-8 border-b border-white/20 pb-3">
                 {[30, 50, 40, 80, 60, 100, 75].map((h, i) => (
                   <div key={i} className="group flex-1 relative flex justify-center">
-                    <div className="w-full bg-gradient-to-t from-purple-600/40 to-cyan-400/80 rounded-t-md transition-all duration-300 group-hover:from-fuchsia-500/60 group-hover:to-cyan-300" style={{ height: `${h}%` }}></div>
+                    <div className="w-full bg-gradient-to-t from-purple-500 to-cyan-300 rounded-t-md transition-all duration-300 shadow-[0_0_15px_rgba(139,92,246,0.5)]" style={{ height: `${h}%` }}></div>
                   </div>
                 ))}
               </div>
 
               {/* Mock Transactions */}
               <div className="relative z-10 space-y-3">
-                <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-3">Recent On-Chain Activity</p>
+                <p className="text-[10px] font-bold text-white/50 uppercase tracking-widest mb-3">Recent On-Chain Activity</p>
                 {[
-                  { title: "Office Supplies", amount: "-₱ 15,000", color: "text-red-400", bg: "bg-red-500/20", dot: "bg-red-400" },
-                  { title: "Dept Funding", amount: "+₱ 500,000", color: "text-green-400", bg: "bg-green-500/20", dot: "bg-green-400" },
-                  { title: "Server Costs", amount: "-₱ 8,500", color: "text-red-400", bg: "bg-red-500/20", dot: "bg-red-400" },
+                  { title: "Office Supplies", amount: "-₱ 15,000", color: "text-red-300", bg: "bg-red-500/30", dot: "bg-red-400" },
+                  { title: "Dept Funding", amount: "+₱ 500,000", color: "text-green-300", bg: "bg-green-500/30", dot: "bg-green-400" },
+                  { title: "Server Costs", amount: "-₱ 8,500", color: "text-red-300", bg: "bg-red-500/30", dot: "bg-red-400" },
                 ].map((tx, i) => (
-                  <div key={i} className="flex items-center justify-between bg-white/5 rounded-2xl p-3.5 border border-white/5 hover:bg-white/10 hover:border-white/10 transition-all cursor-default">
+                  <div key={i} className="flex items-center justify-between bg-white/10 rounded-2xl p-3.5 border border-white/10 hover:bg-white/20 hover:border-white/20 transition-all cursor-default">
                     <div className="flex items-center gap-3.5">
-                      <div className={`w-10 h-10 rounded-full ${tx.bg} flex items-center justify-center border border-white/5`}>
+                      <div className={`w-10 h-10 rounded-full ${tx.bg} flex items-center justify-center border border-white/10`}>
                         <div className={`w-2.5 h-2.5 rounded-full ${tx.dot} shadow-[0_0_10px_currentColor]`}></div>
                       </div>
-                      <span className="text-sm font-bold text-white/90">{tx.title}</span>
+                      <span className="text-sm font-bold text-white">{tx.title}</span>
                     </div>
                     <span className={`text-sm font-extrabold tracking-wide ${tx.color}`}>{tx.amount}</span>
                   </div>
@@ -188,11 +188,11 @@ export default function LandingPage() {
             </div>
 
             {/* Floating Decorative Elements */}
-            <div className="absolute -top-8 -right-8 w-24 h-24 bg-purple-500/20 border border-purple-400/30 rounded-3xl backdrop-blur-xl animate-float-delayed flex items-center justify-center shadow-[0_0_40px_rgba(139,92,246,0.3)] z-20" style={{ transform: 'translateZ(50px)' }}>
-              <ShieldCheck className="w-10 h-10 text-fuchsia-400 drop-shadow-md" />
+            <div className="absolute -top-10 -right-10 w-28 h-28 bg-purple-500/30 border border-purple-400/50 rounded-3xl backdrop-blur-xl animate-float-delayed flex items-center justify-center shadow-[0_0_50px_rgba(139,92,246,0.5)] z-20" style={{ transform: 'translateZ(60px)' }}>
+              <ShieldCheck className="w-12 h-12 text-fuchsia-300 drop-shadow-lg" />
             </div>
-            <div className="absolute -bottom-10 -left-10 w-28 h-28 bg-cyan-500/10 border border-cyan-400/20 rounded-full backdrop-blur-xl animate-float flex items-center justify-center shadow-[0_0_40px_rgba(34,211,238,0.2)] z-0" style={{ transform: 'translateZ(-30px)', animationDelay: '1s' }}>
-              <Users className="w-12 h-12 text-cyan-400 drop-shadow-md" />
+            <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-cyan-500/20 border border-cyan-400/40 rounded-full backdrop-blur-xl animate-float flex items-center justify-center shadow-[0_0_50px_rgba(34,211,238,0.4)] z-0" style={{ transform: 'translateZ(-40px)', animationDelay: '1.5s' }}>
+              <Users className="w-14 h-14 text-cyan-200 drop-shadow-lg" />
             </div>
 
           </div>
