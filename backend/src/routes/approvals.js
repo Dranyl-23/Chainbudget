@@ -119,6 +119,14 @@ router.post("/:txId", authenticate, requireRole(2), async (req, res) => {
     const io = req.app.get("io");
     if (io) {
       io.emit("transaction_updated", { orgId: org._id });
+      io.emit("new_notification", {
+        orgId: org._id,
+        id: txn._id,
+        title: "Approval Granted",
+        message: `${req.user.displayName || 'An Executive'} approved a transaction for ${txn.amount}.`,
+        type: "system",
+        timestamp: new Date().toISOString()
+      });
     }
 
     res.json({ approval: approval[0], transaction: txn });

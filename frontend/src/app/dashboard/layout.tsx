@@ -16,6 +16,7 @@ import Portal from "@/components/Portal";
 import api from "@/lib/api";
 import OnboardingTour from "@/components/OnboardingTour";
 import SessionExpiredModal from "@/components/SessionExpiredModal";
+import NotificationsCenter from "@/components/NotificationsCenter";
 
 const navItems = [
   { href: "/dashboard",              icon: <LayoutDashboard className="w-4 h-4" />, label: "Dashboard",    minRole: 4 },
@@ -125,9 +126,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             Chain<span className="gradient-text">Budget</span>
           </span>
         </div>
-        <button onClick={() => setIsMobileOpen(!isMobileOpen)} className="p-2 -mr-2 text-gray-500 focus:outline-none">
-          {isMobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-        </button>
+        <div className="flex items-center gap-1">
+          <div className="mt-1 mr-1 z-50">
+            <NotificationsCenter />
+          </div>
+          <button onClick={() => setIsMobileOpen(!isMobileOpen)} className="p-2 -mr-2 text-gray-500 focus:outline-none">
+            {isMobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          </button>
+        </div>
       </div>
 
       {/* ── Mobile Overlay ── */}
@@ -304,6 +310,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* ── Main content ── */}
       <main className="flex-1 overflow-auto w-full md:w-auto relative">
+        <div className="hidden md:block fixed top-6 right-8 z-50">
+          <NotificationsCenter />
+        </div>
         {children}
       </main>
 
