@@ -134,15 +134,7 @@ export default function ApprovalsPage() {
     if (!activeOrgId) return;
     setActionLoading(txId);
     try {
-      // BUG-2 FIX: Call backend FIRST to record the vote in MongoDB
-      toast.loading("Recording approval...", { id: "txToast" });
-      await api.post(`/approvals/${txId}`, {
-        action: "approved",
-        comment: "Approved via dashboard",
-        organizationId: activeOrgId,
-      });
-
-      // THEN do MetaMask on-chain signing (if available)
+      // FIX: Do MetaMask on-chain signing FIRST. If it fails, do not update the database.
       if (onChainTxId && typeof window !== "undefined" && (window as any).ethereum) {
         const ethereum = (window as any).ethereum;
         toast.loading("Connecting to Hardhat Network...", { id: "txToast" });
@@ -185,32 +177,31 @@ export default function ApprovalsPage() {
             const tx = await contract.submitApproval(onChainTxId);
             toast.loading("Waiting for blockchain confirmation...", { id: "txToast" });
             await tx.wait();
-
-            // Update the backend with the blockchain hash
-            await api.patch(`/approvals/${txId}/hash`, {
-              blockchainTxHash: tx.hash,
-            });
             toast.success("Blockchain verified!", { id: "txToast" });
-            confetti({
-              particleCount: 150,
-              spread: 70,
-              origin: { y: 0.6 },
-              colors: ['#6B55D9', '#7DBD9B', '#4F46E5', '#10B981']
-            });
           }
         } catch (chainErr: any) {
-          console.warn("On-chain approval failed (vote already recorded in DB):", chainErr.message);
-          toast.success("Vote recorded! On-chain confirmation pending.", { id: "txToast" });
+          console.error("On-chain approval failed:", chainErr.message);
+          toast.error("MetaMask approval failed or was cancelled.", { id: "txToast" });
+          setActionLoading(null);
+          return; // STOP execution here, do NOT update MongoDB!
         }
-      } else {
-        toast.success("Approval recorded!", { id: "txToast" });
-        confetti({
-          particleCount: 100,
-          spread: 70,
-          origin: { y: 0.6 },
-          colors: ['#6B55D9', '#7DBD9B', '#4F46E5', '#10B981']
-        });
       }
+
+      // NOW call backend to record the vote in MongoDB
+      toast.loading("Recording approval...", { id: "txToast" });
+      await api.post(`/approvals/${txId}`, {
+        action: "approved",
+        comment: "Approved via dashboard",
+        organizationId: activeOrgId,
+      });
+
+      toast.success("Approval recorded successfully!", { id: "txToast" });
+      confetti({
+        particleCount: 100,
+        spread: 70,
+        origin: { y: 0.6 },
+        colors: ['#6B55D9', '#7DBD9B', '#4F46E5', '#10B981']
+      });
 
       // BUG-6 FIX: Re-fetch instead of filtering out
       await refreshApprovals();
