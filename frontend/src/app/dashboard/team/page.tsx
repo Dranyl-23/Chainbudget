@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { Users, Plus, X, Trash2, Shield, User as UserIcon } from "lucide-react";
+import { Users, Plus, X, Trash2, Shield, User as UserIcon, Crown, CheckCircle2, Eye } from "lucide-react";
 import api from "@/lib/api";
 import toast from "react-hot-toast";
 import TableSkeleton from "@/components/TableSkeleton";
