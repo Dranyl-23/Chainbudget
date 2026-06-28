@@ -123,12 +123,12 @@ export default function ExplorerPage() {
 
         <div className="mt-10 max-w-xl mx-auto relative group">
           <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-500 to-fuchsia-500 rounded-xl blur opacity-30 group-hover:opacity-60 transition duration-500"></div>
-          <div className="relative flex items-center bg-black/60 backdrop-blur-xl border border-white/10 rounded-xl p-2 shadow-2xl">
-            <Search className="w-6 h-6 text-white/40 ml-3" />
+          <div className="relative flex items-center bg-black/60 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl">
+            <Search className="w-6 h-6 text-white/40 ml-5" />
             <input
               type="text"
               placeholder="Search for an organization..."
-              className="w-full bg-transparent border-none focus:ring-0 text-white placeholder-white/40 px-4 py-3 text-lg"
+              className="w-full bg-transparent border-none outline-none focus:outline-none focus:ring-0 text-white placeholder-white/40 px-4 py-4 text-lg"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
