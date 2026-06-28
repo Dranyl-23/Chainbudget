@@ -310,11 +310,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </aside>
 
       {/* ── Main content ── */}
-      <main className="flex-1 overflow-auto w-full md:w-auto relative">
-        <div className="hidden md:block fixed top-6 right-8 z-50">
+      <main className="flex-1 overflow-auto w-full md:w-auto relative flex flex-col">
+        
+        {/* Desktop Top Navigation Bar */}
+        <div className="hidden md:flex items-center justify-end px-8 py-4 sticky top-0 z-40 bg-[var(--color-bg)]/80 backdrop-blur-xl border-b border-white/5">
           <NotificationsCenter />
         </div>
-        {children}
+
+        <div className="flex-1 relative">
+          {children}
+        </div>
       </main>
 
       {/* Disconnect Confirmation Modal */}
