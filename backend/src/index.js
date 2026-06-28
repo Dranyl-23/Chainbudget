@@ -19,6 +19,7 @@ const budgetRoutes = require("./routes/budget");
 const uploadRoutes = require("./routes/upload");
 const adminRoutes = require("./routes/admin");
 const daoRoutes = require("./routes/dao");
+const publicRoutes = require("./routes/public");
 const { generalRateLimiter, csrfProtection } = require("./middleware/security");
 
 const app = express();
@@ -69,6 +70,7 @@ app.use("/api/budget", budgetRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/dao", daoRoutes);
+app.use("/api/public", publicRoutes);
 
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get("/api/health", (req, res) => {
