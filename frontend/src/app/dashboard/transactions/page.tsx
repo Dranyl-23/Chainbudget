@@ -31,6 +31,7 @@ import confetti from "canvas-confetti";
 import toast from "react-hot-toast";
 import api from "@/lib/api";
 import TableSkeleton from "@/components/TableSkeleton";
+import TxExplorerModal from "@/components/TxExplorerModal";
 import { exportToCSV, exportToPDF } from "@/lib/exportUtils";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL?.replace("/api", "") || "http://localhost:5000";
@@ -98,6 +99,7 @@ export default function TransactionsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [filters, setFilters] = useState({ search: "", type: "", status: "" });
   const [activeTab, setActiveTab] = useState<"expense" | "income">("expense");
+  const [selectedExplorerHash, setSelectedExplorerHash] = useState<string | null>(null);
   const [expandedTxId, setExpandedTxId] = useState<string | null>(null);
   const [expenseData, setExpenseData] = useState<CreateTxForm>({
     type: "expense", amount: "", description: "", category: "", referenceNumber: "", notes: "", urgency: "normal",
@@ -595,19 +597,19 @@ export default function TransactionsPage() {
                   <td className="p-4">
                     {tx.isRecordedOnChain ? (
                       tx.blockchainTxHash ? (
-                        <a 
-                          href={`https://amoy.polygonscan.com/tx/${tx.blockchainTxHash}`} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedExplorerHash(tx.blockchainTxHash || "");
+                          }}
                           className="px-2 py-1 rounded-sm bg-fuchsia-500/10 border border-fuchsia-500/20 text-fuchsia-300 text-[10px] uppercase tracking-widest font-bold hover:bg-fuchsia-500/20 transition-colors inline-flex items-center gap-1 w-fit cursor-pointer shadow-[0_0_10px_rgba(217,70,239,0.1)]" 
-                          title="View on Polygonscan"
+                          title="View in Explorer"
                         >
                           <span className="chain-dot w-2 h-2 shadow-[0_0_8px_rgba(217,70,239,0.8)]" /> Verified
                           <ExternalLink className="w-3 h-3" />
-                        </a>
+                        </button>
                       ) : (
-                        <span className="px-2 py-1 rounded-sm bg-fuchsia-500/10 border border-fuchsia-500/20 text-fuchsia-300 text-[10px] uppercase tracking-widest font-bold shadow-[0_0_10px_rgba(217,70,239,0.1)]" title="Recorded on Polygon Amoy">
+                        <span className="px-2 py-1 rounded-sm bg-fuchsia-500/10 border border-fuchsia-500/20 text-fuchsia-300 text-[10px] uppercase tracking-widest font-bold shadow-[0_0_10px_rgba(217,70,239,0.1)]" title="Recorded on Polygon">
                           <span className="chain-dot w-2 h-2 mr-1 shadow-[0_0_8px_rgba(217,70,239,0.8)]" /> Verified
                         </span>
                       )
@@ -1045,6 +1047,12 @@ export default function TransactionsPage() {
         </Portal>
       )}
 
+    </div>
+      <TxExplorerModal 
+        isOpen={!!selectedExplorerHash} 
+        onClose={() => setSelectedExplorerHash(null)} 
+        txHash={selectedExplorerHash || ""} 
+      />
     </div>
   );
 }
