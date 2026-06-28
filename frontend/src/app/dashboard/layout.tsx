@@ -235,26 +235,41 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               title="Copy full wallet address"
             >
               <div className="flex items-center gap-2">
-                {user?.avatarUrl ? (
-                  <img src={user.avatarUrl} alt="Avatar" className="w-5 h-5 rounded-full object-cover" />
-                ) : (
-                  <UserCircle className="w-4 h-4 text-primary" />
-                )}
-                <div className="flex flex-col">
-                  {user?.displayName && (
-                    <span className="text-xs font-bold text-gray-800 flex items-center gap-1">
-                      {user.displayName}
-                      {currentMembership?.hasSBT && (
-                        <span title="SBT Verified Member" className="flex items-center">
-                          <ShieldCheck className="w-3 h-3 text-indigo-500" />
-                        </span>
-                      )}
+                <div className="nft-avatar-wrapper scale-[0.7] origin-left">
+                  <div className="w-10 h-10 nft-avatar border border-purple-500/30 shadow-[inset_0_0_10px_rgba(139,92,246,0.2)]">
+                    {user?.avatarUrl ? (
+                      <img src={user.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                    ) : (
+                      <UserCircle className="w-5 h-5 text-purple-400 drop-shadow-[0_0_5px_rgba(168,85,247,0.8)]" />
+                    )}
+                  </div>
+                </div>
+                <div className="flex flex-col -ml-2 gap-0.5">
+                  <div className="flex items-center gap-1.5">
+                    {user?.displayName && (
+                      <span className="text-xs font-bold text-gray-100 flex items-center gap-1">
+                        {user.displayName}
+                        {currentMembership?.hasSBT && (
+                          <span title="SBT Verified Member" className="flex items-center">
+                            <ShieldCheck className="w-3 h-3 text-cyan-400 drop-shadow-[0_0_5px_rgba(34,211,238,0.8)]" />
+                          </span>
+                        )}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`px-1.5 py-[1px] rounded-sm text-[8px] uppercase tracking-widest font-bold ${
+                      roleLevel === 1 ? 'role-badge-superadmin' :
+                      roleLevel === 2 ? 'role-badge-approver' :
+                      roleLevel === 3 ? 'role-badge-member' : 'role-badge-readonly'
+                    }`}>
+                      {roleLevel === 1 ? '👑 Exec' : roleLevel === 2 ? '✅ Apprv' : roleLevel === 3 ? '👤 Mem' : '👁️ Pub'}
                     </span>
-                  )}
-                  <span className="text-[10px] font-mono text-gray-500 group-hover:text-primary transition-colors">{shortAddress}</span>
+                    <span className="text-[10px] font-mono text-cyan-400/70 group-hover:text-cyan-300 transition-colors">{shortAddress}</span>
+                  </div>
                 </div>
               </div>
-              <Copy className="w-3.5 h-3.5 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+              <Copy className="w-3.5 h-3.5 text-white/30 opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
             <div className="flex items-center gap-1.5">
               <span className="chain-dot" />

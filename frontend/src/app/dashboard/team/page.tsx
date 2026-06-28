@@ -109,10 +109,10 @@ export default function TeamPage() {
 
   const getRoleBadge = (level: number) => {
     switch (level) {
-      case 1: return <span className="whitespace-nowrap px-2.5 py-1 rounded-full text-xs font-bold bg-primary/10 text-primary border border-primary/20">Level 1: Executive</span>;
-      case 2: return <span className="whitespace-nowrap px-2.5 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-600 border border-blue-200">Level 2: Finance</span>;
-      case 3: return <span className="whitespace-nowrap px-2.5 py-1 rounded-full text-xs font-bold bg-green-50 text-green-600 border border-green-200">Level 3: Request</span>;
-      case 4: return <span className="whitespace-nowrap px-2.5 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-600 border border-gray-200">Level 4: Read-Only</span>;
+      case 1: return <span className="whitespace-nowrap px-2.5 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold role-badge-superadmin">👑 Super Admin</span>;
+      case 2: return <span className="whitespace-nowrap px-2.5 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold role-badge-approver">✅ Approver</span>;
+      case 3: return <span className="whitespace-nowrap px-2.5 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold role-badge-member">👤 Member</span>;
+      case 4: return <span className="whitespace-nowrap px-2.5 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold role-badge-readonly">👁️ Public</span>;
       default: return null;
     }
   };
@@ -139,11 +139,11 @@ export default function TeamPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-gray-50/50 border-b border-gray-100">
-                  <th className="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Member</th>
-                  <th className="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Role Access</th>
-                  <th className="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Position/Label</th>
-                  {canManage && <th className="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Actions</th>}
+                <tr className="bg-white/5 border-b border-white/10">
+                  <th className="p-4 text-xs font-semibold text-white/50 uppercase tracking-wider">Member</th>
+                  <th className="p-4 text-xs font-semibold text-white/50 uppercase tracking-wider">Role Access</th>
+                  <th className="p-4 text-xs font-semibold text-white/50 uppercase tracking-wider">Position/Label</th>
+                  {canManage && <th className="p-4 text-xs font-semibold text-white/50 uppercase tracking-wider text-right">Actions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -166,8 +166,8 @@ export default function TeamPage() {
 
                   return (
                     <React.Fragment key={`level-${level}`}>
-                      <tr className="bg-gray-50/80 border-y border-gray-100">
-                        <td colSpan={canManage ? 4 : 3} className="px-4 py-2 text-xs font-bold text-gray-700 uppercase tracking-wide">
+                      <tr className="bg-black/40 border-y border-white/5">
+                        <td colSpan={canManage ? 4 : 3} className="px-4 py-2 text-xs font-bold text-purple-300/80 uppercase tracking-widest">
                           {levelTitles[level]}
                         </td>
                       </tr>
@@ -178,18 +178,20 @@ export default function TeamPage() {
                         const isSelf = member._id === user?.id || member._id === (user as any)?._id;
 
                         return (
-                          <tr key={member._id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors">
+                          <tr key={member._id} className="hover:bg-white/5 transition-colors">
                             <td className="p-4">
                               <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center border border-primary/10">
-                                  {level === 1 ? <Shield className="w-5 h-5 text-primary" /> : <UserIcon className="w-5 h-5 text-gray-500" />}
+                                <div className="nft-avatar-wrapper">
+                                  <div className="w-10 h-10 nft-avatar border border-purple-500/30 shadow-[inset_0_0_10px_rgba(139,92,246,0.2)]">
+                                    {level === 1 ? <Shield className="w-4 h-4 text-purple-400 drop-shadow-[0_0_5px_rgba(168,85,247,0.8)]" /> : <UserIcon className="w-4 h-4 text-cyan-400 drop-shadow-[0_0_5px_rgba(34,211,238,0.8)]" />}
+                                  </div>
                                 </div>
                                 <div>
-                                  <p className="font-mono text-sm font-medium text-gray-900">
+                                  <p className="font-mono text-sm font-medium text-cyan-300">
                                     {member.walletAddress ? `${member.walletAddress.slice(0, 6)}...${member.walletAddress.slice(-4)}` : "No Wallet"}
-                                    {isSelf && <span className="ml-2 text-xs text-primary font-semibold">(You)</span>}
+                                    {isSelf && <span className="ml-2 text-[10px] text-purple-400 font-bold tracking-widest uppercase">(You)</span>}
                                   </p>
-                                  {member.displayName && <p className="text-xs text-gray-500">{member.displayName}</p>}
+                                  {member.displayName && <p className="text-xs text-white/50">{member.displayName}</p>}
                                 </div>
                               </div>
                             </td>
@@ -197,7 +199,7 @@ export default function TeamPage() {
                               {getRoleBadge(level)}
                             </td>
                             <td className="p-4">
-                              <span className="text-sm text-gray-600 font-medium">
+                              <span className="text-sm text-white/70 font-medium">
                                 {membership?.roleLabel || "Member"}
                               </span>
                             </td>
