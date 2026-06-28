@@ -109,10 +109,10 @@ export default function TeamPage() {
 
   const getRoleBadge = (level: number) => {
     switch (level) {
-      case 1: return <span className="whitespace-nowrap px-2.5 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold role-badge-superadmin">👑 Super Admin</span>;
-      case 2: return <span className="whitespace-nowrap px-2.5 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold role-badge-approver">✅ Approver</span>;
-      case 3: return <span className="whitespace-nowrap px-2.5 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold role-badge-member">👤 Member</span>;
-      case 4: return <span className="whitespace-nowrap px-2.5 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold role-badge-readonly">👁️ Public</span>;
+      case 1: return <span className="whitespace-nowrap inline-flex items-center gap-1 px-2.5 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold role-badge-superadmin"><Crown className="w-3 h-3" /> Super Admin</span>;
+      case 2: return <span className="whitespace-nowrap inline-flex items-center gap-1 px-2.5 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold role-badge-approver"><CheckCircle2 className="w-3 h-3" /> Approver</span>;
+      case 3: return <span className="whitespace-nowrap inline-flex items-center gap-1 px-2.5 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold role-badge-member"><UserIcon className="w-3 h-3" /> Member</span>;
+      case 4: return <span className="whitespace-nowrap inline-flex items-center gap-1 px-2.5 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold role-badge-readonly"><Eye className="w-3 h-3" /> Public</span>;
       default: return null;
     }
   };

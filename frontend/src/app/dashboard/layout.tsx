@@ -7,7 +7,7 @@ import Link from "next/link";
 import {
   LayoutDashboard, ArrowLeftRight, PiggyBank,
   ClipboardCheck, FileText, BookOpen, Settings,
-  LogOut, Wallet, Users, Menu, X, AlertTriangle, Moon, Sun, Copy, Vote, ChevronLeft, ChevronRight, UserCircle, ShieldCheck, Box
+  LogOut, Wallet, Users, Menu, X, AlertTriangle, Moon, Sun, Copy, Vote, ChevronLeft, ChevronRight, UserCircle, ShieldCheck, Box, Crown, CheckCircle2, User as UserIcon, Eye
 } from "lucide-react";
 import toast from "react-hot-toast";
 import OrgSelector from "@/components/OrgSelector";
@@ -265,12 +265,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     )}
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <span className={`px-1.5 py-[1px] rounded-sm text-[8px] uppercase tracking-widest font-bold ${
+                    <span className={`px-1.5 py-[1px] rounded-sm text-[8px] uppercase tracking-widest font-bold flex items-center gap-1 w-fit ${
                       roleLevel === 1 ? 'role-badge-superadmin' :
                       roleLevel === 2 ? 'role-badge-approver' :
                       roleLevel === 3 ? 'role-badge-member' : 'role-badge-readonly'
                     }`}>
-                      {roleLevel === 1 ? '👑 Exec' : roleLevel === 2 ? '✅ Apprv' : roleLevel === 3 ? '👤 Mem' : '👁️ Pub'}
+                      {roleLevel === 1 ? <><Crown className="w-2.5 h-2.5" /> Exec</> : 
+                       roleLevel === 2 ? <><CheckCircle2 className="w-2.5 h-2.5" /> Apprv</> : 
+                       roleLevel === 3 ? <><UserIcon className="w-2.5 h-2.5" /> Mem</> : 
+                       <><Eye className="w-2.5 h-2.5" /> Pub</>}
                     </span>
                     <span className="text-[10px] font-mono text-cyan-400/70 group-hover:text-cyan-300 transition-colors">{shortAddress}</span>
                   </div>
