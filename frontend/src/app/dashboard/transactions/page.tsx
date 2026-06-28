@@ -649,7 +649,7 @@ export default function TransactionsPage() {
                       </div>
                     )}
                   </td>
-                  <td className={`p-4 text-right font-black tracking-tight text-lg drop-shadow-md ${tx.type === "income" ? "text-cyan-400" : "text-red-400"}`}>
+                  <td className={`p-4 text-right font-black tracking-tight text-lg drop-shadow-md whitespace-nowrap ${tx.type === "income" ? "text-cyan-400" : "text-red-400"}`}>
                     {tx.type === "income" ? "+" : "-"}&#8369;{Math.round(tx.amount).toLocaleString()}
                   </td>
                 </tr>
