@@ -411,7 +411,7 @@ export default function DashboardPage() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className={`text-sm font-extrabold ${tx.type === "income" ? "text-cyan-300" : "text-red-300"}`}>
+                    <p className={`text-sm font-extrabold whitespace-nowrap ${tx.type === "income" ? "text-cyan-300" : "text-red-300"}`}>
                       {tx.type === "income" ? "+" : "-"}₱{Math.round(tx.amount).toLocaleString()}
                     </p>
                     <span className={`inline-block text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 mt-1 rounded-sm ${tx.status === "approved" ? "bg-green-500/20 text-green-300 border border-green-500/30" : "bg-amber-500/20 text-amber-300 border border-amber-500/30"}`}>
