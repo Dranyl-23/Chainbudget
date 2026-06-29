@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { FileText, Download, BarChart3, Calendar, Filter } from "lucide-react";
+import { FileText, Download, BarChart3, Calendar, Filter, Sparkles, BrainCircuit, AlertTriangle, TrendingUp, TrendingDown, Info, Loader2 } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
@@ -42,6 +42,10 @@ export default function ReportsPage() {
   const [printData, setPrintData] = useState<any[] | null>(null);
   const [liquidationStatus, setLiquidationStatus] = useState("none");
   const [isSubmittingLiquidation, setIsSubmittingLiquidation] = useState(false);
+  
+  // AI Forecaster State
+  const [aiForecast, setAiForecast] = useState<any>(null);
+  const [isFetchingForecast, setIsFetchingForecast] = useState(false);
 
   useEffect(() => {
     const fetchReportData = async () => {
@@ -139,7 +143,21 @@ export default function ReportsPage() {
       }
     };
 
+    const fetchAiForecast = async () => {
+      if (!activeOrgId) return;
+      setIsFetchingForecast(true);
+      try {
+        const res = await api.get("/ai/forecast", { params: { orgId: activeOrgId } });
+        setAiForecast(res.data);
+      } catch (err) {
+        console.error("Failed to fetch AI forecast", err);
+      } finally {
+        setIsFetchingForecast(false);
+      }
+    };
+
     fetchReportData();
+    fetchAiForecast();
   }, [activeOrgId, range]);
 
   const handleExport = async (exportFormat: "pdf" | "csv") => {
@@ -262,6 +280,76 @@ export default function ReportsPage() {
           </div>
         </div>
       )}
+
+      {/* ── AI Financial Advisor Widget ── */}
+      {isFetchingForecast ? (
+        <div className="mb-8 p-6 rounded-2xl glass border border-purple-500/20 flex flex-col items-center justify-center min-h-[150px]">
+          <Loader2 className="w-8 h-8 text-purple-400 animate-spin mb-3" />
+          <p className="text-sm font-semibold text-purple-300">AI is analyzing your financial data...</p>
+        </div>
+      ) : aiForecast ? (
+        <div className="mb-8 rounded-2xl border overflow-hidden shadow-lg border-purple-500/30">
+          {/* Header */}
+          <div className="bg-gradient-to-r from-purple-900/40 to-blue-900/40 p-4 md:p-5 flex items-center gap-3 border-b border-purple-500/20">
+            <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center shrink-0 border border-purple-500/30 shadow-[0_0_15px_rgba(168,85,247,0.3)]">
+              <BrainCircuit className="w-5 h-5 text-purple-400" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-white flex items-center gap-2 drop-shadow-sm">
+                AI Financial Advisor <Sparkles className="w-4 h-4 text-purple-300" />
+              </h3>
+              <p className="text-[11px] md:text-xs text-purple-200/70 font-medium tracking-wide">
+                AI-generated forecast based on your transaction history
+              </p>
+            </div>
+            {/* Status Badge */}
+            <div className="ml-auto hidden md:block">
+              <span className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 border shadow-sm ${
+                aiForecast.healthStatus === "good" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
+                aiForecast.healthStatus === "warning" ? "bg-amber-500/10 text-amber-400 border-amber-500/20" :
+                "bg-red-500/10 text-red-400 border-red-500/20"
+              }`}>
+                {aiForecast.healthStatus === "good" && <TrendingUp className="w-3.5 h-3.5" />}
+                {aiForecast.healthStatus === "warning" && <AlertTriangle className="w-3.5 h-3.5" />}
+                {aiForecast.healthStatus === "critical" && <TrendingDown className="w-3.5 h-3.5" />}
+                Status: {aiForecast.healthStatus}
+              </span>
+            </div>
+          </div>
+          
+          {/* Body */}
+          <div className="bg-black/20 p-5 md:p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Forecast Paragraphs */}
+            <div>
+              <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                <Info className="w-4 h-4" /> Executive Summary
+              </h4>
+              <div className="space-y-3">
+                {aiForecast.forecast.split("\n\n").map((para: string, idx: number) => (
+                  <p key={idx} className="text-sm text-gray-300 leading-relaxed bg-white/5 p-3 rounded-xl border border-white/5">
+                    {para}
+                  </p>
+                ))}
+              </div>
+            </div>
+            
+            {/* Insights List */}
+            <div>
+              <h4 className="text-xs font-bold text-purple-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4" /> Actionable Insights
+              </h4>
+              <ul className="space-y-3">
+                {aiForecast.insights?.map((insight: string, idx: number) => (
+                  <li key={idx} className="bg-gradient-to-r from-purple-500/5 to-transparent p-3 rounded-xl border-l-2 border-purple-500 text-sm text-gray-200 shadow-sm flex gap-3">
+                    <span className="font-bold text-purple-400 shrink-0">{idx + 1}.</span>
+                    <span>{insight}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* ── Summary Cards ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-8">

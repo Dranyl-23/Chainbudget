@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { ShieldCheck, Vote, CheckCircle2, XCircle, Clock, Search, Link2, X } from "lucide-react";
+import { ShieldCheck, Vote, CheckCircle2, XCircle, Clock, Search, Link2, X, Sparkles, BrainCircuit, Info, AlertTriangle } from "lucide-react";
 import api from "@/lib/api";
 import Portal from "@/components/Portal";
 import { ethers } from "ethers";
@@ -55,6 +55,11 @@ export default function DAOGovernancePage() {
   const [activeFilter, setActiveFilter] = useState("active");
   const [searchQuery, setSearchQuery] = useState("");
   const [visibleCount, setVisibleCount] = useState(6);
+
+  // AI Insights State
+  const [showAiModal, setShowAiModal] = useState<string | null>(null);
+  const [aiInsight, setAiInsight] = useState<any>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   // Reset pagination when filter or search changes
   useEffect(() => {
@@ -128,18 +133,41 @@ export default function DAOGovernancePage() {
     }
   };
 
-  const getCreatorLabel = (creator: any) => {
-    if (!creator) return "Unknown";
-    let roleStr = "";
-    if (creator.memberships) {
-      const mem = creator.memberships.find((m: any) => 
-        m.organization === activeOrgId || m.organization?._id === activeOrgId
+  const getCreatorLabel = (creatorObj: any) => {
+    if (!creatorObj || !creatorObj.displayName) return "Unknown User";
+    let orgRole = "Member";
+    if (creatorObj.memberships && creatorObj.memberships.length > 0 && activeOrgId) {
+      const activeMembership = creatorObj.memberships.find(
+        (m: any) => (m.organization?._id || m.organization) === activeOrgId
       );
-      if (mem && mem.roleLabel) {
-        roleStr = mem.roleLabel;
-      }
+      if (activeMembership) orgRole = activeMembership.role;
     }
-    return roleStr ? `${roleStr} (${creator.displayName})` : creator.displayName;
+    return `${creatorObj.displayName} (${orgRole})`;
+  };
+
+  const currentMembership = user?.memberships?.find(
+    (m: any) => (m.organization?._id || m.organization) === activeOrgId
+  );
+
+  const handleAiInsight = async (proposal: Proposal) => {
+    setShowAiModal(proposal._id);
+    setIsAnalyzing(true);
+    setAiInsight(null);
+    try {
+      const res = await api.post("/ai/analyze-proposal", {
+        title: proposal.title,
+        description: proposal.description,
+        amount: proposal.amount,
+        currentBudget: 500000 // In a real app we fetch actual org treasury
+      });
+      setAiInsight(res.data);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to generate AI insights");
+      setShowAiModal(null);
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   const handleCreateProposal = async (e: React.FormEvent) => {
@@ -282,6 +310,14 @@ export default function DAOGovernancePage() {
                   </div>
                 </div>
 
+                {/* ── AI Insights Button ── */}
+                <button
+                  onClick={() => handleAiInsight(p)}
+                  className="w-full mb-3 md:mb-4 flex items-center justify-center gap-2 bg-gradient-to-r from-purple-500/10 to-blue-500/10 hover:from-purple-500/20 hover:to-blue-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/20 py-1.5 md:py-2 rounded-xl text-xs font-semibold transition-all"
+                >
+                  <Sparkles className="w-3.5 h-3.5" /> AI Risk Analysis
+                </button>
+
                 {p.status === "active" && !p.hasVoted && canInteract && (
                   <div className="grid grid-cols-2 gap-2 md:gap-3 mt-auto">
                     <button 
@@ -421,6 +457,97 @@ export default function DAOGovernancePage() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        </Portal>
+      )}
+
+      {/* ── AI Insights Modal ── */}
+      {showAiModal && (
+        <Portal>
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">
+            <div className="glass rounded-2xl shadow-[0_0_40px_rgba(168,85,247,0.15)] border border-purple-500/20 w-full max-w-lg p-6 overflow-hidden flex flex-col relative" style={{ maxHeight: '90vh' }}>
+              <div className="flex items-center justify-between mb-6 border-b border-white/5 pb-4">
+                <h2 className="text-xl font-bold flex items-center gap-2 text-white">
+                  <BrainCircuit className="w-6 h-6 text-purple-400" />
+                  AI Risk Analysis
+                </h2>
+                <button
+                  onClick={() => setShowAiModal(null)}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="overflow-y-auto pr-2 custom-scrollbar space-y-5">
+                {isAnalyzing ? (
+                  <div className="py-12 flex flex-col items-center justify-center text-center">
+                    <div className="relative w-16 h-16 mb-4">
+                      <div className="absolute inset-0 border-4 border-purple-500/20 rounded-full"></div>
+                      <div className="absolute inset-0 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+                      <BrainCircuit className="absolute inset-0 m-auto w-6 h-6 text-purple-400 animate-pulse" />
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-200">Analyzing Proposal</h3>
+                    <p className="text-sm text-gray-400 max-w-[250px] mx-auto mt-2">Our AI is reading the details and calculating the financial risk...</p>
+                  </div>
+                ) : aiInsight ? (
+                  <div className="animate-fade-in space-y-5">
+                    {/* Risk Score */}
+                    <div className="flex items-center gap-4 bg-black/20 p-4 rounded-xl border border-white/5">
+                      <div className={`w-14 h-14 rounded-full flex items-center justify-center text-xl font-black shrink-0 shadow-lg ${
+                        aiInsight.riskScore <= 3 ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" :
+                        aiInsight.riskScore <= 6 ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30" :
+                        "bg-red-500/20 text-red-400 border border-red-500/30"
+                      }`}>
+                        {aiInsight.riskScore}/10
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-gray-200">Risk Score</h4>
+                        <p className="text-xs text-gray-400 mt-0.5">{aiInsight.riskReason}</p>
+                      </div>
+                    </div>
+
+                    {/* Summary */}
+                    <div>
+                      <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                        <Info className="w-3.5 h-3.5" /> Summary
+                      </h4>
+                      <p className="text-sm text-gray-200 leading-relaxed bg-white/5 p-3 rounded-lg border border-white/5">{aiInsight.summary}</p>
+                    </div>
+
+                    {/* Pros & Cons */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Pros
+                        </h4>
+                        <ul className="space-y-2">
+                          {aiInsight.pros?.map((pro: string, i: number) => (
+                            <li key={i} className="text-xs text-gray-300 flex items-start gap-1.5">
+                              <span className="text-emerald-500 mt-0.5">•</span> <span>{pro}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-red-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                          <AlertTriangle className="w-3.5 h-3.5" /> Cons
+                        </h4>
+                        <ul className="space-y-2">
+                          {aiInsight.cons?.map((con: string, i: number) => (
+                            <li key={i} className="text-xs text-gray-300 flex items-start gap-1.5">
+                              <span className="text-red-500 mt-0.5">•</span> <span>{con}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center text-red-400 py-8">Failed to load insights.</div>
+                )}
+              </div>
             </div>
           </div>
         </Portal>
