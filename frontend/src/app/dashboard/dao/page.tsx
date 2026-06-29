@@ -189,7 +189,7 @@ export default function DAOGovernancePage() {
         {canInteract && (
           <button 
             onClick={() => setShowCreateModal(true)}
-            className="btn-primary flex items-center gap-2 flex-shrink-0"
+            className="hidden md:flex btn-primary items-center gap-2 flex-shrink-0"
           >
             <ShieldCheck className="w-4 h-4" /> Create Proposal
           </button>
@@ -197,7 +197,7 @@ export default function DAOGovernancePage() {
       </div>
 
       {/* ── Filters & Search ── */}
-      <div className="flex flex-col md:flex-row gap-4 items-center justify-between glass p-2 rounded-xl backdrop-blur-md">
+      <div className="sticky top-[60px] md:static z-30 flex flex-col md:flex-row gap-3 md:gap-4 items-center justify-between glass p-2 md:rounded-xl backdrop-blur-xl -mx-4 md:mx-0 px-4 md:px-2 w-[calc(100%+2rem)] md:w-auto shadow-sm md:shadow-none border-x-0 md:border-x">
         <div className="flex w-full md:w-auto gap-1 bg-gray-100 dark:bg-black/20 p-1 rounded-lg overflow-x-auto custom-scrollbar">
           {["active", "all", "passed", "rejected"].map((status) => (
             <button
@@ -238,29 +238,29 @@ export default function DAOGovernancePage() {
             </div>
           ) : (
             filteredProposals.slice(0, visibleCount).map(p => (
-            <div key={p._id} className="glass p-4 md:p-6 rounded-xl md:rounded-2xl flex flex-col hover:-translate-y-1 transition-transform duration-300">
-              <div className="flex justify-between items-start mb-3 md:mb-4">
-                <span className={`badge ${p.status === 'active' ? 'badge-pending' : p.status === 'passed' ? 'badge-approved' : 'badge-rejected'}`}>
+            <div key={p._id} className="glass p-3.5 md:p-6 rounded-xl md:rounded-2xl flex flex-col hover:-translate-y-1 transition-transform duration-300">
+              <div className="flex justify-between items-start mb-2 md:mb-4">
+                <span className={`badge text-[10px] md:text-xs px-2 py-0.5 md:py-1 ${p.status === 'active' ? 'badge-pending' : p.status === 'passed' ? 'badge-approved' : 'badge-rejected'}`}>
                   {p.status.toUpperCase()}
                 </span>
                 {p.blockchainProposalId && (
-                  <span className="text-[10px] md:text-xs text-primary flex items-center gap-1 font-medium bg-primary/10 px-2 py-1 rounded-full">
+                  <span className="text-[9px] md:text-xs text-primary flex items-center gap-1 font-medium bg-primary/10 px-2 py-0.5 md:py-1 rounded-full">
                     <Link2 className="w-3 h-3" /> On-Chain
                   </span>
                 )}
               </div>
                 
-                <h3 className="text-base md:text-lg font-bold text-gray-800 mb-1 md:mb-2 leading-tight">{p.title}</h3>
-                <p className="text-xs md:text-sm text-gray-500 mb-3 md:mb-4 line-clamp-3 flex-1">{p.description}</p>
+                <h3 className="text-sm md:text-lg font-bold text-gray-800 mb-1 leading-tight line-clamp-2 md:line-clamp-none">{p.title}</h3>
+                <p className="text-[11px] md:text-sm text-gray-500 mb-3 md:mb-4 line-clamp-2 md:line-clamp-3 flex-1">{p.description}</p>
                 
-                <div className="bg-gray-50/50 dark:bg-gray-800/30 p-3 md:p-4 rounded-xl mb-4 md:mb-6">
-                  <div className="flex justify-between items-center mb-1.5 md:mb-2">
+                <div className="bg-gray-50/50 dark:bg-gray-800/30 p-2.5 md:p-4 rounded-xl mb-3 md:mb-6">
+                  <div className="flex justify-between items-center mb-1 md:mb-2">
                     <span className="text-[10px] md:text-xs text-gray-500 dark:text-gray-400">Requested Amount</span>
-                    <span className="text-sm font-bold text-primary dark:text-primary/90">₱{p.amount.toLocaleString()}</span>
+                    <span className="text-xs md:text-sm font-bold text-primary dark:text-primary/90">₱{p.amount.toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-[10px] md:text-xs text-gray-500 dark:text-gray-400">Proposed By</span>
-                    <span className="text-xs md:text-sm font-medium text-gray-700 dark:text-gray-300">{getCreatorLabel(p.creator)}</span>
+                    <span className="text-[10px] md:text-sm font-medium text-gray-700 dark:text-gray-300 truncate max-w-[130px] md:max-w-none text-right">{getCreatorLabel(p.creator)}</span>
                   </div>
                 </div>
 
@@ -269,14 +269,14 @@ export default function DAOGovernancePage() {
                     <button 
                       onClick={() => handleVote(p, true)}
                       disabled={votingOn === p._id}
-                      className="btn-primary bg-emerald-500 hover:bg-emerald-600 border-none w-full py-2 md:py-2.5 text-sm md:text-base dark:bg-emerald-600 dark:hover:bg-emerald-500"
+                      className="btn-primary bg-emerald-500 hover:bg-emerald-600 border-none w-full py-1.5 md:py-2.5 text-[11px] md:text-base dark:bg-emerald-600 dark:hover:bg-emerald-500"
                     >
                       {votingOn === p._id ? "..." : "Vote Yes"}
                     </button>
                     <button 
                       onClick={() => handleVote(p, false)}
                       disabled={votingOn === p._id}
-                      className="btn-outline border-red-200 text-red-600 hover:bg-red-50 w-full py-2 md:py-2.5 text-sm md:text-base dark:border-red-900/50 dark:text-red-400 dark:hover:bg-red-900/20"
+                      className="btn-outline border-red-200 text-red-600 hover:bg-red-50 w-full py-1.5 md:py-2.5 text-[11px] md:text-base dark:border-red-900/50 dark:text-red-400 dark:hover:bg-red-900/20"
                     >
                       {votingOn === p._id ? "..." : "Vote No"}
                     </button>
@@ -317,6 +317,16 @@ export default function DAOGovernancePage() {
           </div>
         )}
       </>
+      )}
+
+      {/* ── Mobile FAB for Create Proposal ── */}
+      {canInteract && (
+        <button
+          onClick={() => setShowCreateModal(true)}
+          className="md:hidden fixed bottom-[90px] right-4 w-14 h-14 bg-primary text-white rounded-full shadow-[0_4px_20px_rgba(139,92,246,0.6)] flex items-center justify-center z-40 hover:scale-105 active:scale-95 transition-transform"
+        >
+          <ShieldCheck className="w-6 h-6" />
+        </button>
       )}
 
       {/* ── Create Proposal Modal ── */}
