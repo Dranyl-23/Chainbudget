@@ -171,7 +171,7 @@ export default function TutorialsPage() {
           </p>
         </div>
 
-        {/* Video Tutorial Placeholder */}
+        {/* Video Tutorial */}
         <div className="mb-16 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md overflow-hidden">
           <div className="px-6 py-4 border-b border-white/10 flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-red-500/20 border border-red-500/30 flex items-center justify-center">
@@ -182,18 +182,14 @@ export default function TutorialsPage() {
               <p className="text-xs text-white/40">Full walkthrough of ChainBudget setup</p>
             </div>
           </div>
-          <div className="aspect-video flex flex-col items-center justify-center gap-4 bg-black/30 p-8">
-            <div className="w-20 h-20 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
-              <Video className="w-10 h-10 text-white/30" />
-            </div>
-            <div className="text-center">
-              <p className="text-white/50 font-semibold text-lg">Tutorial Video Coming Soon</p>
-              <p className="text-white/30 text-sm mt-1">Our team is preparing a comprehensive video walkthrough.</p>
-            </div>
-            <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-white/40 text-sm">
-              <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse inline-block" />
-              In Production
-            </div>
+          <div className="aspect-video">
+            <iframe
+              className="w-full h-full"
+              src="https://www.youtube.com/embed/9Nyc9pwVXkE"
+              title="Tutorial for ChainBudget"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            />
           </div>
         </div>
 
