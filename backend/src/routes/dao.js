@@ -4,6 +4,7 @@ const Proposal = require("../models/Proposal");
 const Organization = require("../models/Organization");
 const DaoVote = require("../models/DaoVote");
 const User = require("../models/User");
+const Notification = require("../models/Notification");
 const { authenticate } = require("../middleware/auth");
 const { sendEmail } = require("../services/email");
 const crypto = require("crypto");
@@ -104,10 +105,28 @@ router.post("/proposals", authenticate, async (req, res) => {
     await newProposal.save();
     await newProposal.populate("creator", "displayName walletAddress");
     
-    // Emit real-time socket event
+    // Emit real-time socket event and create notification
+    const notifTitle = "New DAO Proposal";
+    const notifMessage = `${req.user.displayName || 'A member'} proposed to allocate ₱${amount.toLocaleString()} for ${title}`;
+    const newNotif = await Notification.create({
+      organization: orgId,
+      title: notifTitle,
+      message: notifMessage,
+      type: "info",
+      readBy: []
+    });
+
     const io = req.app.get("io");
     if (io) {
       io.emit("dao_vote_updated", { orgId }); // Use same event to trigger refetch
+      io.emit("new_notification", {
+        orgId,
+        id: newNotif._id,
+        title: notifTitle,
+        message: notifMessage,
+        type: "info",
+        timestamp: newNotif.createdAt
+      });
     }
     
     // Send Email to all members of the organization
