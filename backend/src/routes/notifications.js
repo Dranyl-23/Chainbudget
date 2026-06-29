@@ -1,10 +1,10 @@
 const express = require("express");
 const router = express.Router();
 const Notification = require("../models/Notification");
-const { verifyToken } = require("../middleware/auth");
+const { authenticate } = require("../middleware/auth");
 
 // Get all notifications for an org (limit to latest 50)
-router.get("/", verifyToken, async (req, res) => {
+router.get("/", authenticate, async (req, res) => {
   try {
     const { orgId } = req.query;
     if (!orgId) return res.status(400).json({ error: "Missing orgId" });
@@ -31,7 +31,7 @@ router.get("/", verifyToken, async (req, res) => {
 });
 
 // Mark single notification as read
-router.post("/:id/read", verifyToken, async (req, res) => {
+router.post("/:id/read", authenticate, async (req, res) => {
   try {
     const notif = await Notification.findById(req.params.id);
     if (!notif) return res.status(404).json({ error: "Not found" });
@@ -48,7 +48,7 @@ router.post("/:id/read", verifyToken, async (req, res) => {
 });
 
 // Mark all as read for an org
-router.post("/read-all", verifyToken, async (req, res) => {
+router.post("/read-all", authenticate, async (req, res) => {
   try {
     const { orgId } = req.body;
     if (!orgId) return res.status(400).json({ error: "Missing orgId" });
