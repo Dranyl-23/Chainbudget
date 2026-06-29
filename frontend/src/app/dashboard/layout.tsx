@@ -7,7 +7,7 @@ import Link from "next/link";
 import {
   LayoutDashboard, ArrowLeftRight, PiggyBank,
   ClipboardCheck, FileText, BookOpen, Settings,
-  LogOut, Wallet, Users, Menu, X, AlertTriangle, Moon, Sun, Copy, Vote, ChevronLeft, ChevronRight, UserCircle, ShieldCheck, Box, Crown, CheckCircle2, User as UserIcon, Eye
+  LogOut, Wallet, Users, Menu, X, AlertTriangle, Moon, Sun, Copy, Vote, ChevronLeft, ChevronRight, UserCircle, ShieldCheck, Box, Crown, CheckCircle2, User as UserIcon, Eye, HelpCircle
 } from "lucide-react";
 import toast from "react-hot-toast";
 import OrgSelector from "@/components/OrgSelector";
@@ -298,6 +298,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </span>
             </div>
           </div>
+          <Link
+            href="/tutorials"
+            title={isCollapsed ? "Tutorials" : ""}
+            className={`nav-item flex items-center gap-3 w-full transition-all duration-300 text-gray-500 hover:text-primary ${isCollapsed ? 'justify-center px-0' : ''}`}
+          >
+            <div className="flex-shrink-0"><HelpCircle className="w-4 h-4" /></div>
+            <span className={`transition-all duration-300 whitespace-nowrap ${isCollapsed ? 'max-w-0 opacity-0' : 'max-w-[150px] opacity-100'}`}>
+              Tutorials
+            </span>
+          </Link>
           <button
             title={isCollapsed ? "Disconnect" : ""}
             onClick={() => setShowDisconnectModal(true)}

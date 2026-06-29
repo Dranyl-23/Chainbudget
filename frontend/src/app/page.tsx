@@ -80,6 +80,7 @@ export default function LandingPage() {
           <span onClick={() => setInfoModal(modalData.whyUs)} className="hover:text-white cursor-pointer transition-colors">Why us</span>
           <span onClick={() => setInfoModal(modalData.features)} className="hover:text-white cursor-pointer transition-colors">Features</span>
           <span onClick={() => setInfoModal(modalData.security)} className="hover:text-white cursor-pointer transition-colors">Security</span>
+          <Link href="/tutorials" className="hover:text-white transition-colors">Tutorials</Link>
         </div>
         <div className="hidden sm:flex items-center gap-2 text-xs text-white/50 bg-white/5 px-4 py-2 rounded-full border border-white/10 backdrop-blur-md">
           <span className="w-2 h-2 rounded-full bg-fuchsia-500 animate-pulse inline-block" />
