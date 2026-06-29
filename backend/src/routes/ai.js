@@ -125,8 +125,8 @@ router.get("/forecast", authenticate, async (req, res) => {
     const totalTreasury = org.treasuryBalance || 0;
     
     // Get recent 20 transactions
-    const txs = await Transaction.find({ organization: orgId }).sort({ date: -1 }).limit(20);
-    const txSummary = txs.map(t => `${t.date.toISOString().split('T')[0]}: ₱${t.amount} for ${t.category} (${t.merchant})`).join("\n");
+    const txs = await Transaction.find({ organization: orgId }).sort({ createdAt: -1 }).limit(20);
+    const txSummary = txs.map(t => `${t.createdAt ? t.createdAt.toISOString().split('T')[0] : 'N/A'}: ₱${t.amount} for ${t.category} (${t.description})`).join("\n");
 
     const prompt = `
       You are the Chief Financial Officer (CFO) AI for an organization named "${org.name}".
