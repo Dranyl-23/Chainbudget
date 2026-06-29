@@ -75,14 +75,19 @@ export default function TeamPage() {
         try {
           const res = await api.get(`/users/by-wallet/${formData.walletAddress}`);
           if (res.data) {
+            toast.success("User found! Auto-filling details.");
             setFormData(prev => ({
               ...prev,
               displayName: prev.displayName || (res.data.displayName !== "New User" ? res.data.displayName : ""),
               email: prev.email || res.data.email || ""
             }));
           }
-        } catch (err) {
-          // Ignore if user not found
+        } catch (err: any) {
+          if (err.response?.status === 404) {
+            toast.error("User not found in system. Please enter manually.");
+          } else {
+            toast.error("Error fetching user details.");
+          }
         }
       }
     };
