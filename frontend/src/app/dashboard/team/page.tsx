@@ -295,30 +295,32 @@ export default function TeamPage() {
                 />
               </div>
 
-              {/* Name (Optional) */}
+              {/* Name */}
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">Name (Optional)</label>
+                <label className="block text-sm font-medium text-gray-600 mb-1">Name</label>
                 <input
                   type="text"
                   placeholder="e.g., Alfie Lynard"
                   className="input text-sm"
                   value={formData.displayName}
                   onChange={(e) => setFormData({ ...formData, displayName: e.target.value })}
+                  required
                 />
               </div>
 
               {/* Email Address */}
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">Email Address (Optional)</label>
+                <label className="block text-sm font-medium text-gray-600 mb-1">Email Address</label>
                 <input
                   type="email"
                   placeholder="e.g., user@cjc.edu.ph"
                   className="input text-sm"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  required
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Required if you want this member to receive email notifications.
+                  Required for this member to receive email notifications.
                 </p>
               </div>
 
