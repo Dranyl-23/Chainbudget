@@ -127,53 +127,69 @@ const tutorials = [
   },
 ];
 
-const TutorialStep = ({ step, stepIdx, totalSteps }: { step: any, stepIdx: number, totalSteps: number }) => {
+const TutorialSection = ({ tutorial }: { tutorial: any }) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  const maxLength = 100; // character limit before truncating on mobile
-  
-  const shouldTruncate = step.desc.length > maxLength;
-  const displayText = !isExpanded && shouldTruncate ? `${step.desc.substring(0, maxLength)}...` : step.desc;
 
   return (
-    <div className="flex gap-4">
-      <div className="flex flex-col items-center gap-1 flex-shrink-0">
-        <div className="w-7 h-7 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-xs font-bold text-white/70 flex-shrink-0">
-          {stepIdx + 1}
+    <div
+      id={tutorial.id}
+      className={`rounded-2xl border bg-gradient-to-br ${tutorial.color} backdrop-blur-md overflow-hidden`}
+    >
+      {/* Tutorial Header */}
+      <div className="px-6 py-5 border-b border-white/10 flex items-center gap-4">
+        <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${tutorial.color} border flex items-center justify-center flex-shrink-0`}>
+          {tutorial.icon}
         </div>
-        {stepIdx < totalSteps - 1 && (
-          <div className="w-px flex-1 min-h-[20px] bg-white/10" />
-        )}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
+            <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full border ${tutorial.badgeColor}`}>
+              {tutorial.badge}
+            </span>
+          </div>
+          <h3 className="text-lg font-bold text-white">{tutorial.title}</h3>
+          <p className="text-sm text-white/50">{tutorial.subtitle}</p>
+        </div>
       </div>
-      <div className="pb-4 flex-1 min-w-0">
-        <p className="font-semibold text-white text-sm mb-1">{step.title}</p>
-        <p className="text-white/55 text-sm leading-relaxed">
-          {/* Mobile view truncates, desktop view shows all */}
-          <span className="sm:hidden">
-            {displayText}
-            {shouldTruncate && (
-              <button
-                onClick={() => setIsExpanded(!isExpanded)}
-                className="ml-1 text-cyan-400 hover:text-cyan-300 font-medium"
-              >
-                {isExpanded ? "Show less" : "Read more"}
-              </button>
-            )}
-          </span>
-          <span className="hidden sm:inline">
-            {step.desc}
-          </span>
-        </p>
-        {step.link && (
-          <a
-            href={step.link.href}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 mt-2 text-xs text-cyan-400 hover:text-cyan-300 transition-colors"
-          >
-            <ExternalLink className="w-3 h-3" />
-            {step.link.label}
-          </a>
-        )}
+
+      {/* Steps (Hidden on mobile by default) */}
+      <div className={`px-6 py-5 space-y-5 ${isExpanded ? 'block' : 'hidden sm:block'}`}>
+        {tutorial.steps.map((step: any, stepIdx: number) => (
+          <div key={stepIdx} className="flex gap-4">
+            <div className="flex flex-col items-center gap-1 flex-shrink-0">
+              <div className="w-7 h-7 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-xs font-bold text-white/70 flex-shrink-0">
+                {stepIdx + 1}
+              </div>
+              {stepIdx < tutorial.steps.length - 1 && (
+                <div className="w-px flex-1 min-h-[20px] bg-white/10" />
+              )}
+            </div>
+            <div className="pb-4 flex-1 min-w-0">
+              <p className="font-semibold text-white text-sm mb-1">{step.title}</p>
+              <p className="text-white/55 text-sm leading-relaxed">{step.desc}</p>
+              {step.link && (
+                <a
+                  href={step.link.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 mt-2 text-xs text-cyan-400 hover:text-cyan-300 transition-colors"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  {step.link.label}
+                </a>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Mobile Toggle Button */}
+      <div className="sm:hidden border-t border-white/5 bg-white/5">
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="w-full py-4 flex items-center justify-center text-sm font-semibold text-cyan-400 hover:text-cyan-300 transition-colors"
+        >
+          {isExpanded ? "Show less steps" : "Read more steps"}
+        </button>
       </div>
     </div>
   );
@@ -250,40 +266,8 @@ export default function TutorialsPage() {
         <div className="space-y-8">
           <h2 className="text-2xl font-bold text-white/90">Step-by-Step Text Guide</h2>
 
-          {tutorials.map((tutorial, idx) => (
-            <div
-              key={tutorial.id}
-              id={tutorial.id}
-              className={`rounded-2xl border bg-gradient-to-br ${tutorial.color} backdrop-blur-md overflow-hidden`}
-            >
-              {/* Tutorial Header */}
-              <div className="px-6 py-5 border-b border-white/10 flex items-center gap-4">
-                <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${tutorial.color} border flex items-center justify-center flex-shrink-0`}>
-                  {tutorial.icon}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full border ${tutorial.badgeColor}`}>
-                      {tutorial.badge}
-                    </span>
-                  </div>
-                  <h3 className="text-lg font-bold text-white">{tutorial.title}</h3>
-                  <p className="text-sm text-white/50">{tutorial.subtitle}</p>
-                </div>
-              </div>
-
-              {/* Steps */}
-              <div className="px-6 py-5 space-y-5">
-                {tutorial.steps.map((step, stepIdx) => (
-                  <TutorialStep 
-                    key={stepIdx} 
-                    step={step} 
-                    stepIdx={stepIdx} 
-                    totalSteps={tutorial.steps.length} 
-                  />
-                ))}
-              </div>
-            </div>
+          {tutorials.map((tutorial) => (
+            <TutorialSection key={tutorial.id} tutorial={tutorial} />
           ))}
         </div>
 
