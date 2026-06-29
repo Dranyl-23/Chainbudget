@@ -37,7 +37,7 @@ const attachUser = async (req, res, next) => {
     }
 
     const asgardeoId = req.auth.sub;
-    const email = req.auth.email || "";
+    const email = req.auth.email || req.auth.email_address || req.auth.emailAddress || req.auth["http://wso2.org/claims/emailaddress"] || "";
     const nameFromToken = req.auth.name || req.auth.given_name || req.auth.preferred_username || "New User";
     const pictureFromToken = req.auth.picture || "";
 
