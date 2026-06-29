@@ -197,30 +197,36 @@ export default function DAOGovernancePage() {
       </div>
 
       {/* ── Filters & Search ── */}
-      <div className="sticky top-[60px] md:static z-30 flex flex-col md:flex-row gap-3 md:gap-4 items-center justify-between glass p-2 md:rounded-xl backdrop-blur-xl -mx-4 md:mx-0 px-4 md:px-2 w-[calc(100%+2rem)] md:w-auto shadow-sm md:shadow-none border-x-0 md:border-x">
-        <div className="flex w-full md:w-auto gap-1 bg-gray-100 dark:bg-black/20 p-1 rounded-lg overflow-x-auto custom-scrollbar">
-          {["active", "all", "passed", "rejected"].map((status) => (
-            <button
-              key={status}
-              onClick={() => setActiveFilter(status)}
-              className={`px-4 py-1.5 rounded-md text-sm font-medium capitalize transition-all whitespace-nowrap ${
-                activeFilter === status 
-                  ? "bg-primary text-white shadow-lg" 
-                  : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/5"
-              }`}
-            >
-              {status}
-            </button>
-          ))}
+      <div className="flex flex-col md:flex-row gap-3 md:gap-4 items-center justify-between mb-2 md:mb-0 z-30 relative">
+        
+        {/* Sticky Tabs on Mobile */}
+        <div className="sticky top-[70px] md:static z-30 flex w-[calc(100%+2rem)] md:w-auto -mx-4 md:mx-0 px-4 md:px-0 glass border-x-0 md:border-x md:rounded-xl p-2 backdrop-blur-xl">
+          <div className="flex w-full md:w-auto gap-1 bg-gray-100 dark:bg-black/20 p-1 rounded-lg overflow-x-auto custom-scrollbar">
+            {["active", "all", "passed", "rejected"].map((status) => (
+              <button
+                key={status}
+                onClick={() => setActiveFilter(status)}
+                className={`px-4 py-1.5 rounded-md text-sm font-medium capitalize transition-all whitespace-nowrap ${
+                  activeFilter === status 
+                    ? "bg-primary text-white shadow-lg" 
+                    : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/5"
+                }`}
+              >
+                {status}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="relative w-full md:w-64">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+
+        {/* Search - NOT sticky on mobile */}
+        <div className="relative w-full md:w-64 glass rounded-xl p-2 md:p-1.5 backdrop-blur-xl">
+          <Search className="w-4 h-4 absolute left-4 md:left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
             placeholder="Search proposals..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-transparent border border-gray-200 dark:border-white/10 rounded-lg pl-9 pr-4 py-2 text-sm text-gray-800 dark:text-white placeholder-gray-400 focus:outline-none focus:border-primary/50 transition-colors"
+            className="w-full bg-transparent border border-gray-200 dark:border-white/10 rounded-lg pl-10 md:pl-9 pr-4 py-1.5 text-sm text-gray-800 dark:text-white placeholder-gray-400 focus:outline-none focus:border-primary/50 transition-colors"
           />
         </div>
       </div>
