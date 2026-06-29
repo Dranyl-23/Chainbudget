@@ -69,6 +69,26 @@ export default function TeamPage() {
     fetchMembers();
   }, [orgId]);
 
+  useEffect(() => {
+    const checkWallet = async () => {
+      if (formData.walletAddress.length === 42 && formData.walletAddress.startsWith("0x")) {
+        try {
+          const res = await api.get(`/users/by-wallet/${formData.walletAddress}`);
+          if (res.data) {
+            setFormData(prev => ({
+              ...prev,
+              displayName: prev.displayName || (res.data.displayName !== "New User" ? res.data.displayName : ""),
+              email: prev.email || res.data.email || ""
+            }));
+          }
+        } catch (err) {
+          // Ignore if user not found
+        }
+      }
+    };
+    checkWallet();
+  }, [formData.walletAddress]);
+
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.walletAddress.trim()) {
