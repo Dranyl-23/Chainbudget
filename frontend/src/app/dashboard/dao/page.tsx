@@ -197,27 +197,29 @@ export default function DAOGovernancePage() {
       </div>
 
       {/* ── Filters & Desktop Search ── */}
-      <div className="sticky top-[68px] md:static z-30 flex flex-row items-center justify-between w-[calc(100%+2rem)] md:w-auto -mx-4 md:mx-0 px-4 md:px-0 pointer-events-none">
+      <div className="sticky top-[63px] md:static z-30 flex flex-row items-center justify-between w-[calc(100%+2rem)] md:w-auto -mx-4 md:mx-0 pointer-events-none">
         
         {/* Tabs */}
-        <div className="flex w-full md:w-auto gap-1 bg-gray-100 dark:bg-black/20 p-1 md:rounded-lg overflow-x-auto custom-scrollbar glass border-x-0 md:border-x md:rounded-xl p-2 backdrop-blur-xl shadow-sm md:shadow-none pointer-events-auto">
-          {["active", "all", "passed", "rejected"].map((status) => (
-            <button
-              key={status}
-              onClick={() => setActiveFilter(status)}
-              className={`px-4 py-1.5 rounded-md text-sm font-medium capitalize transition-all whitespace-nowrap ${
-                activeFilter === status 
-                  ? "bg-primary text-white shadow-lg" 
-                  : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/5"
-              }`}
-            >
-              {status}
-            </button>
-          ))}
+        <div className="w-full md:w-auto glass border-x-0 md:border-x md:rounded-xl p-2 px-4 md:px-2 backdrop-blur-xl shadow-sm md:shadow-none pointer-events-auto">
+          <div className="flex w-full gap-1 bg-gray-100 dark:bg-black/20 p-1 rounded-lg overflow-x-auto custom-scrollbar">
+            {["active", "all", "passed", "rejected"].map((status) => (
+              <button
+                key={status}
+                onClick={() => setActiveFilter(status)}
+                className={`flex-1 md:flex-none px-4 py-1.5 rounded-md text-sm font-medium capitalize transition-all whitespace-nowrap text-center ${
+                  activeFilter === status 
+                    ? "bg-primary text-white shadow-lg" 
+                    : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/5"
+                }`}
+              >
+                {status}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Desktop Search */}
-        <div className="hidden md:block relative w-64 glass rounded-xl p-1.5 backdrop-blur-xl pointer-events-auto">
+        <div className="hidden md:block relative w-64 glass rounded-xl p-1.5 backdrop-blur-xl pointer-events-auto mr-4 md:mr-0">
           <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
