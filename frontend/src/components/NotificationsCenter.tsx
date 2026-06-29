@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Bell, AlertCircle, CheckCircle2, Link as LinkIcon, X } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { io, Socket } from "socket.io-client";
+import api from "@/lib/api";
 
 interface NotificationItem {
   id: string;
@@ -40,13 +41,9 @@ export default function NotificationsCenter() {
 
     const fetchNotifications = async () => {
       try {
-        const token = localStorage.getItem("token");
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/notifications?orgId=${activeOrgId}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        const data = await res.json();
-        if (data.notifications) {
-          setNotifications(data.notifications);
+        const res = await api.get(`/notifications?orgId=${activeOrgId}`);
+        if (res.data.notifications) {
+          setNotifications(res.data.notifications);
         }
       } catch (error) {
         console.error("Failed to fetch notifications:", error);
@@ -93,15 +90,7 @@ export default function NotificationsCenter() {
   const markAllAsRead = async () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
     try {
-      const token = localStorage.getItem("token");
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/notifications/read-all`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ orgId: activeOrgId })
-      });
+      await api.post("/notifications/read-all", { orgId: activeOrgId });
     } catch (err) {
       console.error(err);
     }
@@ -179,11 +168,7 @@ export default function NotificationsCenter() {
                       if (!notif.isRead) {
                         setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, isRead: true } : n));
                         try {
-                          const token = localStorage.getItem("token");
-                          await fetch(`${process.env.NEXT_PUBLIC_API_URL}/notifications/${notif.id}/read`, {
-                            method: "POST",
-                            headers: { Authorization: `Bearer ${token}` }
-                          });
+                          await api.post(`/notifications/${notif.id}/read`);
                         } catch (err) {
                           console.error(err);
                         }
