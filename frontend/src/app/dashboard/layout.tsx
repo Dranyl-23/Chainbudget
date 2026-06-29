@@ -228,9 +228,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           )}
         </nav>
 
-        {/* Wallet info */}
-        <div className="px-3 mt-auto mb-4">
-          <div className={`transition-all duration-300 overflow-hidden ${isCollapsed ? 'max-h-0 opacity-0 m-0 p-0 border-0' : 'max-h-[200px] opacity-100 px-3 py-3 mb-2 rounded-lg sidebar-card'}`}>
+        {/* Wallet info & Bottom Links */}
+        <div className="px-3 mt-auto mb-4 flex flex-col gap-1">
+          {/* Mobile Profile Card */}
+          <div className={`md:hidden transition-all duration-300 overflow-hidden ${isCollapsed ? 'max-h-0 opacity-0 m-0 p-0 border-0' : 'max-h-[200px] opacity-100 px-3 py-3 mb-2 rounded-lg sidebar-card'}`}>
             <div 
               className="flex items-center justify-between mb-2 group cursor-pointer hover:bg-white/5 rounded px-1 -mx-1 transition-colors"
               onClick={() => {
@@ -285,7 +286,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <span className="chain-dot" />
               <span className="text-xs text-gray-600">
                 {(() => {
-                  // BUG-4 FIX: Dynamic network name
                   if (typeof window !== "undefined" && (window as any).ethereum) {
                     const chainId = (window as any).ethereum.chainId;
                     if (chainId === "0x7a69" || chainId === "0x7A69") return "Hardhat Localhost";
@@ -298,6 +298,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </span>
             </div>
           </div>
+
           <Link
             href="/tutorials"
             title={isCollapsed ? "Tutorials" : ""}
@@ -308,11 +309,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               Tutorials
             </span>
           </Link>
+
           <button
             title={isCollapsed ? "Disconnect" : ""}
             onClick={() => setShowDisconnectModal(true)}
             id="logout-btn"
-            className={`nav-item flex items-center gap-3 w-full transition-all duration-300 text-gray-500 hover:text-danger ${isCollapsed ? 'justify-center px-0' : ''}`}
+            className={`md:hidden nav-item flex items-center gap-3 w-full transition-all duration-300 text-gray-500 hover:text-danger ${isCollapsed ? 'justify-center px-0' : ''}`}
           >
             <div className="flex-shrink-0"><LogOut className="w-4 h-4" /></div>
             <span className={`transition-all duration-300 whitespace-nowrap ${isCollapsed ? 'max-w-0 opacity-0' : 'max-w-[150px] opacity-100'}`}>
@@ -326,8 +328,74 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <main className="flex-1 overflow-auto w-full md:w-auto relative flex flex-col">
         
         {/* Desktop Top Navigation Bar */}
-        <div className="hidden md:flex items-center justify-end px-8 py-4 sticky top-0 z-40 bg-[var(--color-bg)]/80 backdrop-blur-xl border-b border-white/5">
+        <div className="hidden md:flex items-center justify-end px-8 py-4 sticky top-0 z-40 bg-[var(--color-bg)]/80 backdrop-blur-xl border-b border-white/5 gap-4">
           <NotificationsCenter />
+
+          {/* Top Nav Profile Pill */}
+          <div className="flex items-center gap-4 pl-4 border-l border-white/10">
+            {/* Role & Network */}
+            <div className="flex items-center gap-2">
+              <span className={`px-2 py-1 rounded-sm text-[9px] uppercase tracking-widest font-bold flex items-center gap-1 w-fit ${
+                  roleLevel === 1 ? 'role-badge-superadmin' :
+                  roleLevel === 2 ? 'role-badge-approver' :
+                  roleLevel === 3 ? 'role-badge-member' : 'role-badge-readonly'
+                }`}>
+                  {roleLevel === 1 ? <><Crown className="w-3 h-3" /> Exec</> : 
+                   roleLevel === 2 ? <><CheckCircle2 className="w-3 h-3" /> Apprv</> : 
+                   roleLevel === 3 ? <><UserIcon className="w-3 h-3" /> Mem</> : 
+                   <><Eye className="w-3 h-3" /> Pub</>}
+              </span>
+              <div className="flex items-center gap-1.5 bg-white/5 px-2 py-1 rounded-md border border-white/10">
+                <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                <span className="text-[10px] text-gray-400">
+                  {(() => {
+                    if (typeof window !== "undefined" && (window as any).ethereum) {
+                      const chainId = (window as any).ethereum.chainId;
+                      if (chainId === "0x7a69" || chainId === "0x7A69") return "Localhost";
+                      if (chainId === "0x13882") return "Amoy";
+                      if (chainId === "0x89") return "Polygon";
+                      if (chainId === "0x1") return "Ethereum";
+                    }
+                    return "Amoy";
+                  })()}
+                </span>
+              </div>
+            </div>
+
+            {/* Profile Info */}
+            <div 
+              className="flex items-center gap-3 cursor-pointer group"
+              onClick={() => {
+                if (walletAddress) {
+                  navigator.clipboard.writeText(walletAddress);
+                  toast.success("Wallet address copied!");
+                }
+              }}
+              title="Copy full wallet address"
+            >
+              <div className="flex flex-col items-end">
+                <span className="text-sm font-bold text-white flex items-center gap-1">
+                  {user?.displayName || "User"}
+                  {currentMembership?.hasSBT && (
+                    <ShieldCheck className="w-3.5 h-3.5 text-cyan-400 drop-shadow-[0_0_5px_rgba(34,211,238,0.8)]" />
+                  )}
+                </span>
+                <span className="text-[10px] font-mono text-cyan-400/70 group-hover:text-cyan-300 transition-colors">{shortAddress}</span>
+              </div>
+              <div className="w-10 h-10 rounded-full border border-purple-500/30 overflow-hidden shadow-[inset_0_0_10px_rgba(139,92,246,0.2)]">
+                 {user?.avatarUrl ? <img src={user.avatarUrl} className="w-full h-full object-cover" /> : <UserCircle className="w-full h-full text-purple-400 bg-white/5" />}
+              </div>
+            </div>
+
+            {/* Disconnect */}
+            <button 
+              onClick={() => setShowDisconnectModal(true)}
+              className="p-2 rounded-lg bg-white/5 hover:bg-red-500/20 text-gray-400 hover:text-red-400 border border-white/5 hover:border-red-500/30 transition-all ml-1"
+              title="Disconnect"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 relative">
