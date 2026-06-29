@@ -34,6 +34,27 @@ export default function NotificationsCenter() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isOpen]);
 
+  // Fetch initial notifications
+  useEffect(() => {
+    if (!isConnected || !activeOrgId) return;
+
+    const fetchNotifications = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/notifications?orgId=${activeOrgId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (data.notifications) {
+          setNotifications(data.notifications);
+        }
+      } catch (error) {
+        console.error("Failed to fetch notifications:", error);
+      }
+    };
+    fetchNotifications();
+  }, [isConnected, activeOrgId]);
+
   // Connect to Socket.IO and listen for events
   useEffect(() => {
     if (!isConnected || !activeOrgId) return;
@@ -69,8 +90,21 @@ export default function NotificationsCenter() {
 
   const unreadCount = notifications.filter((n) => !n.isRead).length;
 
-  const markAllAsRead = () => {
+  const markAllAsRead = async () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    try {
+      const token = localStorage.getItem("token");
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/notifications/read-all`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ orgId: activeOrgId })
+      });
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const getIconForType = (type: string) => {
@@ -141,8 +175,19 @@ export default function NotificationsCenter() {
                     className={`p-4 flex gap-3 hover:bg-white/5 transition-colors cursor-pointer ${
                       !notif.isRead ? "bg-purple-900/10" : ""
                     }`}
-                    onClick={() => {
-                      setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, isRead: true } : n));
+                    onClick={async () => {
+                      if (!notif.isRead) {
+                        setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, isRead: true } : n));
+                        try {
+                          const token = localStorage.getItem("token");
+                          await fetch(`${process.env.NEXT_PUBLIC_API_URL}/notifications/${notif.id}/read`, {
+                            method: "POST",
+                            headers: { Authorization: `Bearer ${token}` }
+                          });
+                        } catch (err) {
+                          console.error(err);
+                        }
+                      }
                     }}
                   >
                     <div className="flex-shrink-0 mt-0.5">

@@ -4,6 +4,7 @@ const Transaction = require("../models/Transaction");
 const Organization = require("../models/Organization");
 const AuditLog = require("../models/AuditLog");
 const User = require("../models/User");
+const Notification = require("../models/Notification");
 const { recordTransactionOnChain } = require("../services/blockchain");
 const { authenticate, requireRole } = require("../middleware/auth");
 const { sendEmail } = require("../services/email");
@@ -161,19 +162,31 @@ router.post("/", authenticate, requireRole(3), async (req, res) => {
       onChainTxId: blockchainResult?.onChainTxId,
     });
 
-    // Emit socket event
+    // Save and Emit Notification
+    const notifTitle = isRequest ? (urgency === "urgent" ? "Urgent Request" : "Budget Request") : "New Transaction";
+    const notifMessage = isRequest 
+      ? `${req.user.displayName || 'A member'} requested ₱${amount.toLocaleString()} for ${description.substring(0,30)}...`
+      : `A new transaction of ₱${amount.toLocaleString()} was created.`;
+    const notifType = (isRequest || urgency === "urgent") ? "urgent" : "blockchain";
+
+    const newNotif = await Notification.create({
+      organization: organizationId,
+      title: notifTitle,
+      message: notifMessage,
+      type: notifType,
+      readBy: []
+    });
+
     const io = req.app.get("io");
     if (io) {
       io.emit("transaction_updated", { orgId: organizationId });
       io.emit("new_notification", {
         orgId: organizationId,
-        id: txn._id,
-        title: isRequest ? (urgency === "urgent" ? "Urgent Request" : "Budget Request") : "New Transaction",
-        message: isRequest 
-          ? `${req.user.displayName || 'A member'} requested ${amount} for ${description.substring(0,20)}...`
-          : `A new transaction of ${amount} was created.`,
-        type: (isRequest || urgency === "urgent") ? "urgent" : "blockchain",
-        timestamp: new Date().toISOString()
+        id: newNotif._id,
+        title: notifTitle,
+        message: notifMessage,
+        type: notifType,
+        timestamp: newNotif.createdAt
       });
     }
 
