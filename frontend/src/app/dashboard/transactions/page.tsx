@@ -26,6 +26,8 @@ import {
   Link2,
   XCircle,
   Download,
+  Sparkles,
+  BrainCircuit,
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import toast from "react-hot-toast";
@@ -114,8 +116,13 @@ export default function TransactionsPage() {
   // File upload state
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>(null);
+  const [rawFile, setRawFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+
+  // AI Scan State
+  const [isAiScanning, setIsAiScanning] = useState(false);
+  const [aiScanSuccess, setAiScanSuccess] = useState(false);
 
   // Attach receipt later state
   const attachFileInputRef = useRef<HTMLInputElement>(null);
@@ -171,6 +178,8 @@ export default function TransactionsPage() {
     setError(null);
     setUploadError(null);
     setUploadedFile(null);
+    setRawFile(null);
+    setAiScanSuccess(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
     setExpenseData({ type: "expense", amount: "", description: "", category: "", referenceNumber: "", notes: "", urgency: "normal", isEscrow: false });
     setIncomeData({ type: "income", amount: "", description: "", category: "", referenceNumber: "", notes: "", urgency: "normal", isEscrow: false });
@@ -218,6 +227,7 @@ export default function TransactionsPage() {
     setIsUploading(true);
     setUploadError(null);
     setUploadedFile(null);
+    setRawFile(file);
 
     try {
       const fd = new FormData();
@@ -231,6 +241,33 @@ export default function TransactionsPage() {
       if (fileInputRef.current) fileInputRef.current.value = "";
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const handleAiAutoFill = async () => {
+    if (!rawFile) return;
+    setIsAiScanning(true);
+    try {
+      const fd = new FormData();
+      fd.append("receipt", rawFile);
+      const res = await api.post("/ai/scan-receipt", fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      const data = res.data;
+      setFormData((prev: any) => ({
+        ...prev,
+        amount: data.totalAmount?.toString() || prev.amount,
+        description: data.merchant || prev.description,
+        category: data.suggestedCategory || prev.category,
+      }));
+      setAiScanSuccess(true);
+      setTimeout(() => setAiScanSuccess(false), 3000);
+      toast.success("AI successfully extracted details!");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to scan receipt with AI");
+    } finally {
+      setIsAiScanning(false);
     }
   };
 
@@ -994,13 +1031,37 @@ export default function TransactionsPage() {
                       </div>
                       <CheckCircle2 className="w-4 h-4 text-green-400 flex-shrink-0 drop-shadow-[0_0_5px_rgba(74,222,128,0.8)]" />
                     </div>
-                    <button
-                      type="button"
-                      onClick={removeUpload}
-                      className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-danger/10 text-gray-400 hover:text-danger transition-colors flex-shrink-0"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleAiAutoFill}
+                        disabled={isAiScanning}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold text-xs shadow-sm transition-all ${
+                          aiScanSuccess 
+                            ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" 
+                            : "bg-gradient-to-r from-purple-500/10 to-blue-500/10 hover:from-purple-500/20 hover:to-blue-500/20 text-cyan-400 border border-cyan-500/20 hover:border-cyan-400/50"
+                        }`}
+                      >
+                        {isAiScanning ? (
+                          <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Scanning...</>
+                        ) : aiScanSuccess ? (
+                          <><CheckCircle2 className="w-3.5 h-3.5" /> Scanned!</>
+                        ) : (
+                          <><Sparkles className="w-3.5 h-3.5" /> AI Auto-fill</>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          removeUpload();
+                          setRawFile(null);
+                          setAiScanSuccess(false);
+                        }}
+                        className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-danger/10 text-gray-400 hover:text-danger transition-colors flex-shrink-0"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 )}
 
