@@ -24,6 +24,9 @@ const notificationRoutes = require("./routes/notifications");
 const { generalRateLimiter, csrfProtection } = require("./middleware/security");
 
 const app = express();
+// Enable trust proxy so rate limiter works behind Render's load balancer
+app.set("trust proxy", 1);
+
 const PORT = process.env.PORT || 5000;
 
 // ── WebSocket Server ──────────────────────────────────────────────────────────
