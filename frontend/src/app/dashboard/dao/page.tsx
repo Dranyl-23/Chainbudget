@@ -197,7 +197,7 @@ export default function DAOGovernancePage() {
       </div>
 
       {/* ── Filters & Desktop Search ── */}
-      <div className="sticky top-[63px] md:static z-30 flex flex-row items-center justify-between w-[calc(100%+2rem)] md:w-auto -mx-4 md:mx-0 pointer-events-none">
+      <div className="sticky top-0 md:static z-30 flex flex-row items-center justify-between w-[calc(100%+2rem)] md:w-auto -mx-4 md:mx-0 pointer-events-none pb-2 md:pb-0">
         
         {/* Tabs */}
         <div className="w-full md:w-auto glass border-x-0 md:border-x md:rounded-xl p-2 px-4 md:px-2 backdrop-blur-xl shadow-sm md:shadow-none pointer-events-auto">
