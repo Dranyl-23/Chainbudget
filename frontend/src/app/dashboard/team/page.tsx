@@ -71,9 +71,10 @@ export default function TeamPage() {
 
   useEffect(() => {
     const checkWallet = async () => {
-      if (formData.walletAddress.length === 42 && formData.walletAddress.startsWith("0x")) {
+      const address = formData.walletAddress.trim();
+      if (address.length === 42 && address.startsWith("0x")) {
         try {
-          const res = await api.get(`/users/by-wallet/${formData.walletAddress}`);
+          const res = await api.get(`/users/by-wallet/${address}`);
           if (res.data) {
             toast.success("User found! Auto-filling details.");
             setFormData(prev => ({
