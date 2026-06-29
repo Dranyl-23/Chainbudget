@@ -76,11 +76,13 @@ export default function TeamPage() {
         try {
           const res = await api.get(`/users/by-wallet/${address}`);
           if (res.data) {
-            toast.success("User found! Auto-filling details.");
+            const fetchedName = res.data.displayName === "New User" ? "" : res.data.displayName;
+            const fetchedEmail = res.data.email || "";
+            toast.success(`Found: ${fetchedName || 'No Name'} | ${fetchedEmail || 'No Email'}`);
             setFormData(prev => ({
               ...prev,
-              displayName: prev.displayName || (res.data.displayName !== "New User" ? res.data.displayName : ""),
-              email: prev.email || res.data.email || ""
+              displayName: prev.displayName || fetchedName || "",
+              email: prev.email || fetchedEmail || ""
             }));
           }
         } catch (err: any) {
