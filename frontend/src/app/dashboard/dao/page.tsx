@@ -54,6 +54,12 @@ export default function DAOGovernancePage() {
   });
   const [activeFilter, setActiveFilter] = useState("active");
   const [searchQuery, setSearchQuery] = useState("");
+  const [visibleCount, setVisibleCount] = useState(6);
+
+  // Reset pagination when filter or search changes
+  useEffect(() => {
+    setVisibleCount(6);
+  }, [activeFilter, searchQuery]);
 
   const filteredProposals = proposals.filter((p) => {
     if (activeFilter !== "all" && p.status !== activeFilter) return false;
@@ -223,14 +229,15 @@ export default function DAOGovernancePage() {
       {loading ? (
         <TableSkeleton />
       ) : (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredProposals.length === 0 ? (
-          <div className="col-span-full py-16 text-center text-gray-500 glass rounded-2xl">
-            <Vote className="w-12 h-12 mx-auto mb-4 opacity-20" />
-            <p>No {activeFilter !== "all" ? activeFilter : ""} proposals found.</p>
-          </div>
-        ) : (
-          filteredProposals.map(p => (
+      <>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredProposals.length === 0 ? (
+            <div className="col-span-full py-16 text-center text-gray-500 glass rounded-2xl">
+              <Vote className="w-12 h-12 mx-auto mb-4 opacity-20" />
+              <p>No {activeFilter !== "all" ? activeFilter : ""} proposals found.</p>
+            </div>
+          ) : (
+            filteredProposals.slice(0, visibleCount).map(p => (
             <div key={p._id} className="glass p-4 md:p-6 rounded-xl md:rounded-2xl flex flex-col hover:-translate-y-1 transition-transform duration-300">
               <div className="flex justify-between items-start mb-3 md:mb-4">
                 <span className={`badge ${p.status === 'active' ? 'badge-pending' : p.status === 'passed' ? 'badge-approved' : 'badge-rejected'}`}>
@@ -297,6 +304,19 @@ export default function DAOGovernancePage() {
             ))
           )}
         </div>
+
+        {/* Load More Button */}
+        {filteredProposals.length > visibleCount && (
+          <div className="flex justify-center mt-8 w-full">
+            <button
+              onClick={() => setVisibleCount(prev => prev + 6)}
+              className="px-8 py-3 rounded-full border border-primary/30 text-primary hover:bg-primary/10 transition-colors font-semibold text-sm flex items-center gap-2 shadow-[0_0_15px_rgba(139,92,246,0.1)] hover:-translate-y-1"
+            >
+              Load More Proposals
+            </button>
+          </div>
+        )}
+      </>
       )}
 
       {/* ── Create Proposal Modal ── */}
