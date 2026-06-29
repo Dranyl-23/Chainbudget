@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { BookOpen, Video, ChevronRight, UserPlus, Building2, Users, LogIn, Wallet, CheckCircle2, ArrowRight, ExternalLink } from "lucide-react";
 
 const tutorials = [
@@ -126,6 +127,58 @@ const tutorials = [
   },
 ];
 
+const TutorialStep = ({ step, stepIdx, totalSteps }: { step: any, stepIdx: number, totalSteps: number }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const maxLength = 100; // character limit before truncating on mobile
+  
+  const shouldTruncate = step.desc.length > maxLength;
+  const displayText = !isExpanded && shouldTruncate ? `${step.desc.substring(0, maxLength)}...` : step.desc;
+
+  return (
+    <div className="flex gap-4">
+      <div className="flex flex-col items-center gap-1 flex-shrink-0">
+        <div className="w-7 h-7 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-xs font-bold text-white/70 flex-shrink-0">
+          {stepIdx + 1}
+        </div>
+        {stepIdx < totalSteps - 1 && (
+          <div className="w-px flex-1 min-h-[20px] bg-white/10" />
+        )}
+      </div>
+      <div className="pb-4 flex-1 min-w-0">
+        <p className="font-semibold text-white text-sm mb-1">{step.title}</p>
+        <p className="text-white/55 text-sm leading-relaxed">
+          {/* Mobile view truncates, desktop view shows all */}
+          <span className="sm:hidden">
+            {displayText}
+            {shouldTruncate && (
+              <button
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="ml-1 text-cyan-400 hover:text-cyan-300 font-medium"
+              >
+                {isExpanded ? "Show less" : "Read more"}
+              </button>
+            )}
+          </span>
+          <span className="hidden sm:inline">
+            {step.desc}
+          </span>
+        </p>
+        {step.link && (
+          <a
+            href={step.link.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 mt-2 text-xs text-cyan-400 hover:text-cyan-300 transition-colors"
+          >
+            <ExternalLink className="w-3 h-3" />
+            {step.link.label}
+          </a>
+        )}
+      </div>
+    </div>
+  );
+};
+
 export default function TutorialsPage() {
   return (
     <main className="min-h-screen bg-[#0A0216] text-white">
@@ -222,31 +275,12 @@ export default function TutorialsPage() {
               {/* Steps */}
               <div className="px-6 py-5 space-y-5">
                 {tutorial.steps.map((step, stepIdx) => (
-                  <div key={stepIdx} className="flex gap-4">
-                    <div className="flex flex-col items-center gap-1 flex-shrink-0">
-                      <div className="w-7 h-7 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-xs font-bold text-white/70 flex-shrink-0">
-                        {stepIdx + 1}
-                      </div>
-                      {stepIdx < tutorial.steps.length - 1 && (
-                        <div className="w-px flex-1 min-h-[20px] bg-white/10" />
-                      )}
-                    </div>
-                    <div className="pb-4 flex-1 min-w-0">
-                      <p className="font-semibold text-white text-sm mb-1">{step.title}</p>
-                      <p className="text-white/55 text-sm leading-relaxed">{step.desc}</p>
-                      {step.link && (
-                        <a
-                          href={step.link.href}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 mt-2 text-xs text-cyan-400 hover:text-cyan-300 transition-colors"
-                        >
-                          <ExternalLink className="w-3 h-3" />
-                          {step.link.label}
-                        </a>
-                      )}
-                    </div>
-                  </div>
+                  <TutorialStep 
+                    key={stepIdx} 
+                    step={step} 
+                    stepIdx={stepIdx} 
+                    totalSteps={tutorial.steps.length} 
+                  />
                 ))}
               </div>
             </div>
