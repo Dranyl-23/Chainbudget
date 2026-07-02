@@ -16,6 +16,8 @@ export default function Onboarding() {
     type: "student_org",
     description: "",
     highValueThreshold: 10000,
+    requiredApprovals: 2,
+    isPrivate: false,
   });
 
   const handleCreateOrg = async (e: React.FormEvent) => {
@@ -214,6 +216,22 @@ export default function Onboarding() {
                   value={formData.highValueThreshold}
                   onChange={(e) => setFormData({ ...formData, highValueThreshold: Number(e.target.value) })}
                 />
+              </div>
+
+              <div className="flex flex-col gap-2 p-4 bg-gray-50 rounded-xl border border-gray-100">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-bold text-gray-800">Private Organization</label>
+                  <button 
+                    type="button" 
+                    onClick={() => setFormData({ ...formData, isPrivate: !formData.isPrivate })}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formData.isPrivate ? 'bg-primary' : 'bg-gray-300'}`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.isPrivate ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  If enabled, only members can view your transaction ledger and DAO. Your organization will still be listed in the public directory.
+                </p>
               </div>
 
               <div className="pt-4 flex gap-3">

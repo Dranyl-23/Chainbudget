@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ShieldCheck, Activity, Link as LinkIcon, AlertTriangle, ArrowUpRight, ArrowDownRight, ArrowRight, ExternalLink } from "lucide-react";
+import { ArrowLeft, ShieldCheck, Activity, Link as LinkIcon, AlertTriangle, ArrowUpRight, ArrowDownRight, ArrowRight, ExternalLink, Lock } from "lucide-react";
 import api from "@/lib/api";
 import { ethers } from "ethers";
 
@@ -15,6 +15,7 @@ interface Organization {
   logoUrl: string;
   contractAddress: string;
   transparencyScore: number;
+  isPrivate?: boolean;
 }
 
 interface Transaction {
@@ -50,26 +51,32 @@ export default function PublicDashboardPage() {
 
     const fetchDashboard = async () => {
       try {
-        const [orgRes, txsRes, budgetRes] = await Promise.all([
-          api.get(`/public/organizations/${orgId}`),
-          api.get(`/public/organizations/${orgId}/transactions`),
-          api.get(`/public/organizations/${orgId}/budget`)
-        ]);
-
-        setOrg(orgRes.data);
-        setTransactions(txsRes.data);
-        setBudgets(budgetRes.data);
+        const orgRes = await api.get(`/public/organizations/${orgId}`);
+        const orgData = orgRes.data;
+        setOrg(orgData);
 
         // Fetch live balance if contract address exists
-        if (orgRes.data.contractAddress) {
+        if (orgData.contractAddress) {
           try {
             const provider = new ethers.JsonRpcProvider("https://rpc-amoy.polygon.technology");
-            const balanceWei = await provider.getBalance(orgRes.data.contractAddress);
+            const balanceWei = await provider.getBalance(orgData.contractAddress);
             const balancePol = ethers.formatEther(balanceWei);
             setBalance(parseFloat(balancePol).toFixed(4));
           } catch (ethErr) {
             console.error("Failed to fetch balance", ethErr);
           }
+        }
+
+        if (!orgData.isPrivate) {
+          const [txsRes, budgetRes] = await Promise.all([
+            api.get(`/public/organizations/${orgId}/transactions`),
+            api.get(`/public/organizations/${orgId}/budget`)
+          ]);
+          setTransactions(txsRes.data);
+          setBudgets(budgetRes.data);
+        } else {
+          setTransactions([]);
+          setBudgets([]);
         }
       } catch (err) {
         console.error(err);
@@ -169,142 +176,159 @@ export default function PublicDashboardPage() {
           </div>
         </div>
 
-        {/* ── Overview Stats ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-          {/* Live Balance */}
-          <div className="glass rounded-2xl p-6 lg:p-8 flex flex-col border border-white/5 relative overflow-hidden group">
-            <div className="absolute -right-10 -top-10 w-40 h-40 bg-cyan-500/10 blur-[50px] rounded-full pointer-events-none group-hover:bg-cyan-500/20 transition-colors duration-500" />
-            <div className="flex items-center gap-2 mb-6 relative z-10">
-              <Activity className="w-5 h-5 text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
-              <h3 className="text-sm font-bold text-white/50 uppercase tracking-widest">Public Treasury Balance</h3>
+        {org.isPrivate ? (
+          <div className="glass rounded-2xl p-12 lg:p-20 text-center border border-white/5 flex flex-col items-center justify-center mt-8">
+            <div className="w-24 h-24 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mb-6 shadow-[inset_0_0_20px_rgba(255,255,255,0.05)]">
+              <Lock className="w-10 h-10 text-white/30" />
             </div>
-            <div className="flex-1 flex flex-col justify-center relative z-10">
-              <div className="flex items-baseline gap-2">
-                <span className="text-5xl md:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-cyan-500 drop-shadow-lg">
-                  {balance || "0.0000"}
-                </span>
-                <span className="text-xl font-bold text-cyan-500/50">POL</span>
-              </div>
-              {org.contractAddress ? (
-                <p className="text-xs text-white/30 mt-4 flex items-center gap-1 font-mono">
-                  {org.contractAddress.slice(0, 8)}...{org.contractAddress.slice(-6)}
-                  <a href={`https://amoy.polygonscan.com/address/${org.contractAddress}`} target="_blank" rel="noopener noreferrer" className="ml-2 text-fuchsia-400 hover:text-fuchsia-300 underline">View on Explorer</a>
-                </p>
-              ) : (
-                <p className="text-xs text-yellow-500/70 mt-4">No Smart Contract Linked</p>
-              )}
-            </div>
+            <h2 className="text-3xl font-bold text-white mb-3 tracking-tight">Private Organization</h2>
+            <p className="text-white/50 max-w-md mx-auto text-lg leading-relaxed">
+              This organization has restricted public access. Only authorized members can view the treasury balance, budget utilization, and transaction ledger.
+            </p>
+            <Link href="/dashboard" className="mt-8 px-6 py-3 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl transition-colors border border-white/10">
+              Go to Member Dashboard
+            </Link>
           </div>
+        ) : (
+          <>
+            {/* ── Overview Stats ── */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+              {/* Live Balance */}
+              <div className="glass rounded-2xl p-6 lg:p-8 flex flex-col border border-white/5 relative overflow-hidden group">
+                <div className="absolute -right-10 -top-10 w-40 h-40 bg-cyan-500/10 blur-[50px] rounded-full pointer-events-none group-hover:bg-cyan-500/20 transition-colors duration-500" />
+                <div className="flex items-center gap-2 mb-6 relative z-10">
+                  <Activity className="w-5 h-5 text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
+                  <h3 className="text-sm font-bold text-white/50 uppercase tracking-widest">Public Treasury Balance</h3>
+                </div>
+                <div className="flex-1 flex flex-col justify-center relative z-10">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-5xl md:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-cyan-500 drop-shadow-lg">
+                      {balance || "0.0000"}
+                    </span>
+                    <span className="text-xl font-bold text-cyan-500/50">POL</span>
+                  </div>
+                  {org.contractAddress ? (
+                    <p className="text-xs text-white/30 mt-4 flex items-center gap-1 font-mono">
+                      {org.contractAddress.slice(0, 8)}...{org.contractAddress.slice(-6)}
+                      <a href={`https://amoy.polygonscan.com/address/${org.contractAddress}`} target="_blank" rel="noopener noreferrer" className="ml-2 text-fuchsia-400 hover:text-fuchsia-300 underline">View on Explorer</a>
+                    </p>
+                  ) : (
+                    <p className="text-xs text-yellow-500/70 mt-4">No Smart Contract Linked</p>
+                  )}
+                </div>
+              </div>
 
-          {/* Budget Overview */}
-          <div className="lg:col-span-2 glass rounded-2xl p-6 lg:p-8 border border-white/5 relative overflow-hidden">
-            <div className="flex items-center justify-between mb-8">
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5 text-fuchsia-400 drop-shadow-[0_0_8px_rgba(217,70,239,0.8)]" />
-                <h3 className="text-sm font-bold text-white/50 uppercase tracking-widest">Public Budget Utilization</h3>
-              </div>
-              <div className="text-right">
-                <p className="text-xs text-white/40 font-bold uppercase tracking-widest mb-1">Total Allocated</p>
-                <p className="text-lg font-bold text-white">₱{(totalAllocated || 0).toLocaleString()}</p>
-              </div>
-            </div>
+              {/* Budget Overview */}
+              <div className="lg:col-span-2 glass rounded-2xl p-6 lg:p-8 border border-white/5 relative overflow-hidden">
+                <div className="flex items-center justify-between mb-8">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-5 h-5 text-fuchsia-400 drop-shadow-[0_0_8px_rgba(217,70,239,0.8)]" />
+                    <h3 className="text-sm font-bold text-white/50 uppercase tracking-widest">Public Budget Utilization</h3>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-white/40 font-bold uppercase tracking-widest mb-1">Total Allocated</p>
+                    <p className="text-lg font-bold text-white">₱{(totalAllocated || 0).toLocaleString()}</p>
+                  </div>
+                </div>
 
-            <div className="mb-6">
-              <div className="flex justify-between text-sm font-bold mb-2">
-                <span className="text-white/70">Total Spend</span>
-                <span className="text-fuchsia-400">{totalBudgetPercentage || 0}%</span>
-              </div>
-              <div className="w-full bg-white/5 rounded-full h-3 overflow-hidden border border-white/10">
-                <div 
-                  className="bg-gradient-to-r from-purple-500 to-fuchsia-500 h-full rounded-full relative"
-                  style={{ width: `${totalBudgetPercentage || 0}%` }}
-                >
-                  <div className="absolute inset-0 bg-white/20 w-full h-full animate-[shimmer_2s_infinite]" />
+                <div className="mb-6">
+                  <div className="flex justify-between text-sm font-bold mb-2">
+                    <span className="text-white/70">Total Spend</span>
+                    <span className="text-fuchsia-400">{totalBudgetPercentage || 0}%</span>
+                  </div>
+                  <div className="w-full bg-white/5 rounded-full h-3 overflow-hidden border border-white/10">
+                    <div 
+                      className="bg-gradient-to-r from-purple-500 to-fuchsia-500 h-full rounded-full relative"
+                      style={{ width: `${totalBudgetPercentage || 0}%` }}
+                    >
+                      <div className="absolute inset-0 bg-white/20 w-full h-full animate-[shimmer_2s_infinite]" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Top Categories */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  {(budgets || []).slice(0, 4).map((b) => (
+                    <div key={b._id} className="bg-white/5 rounded-xl p-3 border border-white/5">
+                      <p className="text-xs text-white/50 font-bold uppercase truncate mb-1" title={b.name || "Budget"}>{b.name || "Budget"}</p>
+                      <p className="text-sm font-bold text-white">₱{(b.spent || 0).toLocaleString()}</p>
+                    </div>
+                  ))}
+                  {(!budgets || budgets.length === 0) && (
+                    <div className="col-span-full text-center text-sm text-white/30 py-4">No public budget data available.</div>
+                  )}
                 </div>
               </div>
             </div>
 
-            {/* Top Categories */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              {(budgets || []).slice(0, 4).map((b) => (
-                <div key={b._id} className="bg-white/5 rounded-xl p-3 border border-white/5">
-                  <p className="text-xs text-white/50 font-bold uppercase truncate mb-1" title={b.name || "Budget"}>{b.name || "Budget"}</p>
-                  <p className="text-sm font-bold text-white">₱{(b.spent || 0).toLocaleString()}</p>
+            {/* ── Public Ledger ── */}
+            <div className="glass rounded-2xl p-6 lg:p-8 border border-white/5">
+              <div className="flex items-center justify-between mb-8">
+                <div>
+                  <h2 className="text-xl font-bold text-white mb-1">Verified Public Ledger</h2>
+                  <p className="text-sm text-white/50">Only transactions recorded and verified on the blockchain are shown here.</p>
                 </div>
-              ))}
-              {(!budgets || budgets.length === 0) && (
-                <div className="col-span-full text-center text-sm text-white/30 py-4">No public budget data available.</div>
-              )}
-            </div>
-          </div>
-        </div>
+              </div>
 
-        {/* ── Public Ledger ── */}
-        <div className="glass rounded-2xl p-6 lg:p-8 border border-white/5">
-          <div className="flex items-center justify-between mb-8">
-            <div>
-              <h2 className="text-xl font-bold text-white mb-1">Verified Public Ledger</h2>
-              <p className="text-sm text-white/50">Only transactions recorded and verified on the blockchain are shown here.</p>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-white/10 text-xs uppercase tracking-widest text-white/40">
-                  <th className="pb-4 font-bold pl-2">Date</th>
-                  <th className="pb-4 font-bold">Description</th>
-                  <th className="pb-4 font-bold">Category</th>
-                  <th className="pb-4 font-bold text-right">Amount</th>
-                  <th className="pb-4 font-bold text-center pr-2">Proof</th>
-                </tr>
-              </thead>
-              <tbody className="text-sm">
-                {(!transactions || transactions.length === 0) ? (
-                  <tr>
-                    <td colSpan={5} className="py-12 text-center text-white/30">
-                      No verified on-chain transactions yet.
-                    </td>
-                  </tr>
-                ) : (
-                  transactions.map((tx) => (
-                    <tr key={tx._id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors group">
-                      <td className="py-4 pl-2 text-white/60 whitespace-nowrap">
-                        {tx.createdAt ? new Date(tx.createdAt).toLocaleDateString() : "Unknown"}
-                      </td>
-                      <td className="py-4 text-white font-medium">
-                        {tx.description || "No description"}
-                      </td>
-                      <td className="py-4">
-                        <span className="px-2 py-1 rounded bg-white/5 text-[10px] uppercase tracking-widest text-white/50 border border-white/10">
-                          {tx.category || "Uncategorized"}
-                        </span>
-                      </td>
-                      <td className={`py-4 text-right font-bold whitespace-nowrap ${tx.type === "income" ? "text-green-400" : "text-white"}`}>
-                        {tx.type === "income" ? "+" : "-"}₱{(tx.amount || 0).toLocaleString()}
-                      </td>
-                      <td className="py-4 text-center pr-2">
-                        {tx.blockchainTxHash ? (
-                          <a 
-                            href={`https://amoy.polygonscan.com/tx/${tx.blockchainTxHash}`} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center justify-center p-1.5 rounded-lg bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 transition-colors border border-cyan-500/20"
-                            title="Verify on Polygonscan"
-                          >
-                            <ExternalLink className="w-4 h-4" />
-                          </a>
-                        ) : (
-                          <span className="text-white/20">-</span>
-                        )}
-                      </td>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-white/10 text-xs uppercase tracking-widest text-white/40">
+                      <th className="pb-4 font-bold pl-2">Date</th>
+                      <th className="pb-4 font-bold">Description</th>
+                      <th className="pb-4 font-bold">Category</th>
+                      <th className="pb-4 font-bold text-right">Amount</th>
+                      <th className="pb-4 font-bold text-center pr-2">Proof</th>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+                  </thead>
+                  <tbody className="text-sm">
+                    {(!transactions || transactions.length === 0) ? (
+                      <tr>
+                        <td colSpan={5} className="py-12 text-center text-white/30">
+                          No verified on-chain transactions yet.
+                        </td>
+                      </tr>
+                    ) : (
+                      transactions.map((tx) => (
+                        <tr key={tx._id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors group">
+                          <td className="py-4 pl-2 text-white/60 whitespace-nowrap">
+                            {tx.createdAt ? new Date(tx.createdAt).toLocaleDateString() : "Unknown"}
+                          </td>
+                          <td className="py-4 text-white font-medium">
+                            {tx.description || "No description"}
+                          </td>
+                          <td className="py-4">
+                            <span className="px-2 py-1 rounded bg-white/5 text-[10px] uppercase tracking-widest text-white/50 border border-white/10">
+                              {tx.category || "Uncategorized"}
+                            </span>
+                          </td>
+                          <td className={`py-4 text-right font-bold whitespace-nowrap ${tx.type === "income" ? "text-green-400" : "text-white"}`}>
+                            {tx.type === "income" ? "+" : "-"}₱{(tx.amount || 0).toLocaleString()}
+                          </td>
+                          <td className="py-4 text-center pr-2">
+                            {tx.blockchainTxHash ? (
+                              <a 
+                                href={`https://amoy.polygonscan.com/tx/${tx.blockchainTxHash}`} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center justify-center p-1.5 rounded-lg bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 transition-colors border border-cyan-500/20"
+                                title="Verify on Polygonscan"
+                              >
+                                <ExternalLink className="w-4 h-4" />
+                              </a>
+                            ) : (
+                              <span className="text-white/20">-</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
 
       </div>
 
