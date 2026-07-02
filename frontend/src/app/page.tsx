@@ -3,7 +3,7 @@
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
-import { Wallet, ShieldCheck, Users, BarChart3, Lock, LogIn, UserPlus, Search, Hexagon } from "lucide-react";
+import { Wallet, ShieldCheck, Users, BarChart3, Lock, LogIn, UserPlus, Search, Hexagon, Menu, X } from "lucide-react";
 import Link from "next/link";
 
 const features = [
@@ -34,6 +34,7 @@ export default function LandingPage() {
   const router = useRouter();
 
   const [infoModal, setInfoModal] = useState<{title: string, content: string} | null>(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const modalData = {
     whyUs: {
@@ -86,7 +87,35 @@ export default function LandingPage() {
           <span className="w-2 h-2 rounded-full bg-fuchsia-500 animate-pulse inline-block" />
           Polygon Amoy
         </div>
+        
+        {/* Mobile Menu Button */}
+        <button 
+          className="md:hidden p-2 text-white/70 hover:text-white transition-colors z-50"
+          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+        >
+          {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+        </button>
       </nav>
+
+      {/* Mobile Menu Dropdown */}
+      {isMobileMenuOpen && (
+        <div className="md:hidden absolute top-[72px] left-0 w-full bg-[#160B2E]/95 backdrop-blur-xl border-b border-purple-500/20 z-40 shadow-2xl animate-in slide-in-from-top-4">
+          <div className="flex flex-col p-6 gap-6 text-sm font-medium text-white/80">
+            <span onClick={() => { setInfoModal(modalData.whyUs); setIsMobileMenuOpen(false); }} className="hover:text-white cursor-pointer transition-colors flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-fuchsia-400"></span> Why us
+            </span>
+            <span onClick={() => { setInfoModal(modalData.features); setIsMobileMenuOpen(false); }} className="hover:text-white cursor-pointer transition-colors flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span> Features
+            </span>
+            <span onClick={() => { setInfoModal(modalData.security); setIsMobileMenuOpen(false); }} className="hover:text-white cursor-pointer transition-colors flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span> Security
+            </span>
+            <Link href="/tutorials" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-white transition-colors flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span> Tutorials
+            </Link>
+          </div>
+        </div>
+      )}
 
       {/* ── Hero ── */}
       <section className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-4 xl:gap-12 items-center px-6 md:px-16 pt-16 md:pt-20 pb-20 md:pb-32 max-w-7xl mx-auto w-full">
