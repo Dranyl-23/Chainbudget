@@ -36,6 +36,7 @@ const OrganizationSchema = new mongoose.Schema(
     // The amount to be automatically subsidized on approval (in PHP/smallest unit)
     subsidyAmount: { type: Number, default: 50000 },
     isActive: { type: Boolean, default: true },
+    isPrivate: { type: Boolean, default: false },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   },
   { timestamps: true }

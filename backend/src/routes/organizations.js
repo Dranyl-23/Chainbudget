@@ -18,7 +18,7 @@ const upload = multer({
 router.post("/", authenticate, upload.single("logo"), async (req, res) => {
   try {
     // BUG-8 FIX: Whitelist fields instead of spreading raw req.body
-    const { name, type, description, highValueThreshold, requiredApprovals } = req.body;
+    const { name, type, description, highValueThreshold, requiredApprovals, isPrivate } = req.body;
     if (!name || !type) {
       return res.status(400).json({ error: "name and type are required" });
     }
@@ -46,6 +46,7 @@ router.post("/", authenticate, upload.single("logo"), async (req, res) => {
       logoUrl: logoUrl,
       highValueThreshold: highValueThreshold || 10000,
       requiredApprovals: requiredApprovals || 2,
+      isPrivate: isPrivate === true || isPrivate === "true",
       createdBy: req.user._id,
     });
     await org.save();

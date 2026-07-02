@@ -64,7 +64,7 @@ export default function LandingPage() {
       <div className="absolute bottom-[-10%] left-[-10%] w-[120vw] md:w-[80vw] h-[120vw] md:h-[80vw] rounded-full bg-blue-800/20 blur-[120px] md:blur-[160px] pointer-events-none mix-blend-screen animate-pulse" style={{ animationDuration: '12s' }} />
       
       {/* ── Noise Overlay ── */}
-      <div className="absolute inset-0 bg-[url('/noise.png')] opacity-10 mix-blend-overlay pointer-events-none"></div>
+
 
       {/* ── Nav ── */}
       <nav className="relative z-20 flex items-center justify-between px-4 md:px-8 py-4 md:py-6">

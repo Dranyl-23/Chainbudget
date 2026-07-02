@@ -63,7 +63,7 @@ export default function VerifyPage() {
       <div className="absolute top-[-20%] left-[-10%] w-[70vw] h-[70vw] rounded-full bg-fuchsia-600/30 blur-[150px] pointer-events-none mix-blend-screen animate-pulse" style={{ animationDuration: '10s' }} />
       <div className="absolute top-[10%] right-[-20%] w-[60vw] h-[60vw] rounded-full bg-cyan-600/20 blur-[130px] pointer-events-none mix-blend-screen animate-pulse" style={{ animationDuration: '14s' }} />
       <div className="absolute bottom-[-10%] left-[20%] w-[80vw] h-[80vw] rounded-full bg-blue-800/20 blur-[160px] pointer-events-none mix-blend-screen animate-pulse" style={{ animationDuration: '12s' }} />
-      <div className="absolute inset-0 bg-[url('/noise.png')] opacity-10 mix-blend-overlay pointer-events-none"></div>
+
 
       {/* ── Nav ── */}
       <nav className="relative z-20 flex items-center justify-between px-8 py-5 border-b border-purple-500/20 bg-[#160B2E]/40 backdrop-blur-md">

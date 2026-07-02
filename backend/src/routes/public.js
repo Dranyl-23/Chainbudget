@@ -29,7 +29,8 @@ router.get("/organizations", async (req, res) => {
         description: org.description,
         logoUrl: org.logoUrl,
         contractAddress: org.contractAddress,
-        transparencyScore
+        transparencyScore,
+        isPrivate: org.isPrivate || false
       };
     }));
 
@@ -62,7 +63,8 @@ router.get("/organizations/:orgId", async (req, res) => {
       description: org.description,
       logoUrl: org.logoUrl,
       contractAddress: org.contractAddress,
-      transparencyScore
+      transparencyScore,
+      isPrivate: org.isPrivate || false
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -72,6 +74,11 @@ router.get("/organizations/:orgId", async (req, res) => {
 // ── GET /api/public/organizations/:orgId/transactions ── Fetch public on-chain transactions only
 router.get("/organizations/:orgId/transactions", async (req, res) => {
   try {
+    const org = await Organization.findById(req.params.orgId).lean();
+    if (org && org.isPrivate) {
+      return res.status(403).json({ error: "This organization is private. Transactions are restricted." });
+    }
+
     // Only fetch APPROVED and ON-CHAIN transactions. Reject pending requests.
     const transactions = await Transaction.find({ 
       organization: req.params.orgId,
@@ -91,6 +98,11 @@ router.get("/organizations/:orgId/transactions", async (req, res) => {
 // ── GET /api/public/organizations/:orgId/budget ── Fetch public budget categories
 router.get("/organizations/:orgId/budget", async (req, res) => {
   try {
+    const org = await Organization.findById(req.params.orgId).lean();
+    if (org && org.isPrivate) {
+      return res.status(403).json({ error: "This organization is private. Budget is restricted." });
+    }
+
     const budgets = await Budget.find({ organization: req.params.orgId })
       .select("name allocated spent")
       .sort({ allocated: -1 });
@@ -108,12 +120,16 @@ router.get("/feed", async (req, res) => {
       status: "approved",
       isRecordedOnChain: true
     })
-    .populate("organization", "name")
+    .populate("organization", "name isPrivate")
     .select("amount type description createdAt blockchainTxHash organization")
     .sort({ createdAt: -1 })
-    .limit(10);
+    .limit(20);
 
-    res.json(transactions);
+    const publicTransactions = transactions
+      .filter(t => t.organization && !t.organization.isPrivate)
+      .slice(0, 10);
+
+    res.json(publicTransactions);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

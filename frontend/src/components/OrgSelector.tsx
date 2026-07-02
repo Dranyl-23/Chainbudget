@@ -26,6 +26,7 @@ export default function OrgSelector() {
     name: "",
     type: "student_org",
     highValueThreshold: 10000,
+    isPrivate: false,
   });
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -73,6 +74,7 @@ export default function OrgSelector() {
       data.append("name", formData.name);
       data.append("type", formData.type);
       data.append("highValueThreshold", formData.highValueThreshold.toString());
+      data.append("isPrivate", formData.isPrivate.toString());
       if (logoFile) {
         data.append("logo", logoFile);
       }
@@ -85,7 +87,7 @@ export default function OrgSelector() {
       setActiveOrgId(newOrg._id);
       setModalOpen(false);
       setDropdownOpen(false);
-      setFormData({ name: "", type: "student_org", highValueThreshold: 10000 });
+      setFormData({ name: "", type: "student_org", highValueThreshold: 10000, isPrivate: false });
       setLogoFile(null);
       // Force reload to refresh user memberships from token/backend if needed
       window.location.reload(); 
@@ -226,6 +228,22 @@ export default function OrgSelector() {
                     value={formData.highValueThreshold}
                     onChange={e => setFormData({...formData, highValueThreshold: Number(e.target.value)})}
                   />
+                </div>
+
+                <div className="flex flex-col gap-2 p-4 bg-white/5 rounded-xl border border-white/10">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-bold text-white/90">Private Organization</label>
+                    <button 
+                      type="button" 
+                      onClick={() => setFormData({ ...formData, isPrivate: !formData.isPrivate })}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formData.isPrivate ? 'bg-purple-500' : 'bg-white/20'}`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.isPrivate ? 'translate-x-6' : 'translate-x-1'}`} />
+                    </button>
+                  </div>
+                  <p className="text-xs text-white/50 leading-relaxed">
+                    If enabled, only members can view your transaction ledger and DAO. Your organization will still be listed in the public directory.
+                  </p>
                 </div>
 
                 <div className="pt-4 flex gap-3">
