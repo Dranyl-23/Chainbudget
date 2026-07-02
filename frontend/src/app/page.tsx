@@ -3,7 +3,7 @@
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
-import { Wallet, ShieldCheck, Users, BarChart3, Lock, LogIn, UserPlus, Search } from "lucide-react";
+import { Wallet, ShieldCheck, Users, BarChart3, Lock, LogIn, UserPlus, Search, Hexagon } from "lucide-react";
 import Link from "next/link";
 
 const features = [
@@ -222,10 +222,10 @@ export default function LandingPage() {
 
             {/* Floating Decorative Elements around the coin */}
             <div className="absolute top-10 -right-10 w-24 h-24 bg-purple-500/20 border border-purple-400/40 rounded-3xl backdrop-blur-xl animate-float flex items-center justify-center shadow-[0_20px_40px_rgba(0,0,0,0.5),_0_0_50px_rgba(139,92,246,0.5)] z-20" style={{ transform: 'translateZ(60px)' }}>
-              <ShieldCheck className="w-10 h-10 text-fuchsia-300 drop-shadow-lg" />
+              <Hexagon className="w-10 h-10 text-fuchsia-300 drop-shadow-lg" />
             </div>
             <div className="absolute bottom-10 -left-10 w-28 h-28 bg-cyan-500/20 border border-cyan-400/40 rounded-full backdrop-blur-xl flex items-center justify-center shadow-[0_20px_40px_rgba(0,0,0,0.5),_0_0_50px_rgba(34,211,238,0.4)] z-0" style={{ transform: 'translateZ(-40px)', animation: 'float-delayed 7s ease-in-out infinite' }}>
-              <Users className="w-12 h-12 text-cyan-200 drop-shadow-lg" />
+              <Wallet className="w-12 h-12 text-cyan-200 drop-shadow-lg" />
             </div>
 
           </div>
