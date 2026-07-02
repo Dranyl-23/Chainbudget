@@ -220,12 +220,42 @@ export default function LandingPage() {
 
             </div>
 
-            {/* Floating Decorative Elements around the coin */}
-            <div className="absolute top-10 -right-10 w-24 h-24 bg-purple-500/20 border border-purple-400/40 rounded-3xl backdrop-blur-xl animate-float flex items-center justify-center shadow-[0_20px_40px_rgba(0,0,0,0.5),_0_0_50px_rgba(139,92,246,0.5)] z-20" style={{ transform: 'translateZ(60px)' }}>
-              <Hexagon className="w-10 h-10 text-fuchsia-300 drop-shadow-lg" />
+            {/* Floating Decorative Elements around the coin (Now 3D) */}
+            
+            {/* 3D Hexagon Element */}
+            <div className="absolute top-10 -right-10 z-20 animate-float" style={{ transform: 'translateZ(60px)' }}>
+              <div className="relative w-24 h-24 animate-spin-slow-3d" style={{ transformStyle: 'preserve-3d', animationDuration: '15s' }}>
+                {/* Back Face */}
+                <div className="absolute inset-0 bg-purple-500/20 border border-purple-400/40 rounded-3xl backdrop-blur-xl flex items-center justify-center shadow-[0_20px_40px_rgba(0,0,0,0.5)]" style={{ transform: 'translateZ(-8px) rotateY(180deg)' }}>
+                  <Hexagon className="w-10 h-10 text-fuchsia-300/30" />
+                </div>
+                {/* Layers for thickness */}
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="absolute inset-0 border border-purple-500/30 rounded-3xl bg-[#0A0216]/40" style={{ transform: `translateZ(${-4 + i * 2}px)` }}></div>
+                ))}
+                {/* Front Face */}
+                <div className="absolute inset-0 bg-gradient-to-tr from-[#160B2E]/90 to-purple-900/80 border-[3px] border-fuchsia-400/50 rounded-3xl backdrop-blur-xl flex items-center justify-center shadow-[inset_0_0_20px_rgba(217,70,239,0.3),_0_0_30px_rgba(139,92,246,0.4)]" style={{ transform: 'translateZ(8px)' }}>
+                  <Hexagon className="w-10 h-10 text-fuchsia-300 drop-shadow-[0_0_15px_rgba(217,70,239,0.8)]" />
+                </div>
+              </div>
             </div>
-            <div className="absolute bottom-10 -left-10 w-28 h-28 bg-cyan-500/20 border border-cyan-400/40 rounded-full backdrop-blur-xl flex items-center justify-center shadow-[0_20px_40px_rgba(0,0,0,0.5),_0_0_50px_rgba(34,211,238,0.4)] z-0" style={{ transform: 'translateZ(-40px)', animation: 'float-delayed 7s ease-in-out infinite' }}>
-              <Wallet className="w-12 h-12 text-cyan-200 drop-shadow-lg" />
+
+            {/* 3D Wallet Element */}
+            <div className="absolute bottom-10 -left-10 z-0" style={{ transform: 'translateZ(-40px)', animation: 'float-delayed 7s ease-in-out infinite' }}>
+              <div className="relative w-28 h-28 animate-spin-slow-3d" style={{ transformStyle: 'preserve-3d', animationDuration: '20s', animationDirection: 'reverse' }}>
+                {/* Back Face */}
+                <div className="absolute inset-0 bg-cyan-500/20 border border-cyan-400/40 rounded-full backdrop-blur-xl flex items-center justify-center shadow-[0_20px_40px_rgba(0,0,0,0.5)]" style={{ transform: 'translateZ(-8px) rotateY(180deg)' }}>
+                  <Wallet className="w-12 h-12 text-cyan-200/30" />
+                </div>
+                {/* Layers for thickness */}
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="absolute inset-0 border border-cyan-500/30 rounded-full bg-[#0A0216]/40" style={{ transform: `translateZ(${-4 + i * 2}px)` }}></div>
+                ))}
+                {/* Front Face */}
+                <div className="absolute inset-0 bg-gradient-to-tr from-[#160B2E]/90 to-cyan-900/80 border-[3px] border-cyan-400/50 rounded-full backdrop-blur-xl flex items-center justify-center shadow-[inset_0_0_20px_rgba(34,211,238,0.3),_0_0_30px_rgba(34,211,238,0.4)]" style={{ transform: 'translateZ(8px)' }}>
+                  <Wallet className="w-12 h-12 text-cyan-200 drop-shadow-[0_0_15px_rgba(34,211,238,0.8)]" />
+                </div>
+              </div>
             </div>
 
           </div>
