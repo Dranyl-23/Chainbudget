@@ -113,6 +113,8 @@ export default function TransactionsPage() {
   const formData = activeTab === "expense" ? expenseData : incomeData;
   const setFormData = activeTab === "expense" ? setExpenseData : setIncomeData;
 
+  const [budgets, setBudgets] = useState<any[]>([]);
+
   // File upload state
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>(null);
@@ -138,6 +140,10 @@ export default function TransactionsPage() {
         const data = res.data.transactions || [];
         setTransactions(data);
         sessionStorage.setItem("cb_cache_transactions", JSON.stringify(data));
+        
+        // Fetch budgets for dropdown
+        const budgetRes = await api.get("/budget", { params: { orgId } });
+        setBudgets(budgetRes.data || []);
         
         // Re-apply filters if any exist, otherwise set filtered to all
         let result = data;
@@ -936,15 +942,36 @@ export default function TransactionsPage() {
               {/* Category + Reference */}
               <div className="grid grid-cols-2 gap-2 md:gap-3">
                 <div>
-                  <label className="block text-sm font-bold text-white/70 mb-1 drop-shadow-sm">Category</label>
-                  <input
-                    id="tx-category"
-                    type="text"
-                    placeholder={formData.type === "expense" ? "e.g. Events & Activities" : "e.g. Donations"}
-                    className="input"
-                    value={formData.category}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  />
+                  <label className="block text-sm font-bold text-white/70 mb-1 drop-shadow-sm">Category (Budget Allocation)</label>
+                  {formData.type === "expense" ? (
+                    <select
+                      id="tx-category"
+                      className="input appearance-none"
+                      value={formData.category}
+                      onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                      required
+                    >
+                      <option value="" disabled>Select Budget Category</option>
+                      {budgets.map((b) => {
+                        const remaining = b.allocated - b.spent;
+                        const isExhausted = remaining <= 0;
+                        return (
+                          <option key={b._id} value={b.name} disabled={isExhausted}>
+                            {b.name} (Remaining: ₱{remaining.toLocaleString()})
+                          </option>
+                        );
+                      })}
+                    </select>
+                  ) : (
+                    <input
+                      id="tx-category"
+                      type="text"
+                      placeholder="e.g. Donations"
+                      className="input"
+                      value={formData.category}
+                      onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                    />
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-bold text-white/70 mb-1 drop-shadow-sm">Reference #</label>

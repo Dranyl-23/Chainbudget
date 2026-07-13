@@ -2,6 +2,8 @@ const express = require("express");
 const router = express.Router();
 const Transaction = require("../models/Transaction");
 const Organization = require("../models/Organization");
+const Budget = require("../models/Budget");
+const mongoose = require("mongoose");
 const AuditLog = require("../models/AuditLog");
 const User = require("../models/User");
 const Notification = require("../models/Notification");
@@ -46,6 +48,42 @@ router.post("/", authenticate, requireRole(3), async (req, res) => {
     if (!org) return res.status(404).json({ error: "Organization not found" });
     if (!org.isActive) {
       return res.status(400).json({ error: "Organization is inactive" });
+    }
+
+    // Budget Dissemination Validation
+    if (type === "expense" && category) {
+      const budget = await Budget.findOne({ 
+        organization: organizationId, 
+        name: { $regex: new RegExp(`^${category.trim()}$`, "i") } 
+      });
+
+      if (!budget) {
+        return res.status(400).json({ error: `Budget category '${category}' not found. Please create it in the Budget tab first.` });
+      }
+
+      const spendingAgg = await Transaction.aggregate([
+        {
+          $match: {
+            organization: new mongoose.Types.ObjectId(organizationId),
+            type: "expense",
+            status: { $in: ["approved", "pending_approval", "requested"] },
+            category: { $regex: new RegExp(`^${category.trim()}$`, "i") } 
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalSpent: { $sum: "$amount" }
+          }
+        }
+      ]);
+      const spentSoFar = spendingAgg.length > 0 ? spendingAgg[0].totalSpent : 0;
+      
+      if (amount + spentSoFar > budget.allocated) {
+        return res.status(400).json({ 
+          error: `Transaction exceeds remaining budget allocation. Allocated: ₱${budget.allocated.toLocaleString()}, Spent/Pending: ₱${spentSoFar.toLocaleString()}, Requested: ₱${amount.toLocaleString()}.`
+        });
+      }
     }
 
     const isHighValue = amount >= org.highValueThreshold;
