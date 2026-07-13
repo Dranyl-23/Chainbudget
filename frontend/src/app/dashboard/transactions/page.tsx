@@ -946,17 +946,17 @@ export default function TransactionsPage() {
                   {formData.type === "expense" ? (
                     <select
                       id="tx-category"
-                      className="input appearance-none"
+                      className="input appearance-none bg-[#160B2E] text-white"
                       value={formData.category}
                       onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                       required
                     >
-                      <option value="" disabled>Select Budget Category</option>
+                      <option value="" disabled className="bg-[#160B2E] text-white/50">Select Budget Category</option>
                       {budgets.map((b) => {
                         const remaining = b.allocated - b.spent;
                         const isExhausted = remaining <= 0;
                         return (
-                          <option key={b._id} value={b.name} disabled={isExhausted}>
+                          <option key={b._id} value={b.name} disabled={isExhausted} className="bg-[#160B2E] text-white disabled:text-white/30">
                             {b.name} (Remaining: ₱{remaining.toLocaleString()})
                           </option>
                         );
