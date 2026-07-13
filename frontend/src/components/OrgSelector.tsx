@@ -115,7 +115,7 @@ export default function OrgSelector() {
 
       {/* Dropdown Menu */}
       {dropdownOpen && (
-        <div className="absolute top-full left-3 right-3 mt-1 glass rounded-lg shadow-[0_0_20px_rgba(0,0,0,0.5)] border border-white/10 py-1 z-50 animate-fade-in">
+        <div className="absolute top-full left-3 right-3 mt-1 bg-[#160B2E] rounded-lg shadow-[0_0_30px_rgba(0,0,0,0.8)] border border-purple-500/30 py-1 z-50 animate-fade-in">
           <div className="max-h-48 overflow-y-auto custom-scrollbar">
             {orgs.map(org => (
               <div 
