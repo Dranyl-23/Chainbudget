@@ -257,7 +257,7 @@ export default function BudgetPage() {
           style={{ background: "rgba(26,26,46,0.55)", backdropFilter: "blur(4px)" }}
           onClick={(e) => { if (e.target === e.currentTarget) setShowAddModal(false); }}
         >
-          <div className="glass rounded-2xl p-8 w-full max-w-md shadow-2xl animate-fade-in">
+          <div className="bg-[#160B2E] border border-purple-500/30 rounded-2xl p-8 w-full max-w-md shadow-[0_0_40px_rgba(0,0,0,0.8)] animate-fade-in relative z-[60]">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold">New Budget Category</h2>
               <button
