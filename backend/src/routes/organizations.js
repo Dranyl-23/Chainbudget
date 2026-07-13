@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const Organization = require("../models/Organization");
+const Budget = require("../models/Budget");
 const { authenticate, requireRole } = require("../middleware/auth");
 const multer = require("multer");
 const path = require("path");
@@ -58,6 +59,24 @@ router.post("/", authenticate, upload.single("logo"), async (req, res) => {
       roleLabel: "Founder",
     });
     await req.user.save();
+
+    // Create default Template Budget Categories
+    const templateBudgets = [
+      { name: "Events & Activities", allocated: 0, color: "#6B55D9" },
+      { name: "Operations & Supplies", allocated: 0, color: "#10B981" },
+      { name: "Marketing", allocated: 0, color: "#F59E0B" },
+      { name: "Emergency Fund", allocated: 0, color: "#E05C5C" }
+    ];
+
+    for (const b of templateBudgets) {
+      const budget = new Budget({
+        organization: org._id,
+        name: b.name,
+        allocated: b.allocated,
+        color: b.color
+      });
+      await budget.save();
+    }
 
     res.status(201).json(org);
   } catch (err) {
