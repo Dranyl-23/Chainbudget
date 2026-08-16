@@ -2,12 +2,13 @@
 
 import { useAuth } from "@/context/AuthContext";
 import { useRouter, usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   LayoutDashboard, ArrowLeftRight, PiggyBank,
   ClipboardCheck, FileText, BookOpen, Settings,
-  LogOut, Wallet, Users, Menu, X, AlertTriangle, Moon, Sun, Copy, Vote, ChevronLeft, ChevronRight, UserCircle, ShieldCheck, Box, Crown, CheckCircle2, User as UserIcon, Eye, HelpCircle
+  LogOut, Users, Menu, X, AlertTriangle, Copy, Vote, ChevronLeft, ChevronRight, UserCircle, ShieldCheck, Box, Crown, CheckCircle2, User as UserIcon, Eye, HelpCircle
 } from "lucide-react";
 import toast from "react-hot-toast";
 import OrgSelector from "@/components/OrgSelector";
@@ -17,6 +18,49 @@ import api from "@/lib/api";
 import OnboardingTour from "@/components/OnboardingTour";
 import SessionExpiredModal from "@/components/SessionExpiredModal";
 import NotificationsCenter from "@/components/NotificationsCenter";
+
+// ── Types ────────────────────────────────────────────────────────────────────
+interface UserOrgRef {
+  _id?: string;
+  name?: string;
+  logoUrl?: string;
+}
+
+interface UserMembership {
+  organization?: string | UserOrgRef;
+  roleLevel: number;
+  roleLabel?: string;
+  isActive?: boolean;
+  hasSBT?: boolean;
+  sbtTokenId?: string;
+}
+
+interface PendingCountResponse {
+  count?: number;
+}
+
+function getOrgId(org?: string | UserOrgRef): string | undefined {
+  if (!org) return undefined;
+  return typeof org === "string" ? org : org._id;
+}
+
+function getNetworkName(chainId?: string): string {
+  if (!chainId) return "Polygon Amoy";
+  if (chainId === "0x7a69" || chainId === "0x7A69") return "Hardhat Localhost";
+  if (chainId === "0x13882") return "Polygon Amoy";
+  if (chainId === "0x89") return "Polygon Mainnet";
+  if (chainId === "0x1") return "Ethereum Mainnet";
+  return "Polygon Amoy";
+}
+
+function getShortNetworkName(chainId?: string): string {
+  if (!chainId) return "Amoy";
+  if (chainId === "0x7a69" || chainId === "0x7A69") return "Localhost";
+  if (chainId === "0x13882") return "Amoy";
+  if (chainId === "0x89") return "Polygon";
+  if (chainId === "0x1") return "Ethereum";
+  return "Amoy";
+}
 
 const navItems = [
   { href: "/dashboard",              icon: <LayoutDashboard className="w-4 h-4" />, label: "Dashboard",    minRole: 4 },
@@ -38,31 +82,30 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const [pendingCount, setPendingCount] = useState(0);
   const [showDisconnectModal, setShowDisconnectModal] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(true);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   // Filter nav items based on role (Super Admins see everything)
-  const currentMembership = user?.memberships?.find(
-    (m: any) => m.organization === activeOrgId || m.organization?._id === activeOrgId
+  const memberships = (user?.memberships || []) as UserMembership[];
+  const currentMembership = memberships.find(
+    (m) => getOrgId(m.organization) === activeOrgId
   );
-  const roleLevel = currentMembership?.roleLevel || 4; 
+  const roleLevel = user?.isSuperAdmin ? 1 : (currentMembership?.roleLevel || 4); 
 
-  const backendUrl = process.env.NEXT_PUBLIC_API_URL 
-    ? process.env.NEXT_PUBLIC_API_URL.replace("/api", "") 
-    : "http://localhost:5000";
-
-  const displayLogo = currentMembership?.organization?.logoUrl 
-    ? (currentMembership.organization.logoUrl.startsWith('http') 
-        ? currentMembership.organization.logoUrl 
-        : `${backendUrl}${currentMembership.organization.logoUrl}`)
-
+  const backendUrl = "http://127.0.0.1:5001";
+  const orgObj = typeof currentMembership?.organization === "object" ? currentMembership.organization : null;
+  const displayLogo = orgObj?.logoUrl 
+    ? (orgObj.logoUrl.startsWith("http") 
+        ? orgObj.logoUrl 
+        : `${backendUrl}${orgObj.logoUrl}`)
     : "/images/logo.png"; 
 
-  const visibleNavItems = navItems.filter((item) => {
-    if (user?.isSuperAdmin) return true;
-    return roleLevel <= item.minRole;
-  });
+  const visibleNavItems = useMemo(() => {
+    return navItems.filter((item) => {
+      if (user?.isSuperAdmin) return true;
+      return roleLevel <= item.minRole;
+    });
+  }, [user?.isSuperAdmin, roleLevel]);
 
   useEffect(() => {
     if (!isLoading && !isConnected) {
@@ -70,32 +113,41 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, [isLoading, isConnected, router]);
 
+  // Synchronize dark theme attribute with DOM and localStorage
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      setIsDarkMode(true);
-      document.documentElement.setAttribute("data-theme", "dark");
-      localStorage.setItem("chainbudget-theme", "dark");
-    }
+    document.documentElement.setAttribute("data-theme", "dark");
+    localStorage.setItem("chainbudget-theme", "dark");
   }, []);
 
+  // Asynchronous pending approvals count loader
   useEffect(() => {
-    if (activeOrgId && roleLevel <= 2) {
-      api.get("/transactions/pending-count", { params: { orgId: activeOrgId } })
-        .then(res => setPendingCount(res.data.count || 0))
-        .catch(console.error);
-    } else {
-      setPendingCount(0);
+    let isCancelled = false;
+
+    if (!activeOrgId || roleLevel > 2) {
+      return;
     }
+
+    const fetchPendingCount = async () => {
+      try {
+        const res = await api.get<PendingCountResponse>("/transactions/pending-count", {
+          params: { orgId: activeOrgId }
+        });
+        if (!isCancelled) {
+          setPendingCount(res.data.count || 0);
+        }
+      } catch (err: unknown) {
+        console.error("Failed to fetch pending approvals count:", err);
+      }
+    };
+
+    void fetchPendingCount();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [activeOrgId, roleLevel, pathname]);
 
-  // Close sidebar on route change for mobile
-  useEffect(() => {
-    setIsMobileOpen(false);
-  }, [pathname]);
-
-  const toggleTheme = () => {
-    // Disabled: Fully committed to Dark Premium Web3
-  };
+  const visiblePendingCount = (activeOrgId && roleLevel <= 2) ? pendingCount : 0;
 
   if (isLoading || !isConnected) {
     return (
@@ -115,6 +167,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`
     : "No Wallet Linked";
 
+  const chainId = typeof window !== "undefined" ? window.ethereum?.chainId : undefined;
+  const networkName = getNetworkName(chainId);
+  const shortNetworkName = getShortNetworkName(chainId);
+
+  const handleNavClick = () => {
+    if (isMobileOpen) {
+      setIsMobileOpen(false);
+    }
+  };
+
   return (
     <div className="h-screen flex flex-col md:flex-row overflow-hidden" style={{ background: "var(--color-bg)" }}>
       <OnboardingTour />
@@ -122,7 +184,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* ── Mobile Header ── */}
       <div className="md:hidden flex items-center justify-between px-4 py-3 border-b bg-white z-20" style={{ borderColor: "var(--color-border)" }}>
         <div className="flex items-center gap-2">
-          <img src={displayLogo} alt="ChainBudget logo" className="w-8 h-8 object-contain rounded-[8px] shadow-sm flex-shrink-0" />
+          <Image src={displayLogo} alt="ChainBudget logo" width={32} height={32} unoptimized className="w-8 h-8 object-contain rounded-lg shadow-sm shrink-0" />
           <span className="font-bold text-lg tracking-tight">
             Chain<span className="gradient-text">Budget</span>
           </span>
@@ -131,7 +193,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="mt-1 mr-1 z-50">
             <NotificationsCenter />
           </div>
-          <button onClick={() => setIsMobileOpen(!isMobileOpen)} className="p-2 -mr-2 text-gray-500 focus:outline-none">
+          <button onClick={() => setIsMobileOpen(!isMobileOpen)} className="p-2 -mr-2 text-gray-500 focus:outline-none" aria-label="Toggle Navigation">
             {isMobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
           </button>
         </div>
@@ -149,61 +211,63 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <aside 
         className={`
           fixed md:static inset-y-0 left-0 z-40 flex flex-col border-r transform transition-all duration-300 ease-in-out
-          ${isCollapsed ? 'w-20' : 'w-64'}
-          ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0
+          ${isCollapsed ? "w-20" : "w-64"}
+          ${isMobileOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0
         `} 
         style={{ background: "#ffffff", minHeight: "100vh", borderRight: "1px solid var(--color-border)" }}
       >
         {/* Logo (Hidden on very small screens since it's in the header, but keep it for md+) */}
-        <div className={`px-5 mb-8 mt-4 hidden md:flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
+        <div className={`px-5 mb-8 mt-4 hidden md:flex items-center ${isCollapsed ? "justify-center" : "justify-between"}`}>
           <div className="flex items-center gap-3">
-            <img src={displayLogo} alt="ChainBudget logo" className="w-8 h-8 object-contain rounded-[8px] shadow-sm flex-shrink-0" />
-            <span className={`font-bold text-lg tracking-tight transition-all duration-300 overflow-hidden whitespace-nowrap ${isCollapsed ? 'max-w-0 opacity-0' : 'max-w-[150px] opacity-100'}`}>
+            <Image src={displayLogo} alt="ChainBudget logo" width={32} height={32} unoptimized className="w-8 h-8 object-contain rounded-lg shadow-sm shrink-0" />
+            <span className={`font-bold text-lg tracking-tight transition-all duration-300 overflow-hidden whitespace-nowrap ${isCollapsed ? "max-w-0 opacity-0" : "max-w-37.5 opacity-100"}`}>
               Chain<span className="gradient-text">Budget</span>
             </span>
           </div>
           <button 
             onClick={() => setIsCollapsed(!isCollapsed)}
             className="p-1 rounded-md hover:bg-gray-100 text-gray-500 transition-colors hidden md:block"
+            aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
             {isCollapsed ? <ChevronRight className="w-5 h-5" /> : <ChevronLeft className="w-5 h-5" />}
           </button>
         </div>
 
         {/* Org selector component */}
-        <div className={`transition-all duration-300 ${isCollapsed ? 'overflow-hidden max-h-0 opacity-0 m-0 p-0' : 'max-h-[500px] opacity-100 z-50 relative'}`}>
+        <div className={`transition-all duration-300 ${isCollapsed ? "overflow-hidden max-h-0 opacity-0 m-0 p-0" : "max-h-[500px] opacity-100 z-50 relative"}`}>
           <OrgSelector />
         </div>
 
         {/* Nav */}
         <nav className="flex-1 px-3 space-y-0.5 mt-2 overflow-hidden">
-          <p className={`px-3 text-xs font-semibold text-gray-600 uppercase tracking-widest mb-2 transition-all duration-300 overflow-hidden whitespace-nowrap ${isCollapsed ? 'max-h-0 opacity-0 m-0' : 'max-h-10 opacity-100 mt-2'}`}>Main</p>
+          <p className={`px-3 text-xs font-semibold text-gray-600 uppercase tracking-widest mb-2 transition-all duration-300 overflow-hidden whitespace-nowrap ${isCollapsed ? "max-h-0 opacity-0 m-0" : "max-h-10 opacity-100 mt-2"}`}>Main</p>
           {visibleNavItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}
+              onClick={handleNavClick}
               title={isCollapsed ? item.label : ""}
               id={`nav-${item.label.toLowerCase().replace(" ", "-")}`}
-            className={`nav-item flex justify-between ${
-              item.href === "/dashboard"
-                ? pathname === "/dashboard" ? "active" : ""
-                : pathname.startsWith(item.href) ? "active" : ""
-            } ${isCollapsed ? 'justify-center px-0' : ''}`}
+              className={`nav-item flex justify-between ${
+                item.href === "/dashboard"
+                  ? pathname === "/dashboard" ? "active" : ""
+                  : pathname.startsWith(item.href) ? "active" : ""
+              } ${isCollapsed ? "justify-center px-0" : ""}`}
             >
               <div className="flex items-center gap-3 overflow-hidden">
-                <div className="flex-shrink-0">{item.icon}</div>
-                <span className={`transition-all duration-300 whitespace-nowrap ${isCollapsed ? 'max-w-0 opacity-0' : 'max-w-[150px] opacity-100'}`}>
+                <div className="shrink-0">{item.icon}</div>
+                <span className={`transition-all duration-300 whitespace-nowrap ${isCollapsed ? "max-w-0 opacity-0" : "max-w-37.5 opacity-100"}`}>
                   {item.label}
                 </span>
               </div>
-              {item.label === "Approvals" && pendingCount > 0 && (
+              {item.label === "Approvals" && visiblePendingCount > 0 && (
                 <>
-                  <span className={`bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 shadow-sm animate-pulse transition-all duration-300 ${isCollapsed ? 'max-w-0 max-h-0 opacity-0 p-0 m-0 border-0 overflow-hidden' : 'max-w-[40px] opacity-100'}`}>
-                    {pendingCount}
+                  <span className={`bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 shadow-sm animate-pulse transition-all duration-300 ${isCollapsed ? "max-w-0 max-h-0 opacity-0 p-0 m-0 border-0 overflow-hidden" : "max-w-10 opacity-100"}`}>
+                    {visiblePendingCount}
                   </span>
                   {isCollapsed && (
-                    <span className="absolute top-2 right-2 bg-red-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full flex-shrink-0 shadow-sm animate-pulse">
-                      {pendingCount}
+                    <span className="absolute top-2 right-2 bg-red-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full shrink-0 shadow-sm animate-pulse">
+                      {visiblePendingCount}
                     </span>
                   )}
                 </>
@@ -213,14 +277,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
           {user?.isSuperAdmin && (
             <>
-              <p className={`px-3 text-xs font-semibold text-gray-600 uppercase tracking-widest transition-all duration-300 overflow-hidden whitespace-nowrap ${isCollapsed ? 'max-h-0 opacity-0 m-0' : 'max-h-10 opacity-100 mt-4 mb-2'}`}>Admin</p>
+              <p className={`px-3 text-xs font-semibold text-gray-600 uppercase tracking-widest transition-all duration-300 overflow-hidden whitespace-nowrap ${isCollapsed ? "max-h-0 opacity-0 m-0" : "max-h-10 opacity-100 mt-4 mb-2"}`}>Admin</p>
               <Link 
                 title={isCollapsed ? "Platform Admin" : ""}
                 href="/admin" 
-                className={`nav-item flex items-center gap-3 transition-all duration-300 ${isCollapsed ? 'justify-center px-0' : ''} ${pathname.startsWith("/admin") ? "active" : ""}`}
+                onClick={handleNavClick}
+                className={`nav-item flex items-center gap-3 transition-all duration-300 ${isCollapsed ? "justify-center px-0" : ""} ${pathname.startsWith("/admin") ? "active" : ""}`}
               >
-                <div className="flex-shrink-0"><Settings className="w-4 h-4" /></div>
-                <span className={`transition-all duration-300 whitespace-nowrap ${isCollapsed ? 'max-w-0 opacity-0' : 'max-w-[150px] opacity-100'}`}>
+                <div className="shrink-0"><Settings className="w-4 h-4" /></div>
+                <span className={`transition-all duration-300 whitespace-nowrap ${isCollapsed ? "max-w-0 opacity-0" : "max-w-37.5 opacity-100"}`}>
                   Platform Admin
                 </span>
               </Link>
@@ -231,7 +296,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Wallet info & Bottom Links */}
         <div className="px-3 mt-auto mb-4 flex flex-col gap-1">
           {/* Mobile Profile Card */}
-          <div className={`md:hidden transition-all duration-300 overflow-hidden ${isCollapsed ? 'max-h-0 opacity-0 m-0 p-0 border-0' : 'max-h-[200px] opacity-100 px-3 py-3 mb-2 rounded-lg sidebar-card'}`}>
+          <div className={`md:hidden transition-all duration-300 overflow-hidden ${isCollapsed ? "max-h-0 opacity-0 m-0 p-0 border-0" : "max-h-[200px] opacity-100 px-3 py-3 mb-2 rounded-lg sidebar-card"}`}>
             <div 
               className="flex items-center justify-between mb-2 group cursor-pointer hover:bg-white/5 rounded px-1 -mx-1 transition-colors"
               onClick={() => {
@@ -246,7 +311,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <div className="nft-avatar-wrapper scale-[0.7] origin-left">
                   <div className="w-10 h-10 nft-avatar border border-purple-500/30 shadow-[inset_0_0_10px_rgba(139,92,246,0.2)]">
                     {user?.avatarUrl ? (
-                      <img src={user.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                      <Image src={user.avatarUrl} alt="Avatar" width={40} height={40} unoptimized className="w-full h-full object-cover" />
                     ) : (
                       <UserCircle className="w-5 h-5 text-purple-400 drop-shadow-[0_0_5px_rgba(168,85,247,0.8)]" />
                     )}
@@ -267,9 +332,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className={`px-1.5 py-[1px] rounded-sm text-[8px] uppercase tracking-widest font-bold flex items-center gap-1 w-fit ${
-                      roleLevel === 1 ? 'role-badge-superadmin' :
-                      roleLevel === 2 ? 'role-badge-approver' :
-                      roleLevel === 3 ? 'role-badge-member' : 'role-badge-readonly'
+                      roleLevel === 1 ? "role-badge-superadmin" :
+                      roleLevel === 2 ? "role-badge-approver" :
+                      roleLevel === 3 ? "role-badge-member" : "role-badge-readonly"
                     }`}>
                       {roleLevel === 1 ? <><Crown className="w-2.5 h-2.5" /> Exec</> : 
                        roleLevel === 2 ? <><CheckCircle2 className="w-2.5 h-2.5" /> Apprv</> : 
@@ -285,27 +350,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <div className="flex items-center gap-1.5">
               <span className="chain-dot" />
               <span className="text-xs text-gray-600">
-                {(() => {
-                  if (typeof window !== "undefined" && (window as any).ethereum) {
-                    const chainId = (window as any).ethereum.chainId;
-                    if (chainId === "0x7a69" || chainId === "0x7A69") return "Hardhat Localhost";
-                    if (chainId === "0x13882") return "Polygon Amoy";
-                    if (chainId === "0x89") return "Polygon Mainnet";
-                    if (chainId === "0x1") return "Ethereum Mainnet";
-                  }
-                  return "Polygon Amoy";
-                })()}
+                {networkName}
               </span>
             </div>
           </div>
 
           <Link
             href="/tutorials"
+            onClick={handleNavClick}
             title={isCollapsed ? "Tutorials" : ""}
-            className={`nav-item flex items-center gap-3 w-full transition-all duration-300 text-gray-500 hover:text-primary ${isCollapsed ? 'justify-center px-0' : ''}`}
+            className={`nav-item flex items-center gap-3 w-full transition-all duration-300 text-gray-500 hover:text-primary ${isCollapsed ? "justify-center px-0" : ""}`}
           >
-            <div className="flex-shrink-0"><HelpCircle className="w-4 h-4" /></div>
-            <span className={`transition-all duration-300 whitespace-nowrap ${isCollapsed ? 'max-w-0 opacity-0' : 'max-w-[150px] opacity-100'}`}>
+            <div className="shrink-0"><HelpCircle className="w-4 h-4" /></div>
+            <span className={`transition-all duration-300 whitespace-nowrap ${isCollapsed ? "max-w-0 opacity-0" : "max-w-37.5 opacity-100"}`}>
               Tutorials
             </span>
           </Link>
@@ -314,10 +371,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             title={isCollapsed ? "Disconnect" : ""}
             onClick={() => setShowDisconnectModal(true)}
             id="logout-btn"
-            className={`md:hidden nav-item flex items-center gap-3 w-full transition-all duration-300 text-gray-500 hover:text-danger ${isCollapsed ? 'justify-center px-0' : ''}`}
+            className={`md:hidden nav-item flex items-center gap-3 w-full transition-all duration-300 text-gray-500 hover:text-danger ${isCollapsed ? "justify-center px-0" : ""}`}
           >
-            <div className="flex-shrink-0"><LogOut className="w-4 h-4" /></div>
-            <span className={`transition-all duration-300 whitespace-nowrap ${isCollapsed ? 'max-w-0 opacity-0' : 'max-w-[150px] opacity-100'}`}>
+            <div className="shrink-0"><LogOut className="w-4 h-4" /></div>
+            <span className={`transition-all duration-300 whitespace-nowrap ${isCollapsed ? "max-w-0 opacity-0" : "max-w-37.5 opacity-100"}`}>
               Disconnect
             </span>
           </button>
@@ -336,9 +393,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             {/* Role & Network */}
             <div className="flex items-center gap-2">
               <span className={`px-2 py-1 rounded-sm text-[9px] uppercase tracking-widest font-bold flex items-center gap-1 w-fit ${
-                  roleLevel === 1 ? 'role-badge-superadmin' :
-                  roleLevel === 2 ? 'role-badge-approver' :
-                  roleLevel === 3 ? 'role-badge-member' : 'role-badge-readonly'
+                  roleLevel === 1 ? "role-badge-superadmin" :
+                  roleLevel === 2 ? "role-badge-approver" :
+                  roleLevel === 3 ? "role-badge-member" : "role-badge-readonly"
                 }`}>
                   {roleLevel === 1 ? <><Crown className="w-3 h-3" /> Exec</> : 
                    roleLevel === 2 ? <><CheckCircle2 className="w-3 h-3" /> Apprv</> : 
@@ -348,16 +405,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <div className="flex items-center gap-1.5 bg-white/5 px-2 py-1 rounded-md border border-white/10">
                 <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
                 <span className="text-[10px] text-gray-400">
-                  {(() => {
-                    if (typeof window !== "undefined" && (window as any).ethereum) {
-                      const chainId = (window as any).ethereum.chainId;
-                      if (chainId === "0x7a69" || chainId === "0x7A69") return "Localhost";
-                      if (chainId === "0x13882") return "Amoy";
-                      if (chainId === "0x89") return "Polygon";
-                      if (chainId === "0x1") return "Ethereum";
-                    }
-                    return "Amoy";
-                  })()}
+                  {shortNetworkName}
                 </span>
               </div>
             </div>
@@ -383,7 +431,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <span className="text-[10px] font-mono text-cyan-400/70 group-hover:text-cyan-300 transition-colors">{shortAddress}</span>
               </div>
               <div className="w-10 h-10 rounded-full border border-purple-500/30 overflow-hidden shadow-[inset_0_0_10px_rgba(139,92,246,0.2)]">
-                 {user?.avatarUrl ? <img src={user.avatarUrl} className="w-full h-full object-cover" /> : <UserCircle className="w-full h-full text-purple-400 bg-white/5" />}
+                 {user?.avatarUrl ? <Image src={user.avatarUrl} alt="Avatar" width={40} height={40} unoptimized className="w-full h-full object-cover" /> : <UserCircle className="w-full h-full text-purple-400 bg-white/5" />}
               </div>
             </div>
 
@@ -406,7 +454,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Disconnect Confirmation Modal */}
       {showDisconnectModal && (
         <Portal>
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">
+          <div className="fixed inset-0 z-200 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">
             <div className="glass rounded-2xl p-6 w-full max-w-sm shadow-[0_0_40px_rgba(239,68,68,0.15)] border border-red-500/20 animate-modal-pop">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">

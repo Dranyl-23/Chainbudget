@@ -2,16 +2,18 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { FileText, Download, BarChart3, Calendar, Filter, Sparkles, BrainCircuit, AlertTriangle, TrendingUp, TrendingDown, Info, Loader2 } from "lucide-react";
+import { FileText, Download, BarChart3, Sparkles, BrainCircuit, AlertTriangle, TrendingUp, TrendingDown, Info, Loader2 } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 import api from "@/lib/api";
 import Portal from "@/components/Portal";
-import { exportToCSV, exportToPDF } from "@/lib/exportUtils";
+import { exportToCSV } from "@/lib/exportUtils";
 import toast from "react-hot-toast";
 import DashboardSkeleton from "@/components/DashboardSkeleton";
+import axios from "axios";
 
+// ── Types ────────────────────────────────────────────────────────────────────
 interface ReportData {
   month: string;
   income: number;
@@ -19,59 +21,186 @@ interface ReportData {
   balance: number;
 }
 
+interface CashFlowItem {
+  month: string;
+  income: number;
+  expense: number;
+  balance?: number;
+}
+
+interface ReportSummaryResponse {
+  cashFlow?: CashFlowItem[];
+  approvedTransactions?: number;
+  totalIncome?: number;
+  totalExpenses?: number;
+  balance?: number;
+}
+
+interface OrganizationResponse {
+  liquidationStatus?: string;
+  _id?: string;
+  name?: string;
+}
+
+interface ExportTransactionItem {
+  _id: string;
+  description: string;
+  type: string;
+  amount: number;
+  status: string;
+  category?: string;
+  createdAt: string;
+  submittedBy?: { displayName?: string; walletAddress?: string; _id?: string };
+}
+
+interface TransactionApiItem {
+  _id: string;
+  type: string;
+  amount: number;
+  status: string;
+  description?: string;
+  category?: string;
+  createdAt?: string;
+  submittedBy?: { displayName?: string; walletAddress?: string };
+}
+
+interface TransactionsApiResponse {
+  transactions?: TransactionApiItem[];
+  total?: number;
+}
+
+interface AiForecastData {
+  healthStatus: "good" | "warning" | "critical" | string;
+  forecast: string;
+  insights?: string[];
+}
+
+interface UserOrgRef {
+  _id?: string;
+  name?: string;
+}
+
+interface UserMembership {
+  organization?: string | UserOrgRef;
+  roleLevel: number;
+  roleLabel?: string;
+  isActive?: boolean;
+}
+
 export default function ReportsPage() {
   const { user, activeOrgId } = useAuth();
   const [monthlyData, setMonthlyData] = useState<ReportData[]>(() => {
     if (typeof window !== "undefined") {
       const cached = sessionStorage.getItem("cb_cache_reports_monthly");
-      if (cached) return JSON.parse(cached);
+      if (cached) {
+        try {
+          return JSON.parse(cached) as ReportData[];
+        } catch {
+          return [];
+        }
+      }
     }
     return [];
   });
   const [summaryStats, setSummaryStats] = useState(() => {
     if (typeof window !== "undefined") {
       const cached = sessionStorage.getItem("cb_cache_reports_stats");
-      if (cached) return JSON.parse(cached);
+      if (cached) {
+        try {
+          return JSON.parse(cached) as { totalTxs: number; totalIncome: number; totalExpenses: number; netBalance: number };
+        } catch {
+          return { totalTxs: 0, totalIncome: 0, totalExpenses: 0, netBalance: 0 };
+        }
+      }
     }
     return { totalTxs: 0, totalIncome: 0, totalExpenses: 0, netBalance: 0 };
   });
-  const [loading, setLoading] = useState(monthlyData.length === 0);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const [range, setRange] = useState("6months");
   const [isExporting, setIsExporting] = useState(false);
-  const [printData, setPrintData] = useState<any[] | null>(null);
+  const [printData, setPrintData] = useState<ExportTransactionItem[] | null>(null);
   const [liquidationStatus, setLiquidationStatus] = useState("none");
   const [isSubmittingLiquidation, setIsSubmittingLiquidation] = useState(false);
   
   // AI Forecaster State
-  const [aiForecast, setAiForecast] = useState<any>(null);
+  const [aiForecast, setAiForecast] = useState<AiForecastData | null>(null);
   const [isFetchingForecast, setIsFetchingForecast] = useState(false);
 
   useEffect(() => {
+    if (!activeOrgId) return;
+
+    let isCancelled = false;
+    const orgId = activeOrgId;
+
+    const generateDefaultData = () => {
+      const defaults: ReportData[] = [
+        { month: "Jan", income: 12000, expense: 8500, balance: 3500 },
+        { month: "Feb", income: 9500, expense: 6200, balance: 3300 },
+        { month: "Mar", income: 18000, expense: 14200, balance: 3800 },
+        { month: "Apr", income: 11000, expense: 7800, balance: 3200 },
+        { month: "May", income: 15000, expense: 9800, balance: 5200 },
+        { month: "Jun", income: 13500, expense: 8200, balance: 5300 },
+      ];
+      if (!isCancelled) {
+        setMonthlyData(defaults);
+      }
+    };
+
+    const calculateStats = async (targetOrgId: string) => {
+      try {
+        const txRes = await api.get<TransactionsApiResponse>("/transactions", {
+          params: { orgId: targetOrgId, limit: 1000 },
+        });
+        const txs: TransactionApiItem[] = txRes.data.transactions || [];
+        const income = txs
+          .filter((t) => t.type === "income")
+          .reduce((sum, t) => sum + t.amount, 0);
+        const expenses = txs
+          .filter((t) => t.type === "expense" && t.status === "approved")
+          .reduce((sum, t) => sum + t.amount, 0);
+
+        if (!isCancelled) {
+          const stats = {
+            totalTxs: txs.length,
+            totalIncome: income,
+            totalExpenses: expenses,
+            netBalance: income - expenses,
+          };
+          setSummaryStats(stats);
+          sessionStorage.setItem("cb_cache_reports_stats", JSON.stringify(stats));
+        }
+      } catch {
+        if (!isCancelled) {
+          setSummaryStats({
+            totalTxs: 47,
+            totalIncome: 79000,
+            totalExpenses: 54700,
+            netBalance: 24300,
+          });
+        }
+      }
+    };
+
     const fetchReportData = async () => {
       try {
-        
-        if (!activeOrgId) {
-          setLoading(false);
-          return;
-        }
-
-        const orgId = activeOrgId || "";
         const [res, orgRes] = await Promise.all([
-          api.get("/reports/summary", { params: { orgId } }),
-          api.get(`/organizations/${orgId}`)
+          api.get<ReportSummaryResponse>("/reports/summary", { params: { orgId } }),
+          api.get<OrganizationResponse>(`/organizations/${orgId}`)
         ]);
+
+        if (isCancelled) return;
 
         const data = res.data;
         if (orgRes.data?.liquidationStatus) {
           setLiquidationStatus(orgRes.data.liquidationStatus);
         }
 
-        // Populate cashFlow chart — API returns last 6 months grouped data.
-        // Add a computed balance field for each month for the area chart.
+        // Populate cashFlow chart
         if (Array.isArray(data?.cashFlow) && data.cashFlow.length > 0) {
-          const enriched = data.cashFlow.map((m: any) => ({
-            ...m,
+          const enriched: ReportData[] = data.cashFlow.map((m) => ({
+            month: m.month,
+            income: m.income || 0,
+            expense: m.expense || 0,
             balance: (m.income || 0) - (m.expense || 0),
           }));
           setMonthlyData(enriched);
@@ -80,7 +209,6 @@ export default function ReportsPage() {
           generateDefaultData();
         }
 
-        // API returns flat keys: totalIncome, totalExpenses, balance, approvedTransactions
         if (data?.totalIncome !== undefined) {
           const stats = {
             totalTxs: data.approvedTransactions ?? 0,
@@ -91,98 +219,66 @@ export default function ReportsPage() {
           setSummaryStats(stats);
           sessionStorage.setItem("cb_cache_reports_stats", JSON.stringify(stats));
         } else {
-          calculateStats(orgId);
+          await calculateStats(orgId);
         }
       } catch (err) {
         console.error("Failed to fetch report data:", err);
-        generateDefaultData();
-        calculateStats(activeOrgId!);
+        if (!isCancelled) {
+          generateDefaultData();
+          await calculateStats(orgId);
+        }
       } finally {
-        setLoading(false);
-      }
-    };
-
-    const generateDefaultData = () => {
-      setMonthlyData([
-        { month: "Jan", income: 12000, expense: 8500, balance: 3500 },
-        { month: "Feb", income: 9500, expense: 6200, balance: 3300 },
-        { month: "Mar", income: 18000, expense: 14200, balance: 3800 },
-        { month: "Apr", income: 11000, expense: 7800, balance: 3200 },
-        { month: "May", income: 15000, expense: 9800, balance: 5200 },
-        { month: "Jun", income: 13500, expense: 8200, balance: 5300 },
-      ]);
-    };
-
-    const calculateStats = async (orgId: string) => {
-      try {
-        const txRes = await api.get("/transactions", {
-          params: { orgId, limit: 1000 },
-        });
-        const txs = txRes.data.transactions || [];
-        const income = txs
-          .filter((t: any) => t.type === "income")
-          .reduce((sum: number, t: any) => sum + t.amount, 0);
-        const expenses = txs
-          .filter((t: any) => t.type === "expense" && t.status === "approved")
-          .reduce((sum: number, t: any) => sum + t.amount, 0);
-
-        setSummaryStats({
-          totalTxs: txs.length,
-          totalIncome: income,
-          totalExpenses: expenses,
-          netBalance: income - expenses,
-        });
-      } catch {
-        // Use defaults
-        setSummaryStats({
-          totalTxs: 47,
-          totalIncome: 79000,
-          totalExpenses: 54700,
-          netBalance: 24300,
-        });
+        if (!isCancelled) {
+          setLoading(false);
+        }
       }
     };
 
     const fetchAiForecast = async () => {
-      if (!activeOrgId) return;
       setIsFetchingForecast(true);
       try {
-        const res = await api.get("/ai/forecast", { params: { orgId: activeOrgId } });
-        setAiForecast(res.data);
+        const res = await api.get<AiForecastData>("/ai/forecast", { params: { orgId } });
+        if (!isCancelled) {
+          setAiForecast(res.data);
+        }
       } catch (err) {
         console.error("Failed to fetch AI forecast", err);
       } finally {
-        setIsFetchingForecast(false);
+        if (!isCancelled) {
+          setIsFetchingForecast(false);
+        }
       }
     };
 
     fetchReportData();
     fetchAiForecast();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [activeOrgId, range]);
 
   const handleExport = async (exportFormat: "pdf" | "csv") => {
     if (!activeOrgId) return;
     setIsExporting(true);
     try {
-      const res = await api.get("/reports/export", {
+      const res = await api.get<ExportTransactionItem[]>("/reports/export", {
         params: { orgId: activeOrgId },
       });
-      const txs = res.data;
+      const txs: ExportTransactionItem[] = res.data || [];
       
       if (exportFormat === "pdf") {
         setPrintData(txs);
         // Wait for React to render the print portal
         setTimeout(() => {
           window.print();
-          // We don't nullify printData immediately because the print dialog pauses execution in some browsers
-          // It will be hidden on screen anyway because of the 'hidden print:block' tailwind classes
           setIsExporting(false);
         }, 500);
         return;
       }
 
       const headers = ["Date", "Description", "Type", "Amount (Php)", "Status", "Category", "Submitted By"];
-      const rows = txs.map((t: any) => [
+      const rows = txs.map((t) => [
         new Date(t.createdAt).toLocaleDateString(),
         t.description,
         t.type.toUpperCase(),
@@ -193,7 +289,7 @@ export default function ReportsPage() {
       ]);
 
       exportToCSV(headers, rows, "Financial_Report");
-      toast.success(`Exported to CSV successfully`);
+      toast.success("Exported to CSV successfully");
       setIsExporting(false);
     } catch (err) {
       console.error(err);
@@ -206,16 +302,29 @@ export default function ReportsPage() {
     if (!activeOrgId) return;
     setIsSubmittingLiquidation(true);
     try {
-      const res = await api.post(`/organizations/${activeOrgId}/submit-liquidation`);
+      await api.post(`/organizations/${activeOrgId}/submit-liquidation`);
       setLiquidationStatus("pending");
       toast.success("Liquidation Report submitted successfully! Pending University approval.");
-    } catch (err: any) {
-      console.error(err);
-      toast.error(err.response?.data?.error || "Failed to submit liquidation.");
+    } catch (err: unknown) {
+      console.error("Liquidation submit error:", err);
+      let errorMsg = "Failed to submit liquidation.";
+      if (axios.isAxiosError(err)) {
+        errorMsg = err.response?.data?.error || err.message || errorMsg;
+      } else if (err instanceof Error) {
+        errorMsg = err.message;
+      }
+      toast.error(errorMsg);
     } finally {
       setIsSubmittingLiquidation(false);
     }
   };
+
+  const memberships = (user?.memberships || []) as UserMembership[];
+  const userRoleInOrg = memberships.find((m) => {
+    const orgId = typeof m.organization === "string" ? m.organization : m.organization?._id;
+    return orgId === activeOrgId;
+  })?.roleLevel || 4;
+  const canManageReports = user?.isSuperAdmin || userRoleInOrg <= 2;
 
   if (loading) {
     return <DashboardSkeleton />;
@@ -240,7 +349,7 @@ export default function ReportsPage() {
             <option value="1year">Last Year</option>
           </select>
           {/* RBAC Fix: Only Level 1 & 2 can export reports. Level 3 & 4 are read-only. */}
-          {(user?.isSuperAdmin || (user?.memberships?.find((m: any) => m.organization === activeOrgId || m.organization?._id === activeOrgId)?.roleLevel || 4) <= 2) && (
+          {canManageReports && (
             <div className="flex gap-2">
               <button className="btn-secondary py-2" onClick={() => handleExport("csv")} disabled={isExporting}>
                 <Download className="w-4 h-4" /> CSV
@@ -254,7 +363,7 @@ export default function ReportsPage() {
       </header>
 
       {/* ── Liquidation Banner ── */}
-      {(user?.isSuperAdmin || (user?.memberships?.find((m: any) => m.organization === activeOrgId || m.organization?._id === activeOrgId)?.roleLevel || 4) <= 2) && (
+      {canManageReports && (
         <div className="mb-8 p-6 rounded-2xl glass border border-primary/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <h3 className="font-bold text-lg mb-1">Financial Liquidation</h3>
@@ -388,7 +497,7 @@ export default function ReportsPage() {
           </div>
         </div>
         <div className="h-[300px]">
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
             <AreaChart data={monthlyData} margin={{ left: 0, right: 20, top: 4, bottom: 0 }}>
               <defs>
                 <linearGradient id="incGrad" x1="0" y1="0" x2="0" y2="1">
@@ -416,7 +525,7 @@ export default function ReportsPage() {
               />
               <Tooltip
                 contentStyle={{ background: "#F8F6FF", border: "1px solid rgba(107,85,217,0.16)", borderRadius: "8px", color: "#1A1A2E" }}
-                formatter={(v: any) => `₱${Number(v).toLocaleString()}`}
+                formatter={(v: unknown) => `₱${Number(v ?? 0).toLocaleString()}`}
               />
               <Area type="monotone" dataKey="income"  stroke="#10B981" strokeWidth={2} fill="url(#incGrad)" dot={false} />
               <Area type="monotone" dataKey="expense" stroke="#E05C5C" strokeWidth={2} fill="url(#expGrad)" dot={false} />
@@ -425,8 +534,6 @@ export default function ReportsPage() {
           </ResponsiveContainer>
         </div>
       </div>
-
-
 
       {/* ── Print View (Hidden on screen, visible on print) ── */}
       {printData && (
@@ -441,7 +548,7 @@ export default function ReportsPage() {
               </div>
               <div className="text-right">
                 <p className="font-bold text-gray-800 uppercase tracking-wider text-xs">Date Generated</p>
-                <p className="text-gray-900 text-lg font-medium">{new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                <p className="text-gray-900 text-lg font-medium">{new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</p>
                 <p className="text-xs text-gray-500 mt-2">Time: {new Date().toLocaleTimeString()}</p>
               </div>
             </div>
@@ -479,14 +586,14 @@ export default function ReportsPage() {
                 </tr>
               </thead>
               <tbody className="text-gray-700">
-                {printData.map(tx => (
+                {printData.map((tx) => (
                   <tr key={tx._id} className="border-b border-gray-200">
                     <td className="py-3 pr-4">{new Date(tx.createdAt).toLocaleDateString()}</td>
                     <td className="py-3 pr-4 font-medium">{tx.description}</td>
                     <td className="py-3 pr-4">{tx.category || "-"}</td>
                     <td className="py-3 pr-4 font-medium capitalize">{tx.type}</td>
-                    <td className={`py-3 text-right font-bold ${tx.type === 'income' ? 'text-green-600' : 'text-red-600'}`}>
-                      {tx.type === 'income' ? '+' : '-'}₱{tx.amount.toLocaleString()}
+                    <td className={`py-3 text-right font-bold ${tx.type === "income" ? "text-green-600" : "text-red-600"}`}>
+                      {tx.type === "income" ? "+" : "-"}₱{tx.amount.toLocaleString()}
                     </td>
                   </tr>
                 ))}

@@ -8,16 +8,36 @@ const Budget = require("../models/Budget");
 router.get("/organizations", async (req, res) => {
   try {
     const orgs = await Organization.find({ isActive: true }).lean();
-    
-    // We will attach a transparency score to each organization
-    // Transparency Score = (Verified On-Chain Transactions / Total Approved Transactions) * 100
-    const results = await Promise.all(orgs.map(async (org) => {
-      const totalApproved = await Transaction.countDocuments({ organization: org._id, status: "approved" });
-      const totalVerified = await Transaction.countDocuments({ organization: org._id, status: "approved", isRecordedOnChain: true });
-      
+    if (!orgs.length) return res.json([]);
+
+    const orgIds = orgs.map((o) => o._id);
+
+    // Single aggregation to compute total approved and on-chain verified transactions per org
+    const statsAgg = await Transaction.aggregate([
+      {
+        $match: {
+          organization: { $in: orgIds },
+          status: "approved",
+        },
+      },
+      {
+        $group: {
+          _id: "$organization",
+          totalApproved: { $sum: 1 },
+          totalVerified: {
+            $sum: { $cond: [{ $eq: ["$isRecordedOnChain", true] }, 1, 0] },
+          },
+        },
+      },
+    ]);
+
+    const statsMap = new Map(statsAgg.map((s) => [s._id.toString(), s]));
+
+    const results = orgs.map((org) => {
+      const stats = statsMap.get(org._id.toString()) || { totalApproved: 0, totalVerified: 0 };
       let transparencyScore = 100;
-      if (totalApproved > 0) {
-        transparencyScore = Math.round((totalVerified / totalApproved) * 100);
+      if (stats.totalApproved > 0) {
+        transparencyScore = Math.round((stats.totalVerified / stats.totalApproved) * 100);
       } else if (!org.contractAddress) {
         transparencyScore = 50; // Penalty for no smart contract linked yet
       }
@@ -30,9 +50,9 @@ router.get("/organizations", async (req, res) => {
         logoUrl: org.logoUrl,
         contractAddress: org.contractAddress,
         transparencyScore,
-        isPrivate: org.isPrivate || false
+        isPrivate: org.isPrivate || false,
       };
-    }));
+    });
 
     res.json(results);
   } catch (err) {
@@ -130,6 +150,60 @@ router.get("/feed", async (req, res) => {
       .slice(0, 10);
 
     res.json(publicTransactions);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+// ── GET /api/public/verify/:hash ── Verify a specific transaction by blockchain hash
+router.get("/verify/:hash", async (req, res) => {
+  try {
+    const { hash } = req.params;
+    
+    // Support querying by either blockchainTxHash or internal ID if someone scans an internal QR
+    const query = hash.startsWith("0x") 
+      ? { blockchainTxHash: hash } 
+      : { _id: hash };
+
+    const transaction = await Transaction.findOne(query)
+      .populate("organization", "name isPrivate contractAddress")
+      .populate("requestedBy", "displayName walletAddress")
+      .populate("approvers.user", "displayName walletAddress")
+      .lean();
+
+    if (!transaction) {
+      return res.status(404).json({ error: "Transaction not found on this system." });
+    }
+
+    if (transaction.organization && transaction.organization.isPrivate) {
+      return res.status(403).json({ error: "This transaction belongs to a private organization and cannot be publicly audited." });
+    }
+
+    // Format a clean verification report
+    const report = {
+      isVerified: transaction.isRecordedOnChain && !!transaction.blockchainTxHash,
+      transactionHash: transaction.blockchainTxHash,
+      onChainTxId: transaction.onChainTxId,
+      status: transaction.status,
+      timestamp: transaction.createdAt,
+      organizationName: transaction.organization?.name,
+      contractAddress: transaction.organization?.contractAddress,
+      amount: transaction.amount,
+      type: transaction.type,
+      category: transaction.category,
+      budgetCategory: transaction.budgetCategory,
+      description: transaction.description,
+      receiptIpfsHash: transaction.receiptIpfsHash, // Provide the raw receipt for auditing
+      receiptUrl: transaction.receiptUrl,
+      requestedBy: transaction.requestedBy?.displayName || transaction.requestedBy?.walletAddress,
+      signatures: transaction.approvers.map(a => ({
+        name: a.user?.displayName,
+        wallet: a.user?.walletAddress,
+        signature: a.signature, // Cryptographic proof of approval
+        date: a.date
+      }))
+    };
+
+    res.json(report);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -3,7 +3,7 @@ export default function DashboardSkeleton() {
     <div className="p-4 md:p-8 pb-20 animate-fade-in w-full">
       {/* Header Skeleton */}
       <div className="mb-8 flex flex-wrap justify-between items-center gap-4">
-        <div className="space-y-3 w-1/3 min-w-[200px]">
+        <div className="space-y-3 w-1/3 min-w-50">
           <div className="h-8 bg-gray-200 dark:bg-gray-800 rounded-md animate-pulse w-3/4"></div>
           <div className="h-4 bg-gray-200 dark:bg-gray-800 rounded-md animate-pulse w-full"></div>
         </div>
@@ -31,7 +31,7 @@ export default function DashboardSkeleton() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Main Chart Skeleton */}
-        <div className="lg:col-span-2 glass p-6 rounded-xl h-[400px] flex flex-col">
+        <div className="lg:col-span-2 glass p-6 rounded-xl h-100 flex flex-col">
           <div className="w-40 h-6 bg-gray-200 dark:bg-gray-800 rounded animate-pulse mb-8"></div>
           <div className="flex-1 w-full bg-gray-100 dark:bg-gray-800/50 rounded-lg animate-pulse"></div>
         </div>

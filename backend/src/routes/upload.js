@@ -32,58 +32,75 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB limit
 });
 
+
+
 /// POST /api/upload — Upload a receipt or document to IPFS via Pinata
 router.post("/", authenticate, upload.single("file"), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: "No file uploaded" });
   }
 
-  try {
-    const pinataJWT = process.env.PINATA_JWT;
-    if (!pinataJWT) {
-      return res.status(500).json({ error: "Pinata JWT not configured" });
+    // Save locally first as a reliable fallback
+    const localFilename = `${Date.now()}_${req.file.originalname.replace(/\s+/g, '_')}`;
+    const localFilePath = path.join(UPLOADS_DIR, localFilename);
+    fs.writeFileSync(localFilePath, req.file.buffer);
+    const localUrl = `${req.protocol}://${req.get("host")}/uploads/${localFilename}`;
+
+    try {
+      const pinataJWT = process.env.PINATA_JWT;
+      if (!pinataJWT) {
+        throw new Error("Pinata JWT not configured");
+      }
+
+      // Build FormData to send to Pinata
+      const formData = new FormData();
+      formData.append("file", req.file.buffer, {
+        filename: req.file.originalname,
+        contentType: req.file.mimetype,
+      });
+
+      const pinataMetadata = JSON.stringify({
+        name: `ChainBudget_Upload_${Date.now()}_${req.file.originalname}`,
+      });
+      formData.append("pinataMetadata", pinataMetadata);
+
+      const pinataOptions = JSON.stringify({
+        cidVersion: 1,
+      });
+      formData.append("pinataOptions", pinataOptions);
+
+      // Upload to Pinata
+      const response = await axios.post("https://api.pinata.cloud/pinning/pinFileToIPFS", formData, {
+        maxBodyLength: Infinity,
+        headers: {
+          ...formData.getHeaders(),
+          Authorization: `Bearer ${pinataJWT}`,
+        },
+      });
+
+      const ipfsHash = response.data.IpfsHash;
+      const documentUrl = `https://gateway.pinata.cloud/ipfs/${ipfsHash}`;
+
+      // Return public URL and hash
+      return res.status(201).json({
+        documentUrl,
+        documentHash: ipfsHash,
+        originalName: req.file.originalname,
+        mimeType: req.file.mimetype,
+        localUrl // Also provide localUrl just in case
+      });
+    } catch (err) {
+      console.warn("Pinata IPFS upload failed, falling back to local storage:", err?.response?.data || err.message);
+      
+      // Return local URL as fallback
+      return res.status(201).json({
+        documentUrl: localUrl,
+        documentHash: "local_" + crypto.randomBytes(8).toString("hex"),
+        originalName: req.file.originalname,
+        mimeType: req.file.mimetype,
+        isLocal: true
+      });
     }
-
-    // Build FormData to send to Pinata
-    const formData = new FormData();
-    formData.append("file", req.file.buffer, {
-      filename: req.file.originalname,
-      contentType: req.file.mimetype,
-    });
-
-    const pinataMetadata = JSON.stringify({
-      name: `ChainBudget_Receipt_${Date.now()}_${req.file.originalname}`,
-    });
-    formData.append("pinataMetadata", pinataMetadata);
-
-    const pinataOptions = JSON.stringify({
-      cidVersion: 1,
-    });
-    formData.append("pinataOptions", pinataOptions);
-
-    // Upload to Pinata
-    const response = await axios.post("https://api.pinata.cloud/pinning/pinFileToIPFS", formData, {
-      maxBodyLength: "Infinity",
-      headers: {
-        "Content-Type": `multipart/form-data; boundary=${formData._boundary}`,
-        Authorization: `Bearer ${pinataJWT}`,
-      },
-    });
-
-    const ipfsHash = response.data.IpfsHash;
-    const documentUrl = `https://gateway.pinata.cloud/ipfs/${ipfsHash}`;
-
-    // Return public URL and hash
-    res.status(201).json({
-      documentUrl,
-      documentHash: ipfsHash,
-      originalName: req.file.originalname,
-      mimeType: req.file.mimetype,
-    });
-  } catch (err) {
-    console.error("Error uploading to IPFS:", err?.response?.data || err.message);
-    res.status(500).json({ error: "Failed to upload to IPFS" });
-  }
 });
 
 module.exports = router;

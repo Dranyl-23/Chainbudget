@@ -1,5 +1,6 @@
 import { ethers } from "ethers";
 import api from "./api";
+import type { User } from "@/context/AuthContext";
 
 const CHAIN_ID = Number(process.env.NEXT_PUBLIC_CHAIN_ID || 80002);
 
@@ -9,11 +10,28 @@ export interface WalletState {
   isConnected: boolean;
 }
 
-function getInjectedEthereumProvider(): any | null {
+export type InjectedProvider = NonNullable<Window["ethereum"]>;
+
+export interface Eip1193RpcError extends Error {
+  code: number;
+  data?: unknown;
+}
+
+interface ApiErrorResponse {
+  response?: {
+    data?: {
+      error?: string;
+      message?: string;
+    };
+  };
+  message?: string;
+}
+
+function getInjectedEthereumProvider(): InjectedProvider | null {
   if (typeof window === "undefined" || !window.ethereum) return null;
-  const ethereumProvider = window.ethereum as any;
+  const ethereumProvider = window.ethereum;
   if (ethereumProvider.providers?.length) {
-    return ethereumProvider.providers.find((p: any) => p.isMetaMask) || ethereumProvider;
+    return ethereumProvider.providers.find((p: InjectedProvider) => p.isMetaMask) || ethereumProvider;
   }
   return ethereumProvider;
 }
@@ -21,7 +39,7 @@ function getInjectedEthereumProvider(): any | null {
 export function getProvider(): ethers.BrowserProvider | null {
   const injectedProvider = getInjectedEthereumProvider();
   if (!injectedProvider) return null;
-  return new ethers.BrowserProvider(injectedProvider);
+  return new ethers.BrowserProvider(injectedProvider as ethers.Eip1193Provider);
 }
 
 export function isMetaMaskInstalled(): boolean {
@@ -45,16 +63,18 @@ export async function connectWallet(): Promise<WalletState> {
 }
 
 export async function switchToAmoy(): Promise<void> {
-  if (!window.ethereum) throw new Error("MetaMask not installed");
+  const ethereumProvider = getInjectedEthereumProvider();
+  if (!ethereumProvider) throw new Error("MetaMask not installed");
 
   try {
-    await window.ethereum.request({
+    await ethereumProvider.request({
       method: "wallet_switchEthereumChain",
       params: [{ chainId: `0x${CHAIN_ID.toString(16)}` }],
     });
-  } catch (switchError: any) {
-    if (switchError.code === 4902) {
-      await window.ethereum.request({
+  } catch (switchError: unknown) {
+    const rpcError = switchError as Eip1193RpcError;
+    if (rpcError.code === 4902) {
+      await ethereumProvider.request({
         method: "wallet_addEthereumChain",
         params: [
           {
@@ -72,8 +92,8 @@ export async function switchToAmoy(): Promise<void> {
   }
 }
 
-export async function linkWallet(): Promise<{ user: any }> {
-  if (typeof window === "undefined" || !window.ethereum) {
+export async function linkWallet(): Promise<{ user: User }> {
+  if (typeof window === "undefined") {
     throw new Error("MetaMask is not installed");
   }
 
@@ -87,12 +107,13 @@ export async function linkWallet(): Promise<{ user: any }> {
       accounts = (await ethereumProvider.request({
         method: "eth_requestAccounts",
       })) as string[];
-    } catch (accountError: any) {
-      if (accountError?.code === 4001) {
+    } catch (accountError: unknown) {
+      const rpcErr = accountError as Eip1193RpcError;
+      if (rpcErr?.code === 4001) {
         throw new Error("User rejected the request to connect MetaMask");
       }
       throw new Error(
-        `Failed to request accounts: ${accountError?.message || String(accountError)}`
+        `Failed to request accounts: ${rpcErr?.message || String(accountError)}`
       );
     }
 
@@ -118,21 +139,23 @@ export async function linkWallet(): Promise<{ user: any }> {
     // ── Step 2: Switch to Polygon Amoy ───────────────────────────────────────
     try {
       await switchToAmoy();
-    } catch (networkError: any) {
+    } catch (networkError: unknown) {
+      const err = networkError as Error;
       throw new Error(
-        `Failed to switch to Polygon Amoy: ${networkError.message}`
+        `Failed to switch to Polygon Amoy: ${err.message || String(networkError)}`
       );
     }
 
     // ── Step 3: Get nonce from backend ───────────────────────────────────────
     let nonce: string;
     try {
-      const nonceRes = await api.get(`/auth/nonce/${walletAddress}`);
+      const nonceRes = await api.get<{ nonce: string }>(`/auth/nonce/${walletAddress}`);
       nonce = nonceRes.data.nonce;
       console.log("Got nonce:", nonce);
-    } catch (nonceError: any) {
+    } catch (nonceError: unknown) {
+      const apiErr = nonceError as ApiErrorResponse;
       throw new Error(
-        `Failed to get nonce: ${nonceError.response?.data?.error || nonceError.message}`
+        `Failed to get nonce: ${apiErr.response?.data?.error || apiErr.message || String(nonceError)}`
       );
     }
 
@@ -146,22 +169,24 @@ export async function linkWallet(): Promise<{ user: any }> {
         params: [messageHex, walletAddress],
       })) as string;
       console.log("Signature obtained:", signature);
-    } catch (signError: any) {
-      if (signError?.code === 4001) {
+    } catch (signError: unknown) {
+      const rpcErr = signError as Eip1193RpcError;
+      if (rpcErr?.code === 4001) {
         throw new Error("User rejected the signature request");
       }
       throw new Error(
-        `Failed to sign message: ${signError?.message || String(signError)}`
+        `Failed to sign message: ${rpcErr?.message || String(signError)}`
       );
     }
 
     // ── Step 5: Verify and Link with backend ──────────────────────────────────
     let linkRes;
     try {
-      linkRes = await api.post("/auth/link-wallet", { walletAddress, signature });
-    } catch (verifyError: any) {
+      linkRes = await api.post<{ user: User }>("/auth/link-wallet", { walletAddress, signature });
+    } catch (verifyError: unknown) {
+      const apiErr = verifyError as ApiErrorResponse;
       throw new Error(
-        `Linking failed: ${verifyError.response?.data?.error || verifyError.message}`
+        `Linking failed: ${apiErr.response?.data?.error || apiErr.message || String(verifyError)}`
       );
     }
 
@@ -171,25 +196,25 @@ export async function linkWallet(): Promise<{ user: any }> {
     localStorage.setItem("cb_user", JSON.stringify(user));
 
     return { user };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Wallet login error:", error);
     throw error;
   }
 }
 
-export function getStoredUser(): any | null {
+export function getStoredUser(): User | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = localStorage.getItem("cb_user");
     if (!raw) return null;
-    const user = JSON.parse(raw);
+    const user = JSON.parse(raw) as User;
     if (!user.walletAddress || !user.id) {
       console.warn("Stored user object is malformed, clearing session");
       clearSession();
       return null;
     }
     return user;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error(
       "Failed to parse stored user:",
       error instanceof Error ? error.message : String(error)

@@ -32,7 +32,6 @@ const TransactionSchema = new mongoose.Schema(
     documentHash: { type: String }, // Hash of uploaded document
 
     // Approval state
-    isHighValue: { type: Boolean, default: false },
     status: {
       type: String,
       enum: ["requested", "pending_approval", "approved", "rejected", "cancelled"],
@@ -56,5 +55,12 @@ const TransactionSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// High-performance compound indexes for queries and aggregations
+TransactionSchema.index({ organization: 1, status: 1, createdAt: -1 });
+TransactionSchema.index({ organization: 1, type: 1, status: 1 });
+TransactionSchema.index({ organization: 1, isRecordedOnChain: 1, status: 1 });
+TransactionSchema.index({ blockchainTxHash: 1 }, { sparse: true });
+TransactionSchema.index({ onChainTxId: 1 }, { sparse: true });
 
 module.exports = mongoose.model("Transaction", TransactionSchema);

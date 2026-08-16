@@ -2,10 +2,53 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
+import Image from "next/image";
 import { ethers } from "ethers";
 import api from "@/lib/api";
 import toast from "react-hot-toast";
 import { Save, Wallet, Upload, User as UserIcon, ShieldCheck, ExternalLink } from "lucide-react";
+import axios from "axios";
+
+// ── Types ────────────────────────────────────────────────────────────────────
+interface UserOrgRef {
+  _id?: string;
+  name?: string;
+}
+
+interface UserMembership {
+  organization?: string | UserOrgRef;
+  roleLabel?: string;
+  roleLevel?: number;
+  hasSBT?: boolean;
+  sbtTokenId?: string;
+}
+
+interface PendingLiquidationOrg {
+  _id: string;
+  name: string;
+  liquidationStatus?: string;
+  subsidyAmount?: number;
+}
+
+interface AutoWalletKeys {
+  privateKey: string;
+  mnemonic: string;
+}
+
+interface UploadResponse {
+  documentUrl: string;
+}
+
+// ── Helper to safely extract error message ──────────────────────────────────
+function getErrorMessage(err: unknown, fallback: string): string {
+  if (axios.isAxiosError(err)) {
+    return err.response?.data?.error || err.message || fallback;
+  }
+  if (err instanceof Error) {
+    return err.message;
+  }
+  return fallback;
+}
 
 export default function SettingsPage() {
   const { user, refreshUser, activeOrgId } = useAuth();
@@ -16,17 +59,26 @@ export default function SettingsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isLinking, setIsLinking] = useState(false);
   const [walletBalance, setWalletBalance] = useState<string | null>(null);
-  const [pendingLiquidations, setPendingLiquidations] = useState<any[]>([]);
+  const [pendingLiquidations, setPendingLiquidations] = useState<PendingLiquidationOrg[]>([]);
   const [approvingLiquidationId, setApprovingLiquidationId] = useState<string | null>(null);
 
+  // Auto-Wallet Security State
+  const [showKeys, setShowKeys] = useState(false);
+  const [autoWalletKeys, setAutoWalletKeys] = useState<AutoWalletKeys | null>(null);
+  const [isLoadingKeys, setIsLoadingKeys] = useState(false);
+
   useEffect(() => {
+    let isCancelled = false;
+
     const fetchBalance = async () => {
       if (!user?.walletAddress) return;
       try {
-        const provider = new ethers.JsonRpcProvider("https://rpc-amoy.polygon.technology");
+        const provider = new ethers.JsonRpcProvider("https://polygon-amoy.drpc.org");
         const balance = await provider.getBalance(user.walletAddress);
         const balanceInMatic = ethers.formatEther(balance);
-        setWalletBalance(parseFloat(balanceInMatic).toFixed(4));
+        if (!isCancelled) {
+          setWalletBalance(parseFloat(balanceInMatic).toFixed(4));
+        }
       } catch (error) {
         console.error("Failed to fetch balance:", error);
       }
@@ -35,9 +87,12 @@ export default function SettingsPage() {
     const fetchLiquidations = async () => {
       if (!user?.isSuperAdmin) return;
       try {
-        const res = await api.get("/organizations");
-        const pending = res.data.filter((org: any) => org.liquidationStatus === "pending");
-        setPendingLiquidations(pending);
+        const res = await api.get<PendingLiquidationOrg[]>("/organizations");
+        const orgList = res.data || [];
+        const pending = orgList.filter((org) => org.liquidationStatus === "pending");
+        if (!isCancelled) {
+          setPendingLiquidations(pending);
+        }
       } catch (err) {
         console.error("Failed to fetch liquidations:", err);
       }
@@ -45,10 +100,15 @@ export default function SettingsPage() {
     
     fetchBalance();
     fetchLiquidations();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [user?.walletAddress, user?.isSuperAdmin]);
 
   // Get active role
-  const activeMembership = user?.memberships?.find((m: any) => {
+  const memberships = (user?.memberships || []) as UserMembership[];
+  const activeMembership = memberships.find((m) => {
     const orgId = typeof m.organization === "object" ? m.organization?._id : m.organization;
     return String(orgId) === String(activeOrgId);
   });
@@ -72,7 +132,7 @@ export default function SettingsPage() {
         const formData = new FormData();
         formData.append("file", avatarFile);
         
-        const uploadRes = await api.post("/upload", formData, {
+        const uploadRes = await api.post<UploadResponse>("/upload", formData, {
           headers: { "Content-Type": "multipart/form-data" }
         });
         
@@ -89,8 +149,8 @@ export default function SettingsPage() {
       await refreshUser();
       
       toast.success("Profile updated successfully!");
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || "Failed to update profile");
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, "Failed to update profile"));
     } finally {
       setIsSaving(false);
     }
@@ -99,13 +159,13 @@ export default function SettingsPage() {
   const handleLinkWallet = async () => {
     try {
       setIsLinking(true);
-      if (typeof window === "undefined" || !(window as any).ethereum) {
+      if (typeof window === "undefined" || !window.ethereum) {
         throw new Error("MetaMask not installed");
       }
       
-      const accounts = await (window as any).ethereum.request({
+      const accounts = await window.ethereum.request({
         method: "eth_requestAccounts",
-      });
+      }) as string[];
       
       if (!accounts || accounts.length === 0) {
         throw new Error("No accounts selected");
@@ -113,7 +173,7 @@ export default function SettingsPage() {
 
       const newWallet = accounts[0];
       
-      if (newWallet.toLowerCase() === user?.walletAddress.toLowerCase()) {
+      if (user?.walletAddress && newWallet.toLowerCase() === user.walletAddress.toLowerCase()) {
         toast.error("This is your primary wallet.");
         return;
       }
@@ -124,10 +184,28 @@ export default function SettingsPage() {
 
       await refreshUser();
       toast.success("Wallet linked successfully!");
-    } catch (err: any) {
-      toast.error(err.message || "Failed to link wallet");
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, "Failed to link wallet"));
     } finally {
       setIsLinking(false);
+    }
+  };
+
+  const handleRevealKeys = async () => {
+    if (showKeys) {
+      setShowKeys(false);
+      return;
+    }
+
+    try {
+      setIsLoadingKeys(true);
+      const res = await api.get<AutoWalletKeys>("/auth/keys");
+      setAutoWalletKeys(res.data);
+      setShowKeys(true);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, "Failed to fetch wallet keys. You may not have an auto-generated wallet."));
+    } finally {
+      setIsLoadingKeys(false);
     }
   };
 
@@ -136,9 +214,9 @@ export default function SettingsPage() {
       setApprovingLiquidationId(orgId);
       await api.post(`/organizations/${orgId}/approve-liquidation`);
       toast.success("Liquidation approved and budget replenished!");
-      setPendingLiquidations(prev => prev.filter(org => org._id !== orgId));
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || "Failed to approve liquidation");
+      setPendingLiquidations((prev) => prev.filter((org) => org._id !== orgId));
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, "Failed to approve liquidation"));
     } finally {
       setApprovingLiquidationId(null);
     }
@@ -166,9 +244,16 @@ export default function SettingsPage() {
             <div className="flex flex-col sm:flex-row gap-6 items-center sm:items-start mb-6">
               <div className="relative flex flex-col items-center">
                 <div className="relative group mb-3">
-                  <div className="w-24 h-24 rounded-full bg-gray-200 border-4 border-white shadow-lg overflow-hidden flex items-center justify-center flex-shrink-0">
+                  <div className="w-24 h-24 rounded-full bg-gray-200 border-4 border-white shadow-lg overflow-hidden flex items-center justify-center shrink-0">
                     {avatarPreview ? (
-                      <img src={avatarPreview} alt="Avatar" className="w-full h-full object-cover" />
+                      <Image
+                        src={avatarPreview}
+                        alt="Avatar"
+                        width={96}
+                        height={96}
+                        unoptimized
+                        className="w-full h-full object-cover"
+                      />
                     ) : (
                       <UserIcon className="w-10 h-10 text-gray-400" />
                     )}
@@ -251,6 +336,53 @@ export default function SettingsPage() {
                 )}
                 Save Profile
               </button>
+            </div>
+          </div>
+
+          {/* ── Auto-Wallet Security & Backup ── */}
+          <div className="glass rounded-xl p-6 md:p-8 border border-[var(--color-border)] mb-8">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center">
+                <ShieldCheck className="w-5 h-5 text-orange-400" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold">Security & Backup</h2>
+                <p className="text-sm text-gray-500">Manage your auto-generated Web3 wallet.</p>
+              </div>
+            </div>
+
+            <div className="bg-orange-500/5 border border-orange-500/20 rounded-lg p-5">
+              <h3 className="text-orange-200 font-bold mb-2">Your Web3 Identity</h3>
+              <p className="text-sm text-gray-400 mb-4">
+                ChainBudget automatically generated a secure Ethereum wallet for you when you signed up. 
+                This wallet is used to interact with smart contracts on your behalf. You can backup your keys below and import them into MetaMask if you wish to self-custody.
+              </p>
+
+              <button 
+                onClick={handleRevealKeys}
+                disabled={isLoadingKeys}
+                className="btn-secondary py-2 border-orange-500/30 hover:border-orange-500 text-orange-300"
+              >
+                {isLoadingKeys ? "Loading..." : showKeys ? "Hide Recovery Phrase & Private Key" : "Reveal Recovery Phrase & Private Key"}
+              </button>
+
+              {showKeys && autoWalletKeys && (
+                <div className="mt-6 space-y-4 animate-fade-in">
+                  <div className="bg-black/50 p-4 rounded-lg border border-red-500/30">
+                    <p className="text-xs font-bold text-red-400 uppercase tracking-widest mb-1">Recovery Phrase (12 Words)</p>
+                    <p className="text-sm font-mono text-gray-300 break-words">{autoWalletKeys.mnemonic}</p>
+                  </div>
+                  
+                  <div className="bg-black/50 p-4 rounded-lg border border-red-500/30">
+                    <p className="text-xs font-bold text-red-400 uppercase tracking-widest mb-1">Private Key</p>
+                    <p className="text-sm font-mono text-gray-300 break-all">{autoWalletKeys.privateKey}</p>
+                  </div>
+
+                  <p className="text-xs text-red-400 font-medium">
+                    ⚠️ WARNING: Never share these keys with anyone. Anyone with your private key or recovery phrase has full control over your funds.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 
@@ -339,7 +471,7 @@ export default function SettingsPage() {
             ) : (
               <div className="mt-4 text-center p-4 bg-white/50 dark:bg-gray-800/50 rounded-xl border border-dashed border-gray-300 dark:border-gray-700">
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                  You don't have a Soulbound Token (SBT) yet.
+                  You don&apos;t have a Soulbound Token (SBT) yet.
                 </p>
                 {user?.walletAddress ? (
                   <button 
@@ -349,8 +481,8 @@ export default function SettingsPage() {
                         await api.post("/auth/mint-sbt");
                         await refreshUser();
                         toast.success("Soulbound ID Minted Successfully!");
-                      } catch (err: any) {
-                        toast.error(err.response?.data?.error || "Failed to mint SBT");
+                      } catch (err: unknown) {
+                        toast.error(getErrorMessage(err, "Failed to mint SBT"));
                       } finally {
                         setIsLinking(false);
                       }
@@ -361,7 +493,7 @@ export default function SettingsPage() {
                     {isLinking ? (
                       <span className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
                     ) : (
-                      <ShieldCheck className="w-5 h-5 flex-shrink-0" />
+                      <ShieldCheck className="w-5 h-5 shrink-0" />
                     )}
                     Mint Member ID
                   </button>
@@ -398,7 +530,7 @@ export default function SettingsPage() {
             </div>
           ) : (
             <div className="space-y-4">
-              {pendingLiquidations.map(org => (
+              {pendingLiquidations.map((org) => (
                 <div key={org._id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-white rounded-xl border border-gray-100 shadow-sm gap-4">
                   <div>
                     <h3 className="font-bold text-gray-800">{org.name}</h3>

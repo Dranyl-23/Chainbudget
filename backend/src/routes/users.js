@@ -1,17 +1,63 @@
 const express = require("express");
 const router = express.Router();
 const User = require("../models/User");
+const Organization = require("../models/Organization");
 const { authenticate, requireRole, requireSuperAdmin } = require("../middleware/auth");
+const { ethers } = require("ethers");
+const { sendEmail } = require("../services/email");
 
 /// GET /api/users/me — Current user profile
 router.get("/me", authenticate, async (req, res) => {
-  res.json(req.user);
+  try {
+    await req.user.populate("memberships.organization", "name type logoUrl");
+    const formatted = {
+      id: req.user._id,
+      _id: req.user._id,
+      walletAddress: req.user.walletAddress,
+      displayName: req.user.displayName,
+      email: req.user.email,
+      avatarUrl: req.user.avatarUrl,
+      linkedWallets: req.user.linkedWallets,
+      isSuperAdmin: req.user.isSuperAdmin,
+      memberships: req.user.memberships,
+    };
+    res.json({ user: formatted, ...formatted });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/// GET /api/users/me/balance — Fetch user's MATIC balance from blockchain
+router.get("/me/balance", authenticate, async (req, res) => {
+  try {
+    if (!req.user.walletAddress) {
+      return res.json({ balance: "0.0" });
+    }
+    const provider = new ethers.JsonRpcProvider(process.env.AMOY_RPC_URL || process.env.RPC_URL || "https://rpc-amoy.polygon.technology/");
+    const balanceWei = await provider.getBalance(req.user.walletAddress);
+    const balanceMatic = ethers.formatEther(balanceWei);
+    res.json({ balance: balanceMatic });
+  } catch (err) {
+    console.error("Failed to fetch balance:", err);
+    res.status(500).json({ error: "Failed to fetch on-chain balance" });
+  }
 });
 
 /// GET /api/users/by-wallet/:walletAddress — Look up user profile by wallet address
 router.get("/by-wallet/:walletAddress", authenticate, async (req, res) => {
   try {
     const user = await User.findOne({ walletAddress: req.params.walletAddress.toLowerCase() }).select("displayName email walletAddress");
+    if (!user) return res.status(404).json({ error: "User not found" });
+    res.json(user);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/// GET /api/users/by-email/:email — Look up user profile by email
+router.get("/by-email/:email", authenticate, async (req, res) => {
+  try {
+    const user = await User.findOne({ email: req.params.email.toLowerCase() }).select("displayName email walletAddress");
     if (!user) return res.status(404).json({ error: "User not found" });
     res.json(user);
   } catch (err) {
@@ -31,17 +77,29 @@ router.put("/me", authenticate, async (req, res) => {
     
     // Add to linked wallets, avoiding duplicates and current wallet
     if (linkedWallets && Array.isArray(linkedWallets)) {
-      const mainWallet = user.walletAddress.toLowerCase();
+      const mainWallet = user.walletAddress ? user.walletAddress.toLowerCase() : "";
       linkedWallets.forEach((w) => {
         const lowerW = w.toLowerCase();
-        if (lowerW !== mainWallet && !user.linkedWallets.includes(lowerW)) {
+        if (lowerW && lowerW !== mainWallet && !user.linkedWallets.includes(lowerW)) {
           user.linkedWallets.push(lowerW);
         }
       });
     }
 
     await user.save();
-    res.json(user);
+    await user.populate("memberships.organization", "name type logoUrl");
+    const formatted = {
+      id: user._id,
+      _id: user._id,
+      walletAddress: user.walletAddress,
+      displayName: user.displayName,
+      email: user.email,
+      avatarUrl: user.avatarUrl,
+      linkedWallets: user.linkedWallets,
+      isSuperAdmin: user.isSuperAdmin,
+      memberships: user.memberships,
+    };
+    res.json({ user: formatted, ...formatted });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -63,25 +121,26 @@ router.get("/:orgId/members", authenticate, requireRole(4), async (req, res) => 
 /// POST /api/users/:orgId/invite — Invite/add a member (Level 1 only)
 router.post("/:orgId/invite", authenticate, requireRole(1), async (req, res) => {
   try {
-    const { walletAddress, displayName, email, roleLevel, roleLabel } = req.body;
-    if (!walletAddress || !roleLevel) {
-      return res.status(400).json({ error: "walletAddress and roleLevel required" });
+    const { identifier, displayName, roleLevel, roleLabel } = req.body;
+    if (!identifier || !roleLevel) {
+      return res.status(400).json({ error: "identifier and roleLevel required" });
     }
 
-    let user = await User.findOne({ walletAddress: walletAddress.toLowerCase() });
+    const idLower = identifier.toLowerCase().trim();
+    let isWallet = idLower.startsWith("0x") && idLower.length === 42;
+    
+    let user = await User.findOne(isWallet ? { walletAddress: idLower } : { email: idLower });
+    
     if (!user) {
-      user = new User({ 
-        walletAddress: walletAddress.toLowerCase(),
-        displayName: displayName || "New User",
-        email: email || undefined
-      });
+      // Pre-create the user. The wallet will be auto-generated upon first login via Asgardeo if they registered with email.
+      const newUserObj = { displayName: displayName || "New Member" };
+      if (isWallet) newUserObj.walletAddress = idLower;
+      else newUserObj.email = idLower;
+      
+      user = new User(newUserObj);
     } else {
       if (displayName && user.displayName === "New User") {
-        // If user exists but is still "New User", we can update their name
         user.displayName = displayName;
-      }
-      if (email && !user.email) {
-        user.email = email;
       }
     }
 
@@ -103,6 +162,81 @@ router.post("/:orgId/invite", authenticate, requireRole(1), async (req, res) => 
     }
 
     await user.save();
+
+    // Send invite email notification (non-fatal — invite succeeds even if email fails)
+    const recipientEmail = isWallet ? null : idLower;
+    if (recipientEmail) {
+      try {
+        const org = await Organization.findById(req.params.orgId).select("name").lean();
+        const orgName = org ? org.name : "your organization";
+        const roleName = roleLabel || `Level ${roleLevel} Member`;
+        const inviterName = req.user.displayName || "An administrator";
+
+        await sendEmail(
+          recipientEmail,
+          `You've been added to ${orgName} on ChainBudget`,
+          `
+<!DOCTYPE html>
+<html>
+<body style="margin:0;padding:0;background:#09090b;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#09090b;padding:40px 0;">
+    <tr><td align="center">
+      <table width="520" cellpadding="0" cellspacing="0" style="background:#111113;border-radius:16px;border:1px solid rgba(255,255,255,0.08);overflow:hidden;">
+        <!-- Header -->
+        <tr><td style="background:linear-gradient(135deg,#1a0a2e,#16082a);padding:32px;text-align:center;">
+          <div style="font-size:28px;font-weight:800;color:#e879f9;letter-spacing:-0.5px;">ChainBudget</div>
+          <div style="font-size:13px;color:rgba(255,255,255,0.4);margin-top:4px;">Transparent On-Chain Budgets</div>
+        </td></tr>
+        <!-- Body -->
+        <tr><td style="padding:32px;">
+          <p style="margin:0 0 8px;font-size:22px;font-weight:700;color:#ffffff;">You've been invited! 🎉</p>
+          <p style="margin:0 0 24px;font-size:14px;color:rgba(255,255,255,0.5);line-height:1.6;">
+            <strong style="color:rgba(255,255,255,0.8);">${inviterName}</strong> has added you to
+            <strong style="color:#e879f9;">${orgName}</strong> as a
+            <strong style="color:rgba(255,255,255,0.8);">${roleName}</strong>.
+          </p>
+          <!-- Divider -->
+          <div style="border-top:1px solid rgba(255,255,255,0.08);margin:24px 0;"></div>
+          <!-- Steps -->
+          <p style="margin:0 0 16px;font-size:13px;font-weight:700;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:1px;">Getting started</p>
+          ${[
+            ['1', 'Download the ChainBudget mobile app on your phone'],
+            ['2', 'Tap <strong style="color:#e879f9;">Create Account</strong>'],
+            ['3', `Enter your email: <strong style="color:#e879f9;">${recipientEmail}</strong>`],
+            ['4', 'Your secure wallet will be created automatically'],
+          ].map(([n, text]) => `
+          <table cellpadding="0" cellspacing="0" style="margin-bottom:12px;width:100%;">
+            <tr>
+              <td style="width:32px;height:32px;background:rgba(168,85,247,0.15);border-radius:50%;text-align:center;vertical-align:middle;">
+                <span style="color:#a855f7;font-weight:700;font-size:13px;">${n}</span>
+              </td>
+              <td style="padding-left:12px;font-size:14px;color:rgba(255,255,255,0.7);line-height:1.5;">${text}</td>
+            </tr>
+          </table>`).join('')}
+          <!-- Important note -->
+          <div style="margin-top:24px;background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.2);border-radius:12px;padding:14px;">
+            <p style="margin:0;font-size:13px;color:rgba(251,191,36,0.9);line-height:1.6;">
+              ⚠️ <strong>Use this exact email address when registering:</strong><br/>
+              <span style="font-family:monospace;font-size:14px;color:#fbbf24;">${recipientEmail}</span><br/>
+              This links your wallet to your membership in ${orgName}.
+            </p>
+          </div>
+        </td></tr>
+        <!-- Footer -->
+        <tr><td style="padding:20px 32px;border-top:1px solid rgba(255,255,255,0.06);text-align:center;">
+          <p style="margin:0;font-size:12px;color:rgba(255,255,255,0.25);">Your private key is generated on your device and never shared with anyone.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`
+        );
+      } catch (emailErr) {
+        console.warn("[invite] Email notification failed (non-fatal):", emailErr.message);
+      }
+    }
+
     res.status(201).json({ message: "Member added/updated", user });
   } catch (err) {
     res.status(400).json({ error: err.message });

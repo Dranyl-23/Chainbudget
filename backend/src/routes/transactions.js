@@ -52,9 +52,10 @@ router.post("/", authenticate, requireRole(3), async (req, res) => {
 
     // Budget Dissemination Validation
     if (type === "expense" && category) {
+      const escapedCategory = category.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const budget = await Budget.findOne({ 
         organization: organizationId, 
-        name: { $regex: new RegExp(`^${category.trim()}$`, "i") } 
+        name: { $regex: new RegExp(`^${escapedCategory}$`, "i") } 
       });
 
       if (!budget) {
@@ -67,7 +68,7 @@ router.post("/", authenticate, requireRole(3), async (req, res) => {
             organization: new mongoose.Types.ObjectId(organizationId),
             type: "expense",
             status: { $in: ["approved", "pending_approval", "requested"] },
-            category: { $regex: new RegExp(`^${category.trim()}$`, "i") } 
+            category: { $regex: new RegExp(`^${escapedCategory}$`, "i") } 
           }
         },
         {
@@ -155,35 +156,37 @@ router.post("/", authenticate, requireRole(3), async (req, res) => {
         // Continue - blockchain is optional for now
       }
 
-      // Send Email to Level 1 Approvers
-      try {
-        const level1Users = await User.find({
-          "memberships": {
-            $elemMatch: { organization: organizationId, roleLevel: 1, isActive: true }
-          },
-          email: { $exists: true, $ne: "" }
-        });
-        const emails = level1Users.map(u => u.email);
-        if (emails.length > 0) {
-          sendEmail(
-            emails.join(","),
-            "Action Required: High-Value Transaction Pending Approval",
-            `
-            <div style="font-family: sans-serif; padding: 20px;">
-              <h2 style="color: #4F46E5;">High-Value Transaction Alert</h2>
-              <p>A new transaction requires your executive approval.</p>
-              <table style="width: 100%; max-width: 400px; border-collapse: collapse; margin-bottom: 20px;">
-                <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Amount:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">₱${amount.toLocaleString()}</td></tr>
-                <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Description:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">${description}</td></tr>
-                <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Requested By:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">${req.user.displayName}</td></tr>
-              </table>
-              <a href="http://localhost:3000/dashboard/approvals" style="display: inline-block; padding: 12px 24px; background-color: #4F46E5; color: white; text-decoration: none; border-radius: 8px; font-weight: bold;">Review in ChainBudget</a>
-            </div>
-            `
-          ).catch(console.error); // don't block
+      // Send Email to Level 1 Approvers if high value transaction
+      if (isHighValue) {
+        try {
+          const level1Users = await User.find({
+            "memberships": {
+              $elemMatch: { organization: organizationId, roleLevel: 1, isActive: true }
+            },
+            email: { $exists: true, $ne: "" }
+          });
+          const emails = level1Users.map(u => u.email);
+          if (emails.length > 0) {
+            sendEmail(
+              emails.join(","),
+              "Action Required: High-Value Transaction Pending Approval",
+              `
+              <div style="font-family: sans-serif; padding: 20px;">
+                <h2 style="color: #4F46E5;">High-Value Transaction Alert</h2>
+                <p>A new transaction requires your executive approval.</p>
+                <table style="width: 100%; max-width: 400px; border-collapse: collapse; margin-bottom: 20px;">
+                  <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Amount:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">₱${amount.toLocaleString()}</td></tr>
+                  <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Description:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">${description}</td></tr>
+                  <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Requested By:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">${req.user.displayName}</td></tr>
+                </table>
+                <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard/approvals" style="display: inline-block; padding: 12px 24px; background-color: #4F46E5; color: white; text-decoration: none; border-radius: 8px; font-weight: bold;">Review in ChainBudget</a>
+              </div>
+              `
+            ).catch(console.error); // don't block
+          }
+        } catch (emailErr) {
+          console.error("Email sending error:", emailErr);
         }
-      } catch (emailErr) {
-        console.error("Email sending error:", emailErr);
       }
     }
 
@@ -217,8 +220,10 @@ router.post("/", authenticate, requireRole(3), async (req, res) => {
 
     const io = req.app.get("io");
     if (io) {
-      io.emit("transaction_updated", { orgId: organizationId });
-      io.emit("new_notification", {
+      // Scope events to the organization's room — only members in this org
+      // receive this broadcast. io.emit() would leak events cross-org.
+      io.to(`org:${organizationId}`).emit("transaction_updated", { orgId: organizationId });
+      io.to(`org:${organizationId}`).emit("new_notification", {
         orgId: organizationId,
         id: newNotif._id,
         title: notifTitle,
@@ -477,7 +482,8 @@ router.patch("/:id/process-request", authenticate, requireRole(2), async (req, r
         payload,
         Math.round(txn.amount),
         toAddress,
-        isHighValue
+        isHighValue,
+        txn.isEscrow === true
       );
 
       if (blockchainResult && !blockchainResult.skipped) {
@@ -514,42 +520,52 @@ router.patch("/:id/process-request", authenticate, requireRole(2), async (req, r
 /// GET /api/transactions/public-overview — Get public stats and recent transactions
 router.get("/public-overview", async (req, res) => {
   try {
-    // 1. Calculate Stats
-    // We consider "secured on blockchain" as those with blockchainTxHash and status "approved" or "completed" (if completed exists)
-    const approvedTxns = await Transaction.find({
-      blockchainTxHash: { $exists: true, $ne: null }
-    });
+    // High-performance aggregation pipeline running inside MongoDB engine
+    const [statsResult, activeOrgs, recentTxns] = await Promise.all([
+      Transaction.aggregate([
+        {
+          $match: {
+            blockchainTxHash: { $exists: true, $ne: null },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            totalVerified: { $sum: 1 },
+            totalFunds: { $sum: "$amount" },
+          },
+        },
+      ]),
+      Organization.countDocuments({ isActive: true }),
+      Transaction.find({
+        blockchainTxHash: { $exists: true, $ne: null },
+      })
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .populate("organization", "name")
+        .lean(),
+    ]);
 
-    const totalVerified = approvedTxns.length;
-    const totalFunds = approvedTxns.reduce((sum, tx) => sum + tx.amount, 0);
+    const totalVerified = statsResult[0]?.totalVerified || 0;
+    const totalFunds = statsResult[0]?.totalFunds || 0;
 
-    const activeOrgs = await Organization.countDocuments({ isActive: true });
-
-    // 2. Fetch Recent 5
-    const recentTxns = await Transaction.find({
-      blockchainTxHash: { $exists: true, $ne: null }
-    })
-      .sort({ createdAt: -1 })
-      .limit(5)
-      .populate("organization", "name");
-
-    const formattedRecent = recentTxns.map(txn => ({
+    const formattedRecent = recentTxns.map((txn) => ({
       txHash: txn.blockchainTxHash,
       amount: txn.amount,
       description: txn.description,
       category: txn.category || "Uncategorized",
       status: txn.status === "approved" ? "Approved" : txn.status === "rejected" ? "Rejected" : "Pending",
       organization: txn.organization?.name || "Unknown",
-      date: txn.createdAt
+      date: txn.createdAt,
     }));
 
     res.json({
       stats: {
         totalVerified,
         totalFunds,
-        activeOrgs
+        activeOrgs,
       },
-      recent: formattedRecent
+      recent: formattedRecent,
     });
   } catch (error) {
     console.error("Public overview error:", error);
@@ -608,62 +624,124 @@ router.patch("/:id/execute", authenticate, requireRole(2), async (req, res) => {
   }
 });
 
-/// POST /api/transactions/:id/release-escrow — Release escrow funds
+/// POST /api/transactions/:id/release-escrow — Release escrow funds with proper identity validation
 router.post("/:id/release-escrow", authenticate, async (req, res) => {
   try {
-    const txn = await Transaction.findById(req.params.id);
+    const txn = await Transaction.findById(req.params.id).populate("submittedBy", "walletAddress displayName email");
     if (!txn) return res.status(404).json({ error: "Transaction not found" });
     if (!txn.isEscrow) return res.status(400).json({ error: "Not an escrow transaction" });
-    if (txn.escrowStatus === "released") return res.status(400).json({ error: "Already released" });
+    if (txn.escrowStatus === "released") return res.status(400).json({ error: "Escrow funds have already been released" });
 
-    // Determine who is clicking
-    const isSupplier = req.user.walletAddress && req.user.walletAddress.toLowerCase() === txn.submittedBy.toString().toLowerCase(); // Wait, to is not saved in DB! Oh, submittedBy is the requester, but where is the payee? 
-    // Wait, the transaction model doesn't have `toAddress`. It relies on the ChainBudget on-chain data.
-    // For now, let's just use role levels. 
-    // We'll allow the backend owner to execute it on-chain.
+    // Validate identity: map database user to wallet address
+    const requester = txn.submittedBy;
+    const requesterId = requester?._id?.toString();
+    const requesterWallet = requester?.walletAddress ? requester.walletAddress.toLowerCase() : null;
+    const currentUserId = req.user._id.toString();
+    const currentUserWallet = req.user.walletAddress ? req.user.walletAddress.toLowerCase() : null;
 
-    const { releaseEscrowOnChain } = require("../services/blockchain");
+    // A supplier is either the user who submitted the request or whose wallet matches the payee
+    const isSupplier = Boolean(
+      (requesterId && requesterId === currentUserId) ||
+      (requesterWallet && currentUserWallet && requesterWallet === currentUserWallet)
+    );
+
+    // An org admin is a level 1 or 2 member of this transaction's organization
     const roleLevel = req.user.getRoleInOrg(txn.organization);
-    const isOrgAdmin = roleLevel <= 2;
-    
-    // In a real scenario, the supplier logs in with their wallet. 
-    // Here we will just simulate the approval by Org Admin and let the backend force release it.
-    if (!isOrgAdmin) {
-      return res.status(403).json({ error: "Only Org Admin can release escrow" });
+    const isOrgAdmin = req.user.isSuperAdmin || (roleLevel !== null && roleLevel <= 2);
+
+    if (!isSupplier && !isOrgAdmin) {
+      return res.status(403).json({
+        error: "Access denied. You are not authorized to approve or release this escrow. Only the designated payee/supplier or an organization executive (Level 1/2) can authorize release."
+      });
     }
 
-    // Call blockchain to release (this uses the owner wallet to force payeeApproval)
-    // Wait, the contract `releaseEscrow` checks msg.sender. The backend owner can only set payerApproved.
-    // To fully release, both need to approve.
-    
-    // I added `setPayeeApprovalByOwner` in the contract earlier!
-    const { ethers } = require("ethers");
-    const rpcUrl = process.env.AMOY_RPC_URL;
-    const privateKey = process.env.BACKEND_WALLET_PRIVATE_KEY;
-    const contractAddress = process.env.CONTRACT_ADDRESS;
-    const ChainBudgetABI = require("../../../contracts/artifacts/contracts/ChainBudget.sol/ChainBudget.json");
-    
-    const provider = new ethers.JsonRpcProvider(rpcUrl);
-    const signer = new ethers.Wallet(privateKey, provider);
-    const contract = new ethers.Contract(contractAddress, ChainBudgetABI.abi, signer);
+    // Apply role-specific approvals
+    if (isOrgAdmin) {
+      txn.payerApproved = true;
+    }
+    if (isSupplier) {
+      txn.payeeApproved = true;
+    }
 
-    // 1. Backend owner sets payerApproved
-    let tx1 = await contract.releaseEscrow(txn.onChainTxId);
-    await tx1.wait();
-    txn.payerApproved = true;
+    // Interact with smart contract if on-chain transaction ID exists
+    let blockchainTxHash = null;
+    if (txn.onChainTxId && process.env.CONTRACT_ADDRESS && process.env.BACKEND_WALLET_PRIVATE_KEY) {
+      try {
+        const { ethers } = require("ethers");
+        const rpcUrl = process.env.AMOY_RPC_URL || "https://rpc-amoy.polygon.technology";
+        const provider = new ethers.JsonRpcProvider(rpcUrl);
+        const signer = new ethers.Wallet(process.env.BACKEND_WALLET_PRIVATE_KEY, provider);
+        const ChainBudgetABI = require("../lib/ChainBudget.json");
+        const contract = new ethers.Contract(process.env.CONTRACT_ADDRESS, ChainBudgetABI.abi, signer);
 
-    // 2. Backend owner forces payeeApproved
-    let tx2 = await contract.setPayeeApprovalByOwner(txn.onChainTxId);
-    await tx2.wait();
-    txn.payeeApproved = true;
-    txn.escrowStatus = "released";
+        if (isOrgAdmin && !isSupplier) {
+          const tx = await contract.releaseEscrow(txn.onChainTxId);
+          const receipt = await tx.wait();
+          blockchainTxHash = receipt.hash;
+        } else if (isSupplier && !isOrgAdmin) {
+          const tx = await contract.setPayeeApprovalByOwner(txn.onChainTxId);
+          const receipt = await tx.wait();
+          blockchainTxHash = receipt.hash;
+        } else {
+          // Admin is acting as both payer and payee (e.g. supplier account is
+          // the same as the org admin). Call payer release first, then record
+          // payee approval on-chain. Use tx2 — not the undefined outer `tx`.
+          const tx1 = await contract.releaseEscrow(txn.onChainTxId);
+          await tx1.wait();
+          const tx2 = await contract.setPayeeApprovalByOwner(txn.onChainTxId);
+          const receipt = await tx2.wait(); // FIX: was `tx` (undefined) — must be `tx2`
+          blockchainTxHash = receipt.hash;
+        }
+      } catch (chainErr) {
+        console.error("Blockchain escrow release warning:", chainErr.message);
+      }
+    }
+
+    // If both parties approved, mark escrow as fully released
+    if (txn.payerApproved && txn.payeeApproved) {
+      txn.escrowStatus = "released";
+      txn.executed = true;
+    } else {
+      txn.escrowStatus = "locked";
+    }
+
+    if (blockchainTxHash) {
+      txn.blockchainTxHash = blockchainTxHash;
+    }
 
     await txn.save();
-    
-    res.json({ success: true, transaction: txn });
+
+    // Audit log
+    await AuditLog.create({
+      organization: txn.organization,
+      actor: req.user._id,
+      actorWallet: req.user.walletAddress,
+      action: txn.escrowStatus === "released" ? "transaction.escrow_released" : (isOrgAdmin ? "transaction.escrow_payer_approved" : "transaction.escrow_payee_approved"),
+      targetType: "Transaction",
+      targetId: txn._id,
+      details: {
+        payerApproved: txn.payerApproved,
+        payeeApproved: txn.payeeApproved,
+        escrowStatus: txn.escrowStatus,
+        actorRole: isOrgAdmin ? "payer_admin" : "payee_supplier",
+      },
+      blockchainTxHash: blockchainTxHash || txn.blockchainTxHash,
+      onChainTxId: txn.onChainTxId,
+    });
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(`org:${txn.organization}`).emit("transaction_updated", { orgId: txn.organization });
+    }
+
+    res.json({
+      success: true,
+      message: txn.escrowStatus === "released" ? "Escrow funds successfully released to supplier" : "Approval recorded. Awaiting final counterparty approval.",
+      transaction: txn
+    });
   } catch (err) {
     console.error("Release escrow error:", err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.message || "Failed to process escrow release" });
   }
 });
 

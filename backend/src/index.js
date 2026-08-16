@@ -1,4 +1,10 @@
 require("dotenv").config();
+const dns = require("dns");
+try {
+  dns.setServers(["8.8.8.8", "8.8.4.4", "1.1.1.1"]);
+} catch (e) {
+  // Fallback if DNS server configuration is restricted
+}
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
@@ -40,17 +46,89 @@ const io = new Server(server, {
 });
 app.set("io", io);
 
-io.on("connection", (socket) => {
-  console.log("Client connected via WebSocket:", socket.id);
+// H-4 Fix: Authenticate WebSocket connections (supports both mobile + browser tokens)
+io.use(async (socket, next) => {
+  const token = socket.handshake.auth?.token;
+  if (!token) return next(new Error("Authentication required"));
+
+  const { verifyChainBudgetJWT } = require("./middleware/auth");
+
+  // Try ChainBudget mobile JWT first (fast, no network)
+  const cbPayload = verifyChainBudgetJWT(token);
+  if (cbPayload && cbPayload.sub) {
+    socket.userId = cbPayload.sub;       // MongoDB _id string
+    socket.authSource = "chainbudget";
+    return next();
+  }
+
+  // Fall back to Asgardeo UserInfo (browser)
+  try {
+    const asgardeoBase = process.env.ASGARDEO_BASE_URL || "https://api.asgardeo.io/t/orgs3xfu";
+    const response = await fetch(`${asgardeoBase}/oauth2/userinfo`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!response.ok) return next(new Error("Invalid token"));
+    const data = await response.json();
+    socket.userId = data.sub;            // Asgardeo sub
+    socket.authSource = "asgardeo";
+    return next();
+  } catch (err) {
+    return next(new Error("Authentication failed"));
+  }
+});
+
+io.on("connection", async (socket) => {
+  console.log("Client connected via WebSocket:", socket.id, "user:", socket.userId, "source:", socket.authSource);
+
+  if (socket.userId) {
+    socket.join(`user:${socket.userId}`);
+
+    // Load org memberships from DB using the correct identifier per auth source
+    try {
+      const User = require("./models/User");
+      let user;
+      if (socket.authSource === "chainbudget") {
+        // Mobile: userId is a MongoDB _id
+        user = await User.findById(socket.userId).select("memberships").lean();
+      } else {
+        // Browser: userId is an Asgardeo sub
+        user = await User.findOne({ asgardeoId: socket.userId }).select("memberships").lean();
+      }
+      if (user && user.memberships) {
+        user.memberships
+          .filter((m) => m.isActive)
+          .forEach((m) => {
+            const orgId = m.organization.toString();
+            socket.join(`org:${orgId}`);
+          });
+      }
+    } catch (err) {
+      console.error("[socket] Failed to load user memberships for room assignment:", err.message);
+    }
+  }
+
   socket.on("disconnect", () => {
     console.log("Client disconnected:", socket.id);
+    // Socket.IO automatically removes the socket from all rooms on disconnect.
   });
 });
 
 // ── Middleware ────────────────────────────────────────────────────────────────
-app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
-app.use(cors({ origin: process.env.FRONTEND_URL || "http://localhost:3000" }));
-app.use(express.json());
+app.use(helmet({ 
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  // H-6 Fix: Enable HSTS in production, disable in dev
+  hsts: process.env.NODE_ENV === "production" ? { maxAge: 31536000, includeSubDomains: true } : false 
+}));
+app.use(cors({
+  origin: [
+    process.env.FRONTEND_URL || "http://localhost:3000",
+    "capacitor://localhost",   // Capacitor mobile app
+    "http://localhost",        // Android emulator
+    "http://localhost:8081",   // Expo/React Native dev
+  ],
+  credentials: true,
+}));
+app.use(express.json({ limit: '1mb' })); // H-8 Fix: Prevent large payload DoS
 app.use(morgan("dev"));
 
 // ── Static file serving for uploaded receipts ─────────────────────────────────
@@ -89,19 +167,34 @@ app.use((req, res) => {
   res.status(404).json({ error: "Route not found" });
 });
 
-// ── Error handler ─────────────────────────────────────────────────────────────
+// ── Error handler (H-7: Don't leak internal details) ──────────────────────────
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  console.error(`[ERROR] ${req.method} ${req.path}:`, err.stack || err);
+  const isProd = process.env.NODE_ENV === "production";
   res.status(err.status || 500).json({
-    error: err.message || "Internal Server Error",
+    error: isProd ? "Internal Server Error" : (err.message || "Internal Server Error"),
   });
 });
 
 // ── Database & server start ───────────────────────────────────────────────────
+const mongoUri = process.env.MONGO_URI || process.env.MONGODB_URI;
+
+if (!mongoUri) {
+  console.error("FATAL: MongoDB connection URI is not configured (missing MONGO_URI or MONGODB_URI).");
+  console.error("Please configure a valid MONGO_URI in your backend .env file.");
+  process.exit(1);
+}
+
+if (mongoUri.includes("<cluster-url>") || mongoUri.includes("<db_user>") || mongoUri.includes("<db_password>")) {
+  console.error("FATAL: MongoDB connection URI contains unreplaced template placeholders (<cluster-url>, <db_user>, or <db_password>).");
+  console.error("Please update MONGO_URI in backend/.env with your actual MongoDB Atlas cluster hostname or MongoDB connection string.");
+  process.exit(1);
+}
+
 mongoose
-  .connect(process.env.MONGO_URI)
+  .connect(mongoUri)
   .then(() => {
-    console.log("Connected to MongoDB Atlas");
+    console.log("Connected to MongoDB");
     server.listen(PORT, () => {
       console.log(`ChainBudget API running on http://localhost:${PORT}`);
     });

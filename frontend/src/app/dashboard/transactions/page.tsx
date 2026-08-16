@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useMemo } from "react";
 import Portal from "@/components/Portal";
 import { useAuth } from "@/context/AuthContext";
 import { ethers } from "ethers";
@@ -9,13 +9,12 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Search,
-  Filter,
   X,
   Paperclip,
   Upload,
   FileText,
   Receipt,
-  Image,
+  Image as ImageIcon,
   ExternalLink,
   CheckCircle2,
   Loader2,
@@ -27,7 +26,6 @@ import {
   XCircle,
   Download,
   Sparkles,
-  BrainCircuit,
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import toast from "react-hot-toast";
@@ -35,8 +33,28 @@ import api from "@/lib/api";
 import TableSkeleton from "@/components/TableSkeleton";
 import TxExplorerModal from "@/components/TxExplorerModal";
 import { exportToCSV, exportToPDF } from "@/lib/exportUtils";
+import axios from "axios";
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL?.replace("/api", "") || "http://localhost:5000";
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL?.replace("/api", "") || "http://127.0.0.1:5001";
+
+// ── Types ────────────────────────────────────────────────────────────────────
+interface UserOrgRef {
+  _id?: string;
+  name?: string;
+}
+
+interface UserMembership {
+  organization?: string | UserOrgRef;
+  roleLevel: number;
+  roleLabel?: string;
+  isActive?: boolean;
+}
+
+interface SubmittedByUser {
+  _id?: string;
+  displayName?: string;
+  walletAddress?: string;
+}
 
 interface Transaction {
   _id: string;
@@ -53,7 +71,7 @@ interface Transaction {
   blockchainTxHash?: string;
   approvalCount?: number;
   organization?: { requiredApprovals?: number; highValueThreshold?: number };
-  submittedBy?: { displayName?: string; walletAddress?: string };
+  submittedBy?: SubmittedByUser;
   documentUrl?: string;
   documentHash?: string;
   referenceNumber?: string;
@@ -63,6 +81,11 @@ interface Transaction {
   payeeApproved?: boolean;
   executed?: boolean;
   onChainTxId?: string;
+}
+
+interface TransactionsResponse {
+  transactions?: Transaction[];
+  total?: number;
 }
 
 interface CreateTxForm {
@@ -84,17 +107,57 @@ interface UploadedFile {
   size: number;
 }
 
+interface BudgetItem {
+  _id: string;
+  name: string;
+  allocated: number;
+  spent: number;
+  color?: string;
+}
+
+interface AiScanReceiptResponse {
+  totalAmount?: number | string;
+  merchant?: string;
+  suggestedCategory?: string;
+}
+
+interface ProcessRequestResponse {
+  transaction: Transaction;
+  message?: string;
+}
+
+// ── Helper to safely extract error message ──────────────────────────────────
+function getErrorMessage(err: unknown, fallback: string): string {
+  if (axios.isAxiosError(err)) {
+    return err.response?.data?.error || err.message || fallback;
+  }
+  if (err instanceof Error) {
+    return err.message;
+  }
+  return fallback;
+}
+
+function getOrgId(org?: string | UserOrgRef): string | undefined {
+  if (!org) return undefined;
+  return typeof org === "string" ? org : org._id;
+}
+
 export default function TransactionsPage() {
   const { user, activeOrgId } = useAuth();
   const [transactions, setTransactions] = useState<Transaction[]>(() => {
     if (typeof window !== "undefined") {
       const cached = sessionStorage.getItem("cb_cache_transactions");
-      if (cached) return JSON.parse(cached);
+      if (cached) {
+        try {
+          return JSON.parse(cached) as Transaction[];
+        } catch {
+          return [];
+        }
+      }
     }
     return [];
   });
-  const [filteredTxs, setFilteredTxs] = useState<Transaction[]>(transactions);
-  const [loading, setLoading] = useState(transactions.length === 0);
+  const [loading, setLoading] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -113,7 +176,7 @@ export default function TransactionsPage() {
   const formData = activeTab === "expense" ? expenseData : incomeData;
   const setFormData = activeTab === "expense" ? setExpenseData : setIncomeData;
 
-  const [budgets, setBudgets] = useState<any[]>([]);
+  const [budgets, setBudgets] = useState<BudgetItem[]>([]);
 
   // File upload state
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -131,52 +194,71 @@ export default function TransactionsPage() {
   const [attachingTxId, setAttachingTxId] = useState<string | null>(null);
   const [isAttaching, setIsAttaching] = useState(false);
 
+  // ── RBAC Calculations ─────────────────────────────────────────────────────
+  const memberships = (user?.memberships || []) as UserMembership[];
+  const userMembership = memberships.find((m) => getOrgId(m.organization) === activeOrgId);
+  const userRoleLevel = user?.isSuperAdmin ? 1 : (userMembership?.roleLevel || 4);
+  const canExport = userRoleLevel <= 2;
+  const canRecordOrRequest = userRoleLevel <= 3;
+  const canDirectRecord = userRoleLevel <= 2;
+
+  // ── Single Asynchronous Effect with Cancellation Guard ────────────────────
   useEffect(() => {
+    if (!activeOrgId) return;
+
+    let isCancelled = false;
+    const orgId = activeOrgId;
+
     const fetchTransactions = async () => {
       try {
-        if (!activeOrgId) { setLoading(false); return; }
-        const orgId = activeOrgId || "";
-        const res = await api.get("/transactions", { params: { orgId, limit: 100 } });
-        const data = res.data.transactions || [];
-        setTransactions(data);
-        sessionStorage.setItem("cb_cache_transactions", JSON.stringify(data));
-        
-        // Fetch budgets for dropdown
-        const budgetRes = await api.get("/budget", { params: { orgId } });
-        setBudgets(budgetRes.data || []);
-        
-        // Re-apply filters if any exist, otherwise set filtered to all
-        let result = data;
-        if (filters.search) {
-          result = result.filter((t: Transaction) => t.description.toLowerCase().includes(filters.search.toLowerCase()) || (t.referenceNumber && t.referenceNumber.toLowerCase().includes(filters.search.toLowerCase())));
+        const [txRes, budgetRes] = await Promise.all([
+          api.get<TransactionsResponse>("/transactions", { params: { orgId, limit: 100 } }),
+          api.get<BudgetItem[]>("/budget", { params: { orgId } }),
+        ]);
+
+        if (!isCancelled) {
+          const data = txRes.data.transactions || [];
+          setTransactions(data);
+          sessionStorage.setItem("cb_cache_transactions", JSON.stringify(data));
+          setBudgets(budgetRes.data || []);
         }
-        if (filters.type) {
-          result = result.filter((t: Transaction) => t.type === filters.type);
-        }
-        if (filters.status) {
-          result = result.filter((t: Transaction) => t.status === filters.status);
-        }
-        setFilteredTxs(result);
-      } catch (err) {
+      } catch (err: unknown) {
         console.error("Failed to fetch transactions:", err);
-        setError("Failed to load transactions");
+        if (!isCancelled) {
+          setError("Failed to load transactions");
+        }
       } finally {
-        setLoading(false);
+        if (!isCancelled) {
+          setLoading(false);
+        }
       }
     };
+
     fetchTransactions();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [activeOrgId]);
 
-  // Apply filters
-  useEffect(() => {
+  // ── Derived Filtered Transactions (Pure useMemo Computation) ──────────────
+  const filteredTxs = useMemo(() => {
     let result = transactions;
     if (filters.search) {
       const q = filters.search.toLowerCase();
-      result = result.filter((tx) => tx.description.toLowerCase().includes(q));
+      result = result.filter(
+        (tx) =>
+          tx.description.toLowerCase().includes(q) ||
+          (tx.referenceNumber && tx.referenceNumber.toLowerCase().includes(q))
+      );
     }
-    if (filters.type)   result = result.filter((tx) => tx.type === filters.type);
-    if (filters.status) result = result.filter((tx) => tx.status === filters.status);
-    setFilteredTxs(result);
+    if (filters.type) {
+      result = result.filter((tx) => tx.type === filters.type);
+    }
+    if (filters.status) {
+      result = result.filter((tx) => tx.status === filters.status);
+    }
+    return result;
   }, [transactions, filters]);
 
   const closeModal = () => {
@@ -208,22 +290,19 @@ export default function TransactionsPage() {
       if (format === "pdf") {
         const title = `Transactions Report - ${new Date().toLocaleDateString()}`;
         exportToPDF(headers, rows, title, "Transactions_Report");
-        toast.success(`Exported to PDF successfully`);
+        toast.success("Exported to PDF successfully");
       } else {
         exportToCSV(headers, rows, "Transactions_Report");
-        toast.success(`Exported to CSV successfully`);
+        toast.success("Exported to CSV successfully");
       }
-    } catch (err) {
+    } catch {
       toast.error(`Failed to export to ${format.toUpperCase()}`);
     } finally {
       setIsExporting(false);
     }
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const processUploadedFile = async (file: File) => {
     const maxSize = 5 * 1024 * 1024; // 5 MB
     if (file.size > maxSize) {
       setUploadError("File is too large. Maximum size is 5 MB.");
@@ -238,15 +317,22 @@ export default function TransactionsPage() {
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const res = await api.post("/upload", fd, {
+      const res = await api.post<UploadedFile>("/upload", fd, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       setUploadedFile(res.data);
-    } catch (err: any) {
-      setUploadError(err.response?.data?.error || "Upload failed. Please try again.");
+    } catch (err: unknown) {
+      setUploadError(getErrorMessage(err, "Upload failed. Please try again."));
       if (fileInputRef.current) fileInputRef.current.value = "";
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      processUploadedFile(file);
     }
   };
 
@@ -256,11 +342,11 @@ export default function TransactionsPage() {
     try {
       const fd = new FormData();
       fd.append("receipt", rawFile);
-      const res = await api.post("/ai/scan-receipt", fd, {
+      const res = await api.post<AiScanReceiptResponse>("/ai/scan-receipt", fd, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       const data = res.data;
-      setFormData((prev: any) => ({
+      setFormData((prev: CreateTxForm) => ({
         ...prev,
         amount: data.totalAmount?.toString() || prev.amount,
         description: data.merchant || prev.description,
@@ -269,8 +355,8 @@ export default function TransactionsPage() {
       setAiScanSuccess(true);
       setTimeout(() => setAiScanSuccess(false), 3000);
       toast.success("AI successfully extracted details!");
-    } catch (err) {
-      console.error(err);
+    } catch (err: unknown) {
+      console.error("AI scan failed:", err);
       toast.error("Failed to scan receipt with AI");
     } finally {
       setIsAiScanning(false);
@@ -283,7 +369,7 @@ export default function TransactionsPage() {
 
     const maxSize = 5 * 1024 * 1024;
     if (file.size > maxSize) {
-      alert("File is too large. Maximum size is 5 MB.");
+      toast.error("File is too large. Maximum size is 5 MB.");
       if (attachFileInputRef.current) attachFileInputRef.current.value = "";
       return;
     }
@@ -292,7 +378,7 @@ export default function TransactionsPage() {
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const uploadRes = await api.post("/upload", fd, {
+      const uploadRes = await api.post<UploadedFile>("/upload", fd, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       
@@ -306,12 +392,12 @@ export default function TransactionsPage() {
       
       // Update state
       setTransactions((prev) => 
-        prev.map(tx => tx._id === attachingTxId ? { ...tx, documentUrl, documentHash } : tx)
+        prev.map((tx) => (tx._id === attachingTxId ? { ...tx, documentUrl, documentHash } : tx))
       );
-      
-    } catch (err: any) {
+      toast.success("Receipt attached successfully!");
+    } catch (err: unknown) {
       console.error("Attach receipt error:", err);
-      alert(err.response?.data?.error || "Failed to attach receipt.");
+      toast.error(getErrorMessage(err, "Failed to attach receipt."));
     } finally {
       setIsAttaching(false);
       setAttachingTxId(null);
@@ -325,13 +411,13 @@ export default function TransactionsPage() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!activeOrgId) {
       setError("Please select an Organization from the dropdown on the left before recording a transaction.");
       return;
     }
-    const orgId = activeOrgId || "";
+    const orgId = activeOrgId;
 
     if (!formData.amount || isNaN(Number(formData.amount)) || Number(formData.amount) <= 0) {
       setError("Please enter a valid positive amount.");
@@ -345,7 +431,7 @@ export default function TransactionsPage() {
     setIsSubmitting(true);
     setError(null);
     try {
-      const res = await api.post("/transactions", {
+      const res = await api.post<{ transaction: Transaction }>("/transactions", {
         organizationId: orgId,
         type: formData.type,
         amount: Number(formData.amount),
@@ -360,15 +446,15 @@ export default function TransactionsPage() {
       });
       setTransactions((prev) => [res.data.transaction, ...prev]);
       closeModal();
-      toast.success(res.data.transaction.status === 'requested' ? "Request submitted!" : "Transaction recorded!");
+      toast.success(res.data.transaction.status === "requested" ? "Request submitted!" : "Transaction recorded!");
       confetti({
         particleCount: 80,
         spread: 60,
         origin: { y: 0.6 },
-        colors: ['#6B55D9', '#7DBD9B', '#4F46E5', '#10B981']
+        colors: ["#6B55D9", "#7DBD9B", "#4F46E5", "#10B981"]
       });
-    } catch (err: any) {
-      setError(err.response?.data?.error || "Failed to record transaction.");
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Failed to record transaction."));
     } finally {
       setIsSubmitting(false);
     }
@@ -376,20 +462,19 @@ export default function TransactionsPage() {
 
   const handleProcessRequest = async (txId: string, action: "approve" | "reject") => {
     try {
-      const res = await api.patch(`/transactions/${txId}/process-request`, { action });
-      // Update transaction in state
+      const res = await api.patch<ProcessRequestResponse>(`/transactions/${txId}/process-request`, { action });
       setTransactions((prev) => 
-        prev.map(tx => tx._id === txId ? { ...tx, ...res.data.transaction } : tx)
+        prev.map((tx) => (tx._id === txId ? { ...tx, ...res.data.transaction } : tx))
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Failed to process request:", err);
-      setError(err.response?.data?.error || "Failed to process request");
+      setError(getErrorMessage(err, "Failed to process request"));
     }
   };
 
   const getFileIcon = (mimeType?: string) => {
     if (!mimeType) return <Paperclip className="w-3.5 h-3.5" />;
-    if (mimeType.startsWith("image/")) return <Image className="w-3.5 h-3.5" />;
+    if (mimeType.startsWith("image/")) return <ImageIcon className="w-3.5 h-3.5" />;
     return <FileText className="w-3.5 h-3.5" />;
   };
 
@@ -412,7 +497,7 @@ export default function TransactionsPage() {
         </div>
         <div className="flex flex-col sm:flex-row gap-3">
           {/* Export Buttons */}
-          {(user?.isSuperAdmin || (user?.memberships?.find((m: any) => m.organization === activeOrgId || m.organization?._id === activeOrgId)?.roleLevel || 4) <= 2) && (
+          {canExport && (
             <div className="flex items-center gap-2 mr-2">
               <button
                 className="btn-secondary py-2 px-3 text-xs flex items-center gap-2"
@@ -431,13 +516,13 @@ export default function TransactionsPage() {
             </div>
           )}
           {/* RBAC Fix: Level 1, 2, and 3 can record/request transactions */}
-          {(user?.isSuperAdmin || (user?.memberships?.find((m: any) => m.organization === activeOrgId || m.organization?._id === activeOrgId)?.roleLevel || 4) <= 3) && (
+          {canRecordOrRequest && (
             <button
               id="record-transaction-btn"
               className="btn-primary py-2"
               onClick={() => setShowCreateModal(true)}
             >
-              { (user?.isSuperAdmin || (user?.memberships?.find((m: any) => m.organization === activeOrgId || m.organization?._id === activeOrgId)?.roleLevel || 4) <= 2) ? "Record Transaction" : "Submit Request" }
+              {canDirectRecord ? "Record Transaction" : "Submit Request"}
             </button>
           )}
         </div>
@@ -523,7 +608,7 @@ export default function TransactionsPage() {
                           </span>
                         )}
                       </div>
-                      <ChevronDown className={`w-3.5 h-3.5 text-white/30 transition-transform duration-200 group-hover:text-white/70 ${expandedTxId === tx._id ? 'rotate-180' : ''}`} />
+                      <ChevronDown className={`w-3.5 h-3.5 text-white/30 transition-transform duration-200 group-hover:text-white/70 ${expandedTxId === tx._id ? "rotate-180" : ""}`} />
                     </div>
                   </td>
                   <td className="p-4">
@@ -560,29 +645,25 @@ export default function TransactionsPage() {
                         <button 
                           onClick={(e) => { 
                             e.stopPropagation(); 
-                            // Call contract to execute the transfer
                             const executeTx = async () => {
                               try {
-                                if (!tx.onChainTxId) return alert("No on-chain ID");
-                                const ethereum = (window as any).ethereum;
-                                if (!ethereum) return alert("MetaMask not installed");
-                                const provider = new ethers.BrowserProvider(ethereum);
+                                if (!tx.onChainTxId) return toast.error("No on-chain ID");
+                                if (typeof window === "undefined" || !window.ethereum) return toast.error("MetaMask not installed");
+                                const provider = new ethers.BrowserProvider(window.ethereum as ethers.Eip1193Provider);
                                 const signer = await provider.getSigner();
                                 const contractAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
                                 const contract = new ethers.Contract(contractAddress, ChainBudgetABI.abi, signer);
+                                toast.loading("Executing transfer on-chain...", { id: "execToast" });
                                 const execTx = await contract.executeTransaction(tx.onChainTxId);
-                                alert("Executing transfer on-chain... Please wait.");
                                 await execTx.wait();
                                 await api.patch(`/transactions/${tx._id}/execute`);
                                 
-                                // Update state locally
                                 setTransactions((prev) => 
-                                  prev.map(t => t._id === tx._id ? { ...t, executed: true, escrowStatus: t.isEscrow ? "locked" : "none" } : t)
+                                  prev.map((t) => (t._id === tx._id ? { ...t, executed: true, escrowStatus: t.isEscrow ? "locked" : "none" } : t))
                                 );
-                                
-                                alert("Transfer executed successfully!");
-                              } catch (err: any) {
-                                alert("Execution failed: " + err.message);
+                                toast.success("Transfer executed successfully!", { id: "execToast" });
+                              } catch (err: unknown) {
+                                toast.error(getErrorMessage(err, "Execution failed"), { id: "execToast" });
                               }
                             };
                             executeTx();
@@ -592,20 +673,25 @@ export default function TransactionsPage() {
                           Execute Transfer
                         </button>
                       )}
-                      {tx.status === "approved" && tx.type === "expense" && tx.executed && tx.isEscrow && tx.escrowStatus === "locked" && (user?.isSuperAdmin || (user?.memberships?.find((m: any) => m.organization === activeOrgId || m.organization?._id === activeOrgId)?.roleLevel || 4) <= 2) && (
+                      {tx.status === "approved" && tx.type === "expense" && tx.executed && tx.isEscrow && tx.escrowStatus === "locked" && (
+                        user?.isSuperAdmin || 
+                        userRoleLevel <= 2 ||
+                        user?.id === tx.submittedBy?._id ||
+                        (user?.walletAddress && tx.submittedBy?.walletAddress && user.walletAddress.toLowerCase() === tx.submittedBy.walletAddress.toLowerCase())
+                      ) && (
                         <button 
                           onClick={(e) => { 
                             e.stopPropagation(); 
                             const releaseTx = async () => {
                               try {
-                                alert("Releasing escrow funds... Please wait.");
+                                toast.loading("Releasing escrow funds...", { id: "escrowToast" });
                                 await api.post(`/transactions/${tx._id}/release-escrow`);
                                 setTransactions((prev) => 
-                                  prev.map(t => t._id === tx._id ? { ...t, escrowStatus: "released", payeeApproved: true, payerApproved: true } : t)
+                                  prev.map((t) => (t._id === tx._id ? { ...t, escrowStatus: "released", payeeApproved: true, payerApproved: true } : t))
                                 );
-                                alert("Escrow released successfully!");
-                              } catch (err: any) {
-                                alert("Release failed: " + err.message);
+                                toast.success("Escrow released successfully!", { id: "escrowToast" });
+                              } catch (err: unknown) {
+                                toast.error(getErrorMessage(err, "Release failed"), { id: "escrowToast" });
                               }
                             };
                             releaseTx();
@@ -615,7 +701,7 @@ export default function TransactionsPage() {
                           Release Escrow
                         </button>
                       )}
-                      {tx.status === "requested" && (user?.isSuperAdmin || (user?.memberships?.find((m: any) => m.organization === activeOrgId || m.organization?._id === activeOrgId)?.roleLevel || 4) <= 2) && (
+                      {tx.status === "requested" && canDirectRecord && (
                         <>
                           <button 
                             onClick={(e) => { e.stopPropagation(); handleProcessRequest(tx._id, "approve"); }}
@@ -655,17 +741,17 @@ export default function TransactionsPage() {
                     ) : (
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-white/30 font-medium">—</span>
-                        {tx.status === "approved" && (user?.isSuperAdmin || (user?.memberships?.find((m: any) => m.organization === activeOrgId || m.organization?._id === activeOrgId)?.roleLevel || 4) <= 2) && (
+                        {tx.status === "approved" && canDirectRecord && (
                           <button 
                             onClick={async (e) => {
                               e.stopPropagation();
                               try {
-                                alert("Retrying blockchain sync on Polygon Amoy network...");
-                                const res = await api.post(`/transactions/${tx._id}/retry-sync`);
-                                setTransactions(prev => prev.map(t => t._id === tx._id ? { ...t, ...res.data.transaction } : t));
-                                toast.success("Successfully synced to blockchain!");
-                              } catch (err: any) {
-                                alert(err.response?.data?.error || "Failed to sync to blockchain.");
+                                toast.loading("Retrying blockchain sync on Polygon Amoy network...", { id: "syncToast" });
+                                const res = await api.post<{ transaction: Transaction }>(`/transactions/${tx._id}/retry-sync`);
+                                setTransactions((prev) => prev.map((t) => (t._id === tx._id ? { ...t, ...res.data.transaction } : t)));
+                                toast.success("Successfully synced to blockchain!", { id: "syncToast" });
+                              } catch (err: unknown) {
+                                toast.error(getErrorMessage(err, "Failed to sync to blockchain."), { id: "syncToast" });
                               }
                             }}
                             className="text-[9px] font-bold uppercase tracking-widest bg-fuchsia-500/10 hover:bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30 px-2 py-1 rounded-sm transition-colors shadow-[0_0_10px_rgba(217,70,239,0.1)]"
@@ -769,22 +855,22 @@ export default function TransactionsPage() {
                             const visibleSteps = tx.status === "rejected" ? steps.slice(0, 2) : steps;
 
                             return visibleSteps.map((step, idx) => (
-                              <div key={idx} className={`flex items-start ${idx < visibleSteps.length - 1 ? 'flex-1' : 'w-32'}`}>
+                              <div key={idx} className={`flex items-start ${idx < visibleSteps.length - 1 ? "flex-1" : "w-32"}`}>
                                 <div className="flex flex-col items-center w-32 shrink-0">
                                   <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white shadow-md transition-all duration-300 ${
                                     step.done 
-                                      ? `${step.color} scale-100 shadow-[0_0_15px_rgba(var(--${step.color.replace('bg-', '')}),0.4)]` 
-                                      : 'bg-white/10 border border-white/20 scale-90'
+                                      ? `${step.color} scale-100 shadow-[0_0_15px_rgba(var(--${step.color.replace("bg-", "")}),0.4)]` 
+                                      : "bg-white/10 border border-white/20 scale-90"
                                   }`}>
                                     {step.done ? step.icon : <span className="w-2 h-2 bg-white/20 rounded-full" />}
                                   </div>
-                                  <p className={`text-xs font-semibold mt-2 ${step.done ? (step.isRejected ? 'text-red-400' : 'text-white/90') : 'text-white/40'}`}>{step.label}</p>
-                                  <p className={`text-[10px] mt-0.5 text-center max-w-[120px] ${step.done ? 'text-white/60' : 'text-white/30'}`}>{step.detail}</p>
+                                  <p className={`text-xs font-semibold mt-2 ${step.done ? (step.isRejected ? "text-red-400" : "text-white/90") : "text-white/40"}`}>{step.label}</p>
+                                  <p className={`text-[10px] mt-0.5 text-center max-w-30 ${step.done ? "text-white/60" : "text-white/30"}`}>{step.detail}</p>
                                   {step.date && <p className="text-[10px] text-white/40 mt-0.5">{step.date}</p>}
                                 </div>
                                 {idx < visibleSteps.length - 1 && (
-                                  <div className={`h-[3px] flex-1 mt-[18px] mx-1 rounded-full transition-all duration-300 ${
-                                    step.done ? step.color : 'bg-white/10'
+                                  <div className={`h-0.75 flex-1 mt-4.5 mx-1 rounded-full transition-all duration-300 ${
+                                    step.done ? step.color : "bg-white/10"
                                   }`} />
                                 )}
                               </div>
@@ -835,7 +921,7 @@ export default function TransactionsPage() {
 
             <div className="flex items-center justify-between mb-4 md:mb-6">
               <h2 className="text-lg md:text-xl font-bold text-white drop-shadow-sm">
-                { (user?.isSuperAdmin || (user?.memberships?.find((m: any) => m.organization === activeOrgId || m.organization?._id === activeOrgId)?.roleLevel || 4) <= 2) ? "Record Transaction" : "Submit Request" }
+                { canDirectRecord ? "Record Transaction" : "Submit Request" }
               </h2>
               <button
                 onClick={closeModal}
@@ -914,7 +1000,7 @@ export default function TransactionsPage() {
               </div>
 
               {/* Urgency Toggle (Level 3 specific) */}
-              {(user?.memberships?.find((m: any) => m.organization === activeOrgId || m.organization?._id === activeOrgId)?.roleLevel === 3) && formData.type === "expense" && (
+              {userRoleLevel === 3 && formData.type === "expense" && (
                 <div className="flex items-center justify-between p-2 md:p-3 bg-red-500/10 border border-red-500/30 rounded-lg shadow-[inset_0_0_15px_rgba(239,68,68,0.05)]">
                   <div>
                     <label className="block text-sm font-bold text-red-400 mb-0 md:mb-0.5 drop-shadow-sm">Mark as Urgent?</label>
@@ -1015,7 +1101,7 @@ export default function TransactionsPage() {
                       (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.2)";
                       const file = e.dataTransfer.files?.[0];
                       if (file) {
-                        handleFileChange({ target: { files: [file] } } as any);
+                        processUploadedFile(file);
                       }
                     }}
                   >
@@ -1049,14 +1135,14 @@ export default function TransactionsPage() {
                     className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-cyan-500/30 bg-cyan-500/10 shadow-[inset_0_0_10px_rgba(34,211,238,0.05)]"
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-9 h-9 rounded-lg bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center flex-shrink-0 text-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.1)]">
+                      <div className="w-9 h-9 rounded-lg bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center shrink-0 text-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.1)]">
                         {getFileIcon(uploadedFile.mimeType)}
                       </div>
                       <div className="min-w-0">
                         <p className="text-sm font-bold text-white drop-shadow-sm truncate">{uploadedFile.originalName}</p>
                         <p className="text-xs text-cyan-300/70 font-medium tracking-wide">{(uploadedFile.size / 1024).toFixed(1)} KB</p>
                       </div>
-                      <CheckCircle2 className="w-4 h-4 text-green-400 flex-shrink-0 drop-shadow-[0_0_5px_rgba(74,222,128,0.8)]" />
+                      <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0 drop-shadow-[0_0_5px_rgba(74,222,128,0.8)]" />
                     </div>
                     <div className="flex items-center gap-2">
                       <button
@@ -1084,7 +1170,7 @@ export default function TransactionsPage() {
                           setRawFile(null);
                           setAiScanSuccess(false);
                         }}
-                        className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-danger/10 text-gray-400 hover:text-danger transition-colors flex-shrink-0"
+                        className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-danger/10 text-gray-400 hover:text-danger transition-colors shrink-0"
                       >
                         <X className="w-4 h-4" />
                       </button>
@@ -1112,10 +1198,10 @@ export default function TransactionsPage() {
                         type="checkbox" 
                         className="sr-only" 
                         checked={formData.isEscrow || false}
-                        onChange={(e) => setExpenseData({...expenseData, isEscrow: e.target.checked})}
+                        onChange={(e) => setExpenseData({ ...expenseData, isEscrow: e.target.checked })}
                       />
-                      <div className={`block w-10 h-6 rounded-full transition-colors ${formData.isEscrow ? 'bg-fuchsia-500 shadow-[0_0_10px_rgba(217,70,239,0.5)]' : 'bg-white/10 border border-white/20'}`}></div>
-                      <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform shadow-sm ${formData.isEscrow ? 'transform translate-x-4' : ''}`}></div>
+                      <div className={`block w-10 h-6 rounded-full transition-colors ${formData.isEscrow ? "bg-fuchsia-500 shadow-[0_0_10px_rgba(217,70,239,0.5)]" : "bg-white/10 border border-white/20"}`}></div>
+                      <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform shadow-sm ${formData.isEscrow ? "transform translate-x-4" : ""}`}></div>
                     </div>
                     <div className="flex flex-col">
                       <span className="text-sm font-bold text-white drop-shadow-sm">Use Smart Contract Escrow</span>
@@ -1140,7 +1226,7 @@ export default function TransactionsPage() {
                   disabled={isSubmitting || isUploading}
                   className="px-4 py-2 md:py-2.5 text-sm md:text-base font-bold text-white bg-cyan-500/20 border border-cyan-400 hover:bg-cyan-500/40 rounded-lg shadow-[0_0_15px_rgba(34,211,238,0.3)] transition-all flex-1 whitespace-nowrap disabled:opacity-50"
                 >
-                  {isSubmitting ? "Recording..." : "Record Transaction"}
+                  {isSubmitting ? "Recording..." : canDirectRecord ? "Record Transaction" : "Submit Request"}
                 </button>
               </div>
             </form>
@@ -1151,7 +1237,7 @@ export default function TransactionsPage() {
         </Portal>
       )}
       <TxExplorerModal 
-        isOpen={!!selectedExplorerHash} 
+        isOpen={Boolean(selectedExplorerHash)} 
         onClose={() => setSelectedExplorerHash(null)} 
         txHash={selectedExplorerHash || ""} 
       />

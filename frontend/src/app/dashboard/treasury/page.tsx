@@ -1,73 +1,131 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { Box, Save, Activity, ShieldAlert, Link as LinkIcon, RefreshCw, Layers } from "lucide-react";
 import api from "@/lib/api";
 import toast from "react-hot-toast";
 import { ethers } from "ethers";
+import axios from "axios";
+
+// ── Types ────────────────────────────────────────────────────────────────────
+interface UserOrgRef {
+  _id?: string;
+  name?: string;
+}
+
+interface UserMembership {
+  organization?: string | UserOrgRef;
+  roleLevel: number;
+  roleLabel?: string;
+  isActive?: boolean;
+}
+
+interface OrganizationSettings {
+  _id?: string;
+  contractAddress?: string;
+  requiredApprovals?: number;
+  highValueThreshold?: number;
+}
+
+interface TreasuryFormData {
+  contractAddress: string;
+  requiredApprovals: number;
+  highValueThreshold: number;
+}
+
+// ── Helper to safely extract error message ──────────────────────────────────
+function getErrorMessage(err: unknown, fallback: string): string {
+  if (axios.isAxiosError(err)) {
+    return err.response?.data?.error || err.message || fallback;
+  }
+  if (err instanceof Error) {
+    return err.message;
+  }
+  return fallback;
+}
+
+function getOrgId(org?: string | UserOrgRef): string | undefined {
+  if (!org) return undefined;
+  return typeof org === "string" ? org : org._id;
+}
 
 export default function TreasuryPage() {
   const { user, activeOrgId } = useAuth();
   
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [balance, setBalance] = useState<string>("0.0000");
   const [isFetchingBalance, setIsFetchingBalance] = useState(false);
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<TreasuryFormData>({
     contractAddress: "",
     requiredApprovals: 2,
     highValueThreshold: 10000,
   });
 
   // Current user's role level in this org
-  const roleLevel = user?.memberships?.find(
-    (m: any) => (typeof m.organization === "string" ? m.organization : m.organization?._id) === activeOrgId
-  )?.roleLevel || 4;
+  const memberships = (user?.memberships || []) as UserMembership[];
+  const userMembership = memberships.find((m) => getOrgId(m.organization) === activeOrgId);
+  const roleLevel = user?.isSuperAdmin ? 1 : (userMembership?.roleLevel || 4);
 
-  const fetchOrgSettings = async () => {
-    if (!activeOrgId) return;
-    try {
-      setLoading(true);
-      const res = await api.get(`/organizations/${activeOrgId}`);
-      setFormData({
-        contractAddress: res.data.contractAddress || "",
-        requiredApprovals: res.data.requiredApprovals || 2,
-        highValueThreshold: res.data.highValueThreshold || 10000,
-      });
-      if (res.data.contractAddress) {
-        fetchBalance(res.data.contractAddress);
-      }
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || "Failed to load treasury settings.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchBalance = async (address: string) => {
+  const fetchBalance = useCallback(async (address: string) => {
     if (!address || !ethers.isAddress(address)) return;
     try {
       setIsFetchingBalance(true);
       // Connect to Polygon Amoy Public RPC
-      const provider = new ethers.JsonRpcProvider("https://rpc-amoy.polygon.technology");
+      const provider = new ethers.JsonRpcProvider("https://polygon-amoy.drpc.org");
       const bal = await provider.getBalance(address);
       setBalance(ethers.formatEther(bal));
-    } catch (err) {
+    } catch (err: unknown) {
       console.error("Error fetching balance:", err);
       toast.error("Failed to fetch on-chain balance");
       setBalance("Error");
     } finally {
       setIsFetchingBalance(false);
     }
-  };
+  }, []);
 
+  // ── Data Fetching Effect ──────────────────────────────────────────────────
   useEffect(() => {
-    fetchOrgSettings();
-  }, [activeOrgId]);
+    if (!activeOrgId) return;
 
-  const handleSubmit = async (e: React.FormEvent) => {
+    let isCancelled = false;
+
+    const loadOrgSettings = async () => {
+      try {
+        const res = await api.get<OrganizationSettings>(`/organizations/${activeOrgId}`);
+        if (!isCancelled) {
+          const settings = res.data;
+          const contractAddress = settings.contractAddress || "";
+          setFormData({
+            contractAddress,
+            requiredApprovals: settings.requiredApprovals || 2,
+            highValueThreshold: settings.highValueThreshold || 10000,
+          });
+          if (contractAddress) {
+            void fetchBalance(contractAddress);
+          }
+        }
+      } catch (err: unknown) {
+        if (!isCancelled) {
+          toast.error(getErrorMessage(err, "Failed to load treasury settings."));
+        }
+      } finally {
+        if (!isCancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadOrgSettings();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [activeOrgId, fetchBalance]);
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (roleLevel > 1) {
       toast.error("Only Level 1 Executives can update Treasury settings.");
@@ -79,10 +137,10 @@ export default function TreasuryPage() {
       await api.patch(`/organizations/${activeOrgId}`, formData);
       toast.success("Treasury settings updated successfully!");
       if (formData.contractAddress) {
-        fetchBalance(formData.contractAddress);
+        void fetchBalance(formData.contractAddress);
       }
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || "Failed to update settings.");
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, "Failed to update settings."));
     } finally {
       setSaving(false);
     }
@@ -107,7 +165,7 @@ export default function TreasuryPage() {
           <Box className="w-6 h-6 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]" /> 
           Treasury & Smart Contract
         </h1>
-        <p className="text-sm text-white/50">Manage your organization's on-chain treasury and multi-sig governance rules.</p>
+        <p className="text-sm text-white/50">Manage your organization&apos;s on-chain treasury and multi-sig governance rules.</p>
       </header>
 
       {loading ? (
@@ -145,7 +203,7 @@ export default function TreasuryPage() {
                     />
                   </div>
                   <p className="text-[10px] text-white/40 mt-1.5 ml-1">
-                    The Polygon address of your DAO's multi-sig or treasury contract.
+                    The Polygon address of your DAO&apos;s multi-sig or treasury contract.
                   </p>
                 </div>
 
@@ -222,10 +280,10 @@ export default function TreasuryPage() {
                   <button 
                     onClick={() => fetchBalance(formData.contractAddress)}
                     disabled={isFetchingBalance}
-                    className={`p-1.5 rounded-md hover:bg-white/10 text-cyan-300 transition-all ${isFetchingBalance ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    className={`p-1.5 rounded-md hover:bg-white/10 text-cyan-300 transition-all ${isFetchingBalance ? "opacity-50 cursor-not-allowed" : ""}`}
                     title="Refresh Balance"
                   >
-                    <RefreshCw className={`w-4 h-4 ${isFetchingBalance ? 'animate-spin' : ''}`} />
+                    <RefreshCw className={`w-4 h-4 ${isFetchingBalance ? "animate-spin" : ""}`} />
                   </button>
                 )}
               </div>

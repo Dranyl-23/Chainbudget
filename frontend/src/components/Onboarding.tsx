@@ -1,9 +1,28 @@
 "use client";
 
 import { useState } from "react";
-import { Building, Users, Plus, ArrowRight, Shield, BarChart3, Link2 } from "lucide-react";
+import Image from "next/image";
+import { Building, Users, ArrowRight, Shield, BarChart3, Link2 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import api from "@/lib/api";
+
+interface CreateOrgFormData {
+  name: string;
+  type: string;
+  description: string;
+  highValueThreshold: number;
+  requiredApprovals: number;
+  isPrivate: boolean;
+}
+
+interface ApiErrorResponse {
+  response?: {
+    data?: {
+      error?: string;
+      message?: string;
+    };
+  };
+}
 
 export default function Onboarding() {
   const { user, logout } = useAuth();
@@ -11,7 +30,7 @@ export default function Onboarding() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<CreateOrgFormData>({
     name: "",
     type: "student_org",
     description: "",
@@ -20,7 +39,7 @@ export default function Onboarding() {
     isPrivate: false,
   });
 
-  const handleCreateOrg = async (e: React.FormEvent) => {
+  const handleCreateOrg = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
     setError(null);
@@ -28,8 +47,9 @@ export default function Onboarding() {
       await api.post("/organizations", formData);
       // Reload to refresh user memberships and redirect to dashboard
       window.location.reload();
-    } catch (err: any) {
-      setError(err.response?.data?.error || "Failed to create organization");
+    } catch (err: unknown) {
+      const apiErr = err as ApiErrorResponse;
+      setError(apiErr.response?.data?.error || apiErr.response?.data?.message || "Failed to create organization");
       setIsSubmitting(false);
     }
   };
@@ -40,7 +60,14 @@ export default function Onboarding() {
         {/* Header */}
         <div className="text-center mb-10">
           <div className="inline-flex items-center gap-2 mb-4">
-            <img src="/images/logo.png" alt="ChainBudget logo" className="w-8 h-8 object-contain rounded-[8px] shadow-sm flex-shrink-0" />
+            <Image 
+              src="/images/logo.png" 
+              alt="ChainBudget logo" 
+              width={32} 
+              height={32} 
+              unoptimized 
+              className="w-8 h-8 object-contain rounded-lg shadow-sm shrink-0" 
+            />
             <span className="text-xl font-bold tracking-tight">
               Chain<span className="gradient-text">Budget</span>
             </span>
@@ -224,9 +251,9 @@ export default function Onboarding() {
                   <button 
                     type="button" 
                     onClick={() => setFormData({ ...formData, isPrivate: !formData.isPrivate })}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formData.isPrivate ? 'bg-primary' : 'bg-gray-300'}`}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formData.isPrivate ? "bg-primary" : "bg-gray-300"}`}
                   >
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.isPrivate ? 'translate-x-6' : 'translate-x-1'}`} />
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.isPrivate ? "translate-x-6" : "translate-x-1"}`} />
                   </button>
                 </div>
                 <p className="text-xs text-gray-500 leading-relaxed">

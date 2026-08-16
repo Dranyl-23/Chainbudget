@@ -13,6 +13,22 @@ interface Organization {
   logoUrl?: string;
 }
 
+interface CreateOrgFormData {
+  name: string;
+  type: string;
+  highValueThreshold: number;
+  isPrivate: boolean;
+}
+
+interface ApiErrorResponse {
+  response?: {
+    data?: {
+      error?: string;
+      message?: string;
+    };
+  };
+}
+
 export default function OrgSelector() {
   const { activeOrgId, setActiveOrgId } = useAuth();
   const [orgs, setOrgs] = useState<Organization[]>([]);
@@ -22,7 +38,7 @@ export default function OrgSelector() {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Form states
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<CreateOrgFormData>({
     name: "",
     type: "student_org",
     highValueThreshold: 10000,
@@ -32,25 +48,36 @@ export default function OrgSelector() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchOrgs = async () => {
-    try {
-      const res = await api.get("/organizations");
-      setOrgs(res.data);
-      
-      // If no active org but we have orgs, set the first one
-      if (!activeOrgId && res.data.length > 0) {
-        setActiveOrgId(res.data[0]._id);
-      }
-    } catch (err) {
-      console.error("Failed to fetch organizations:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchOrgs();
-  }, []);
+    let isCancelled = false;
+
+    const loadOrgs = async () => {
+      try {
+        const res = await api.get<Organization[]>("/organizations");
+        if (!isCancelled) {
+          const organizations = res.data || [];
+          setOrgs(organizations);
+          
+          // If no active org but we have orgs, set the first one
+          if (!activeOrgId && organizations.length > 0) {
+            setActiveOrgId(organizations[0]._id);
+          }
+        }
+      } catch (err: unknown) {
+        console.error("Failed to fetch organizations:", err);
+      } finally {
+        if (!isCancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void loadOrgs();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [activeOrgId, setActiveOrgId]);
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -65,7 +92,7 @@ export default function OrgSelector() {
 
   const activeOrg = orgs.find((o) => o._id === activeOrgId);
 
-  const handleCreateOrg = async (e: React.FormEvent) => {
+  const handleCreateOrg = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
     setError(null);
@@ -79,11 +106,11 @@ export default function OrgSelector() {
         data.append("logo", logoFile);
       }
 
-      const res = await api.post("/organizations", data, {
+      const res = await api.post<Organization>("/organizations", data, {
         headers: { "Content-Type": "multipart/form-data" }
       });
       const newOrg = res.data;
-      setOrgs([...orgs, newOrg]);
+      setOrgs((prev) => [...prev, newOrg]);
       setActiveOrgId(newOrg._id);
       setModalOpen(false);
       setDropdownOpen(false);
@@ -91,8 +118,9 @@ export default function OrgSelector() {
       setLogoFile(null);
       // Force reload to refresh user memberships from token/backend if needed
       window.location.reload(); 
-    } catch (err: any) {
-      setError(err.response?.data?.error || "Failed to create organization");
+    } catch (err: unknown) {
+      const apiErr = err as ApiErrorResponse;
+      setError(apiErr.response?.data?.error || apiErr.response?.data?.message || "Failed to create organization");
       setIsSubmitting(false);
     }
   };
@@ -110,14 +138,14 @@ export default function OrgSelector() {
             {loading ? "Loading..." : activeOrg ? activeOrg.name : "Select Organization"}
           </p>
         </div>
-        <ChevronDown className={`w-4 h-4 text-gray-400 flex-shrink-0 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${dropdownOpen ? "rotate-180" : ""}`} />
       </div>
 
       {/* Dropdown Menu */}
       {dropdownOpen && (
         <div className="absolute top-full left-3 right-3 mt-1 bg-[#160B2E] rounded-lg shadow-[0_0_30px_rgba(0,0,0,0.8)] border border-purple-500/30 py-1 z-50 animate-fade-in">
           <div className="max-h-48 overflow-y-auto custom-scrollbar">
-            {orgs.map(org => (
+            {orgs.map((org) => (
               <div 
                 key={org._id}
                 className="px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/10 cursor-pointer flex items-center justify-between transition-colors"
@@ -127,7 +155,7 @@ export default function OrgSelector() {
                 }}
               >
                 <span className="truncate pr-2">{org.name}</span>
-                {activeOrgId === org._id && <Check className="w-4 h-4 text-cyan-400 flex-shrink-0 drop-shadow-[0_0_5px_rgba(34,211,238,0.8)]" />}
+                {activeOrgId === org._id && <Check className="w-4 h-4 text-cyan-400 shrink-0 drop-shadow-[0_0_5px_rgba(34,211,238,0.8)]" />}
               </div>
             ))}
             {orgs.length === 0 && !loading && (
@@ -151,7 +179,7 @@ export default function OrgSelector() {
       {/* Create Modal */}
       {modalOpen && (
         <Portal>
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 md:p-4 bg-black/60 backdrop-blur-md">
+          <div className="fixed inset-0 z-100 flex items-center justify-center p-3 md:p-4 bg-black/60 backdrop-blur-md">
             <div className="glass rounded-xl md:rounded-2xl p-5 md:p-6 w-full max-w-md shadow-[0_0_40px_rgba(139,92,246,0.15)] border border-purple-500/20 animate-modal-pop">
               <div className="flex items-center justify-between mb-4 md:mb-6">
                 <div className="flex items-center gap-3">
@@ -183,7 +211,7 @@ export default function OrgSelector() {
                     placeholder="e.g. Computer Science Society"
                     className="w-full px-4 py-2.5 bg-black/20 border border-white/10 rounded-xl text-sm text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 transition-all shadow-inner"
                     value={formData.name}
-                    onChange={e => setFormData({...formData, name: e.target.value})}
+                    onChange={(e) => setFormData({...formData, name: e.target.value})}
                   />
                 </div>
 
@@ -192,7 +220,7 @@ export default function OrgSelector() {
                   <input 
                     type="file" 
                     accept="image/png, image/jpeg, image/webp"
-                    onChange={e => setLogoFile(e.target.files?.[0] || null)}
+                    onChange={(e) => setLogoFile(e.target.files?.[0] || null)}
                     className="w-full px-4 py-2 bg-black/20 border border-white/10 rounded-xl text-xs text-white/60 file:mr-4 file:py-1.5 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-purple-500/20 file:text-purple-300 hover:file:bg-purple-500/30 file:transition-colors transition-all shadow-inner cursor-pointer"
                   />
                 </div>
@@ -202,7 +230,7 @@ export default function OrgSelector() {
                   <select 
                     className="w-full px-4 py-2.5 bg-black/20 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 transition-all shadow-inner appearance-none"
                     value={formData.type}
-                    onChange={e => setFormData({...formData, type: e.target.value})}
+                    onChange={(e) => setFormData({...formData, type: e.target.value})}
                   >
                     <option value="student_org" className="bg-gray-900">Student Organization</option>
                     <option value="barangay" className="bg-gray-900">Barangay Fund</option>
@@ -226,7 +254,7 @@ export default function OrgSelector() {
                     min="0"
                     className="w-full px-4 py-2.5 bg-black/20 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 transition-all shadow-inner"
                     value={formData.highValueThreshold}
-                    onChange={e => setFormData({...formData, highValueThreshold: Number(e.target.value)})}
+                    onChange={(e) => setFormData({...formData, highValueThreshold: Number(e.target.value)})}
                   />
                 </div>
 
@@ -236,9 +264,9 @@ export default function OrgSelector() {
                     <button 
                       type="button" 
                       onClick={() => setFormData({ ...formData, isPrivate: !formData.isPrivate })}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formData.isPrivate ? 'bg-purple-500' : 'bg-white/20'}`}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formData.isPrivate ? "bg-purple-500" : "bg-white/20"}`}
                     >
-                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.isPrivate ? 'translate-x-6' : 'translate-x-1'}`} />
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.isPrivate ? "translate-x-6" : "translate-x-1"}`} />
                     </button>
                   </div>
                   <p className="text-xs text-white/50 leading-relaxed">

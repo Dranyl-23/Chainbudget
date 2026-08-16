@@ -1,12 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-/// @title ChainBudget (Tokenized Treasury)
-/// @notice Records budget transactions on-chain, holds organization funds, enforces 2-of-N 
-///         multi-signature approval, and provides Smart Contract Escrow for suppliers.
-/// @dev Deployed to Polygon Amoy. 
+import "@openzeppelin/contracts/access/Ownable2Step.sol";
+import "@openzeppelin/contracts/utils/Pausable.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-contract ChainBudget {
+/// @title ChainBudget (Tokenized Treasury Vault)
+/// @notice Records budget transactions on-chain, holds organization funds, enforces 2-of-N 
+///         multi-signature approval, provides Smart Contract Escrow for suppliers, and supports
+///         emergency pause controls and two-step ownership management.
+contract ChainBudget is Ownable2Step, Pausable, ReentrancyGuard {
     // ────────────────────────────────────────────────────────────────────────
     // Types
     // ────────────────────────────────────────────────────────────────────────
@@ -37,7 +40,6 @@ contract ChainBudget {
     // State
     // ────────────────────────────────────────────────────────────────────────
 
-    address public owner;           // Backend service wallet (deployer)
     uint256 public requiredApprovals = 2;   // 2-of-N threshold
     uint256 public txCounter;
 
@@ -69,11 +71,6 @@ contract ChainBudget {
     // Modifiers
     // ────────────────────────────────────────────────────────────────────────
 
-    modifier onlyOwner() {
-        require(msg.sender == owner, "ChainBudget: caller is not owner");
-        _;
-    }
-
     modifier onlyApprover() {
         require(isApprover[msg.sender], "ChainBudget: caller is not an approver");
         _;
@@ -88,10 +85,11 @@ contract ChainBudget {
     // Constructor & Treasury
     // ────────────────────────────────────────────────────────────────────────
 
-    constructor(address[] memory _initialApprovers, uint256 _requiredApprovals) {
+    constructor(address[] memory _initialApprovers, uint256 _requiredApprovals)
+        Ownable(msg.sender)
+    {
         require(_requiredApprovals > 0, "ChainBudget: required approvals must be > 0");
         require(_initialApprovers.length >= _requiredApprovals, "ChainBudget: not enough approvers");
-        owner = msg.sender;
         requiredApprovals = _requiredApprovals;
 
         for (uint256 i = 0; i < _initialApprovers.length; i++) {
@@ -100,12 +98,26 @@ contract ChainBudget {
     }
 
     // Accept MATIC deposits into the Treasury Vault
-    receive() external payable {
+    receive() external payable whenNotPaused {
         emit VaultDeposited(msg.sender, msg.value);
     }
 
     function getVaultBalance() external view returns (uint256) {
         return address(this).balance;
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
+    // Emergency Controls (Pausable)
+    // ────────────────────────────────────────────────────────────────────────
+
+    /// @notice Pauses contract state modifications in case of emergency
+    function pause() external onlyOwner {
+        _pause();
+    }
+
+    /// @notice Unpauses contract operations
+    function unpause() external onlyOwner {
+        _unpause();
     }
 
     // ────────────────────────────────────────────────────────────────────────
@@ -118,7 +130,7 @@ contract ChainBudget {
         address payable to,
         bool isHighValue,
         bool isEscrow
-    ) external onlyOwner returns (uint256 txId) {
+    ) external onlyOwner whenNotPaused returns (uint256 txId) {
         txCounter++;
         txId = txCounter;
 
@@ -168,7 +180,7 @@ contract ChainBudget {
     // Approver actions & Execution
     // ────────────────────────────────────────────────────────────────────────
 
-    function submitApproval(uint256 txId) external onlyApprover txExists(txId) {
+    function submitApproval(uint256 txId) external onlyApprover txExists(txId) whenNotPaused {
         Transaction storage txn = transactions[txId];
         require(txn.isHighValue, "ChainBudget: transaction does not need approval");
         require(!txn.isApproved, "ChainBudget: transaction already approved");
@@ -185,7 +197,8 @@ contract ChainBudget {
         }
     }
 
-    function executeTransaction(uint256 txId) external txExists(txId) {
+    function executeTransaction(uint256 txId) external nonReentrant txExists(txId) whenNotPaused {
+        require(msg.sender == owner() || isApprover[msg.sender], "ChainBudget: not authorized to execute");
         Transaction storage txn = transactions[txId];
         require(txn.isApproved, "ChainBudget: transaction not approved yet");
         require(!txn.executed, "ChainBudget: already executed");
@@ -208,7 +221,7 @@ contract ChainBudget {
     // Escrow Management
     // ────────────────────────────────────────────────────────────────────────
 
-    function releaseEscrow(uint256 txId) external txExists(txId) {
+    function releaseEscrow(uint256 txId) external nonReentrant txExists(txId) whenNotPaused {
         Transaction storage txn = transactions[txId];
         EscrowDetails storage esc = escrows[txId];
         
@@ -220,7 +233,7 @@ contract ChainBudget {
         if (msg.sender == txn.to) {
             esc.payeeApproved = true;
             emit EscrowApproved(txId, msg.sender, false);
-        } else if (msg.sender == owner || isApprover[msg.sender]) {
+        } else if (msg.sender == owner() || isApprover[msg.sender]) {
             esc.payerApproved = true;
             emit EscrowApproved(txId, msg.sender, true);
         } else {
@@ -235,12 +248,7 @@ contract ChainBudget {
         }
     }
 
-    // Backend can proxy the payee approval if the payee signs an off-chain message
-    // but for now we just rely on standard msg.sender logic or backend owner forcing it.
-    // If we want backend to approve on behalf of payee, we could add `forceReleaseEscrow`.
-    // We already allow msg.sender == owner to set `payerApproved`.
-
-    function setPayeeApprovalByOwner(uint256 txId) external onlyOwner txExists(txId) {
+    function setPayeeApprovalByOwner(uint256 txId) external nonReentrant onlyOwner txExists(txId) whenNotPaused {
         EscrowDetails storage esc = escrows[txId];
         require(transactions[txId].isEscrow, "Not an escrow");
         require(!esc.isReleased, "Already released");
@@ -255,7 +263,6 @@ contract ChainBudget {
             emit EscrowReleased(txId, transactions[txId].to, transactions[txId].amount);
         }
     }
-
 
     // ────────────────────────────────────────────────────────────────────────
     // Read functions

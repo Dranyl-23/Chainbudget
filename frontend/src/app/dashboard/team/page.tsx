@@ -1,22 +1,70 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { Users, Plus, X, Trash2, Shield, User as UserIcon, Crown, CheckCircle2, Eye } from "lucide-react";
+import { Plus, X, Trash2, Shield, User as UserIcon, Crown, CheckCircle2, Eye } from "lucide-react";
 import api from "@/lib/api";
 import toast from "react-hot-toast";
 import TableSkeleton from "@/components/TableSkeleton";
+import axios from "axios";
+
+// ── Types ────────────────────────────────────────────────────────────────────
+interface UserOrgRef {
+  _id?: string;
+  name?: string;
+}
+
+interface UserMembership {
+  organization?: string | UserOrgRef;
+  roleLevel: number;
+  roleLabel?: string;
+  isActive?: boolean;
+}
+
+interface MemberMembership {
+  organization: string | UserOrgRef;
+  roleLevel: number;
+  roleLabel: string;
+  isActive: boolean;
+}
 
 interface Member {
   _id: string;
   walletAddress: string;
   displayName?: string;
-  memberships: {
-    organization: string;
-    roleLevel: number;
-    roleLabel: string;
-    isActive: boolean;
-  }[];
+  email?: string;
+  memberships: MemberMembership[];
+}
+
+interface UserLookupResponse {
+  _id?: string;
+  displayName?: string;
+  email?: string;
+  walletAddress?: string;
+}
+
+interface AddMemberFormData {
+  walletAddress: string;
+  displayName: string;
+  email: string;
+  roleLevel: number;
+  roleLabel: string;
+}
+
+// ── Helper to safely extract error message ──────────────────────────────────
+function getErrorMessage(err: unknown, fallback: string): string {
+  if (axios.isAxiosError(err)) {
+    return err.response?.data?.error || err.message || fallback;
+  }
+  if (err instanceof Error) {
+    return err.message;
+  }
+  return fallback;
+}
+
+function getOrgId(org: string | UserOrgRef | undefined): string | undefined {
+  if (!org) return undefined;
+  return typeof org === "string" ? org : org._id;
 }
 
 export default function TeamPage() {
@@ -24,16 +72,22 @@ export default function TeamPage() {
   const [members, setMembers] = useState<Member[]>(() => {
     if (typeof window !== "undefined") {
       const cached = sessionStorage.getItem("cb_cache_team");
-      if (cached) return JSON.parse(cached);
+      if (cached) {
+        try {
+          return JSON.parse(cached) as Member[];
+        } catch {
+          return [];
+        }
+      }
     }
     return [];
   });
-  const [loading, setLoading] = useState(members.length === 0);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<AddMemberFormData>({
     walletAddress: "",
     displayName: "",
     email: "",
@@ -44,63 +98,101 @@ export default function TeamPage() {
   const orgId = activeOrgId;
   
   // Current user's role level in this org
-  const currentUserRole = user?.memberships?.find(
-    (m: any) => (typeof m.organization === "string" ? m.organization : m.organization?._id) === orgId
+  const memberships = (user?.memberships || []) as UserMembership[];
+  const currentUserRole = memberships.find(
+    (m) => getOrgId(m.organization) === orgId
   )?.roleLevel || 4;
 
   const canManage = currentUserRole === 1;
 
-  const fetchMembers = async () => {
+  const refreshMembers = useCallback(async () => {
     if (!orgId) return;
     try {
-      const res = await api.get(`/users/${orgId}/members`);
+      const res = await api.get<Member[]>(`/users/${orgId}/members`);
       const data = res.data || [];
       setMembers(data);
       sessionStorage.setItem("cb_cache_team", JSON.stringify(data));
-    } catch (err) {
-      console.error("Failed to fetch members:", err);
-      setError("Failed to load team members.");
-    } finally {
-      setLoading(false);
+    } catch (err: unknown) {
+      console.error("Failed to refresh members:", err);
     }
-  };
-
-  useEffect(() => {
-    fetchMembers();
   }, [orgId]);
 
+  // ── Data Fetching Effect ──────────────────────────────────────────────────
   useEffect(() => {
-    const checkWallet = async () => {
-      const address = formData.walletAddress.trim();
-      if (address.length === 42 && address.startsWith("0x")) {
-        try {
-          const res = await api.get(`/users/by-wallet/${address}`);
-          if (res.data) {
-            const fetchedName = res.data.displayName === "New User" ? "" : res.data.displayName;
-            const fetchedEmail = res.data.email || "";
-            toast.success(`Found: ${fetchedName || 'No Name'} | ${fetchedEmail || 'No Email'}`);
-            setFormData(prev => ({
-              ...prev,
-              displayName: prev.displayName || fetchedName || "",
-              email: prev.email || fetchedEmail || ""
-            }));
-          }
-        } catch (err: any) {
-          if (err.response?.status === 404) {
-            toast.error("User not found in system. Please enter manually.");
-          } else {
-            toast.error("Error fetching user details.");
-          }
+    if (!orgId) return;
+
+    let isCancelled = false;
+
+    const loadMembers = async () => {
+      try {
+        const res = await api.get<Member[]>(`/users/${orgId}/members`);
+        const data = res.data || [];
+        if (!isCancelled) {
+          setMembers(data);
+          sessionStorage.setItem("cb_cache_team", JSON.stringify(data));
+        }
+      } catch (err: unknown) {
+        console.error("Failed to fetch members:", err);
+        if (!isCancelled) {
+          setError("Failed to load team members.");
+        }
+      } finally {
+        if (!isCancelled) {
+          setLoading(false);
         }
       }
     };
-    checkWallet();
-  }, [formData.walletAddress]);
 
-  const handleAddMember = async (e: React.FormEvent) => {
+    loadMembers();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [orgId]);
+
+  // ── Lookup Identifier (Declared BEFORE debounced effect) ──────────────────
+  const checkIdentifier = useCallback(async (endpoint: string) => {
+    try {
+      const token = localStorage.getItem("cb_token");
+      if (!token) return;
+      const res = await api.get<UserLookupResponse>(endpoint, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.data) {
+        const fetchedName = res.data.displayName === "New User" ? "" : res.data.displayName;
+        toast.success(`Found User: ${fetchedName || res.data.email || res.data.walletAddress || "Unknown"}`);
+        setFormData((prev) => ({
+          ...prev,
+          displayName: prev.displayName || fetchedName || "",
+        }));
+      }
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err) && err.response?.status !== 404) {
+        console.error("Error fetching user", err);
+      }
+    }
+  }, []);
+
+  // ── Debounced Identifier Check Effect ─────────────────────────────────────
+  useEffect(() => {
+    const identifier = formData.email.trim();
+    if (!identifier) return;
+
+    const timeoutId = setTimeout(() => {
+      if (identifier.startsWith("0x") && identifier.length === 42) {
+        checkIdentifier(`/users/by-wallet/${identifier}`);
+      } else if (identifier.includes("@")) {
+        checkIdentifier(`/users/by-email/${encodeURIComponent(identifier)}`);
+      }
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [formData.email, checkIdentifier]);
+
+  const handleAddMember = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!formData.walletAddress.trim()) {
-      setError("Wallet address is required.");
+    if (!formData.email.trim()) {
+      setError("Email or Wallet Address is required.");
       return;
     }
 
@@ -108,17 +200,16 @@ export default function TeamPage() {
     setError(null);
     try {
       await api.post(`/users/${orgId}/invite`, {
-        walletAddress: formData.walletAddress,
+        identifier: formData.email.trim(),
         displayName: formData.displayName,
-        email: formData.email,
         roleLevel: Number(formData.roleLevel),
         roleLabel: formData.roleLabel || "Member",
       });
       setShowAddModal(false);
       setFormData({ walletAddress: "", displayName: "", email: "", roleLevel: 3, roleLabel: "" });
-      fetchMembers(); // Refresh the list
-    } catch (err: any) {
-      setError(err.response?.data?.error || "Failed to add member.");
+      await refreshMembers();
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Failed to add member."));
     } finally {
       setIsSubmitting(false);
     }
@@ -130,8 +221,8 @@ export default function TeamPage() {
       await api.delete(`/users/${orgId}/members/${userId}`);
       setMembers((prev) => prev.filter((m) => m._id !== userId));
       toast.success("Member removed");
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || "Failed to remove member.");
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, "Failed to remove member."));
     }
   };
 
@@ -144,6 +235,8 @@ export default function TeamPage() {
       default: return null;
     }
   };
+
+  const currentUserId = user?.id;
 
   return (
     <>
@@ -175,10 +268,10 @@ export default function TeamPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {[1, 2, 3, 4].map(level => {
-                  const levelMembers = members.filter(member => {
+                {[1, 2, 3, 4].map((level) => {
+                  const levelMembers = members.filter((member) => {
                     const membership = member.memberships.find(
-                      (m) => (typeof m.organization === "string" ? m.organization : (m.organization as any)?._id) === orgId
+                      (m) => getOrgId(m.organization) === orgId
                     );
                     return (membership?.roleLevel || 4) === level;
                   });
@@ -201,9 +294,9 @@ export default function TeamPage() {
                       </tr>
                       {levelMembers.map((member) => {
                         const membership = member.memberships.find(
-                          (m) => (typeof m.organization === "string" ? m.organization : (m.organization as any)?._id) === orgId
+                          (m) => getOrgId(m.organization) === orgId
                         );
-                        const isSelf = member._id === user?.id || member._id === (user as any)?._id;
+                        const isSelf = Boolean(currentUserId && member._id === currentUserId);
 
                         return (
                           <tr key={member._id} className="hover:bg-white/5 transition-colors">
@@ -269,7 +362,7 @@ export default function TeamPage() {
       {/* ── Add Member Modal ── */}
       {showAddModal && (
         <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+          className="fixed inset-0 z-9999 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
           onClick={(e) => { if (e.target === e.currentTarget) setShowAddModal(false); }}
         >
           <div className="glass rounded-2xl p-8 w-full max-w-md shadow-2xl animate-fade-in">
@@ -290,17 +383,20 @@ export default function TeamPage() {
             )}
 
             <form onSubmit={handleAddMember} className="space-y-4">
-              {/* Wallet Address */}
+              {/* Email or Wallet Address */}
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">Wallet Address</label>
+                <label className="block text-sm font-medium text-gray-600 mb-1">Email or Wallet Address</label>
                 <input
                   type="text"
-                  placeholder="0x..."
-                  className="input font-mono text-sm"
-                  value={formData.walletAddress}
-                  onChange={(e) => setFormData({ ...formData, walletAddress: e.target.value })}
+                  placeholder="e.g., user@cjc.edu.ph or 0x123..."
+                  className="input text-sm"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   required
                 />
+                <p className="text-xs text-gray-500 mt-1">
+                  We will auto-generate their Web3 wallet if they log in via email later!
+                </p>
               </div>
 
               {/* Name */}
@@ -316,21 +412,6 @@ export default function TeamPage() {
                 />
               </div>
 
-              {/* Email Address */}
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">Email Address</label>
-                <input
-                  type="email"
-                  placeholder="e.g., user@cjc.edu.ph"
-                  className="input text-sm"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  required
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Required for this member to receive email notifications.
-                </p>
-              </div>
 
               {/* Role Level */}
               <div>

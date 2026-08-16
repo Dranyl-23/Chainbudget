@@ -54,7 +54,10 @@ router.get("/organizations", async (req, res) => {
     const filter = {};
     if (status === "active") filter.isActive = true;
     if (status === "suspended") filter.isActive = false;
-    if (search) filter.name = { $regex: search, $options: "i" };
+    if (search) {
+      const escapedSearch = search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      filter.name = { $regex: escapedSearch, $options: "i" };
+    }
 
     const skip = (Number(page) - 1) * Number(limit);
 
@@ -68,23 +71,56 @@ router.get("/organizations", async (req, res) => {
       Organization.countDocuments(filter),
     ]);
 
-    // Enrich each org with member + transaction counts
-    const enriched = await Promise.all(
-      orgs.map(async (org) => {
-        const [memberCount, txCount, pendingCount] = await Promise.all([
-          User.countDocuments({
-            "memberships.organization": org._id,
+    // High-performance batch aggregation: replaces 3N queries with 2 single batch queries
+    const orgIds = orgs.map((o) => o._id);
+
+    const [memberCounts, txStats] = await Promise.all([
+      User.aggregate([
+        { $unwind: "$memberships" },
+        {
+          $match: {
+            "memberships.organization": { $in: orgIds },
             "memberships.isActive": true,
-          }),
-          Transaction.countDocuments({ organization: org._id }),
-          Transaction.countDocuments({
-            organization: org._id,
-            status: "pending_approval",
-          }),
-        ]);
-        return { ...org, memberCount, txCount, pendingCount };
-      })
-    );
+          },
+        },
+        {
+          $group: {
+            _id: "$memberships.organization",
+            count: { $sum: 1 },
+          },
+        },
+      ]),
+      Transaction.aggregate([
+        {
+          $match: {
+            organization: { $in: orgIds },
+          },
+        },
+        {
+          $group: {
+            _id: "$organization",
+            txCount: { $sum: 1 },
+            pendingCount: {
+              $sum: { $cond: [{ $eq: ["$status", "pending_approval"] }, 1, 0] },
+            },
+          },
+        },
+      ]),
+    ]);
+
+    const memberMap = new Map(memberCounts.map((m) => [m._id.toString(), m.count]));
+    const txMap = new Map(txStats.map((t) => [t._id.toString(), t]));
+
+    const enriched = orgs.map((org) => {
+      const orgIdStr = org._id.toString();
+      const stats = txMap.get(orgIdStr) || { txCount: 0, pendingCount: 0 };
+      return {
+        ...org,
+        memberCount: memberMap.get(orgIdStr) || 0,
+        txCount: stats.txCount,
+        pendingCount: stats.pendingCount,
+      };
+    });
 
     res.json({ organizations: enriched, total, page: Number(page), limit: Number(limit) });
   } catch (err) {
@@ -128,9 +164,10 @@ router.get("/users", async (req, res) => {
 
     const filter = {};
     if (search) {
+      const escapedSearch = search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       filter.$or = [
-        { walletAddress: { $regex: search, $options: "i" } },
-        { displayName: { $regex: search, $options: "i" } },
+        { walletAddress: { $regex: escapedSearch, $options: "i" } },
+        { displayName: { $regex: escapedSearch, $options: "i" } },
       ];
     }
 

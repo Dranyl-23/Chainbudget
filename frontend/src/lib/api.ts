@@ -2,7 +2,7 @@ import axios from "axios";
 import toast from "react-hot-toast";
 
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api",
+  baseURL: "/api",
   headers: { "Content-Type": "application/json" },
 });
 
@@ -13,7 +13,7 @@ let csrfToken: string | null = null;
 async function fetchCSRFToken() {
   try {
     const response = await axios.get(
-      `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"}/auth/csrf-token`
+      "/api/auth/csrf-token"
     );
     csrfToken = response.data.csrfToken;
   } catch (error) {

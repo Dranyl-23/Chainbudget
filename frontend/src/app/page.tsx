@@ -208,11 +208,7 @@ export default function LandingPage() {
                 
                 <div className="flex flex-col items-center justify-center z-10 relative">
                   <div className="w-24 h-24 rounded-full bg-fuchsia-500/10 border border-fuchsia-400/30 flex items-center justify-center shadow-[0_0_30px_rgba(217,70,239,0.2)] mb-4">
-                    {/* Simulated Polygon Logo */}
-                    <svg width="60" height="60" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="drop-shadow-[0_0_15px_rgba(217,70,239,0.8)]">
-                      <path d="M50 5L90 25V75L50 95L10 75V25L50 5Z" stroke="#E879F9" strokeWidth="6" fill="#8B5CF6" fillOpacity="0.5" />
-                      <circle cx="50" cy="50" r="15" fill="#E879F9" />
-                    </svg>
+                    <img src="/Matic-logo.png" alt="Polygon Network" className="w-20 h-20 object-contain drop-shadow-[0_0_15px_rgba(217,70,239,0.8)]" />
                   </div>
                   <span className="text-white font-extrabold tracking-[0.2em] text-lg uppercase drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]">
                     Polygon
@@ -236,7 +232,7 @@ export default function LandingPage() {
                 <div className="flex flex-col items-center justify-center z-10 relative">
                   {/* Outer glowing ring for the logo */}
                   <div className="w-24 h-24 rounded-full bg-white/5 border border-white/20 flex items-center justify-center shadow-[0_0_30px_rgba(255,255,255,0.1)] mb-4">
-                    <img src="/images/logo.png" alt="ChainBudget" className="w-16 h-16 object-contain drop-shadow-[0_0_15px_rgba(255,255,255,0.9)]" />
+                    <img src="/3D-Chainbudget.png" alt="ChainBudget" className="w-20 h-20 object-contain drop-shadow-[0_0_15px_rgba(255,255,255,0.9)]" />
                   </div>
                   <span className="text-white font-extrabold tracking-[0.2em] text-lg uppercase drop-shadow-[0_0_10px_rgba(255,255,255,0.5)] bg-clip-text text-transparent bg-gradient-to-r from-white to-white/70">
                     ChainBudget
