@@ -59,7 +59,7 @@ export default function ExplorerPage() {
 
   const backendUrl = process.env.NEXT_PUBLIC_API_URL 
     ? process.env.NEXT_PUBLIC_API_URL.replace("/api", "") 
-    : "http://localhost:5000";
+    : "http://127.0.0.1:5001";
 
   return (
     <main className="min-h-screen bg-[#050505] text-white">
@@ -92,7 +92,7 @@ export default function ExplorerPage() {
                 <span className={tx.type === "income" ? "text-green-400" : "text-red-400"}>
                   {tx.type === "income" ? "+" : "-"}₱{tx.amount.toLocaleString()}
                 </span>
-                <span className="text-white/30 truncate max-w-[150px]">{tx.description}</span>
+                <span className="text-white/30 truncate max-w-37.5">{tx.description}</span>
                 <span className="text-white/10">•</span>
                 <a 
                   href={`https://amoy.polygonscan.com/tx/${tx.blockchainTxHash}`} 

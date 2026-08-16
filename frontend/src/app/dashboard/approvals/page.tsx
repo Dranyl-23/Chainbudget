@@ -7,21 +7,53 @@ import { ethers } from "ethers";
 import ChainBudgetABI from "@/lib/ChainBudget.json";
 import api from "@/lib/api";
 import toast from "react-hot-toast";
-import { io } from "socket.io-client";
 import TableSkeleton from "@/components/TableSkeleton";
 import confetti from "canvas-confetti";
+import axios from "axios";
+
+// ── Types ────────────────────────────────────────────────────────────────────
+interface SubmittedByUser {
+  displayName?: string;
+  walletAddress?: string;
+  _id?: string;
+}
+
+interface TransactionApiItem {
+  _id: string;
+  description: string;
+  amount: number;
+  submittedBy?: SubmittedByUser;
+  createdAt: string;
+  status: string;
+  approvalCount?: number;
+  organization?: {
+    requiredApprovals?: number;
+    highValueThreshold?: number;
+  };
+  onChainTxId?: string | number;
+  category?: string;
+  budgetCategory?: string;
+  type?: string;
+  urgency?: "normal" | "urgent";
+  documentUrl?: string;
+}
+
+interface TransactionsResponse {
+  transactions?: TransactionApiItem[];
+  total?: number;
+}
 
 interface Approval {
   _id: string;
   description: string;
   amount: number;
-  submittedBy: { displayName: string };
+  submittedBy?: SubmittedByUser;
   createdAt: string;
   status: string;
   votes: number;
   required: number;
   organization: { highValueThreshold: number };
-  onChainTxId?: string;
+  onChainTxId?: string | number;
   category?: string;
   type?: string;
   documentUrl?: string;
@@ -35,12 +67,42 @@ interface BudgetItem {
   spent: number;
 }
 
+interface RpcError {
+  code?: number;
+  message?: string;
+}
+
+// ── Helper to safely extract error message ──────────────────────────────────
+function getErrorMessage(err: unknown, fallback: string): string {
+  if (axios.isAxiosError(err)) {
+    return err.response?.data?.error || err.message || fallback;
+  }
+  if (err instanceof Error) {
+    return err.message;
+  }
+  return fallback;
+}
+
+function getRpcErrorCode(err: unknown): number | undefined {
+  if (typeof err === "object" && err !== null && "code" in err) {
+    const rpcErr = err as RpcError;
+    return typeof rpcErr.code === "number" ? rpcErr.code : undefined;
+  }
+  return undefined;
+}
+
 export default function ApprovalsPage() {
-  const { user, activeOrgId } = useAuth();
+  const { activeOrgId } = useAuth();
   const [pendingApprovals, setPendingApprovals] = useState<Approval[]>(() => {
     if (typeof window !== "undefined") {
       const cached = sessionStorage.getItem("cb_cache_approvals");
-      if (cached) return JSON.parse(cached);
+      if (cached) {
+        try {
+          return JSON.parse(cached) as Approval[];
+        } catch {
+          return [];
+        }
+      }
     }
     return [];
   });
@@ -51,21 +113,24 @@ export default function ApprovalsPage() {
   const [verifiedReceipts, setVerifiedReceipts] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
+    let isCancelled = false;
+
     const fetchApprovals = async () => {
       try {
-        
         if (!activeOrgId) {
-          setLoading(false);
+          if (!isCancelled) setLoading(false);
           return;
         }
 
-        const orgId = activeOrgId || "";
-        const res = await api.get("/transactions", {
+        const orgId = activeOrgId;
+        const res = await api.get<TransactionsResponse>("/transactions", {
           params: { orgId, status: "pending_approval", limit: 100 },
         });
 
+        const txList: TransactionApiItem[] = res.data.transactions || [];
+
         // Map transactions to approval display format
-        const approvals = (res.data.transactions || []).map((tx: any) => ({
+        const approvals: Approval[] = txList.map((tx) => ({
           _id: tx._id,
           description: tx.description,
           amount: tx.amount,
@@ -82,33 +147,47 @@ export default function ApprovalsPage() {
           documentUrl: tx.documentUrl,
         }));
 
-        setPendingApprovals(approvals);
-        sessionStorage.setItem("cb_cache_approvals", JSON.stringify(approvals));
+        if (!isCancelled) {
+          setPendingApprovals(approvals);
+          sessionStorage.setItem("cb_cache_approvals", JSON.stringify(approvals));
+        }
 
         // Fetch budget data for overspend detection
         try {
-          const budgetRes = await api.get("/budget", { params: { orgId } });
-          setBudgetData(budgetRes.data || []);
-        } catch { /* budget not required */ }
-      } catch (err) {
+          const budgetRes = await api.get<BudgetItem[]>("/budget", { params: { orgId } });
+          if (!isCancelled) {
+            setBudgetData(budgetRes.data || []);
+          }
+        } catch {
+          /* budget optional */
+        }
+      } catch (err: unknown) {
         console.error("Failed to fetch approvals:", err);
-        setError("Failed to load approvals");
+        if (!isCancelled) {
+          setError("Failed to load approvals");
+        }
       } finally {
-        setLoading(false);
+        if (!isCancelled) {
+          setLoading(false);
+        }
       }
     };
 
     fetchApprovals();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [activeOrgId]);
 
-  // BUG-6 FIX: Re-fetch approvals from server to show updated vote count
   const refreshApprovals = async () => {
     if (!activeOrgId) return;
     try {
-      const res = await api.get("/transactions", {
+      const res = await api.get<TransactionsResponse>("/transactions", {
         params: { orgId: activeOrgId, status: "pending_approval", limit: 100 },
       });
-      const approvals = (res.data.transactions || []).map((tx: any) => ({
+      const txList: TransactionApiItem[] = res.data.transactions || [];
+      const approvals: Approval[] = txList.map((tx) => ({
         _id: tx._id,
         description: tx.description,
         amount: tx.amount,
@@ -125,17 +204,16 @@ export default function ApprovalsPage() {
         documentUrl: tx.documentUrl,
       }));
       setPendingApprovals(approvals);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error("Failed to refresh approvals:", err);
     }
   };
 
-  const requestSignature = async (action: string, req: Approval) => {
-    if (typeof window === "undefined" || !(window as any).ethereum) {
+  const requestSignature = async (action: string, req: Approval): Promise<string> => {
+    if (typeof window === "undefined" || !window.ethereum) {
       throw new Error("MetaMask is not installed. Web3 signatures require MetaMask.");
     }
-    const ethereum = (window as any).ethereum;
-    const provider = new ethers.BrowserProvider(ethereum);
+    const provider = new ethers.BrowserProvider(window.ethereum as ethers.Eip1193Provider);
     const signer = await provider.getSigner();
     
     const domain = { name: "ChainBudget", version: "1" };
@@ -166,31 +244,30 @@ export default function ApprovalsPage() {
       // 1. Request Web3 Signature (EIP-712)
       const signature = await requestSignature("approved", req);
 
-      // 2. Do MetaMask on-chain signing FIRST (if applicable)
-      if (req.onChainTxId && typeof window !== "undefined" && (window as any).ethereum) {
-        const ethereum = (window as any).ethereum;
-        toast.loading("Connecting to Hardhat Network...", { id: "txToast" });
+      // 2. Do MetaMask on-chain signing FIRST (if on-chain tx ID exists)
+      if (req.onChainTxId && typeof window !== "undefined" && window.ethereum) {
+        toast.loading("Connecting to Network...", { id: "txToast" });
         
         try {
-          await ethereum.request({
-            method: 'wallet_switchEthereumChain',
-            params: [{ chainId: '0x7a69' }],
+          await window.ethereum.request({
+            method: "wallet_switchEthereumChain",
+            params: [{ chainId: "0x7a69" }],
           });
-        } catch (switchError: any) {
-          if (switchError.code === 4902) {
+        } catch (switchError: unknown) {
+          if (getRpcErrorCode(switchError) === 4902) {
             try {
-              await ethereum.request({
-                method: 'wallet_addEthereumChain',
+              await window.ethereum.request({
+                method: "wallet_addEthereumChain",
                 params: [
                   {
-                    chainId: '0x7a69',
-                    chainName: 'Hardhat Localhost',
-                    rpcUrls: ['http://localhost:8545'],
-                    nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+                    chainId: "0x7a69",
+                    chainName: "Hardhat Localhost",
+                    rpcUrls: ["http://localhost:8545"],
+                    nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
                   },
                 ],
               });
-            } catch (addError: any) {
+            } catch (addError: unknown) {
               console.error("Add network error:", addError);
               toast.error("Failed to add Hardhat network", { id: "txToast" });
             }
@@ -199,7 +276,7 @@ export default function ApprovalsPage() {
 
         try {
           toast.loading("Please approve the blockchain transaction in MetaMask...", { id: "txToast" });
-          const provider = new ethers.BrowserProvider(ethereum);
+          const provider = new ethers.BrowserProvider(window.ethereum as ethers.Eip1193Provider);
           const signer = await provider.getSigner();
           const contractAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
           
@@ -210,11 +287,12 @@ export default function ApprovalsPage() {
             await tx.wait();
             toast.success("Blockchain verified!", { id: "txToast" });
           }
-        } catch (chainErr: any) {
-          console.error("On-chain approval failed:", chainErr.message);
+        } catch (chainErr: unknown) {
+          const errMsg = chainErr instanceof Error ? chainErr.message : "On-chain approval failed";
+          console.error("On-chain approval failed:", errMsg);
           toast.error("MetaMask approval failed or was cancelled.", { id: "txToast" });
           setActionLoading(null);
-          return; // STOP execution here, do NOT update MongoDB!
+          return; // STOP execution here, do NOT update backend!
         }
       }
 
@@ -232,13 +310,13 @@ export default function ApprovalsPage() {
         particleCount: 100,
         spread: 70,
         origin: { y: 0.6 },
-        colors: ['#6B55D9', '#7DBD9B', '#4F46E5', '#10B981']
+        colors: ["#6B55D9", "#7DBD9B", "#4F46E5", "#10B981"]
       });
 
       await refreshApprovals();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Approval failed:", err);
-      toast.error(err.response?.data?.error || err.message || "Failed to approve transaction", { id: "txToast" });
+      toast.error(getErrorMessage(err, "Failed to approve transaction"), { id: "txToast" });
     } finally {
       setActionLoading(null);
     }
@@ -260,13 +338,14 @@ export default function ApprovalsPage() {
       });
       await refreshApprovals();
       toast.success("Rejection vote recorded", { id: "txToast" });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Rejection failed:", err);
-      toast.error(err.response?.data?.error || err.message || "Failed to reject transaction", { id: "txToast" });
+      toast.error(getErrorMessage(err, "Failed to reject transaction"), { id: "txToast" });
     } finally {
       setActionLoading(null);
     }
   };
+
   return (
     <div className="p-4 md:p-8 pb-20 animate-fade-in">
       <header className="mb-8">
@@ -276,7 +355,7 @@ export default function ApprovalsPage() {
 
       {error && (
         <div className="mb-6 p-4 bg-danger/10 border border-danger/20 rounded-lg flex gap-3">
-          <AlertCircle className="w-5 h-5 text-danger flex-shrink-0 mt-0.5" />
+          <AlertCircle className="w-5 h-5 text-danger shrink-0 mt-0.5" />
           <p className="text-sm text-danger">{error}</p>
         </div>
       )}
@@ -284,154 +363,154 @@ export default function ApprovalsPage() {
       {loading ? (
         <TableSkeleton />
       ) : (
-      <div className="space-y-4">
-        {pendingApprovals.length > 0 ? (
-          pendingApprovals.map((req) => (
-            <div key={req._id} className="glass p-6 rounded-xl flex flex-col md:flex-row gap-6 items-start md:items-center justify-between">
-              <div className="flex-1">
-                <div className="flex flex-wrap items-center gap-2 mb-2">
-                  <span className="badge badge-pending whitespace-nowrap"><Clock className="w-3 h-3" /> Action Required</span>
-                  {req.urgency === "urgent" && (
-                    <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-red-100 text-red-700 animate-pulse">
-                      Urgent
-                    </span>
-                  )}
-                  <span className="text-xs text-gray-500">Submitted {new Date(req.createdAt).toLocaleDateString()} by {req.submittedBy?.displayName || "Unknown"}</span>
-                </div>
-                <h3 className="text-lg font-medium text-gray-700">{req.description}</h3>
-                <p className="text-sm text-gray-400 mt-1">
-                  Amount exceeds the high-value threshold of ₱{Math.round(req.organization.highValueThreshold).toLocaleString()}.
-                </p>
-                
-                <div className="mt-4 flex items-center gap-3">
-                  <div className="text-xs font-semibold uppercase text-gray-500 tracking-wider">Approval Progress</div>
-                  <div className="flex items-center gap-1">
-                    {Array.from({ length: req.required }).map((_, i) => (
-                      <div 
-                        key={i} 
-                        className={`h-2 rounded-full w-8 ${i < req.votes ? 'bg-primary' : 'bg-[#e8e1ff]'}`} 
-                      />
-                    ))}
+        <div className="space-y-4">
+          {pendingApprovals.length > 0 ? (
+            pendingApprovals.map((req) => (
+              <div key={req._id} className="glass p-6 rounded-xl flex flex-col md:flex-row gap-6 items-start md:items-center justify-between">
+                <div className="flex-1">
+                  <div className="flex flex-wrap items-center gap-2 mb-2">
+                    <span className="badge badge-pending whitespace-nowrap"><Clock className="w-3 h-3" /> Action Required</span>
+                    {req.urgency === "urgent" && (
+                      <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-red-100 text-red-700 animate-pulse">
+                        Urgent
+                      </span>
+                    )}
+                    <span className="text-xs text-gray-500">Submitted {new Date(req.createdAt).toLocaleDateString()} by {req.submittedBy?.displayName || "Unknown"}</span>
                   </div>
-                  <span className="text-xs font-medium text-primary">{req.votes} of {req.required} required</span>
-                </div>
+                  <h3 className="text-lg font-medium text-gray-700">{req.description}</h3>
+                  <p className="text-sm text-gray-400 mt-1">
+                    Amount exceeds the high-value threshold of ₱{Math.round(req.organization.highValueThreshold).toLocaleString()}.
+                  </p>
+                  
+                  <div className="mt-4 flex items-center gap-3">
+                    <div className="text-xs font-semibold uppercase text-gray-500 tracking-wider">Approval Progress</div>
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: req.required }).map((_, i) => (
+                        <div 
+                          key={i} 
+                          className={`h-2 rounded-full w-8 ${i < req.votes ? "bg-primary" : "bg-[#e8e1ff]"}`} 
+                        />
+                      ))}
+                    </div>
+                    <span className="text-xs font-medium text-primary">{req.votes} of {req.required} required</span>
+                  </div>
 
-                {/* Budget Overspend Warning */}
-                {req.type === "expense" && req.category && (() => {
-                  const budget = budgetData.find(b => b.name.toLowerCase() === (req.category || "").toLowerCase());
-                  if (!budget) return null;
-                  const remaining = budget.allocated - budget.spent;
-                  const wouldOverspend = req.amount > remaining;
-                  const usageAfter = Math.round(((budget.spent + req.amount) / budget.allocated) * 100);
-                  const usageBefore = Math.round((budget.spent / budget.allocated) * 100);
+                  {/* Budget Overspend Warning */}
+                  {req.type === "expense" && req.category && (() => {
+                    const budget = budgetData.find((b) => b.name.toLowerCase() === (req.category || "").toLowerCase());
+                    if (!budget) return null;
+                    const remaining = budget.allocated - budget.spent;
+                    const wouldOverspend = req.amount > remaining;
+                    const usageAfter = Math.round(((budget.spent + req.amount) / budget.allocated) * 100);
+                    const usageBefore = Math.round((budget.spent / budget.allocated) * 100);
 
-                  if (wouldOverspend) {
-                    return (
-                      <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-                        <div className="flex items-start gap-2">
-                          <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
-                          <div>
-                            <p className="text-sm font-semibold text-red-700">Budget Overspend Warning</p>
-                            <p className="text-xs text-red-600 mt-1">
-                              Approving this will exceed the <strong>"{budget.name}"</strong> budget.
-                              Currently ₱{Math.round(budget.spent).toLocaleString()} of ₱{Math.round(budget.allocated).toLocaleString()} used ({usageBefore}%).
-                              After approval: <strong>₱{Math.round(budget.spent + req.amount).toLocaleString()} ({usageAfter}%)</strong> — over by ₱{Math.round(req.amount - remaining).toLocaleString()}.
-                            </p>
-                            <div className="mt-2 w-full bg-red-200 rounded-full h-2 overflow-hidden">
-                              <div className="h-full rounded-full bg-red-500 transition-all" style={{ width: `${Math.min(usageAfter, 100)}%` }} />
+                    if (wouldOverspend) {
+                      return (
+                        <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                          <div className="flex items-start gap-2">
+                            <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5 shrink-0" />
+                            <div>
+                              <p className="text-sm font-semibold text-red-700">Budget Overspend Warning</p>
+                              <p className="text-xs text-red-600 mt-1">
+                                Approving this will exceed the <strong>&quot;{budget.name}&quot;</strong> budget.
+                                Currently ₱{Math.round(budget.spent).toLocaleString()} of ₱{Math.round(budget.allocated).toLocaleString()} used ({usageBefore}%).
+                                After approval: <strong>₱{Math.round(budget.spent + req.amount).toLocaleString()} ({usageAfter}%)</strong> — over by ₱{Math.round(req.amount - remaining).toLocaleString()}.
+                              </p>
+                              <div className="mt-2 w-full bg-red-200 rounded-full h-2 overflow-hidden">
+                                <div className="h-full rounded-full bg-red-500 transition-all" style={{ width: `${Math.min(usageAfter, 100)}%` }} />
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  } else if (usageAfter >= 80) {
-                    return (
-                      <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                        <div className="flex items-start gap-2">
-                          <TrendingDown className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
-                          <div>
-                            <p className="text-sm font-semibold text-amber-700">Budget Running Low</p>
-                            <p className="text-xs text-amber-600 mt-1">
-                              After approval, <strong>"{budget.name}"</strong> will be at {usageAfter}% utilization.
-                              Remaining: ₱{Math.round(remaining - req.amount).toLocaleString()} of ₱{Math.round(budget.allocated).toLocaleString()}.
-                            </p>
-                            <div className="mt-2 w-full bg-amber-200 rounded-full h-2 overflow-hidden">
-                              <div className="h-full rounded-full bg-amber-500 transition-all" style={{ width: `${Math.min(usageAfter, 100)}%` }} />
+                      );
+                    } else if (usageAfter >= 80) {
+                      return (
+                        <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                          <div className="flex items-start gap-2">
+                            <TrendingDown className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                            <div>
+                              <p className="text-sm font-semibold text-amber-700">Budget Running Low</p>
+                              <p className="text-xs text-amber-600 mt-1">
+                                After approval, <strong>&quot;{budget.name}&quot;</strong> will be at {usageAfter}% utilization.
+                                Remaining: ₱{Math.round(remaining - req.amount).toLocaleString()} of ₱{Math.round(budget.allocated).toLocaleString()}.
+                              </p>
+                              <div className="mt-2 w-full bg-amber-200 rounded-full h-2 overflow-hidden">
+                                <div className="h-full rounded-full bg-amber-500 transition-all" style={{ width: `${Math.min(usageAfter, 100)}%` }} />
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  }
-                  return null;
-                })()}
+                      );
+                    }
+                    return null;
+                  })()}
 
-                {/* Receipt Verification Checkbox */}
-                <label className="mt-4 flex items-center gap-3 p-3 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors select-none">
-                  <input
-                    type="checkbox"
-                    checked={verifiedReceipts[req._id] || false}
-                    onChange={(e) => setVerifiedReceipts(prev => ({ ...prev, [req._id]: e.target.checked }))}
-                    className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary accent-[#6B55D9]"
-                  />
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">I have verified the attached receipt/document</p>
-                    <p className="text-[10px] text-gray-400">Required before approving this transaction</p>
-                  </div>
-                  {req.documentUrl && (
-                    <a
-                      href={req.documentUrl.startsWith("http") ? req.documentUrl : `${process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000"}${req.documentUrl}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="ml-auto flex items-center gap-1 px-3 py-1.5 bg-white border border-gray-200 rounded-md text-xs font-medium text-primary hover:bg-gray-50 transition-colors"
+                  {/* Receipt Verification Checkbox */}
+                  <label className="mt-4 flex items-center gap-3 p-3 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors select-none">
+                    <input
+                      type="checkbox"
+                      checked={verifiedReceipts[req._id] || false}
+                      onChange={(e) => setVerifiedReceipts((prev) => ({ ...prev, [req._id]: e.target.checked }))}
+                      className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary accent-[#6B55D9]"
+                    />
+                    <div>
+                      <p className="text-sm font-medium text-gray-700">I have verified the attached receipt/document</p>
+                      <p className="text-[10px] text-gray-400">Required before approving this transaction</p>
+                    </div>
+                    {req.documentUrl && (
+                      <a
+                        href={req.documentUrl.startsWith("http") ? req.documentUrl : `${process.env.NEXT_PUBLIC_BACKEND_URL || "http://127.0.0.1:5001"}${req.documentUrl}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="ml-auto flex items-center gap-1 px-3 py-1.5 bg-white border border-gray-200 rounded-md text-xs font-medium text-primary hover:bg-gray-50 transition-colors"
+                      >
+                        View Receipt
+                      </a>
+                    )}
+                  </label>
+                </div>
+
+                <div className="flex flex-col items-end gap-3 w-full md:w-auto">
+                  <div className="text-2xl font-bold text-gray-800">₱{Math.round(req.amount).toLocaleString()}</div>
+                  <div className="flex w-full gap-2">
+                    <button
+                      onClick={() => handleReject(req)}
+                      disabled={actionLoading === req._id}
+                      className="flex-1 md:flex-none btn-danger py-2 px-4 whitespace-nowrap disabled:opacity-50"
                     >
-                      View Receipt
-                    </a>
+                      {actionLoading === req._id ? "Processing..." : (
+                        <span className="flex items-center gap-2"><XCircle className="w-4 h-4" /> Reject</span>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => handleApprove(req)}
+                      disabled={actionLoading === req._id || !verifiedReceipts[req._id]}
+                      className="flex-1 md:flex-none btn-primary py-2 px-4 whitespace-nowrap disabled:opacity-50"
+                    >
+                      {actionLoading === req._id ? "Processing..." : (
+                        <span className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4" /> Approve</span>
+                      )}
+                    </button>
+                  </div>
+                  {!verifiedReceipts[req._id] && (
+                    <p className="text-[10px] text-amber-600 w-full text-center mt-1">✓ Verify receipt first</p>
                   )}
-                </label>
-              </div>
-
-              <div className="flex flex-col items-end gap-3 w-full md:w-auto">
-                <div className="text-2xl font-bold text-gray-800">₱{Math.round(req.amount).toLocaleString()}</div>
-                <div className="flex w-full gap-2">
-                  <button
-                    onClick={() => handleReject(req)}
-                    disabled={actionLoading === req._id}
-                    className="flex-1 md:flex-none btn-danger py-2 px-4 whitespace-nowrap disabled:opacity-50"
-                  >
-                    {actionLoading === req._id ? "Processing..." : (
-                      <span className="flex items-center gap-2"><XCircle className="w-4 h-4" /> Reject</span>
-                    )}
-                  </button>
-                  <button
-                    onClick={() => handleApprove(req)}
-                    disabled={actionLoading === req._id || !verifiedReceipts[req._id]}
-                    className="flex-1 md:flex-none btn-primary py-2 px-4 whitespace-nowrap disabled:opacity-50"
-                  >
-                    {actionLoading === req._id ? "Processing..." : (
-                      <span className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4" /> Approve</span>
-                    )}
-                  </button>
                 </div>
-                {!verifiedReceipts[req._id] && (
-                  <p className="text-[10px] text-amber-600 w-full text-center mt-1">✓ Verify receipt first</p>
-                )}
               </div>
+            ))
+          ) : (
+            <div className="text-center py-20 glass rounded-2xl border border-dashed border-primary/20 bg-white/40 flex flex-col items-center justify-center">
+              <div className="w-20 h-20 bg-gradient-to-br from-green-100 to-green-50 rounded-full flex items-center justify-center mb-5 shadow-sm border border-green-200/50">
+                <CheckCircle2 className="w-10 h-10 text-green-500" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-800 mb-2">You&apos;re all caught up!</h3>
+              <p className="text-sm text-gray-500 max-w-sm mx-auto">
+                There are no pending high-value transactions requiring your approval at this time.
+              </p>
             </div>
-          ))
-        ) : (
-          <div className="text-center py-20 glass rounded-2xl border border-dashed border-primary/20 bg-white/40 flex flex-col items-center justify-center">
-            <div className="w-20 h-20 bg-gradient-to-br from-green-100 to-green-50 rounded-full flex items-center justify-center mb-5 shadow-sm border border-green-200/50">
-              <CheckCircle2 className="w-10 h-10 text-green-500" />
-            </div>
-            <h3 className="text-xl font-bold text-gray-800 mb-2">You're all caught up!</h3>
-            <p className="text-sm text-gray-500 max-w-sm mx-auto">
-              There are no pending high-value transactions requiring your approval at this time.
-            </p>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
       )}
     </div>
   );

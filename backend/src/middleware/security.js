@@ -14,10 +14,6 @@ const nonceRateLimiter = rateLimit({
   message: "Too many nonce requests. Please try again later.",
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => {
-    // Log rate limit hits for security monitoring
-    return false;
-  },
 });
 
 // Strict rate limit for signature verification (10 attempts per minute per IP)
@@ -38,71 +34,132 @@ const generalRateLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// Strict rate limit for private key export (3 requests per 15 minutes per user/IP)
+const keyExportRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 3,
+  message: "Too many key export requests. Please try again in 15 minutes.",
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 /**
- * ── CSRF Protection ──
+ * ── Stateless Cryptographic CSRF Protection (Horizontally Scalable) ──
  * 
- * Generate and validate CSRF tokens to prevent cross-site request forgery
+ * Generates and validates HMAC-SHA256 signed stateless CSRF tokens.
+ * Works seamlessly across multi-instance clusters, load balancers, and serverless runtimes
+ * without in-memory state, shared Redis dependency, or memory leaks.
  */
 
-// Store CSRF tokens in memory (in production, use Redis or database)
-// Format: { token: timestamp }
-const csrfTokenStore = new Map();
+// ── CSRF Signing Key ──────────────────────────────────────────────────────────
+// Fail fast at startup if the required secret is not configured.
+// A hardcoded fallback would make CSRF tokens universally forgeable.
+const _csrfSecret = process.env.CSRF_SECRET;
+if (!_csrfSecret) {
+  throw new Error(
+    "FATAL: CSRF_SECRET environment variable is not set. " +
+    "Generate one with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\" " +
+    "and add it to your .env file."
+  );
+}
+if (_csrfSecret.length < 32) {
+  throw new Error(
+    "FATAL: CSRF_SECRET is too short. It must be at least 32 characters. " +
+    "Generate a secure one with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\""
+  );
+}
 
-// Token expiry: 1 hour
+function getCsrfSigningKey() {
+  // Return the validated secret. Never log or expose it.
+  return _csrfSecret;
+}
+
+// Token expiry: 1 hour (3600000 ms)
 const CSRF_TOKEN_EXPIRY = 60 * 60 * 1000;
 
 /**
- * Generate a CSRF token
- * Should be called when user requests the form/page
+ * Generate a cryptographically secure, stateless, HMAC-signed CSRF token
  */
 function generateCSRFToken() {
-  const token = crypto.randomBytes(32).toString("hex");
-  csrfTokenStore.set(token, Date.now());
+  const nonce = crypto.randomBytes(16).toString("hex");
+  const timestamp = Date.now();
+  const payload = JSON.stringify({ n: nonce, t: timestamp });
+  const encodedPayload = Buffer.from(payload).toString("base64url");
   
-  // Clean up expired tokens every 10 minutes
-  if (csrfTokenStore.size > 10000) {
-    const now = Date.now();
-    for (const [key, timestamp] of csrfTokenStore.entries()) {
-      if (now - timestamp > CSRF_TOKEN_EXPIRY) {
-        csrfTokenStore.delete(key);
-      }
-    }
-  }
-  
-  return token;
+  const signature = crypto
+    .createHmac("sha256", getCsrfSigningKey())
+    .update(encodedPayload)
+    .digest("hex");
+
+  return `${encodedPayload}.${signature}`;
 }
 
 /**
- * Validate CSRF token
+ * Validate a stateless CSRF token using constant-time signature verification and timestamp check
  */
 function validateCSRFToken(token) {
-  if (!token || !csrfTokenStore.has(token)) {
+  if (!token || typeof token !== "string") {
     return false;
   }
 
-  const timestamp = csrfTokenStore.get(token);
-  const isValid = Date.now() - timestamp < CSRF_TOKEN_EXPIRY;
-
-  // NOTE: Token is NOT deleted after use — it remains valid until expiry (1 hour).
-  // This prevents BUG-5 where the second form submission in a session always
-  // fails 403 because the token was already consumed on the first request.
-  if (!isValid) {
-    csrfTokenStore.delete(token); // Only clean up if expired
+  const parts = token.split(".");
+  if (parts.length !== 2) {
+    return false;
   }
 
-  return isValid;
+  const [encodedPayload, providedSignature] = parts;
+  if (!encodedPayload || !providedSignature) {
+    return false;
+  }
+
+  // 1. Recompute and verify HMAC signature in constant time
+  const expectedSignature = crypto
+    .createHmac("sha256", getCsrfSigningKey())
+    .update(encodedPayload)
+    .digest("hex");
+
+  const providedBuf = Buffer.from(providedSignature, "hex");
+  const expectedBuf = Buffer.from(expectedSignature, "hex");
+
+  if (providedBuf.length !== expectedBuf.length) {
+    return false;
+  }
+
+  if (!crypto.timingSafeEqual(providedBuf, expectedBuf)) {
+    return false;
+  }
+
+  // 2. Decode payload and check expiration
+  try {
+    const payloadStr = Buffer.from(encodedPayload, "base64url").toString("utf8");
+    const payload = JSON.parse(payloadStr);
+
+    if (!payload.t || typeof payload.t !== "number") {
+      return false;
+    }
+
+    const now = Date.now();
+    // Reject tokens from the future (> 60s clock skew) or older than CSRF_TOKEN_EXPIRY
+    if (payload.t > now + 60000 || now - payload.t > CSRF_TOKEN_EXPIRY) {
+      return false;
+    }
+
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
- * Middleware to validate CSRF token for POST/PUT/DELETE requests
+ * Middleware to validate CSRF token for state-changing HTTP requests (POST, PUT, PATCH, DELETE)
  */
 function csrfProtection(req, res, next) {
-  // Skip CSRF check for GET, HEAD, and OPTIONS requests
+  // Skip CSRF check for safe HTTP methods (GET, HEAD, OPTIONS)
   if (["GET", "HEAD", "OPTIONS"].includes(req.method)) {
     return next();
   }
 
-  // Skip CSRF check for auth endpoints (they use signature verification instead)
+  // Skip CSRF check for auth endpoints (protected by wallet/OAuth cryptographic signatures)
   if (req.path.includes("/auth")) {
     return next();
   }
@@ -122,12 +179,15 @@ function csrfProtection(req, res, next) {
     });
   }
 
+  // Issue a fresh rotated token in the response header for the client
+  const newToken = generateCSRFToken();
+  res.set("X-CSRF-Token", newToken);
+
   next();
 }
 
 /**
- * Endpoint to retrieve CSRF token
- * Frontend should call this before submitting forms
+ * Endpoint handler to issue a fresh CSRF token
  */
 function csrfTokenEndpoint(req, res) {
   const token = generateCSRFToken();
@@ -138,6 +198,7 @@ module.exports = {
   nonceRateLimiter,
   verifyRateLimiter,
   generalRateLimiter,
+  keyExportRateLimiter,
   csrfProtection,
   csrfTokenEndpoint,
   generateCSRFToken,

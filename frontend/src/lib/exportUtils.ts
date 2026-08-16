@@ -1,12 +1,14 @@
 import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import autoTable, { RowInput } from "jspdf-autotable";
 
-export const exportToCSV = (headers: string[], data: any[][], filename: string) => {
+export type ExportCellValue = string | number | boolean | null | undefined;
+
+export const exportToCSV = (headers: string[], data: ExportCellValue[][], filename: string) => {
   const csvContent = [
     headers.join(","),
-    ...data.map(row => 
-      row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(",")
-    )
+    ...data.map((row) =>
+      row.map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(",")
+    ),
   ].join("\n");
 
   const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
@@ -18,9 +20,10 @@ export const exportToCSV = (headers: string[], data: any[][], filename: string) 
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 };
 
-export const exportToPDF = (headers: string[], data: any[][], title: string, filename: string) => {
+export const exportToPDF = (headers: string[], data: RowInput[], title: string, filename: string) => {
   const doc = new jsPDF();
   
   // Title

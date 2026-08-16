@@ -1,17 +1,49 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from "react";
+import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { linkWallet, clearSession, getStoredUser, isMetaMaskInstalled } from "@/lib/wallet";
 import api from "@/lib/api";
 
-interface User {
+export interface UserOrgRef {
+  _id?: string;
+  id?: string;
+  name?: string;
+  logoUrl?: string;
+}
+
+export interface UserMembership {
+  organization?: string | UserOrgRef;
+  roleLevel: number;
+  roleLabel?: string;
+  isActive?: boolean;
+  hasSBT?: boolean;
+  sbtTokenId?: string;
+}
+
+export interface User {
   id: string;
   walletAddress: string;
   displayName?: string;
   avatarUrl?: string;
   linkedWallets?: string[];
   isSuperAdmin: boolean;
-  memberships: any[];
+  memberships: UserMembership[];
+}
+
+export interface AsgardeoAuthState {
+  isAuthenticated?: boolean;
+  isLoading?: boolean;
+}
+
+export interface AsgardeoAuthContext {
+  state?: AsgardeoAuthState;
+  signIn: () => Promise<unknown>;
+  signOut: () => Promise<unknown>;
+  getAccessToken: () => Promise<string | null>;
+}
+
+interface AuthMeResponse {
+  user?: User;
 }
 
 interface AuthContextType {
@@ -51,7 +83,7 @@ async function validateTokenWithBackend(): Promise<boolean> {
   }
 }
 
-export function ChainBudgetAuthProvider({ children, asgardeoAuth }: { children: React.ReactNode, asgardeoAuth: any }) {
+export function ChainBudgetAuthProvider({ children, asgardeoAuth }: { children: React.ReactNode; asgardeoAuth?: AsgardeoAuthContext | null }) {
   const { state: asgardeoState, signIn, signOut, getAccessToken } = asgardeoAuth || {};
   
   const [user, setUser] = useState<User | null>(null);
@@ -70,13 +102,15 @@ export function ChainBudgetAuthProvider({ children, asgardeoAuth }: { children: 
 
   // Restore and validate session on mount
   useEffect(() => {
+    let isCancelled = false;
+
     const restoreSession = async () => {
       try {
         const stored = getStoredUser();
         if (stored) {
           // Validate token is still valid
           const isValid = await validateTokenWithBackend();
-          if (isValid) {
+          if (isValid && !isCancelled) {
             setUser(stored);
             setWalletAddress(stored.walletAddress);
             setIsConnected(true);
@@ -91,9 +125,11 @@ export function ChainBudgetAuthProvider({ children, asgardeoAuth }: { children: 
             } else if (stored.memberships?.length > 0) {
               const firstOrg = stored.memberships[0].organization;
               const orgId = typeof firstOrg === "string" ? firstOrg : firstOrg?._id || firstOrg?.id;
-              setActiveOrgIdState(orgId);
+              if (orgId) {
+                setActiveOrgIdState(orgId);
+              }
             }
-          } else {
+          } else if (!isCancelled) {
             // Token expired, clear session
             clearSession();
             setUser(null);
@@ -103,44 +139,51 @@ export function ChainBudgetAuthProvider({ children, asgardeoAuth }: { children: 
             if (typeof window !== "undefined") localStorage.removeItem("cb_active_org");
           }
         }
-      } catch (err) {
+      } catch (err: unknown) {
         console.error("Session restoration error:", err);
         clearSession();
       } finally {
-        setIsLoading(false);
+        if (!isCancelled) {
+          setIsLoading(false);
+        }
       }
     };
 
-    restoreSession();
+    void restoreSession();
+
+    return () => {
+      isCancelled = true;
+    };
   }, []);
 
   const login = useCallback(async () => {
     try {
-      await signIn();
-    } catch (err) {
+      if (signIn) {
+        await signIn();
+      }
+    } catch (err: unknown) {
       console.error("Asgardeo sign in error:", err);
-      console.error("Error stringified:", JSON.stringify(err, Object.getOwnPropertyNames(err)));
     }
   }, [signIn]);
 
   const register = useCallback(async () => {
     try {
-      // In Asgardeo, sign-in also handles registration if configured, 
-      // or we can pass a prompt parameter, but standard signIn works for both.
-      await signIn();
-    } catch (err) {
+      if (signIn) {
+        await signIn();
+      }
+    } catch (err: unknown) {
       console.error("Asgardeo register error:", err);
-      console.error("Error stringified:", JSON.stringify(err, Object.getOwnPropertyNames(err)));
     }
   }, [signIn]);
 
   // Handle successful Asgardeo auth and check/link MetaMask
   useEffect(() => {
+    let isCancelled = false;
+
     const handleAuth = async () => {
-      if (asgardeoState.isAuthenticated) {
+      if (asgardeoState?.isAuthenticated) {
         try {
-          const token = await getAccessToken();
-          console.log("Raw Token from Asgardeo:", token);
+          const token = getAccessToken ? await getAccessToken() : null;
           if (token) {
             localStorage.setItem("cb_token", token);
           } else {
@@ -148,53 +191,63 @@ export function ChainBudgetAuthProvider({ children, asgardeoAuth }: { children: 
           }
           
           // Fetch user profile from backend (backend validates Asgardeo token)
-          // If the user doesn't have a linked wallet, the backend might return a special status
-          const res = await api.get("/auth/me");
+          const res = await api.get<AuthMeResponse>("/auth/me", {
+            headers: token ? { Authorization: `Bearer ${token}` } : undefined
+          });
           
-          if (res.data.user) {
-            setUser(res.data.user);
-            setWalletAddress(res.data.user.walletAddress);
-            setIsConnected(!!res.data.user.walletAddress);
+          if (!isCancelled && res.data.user) {
+            const authUser = res.data.user;
+            setUser(authUser);
+            setWalletAddress(authUser.walletAddress);
+            setIsConnected(Boolean(authUser.walletAddress));
             
             // Set active org
-            if (res.data.user.memberships?.length > 0) {
-              const firstOrg = res.data.user.memberships[0].organization;
+            if (authUser.memberships?.length > 0) {
+              const firstOrg = authUser.memberships[0].organization;
               const orgId = typeof firstOrg === "string" ? firstOrg : firstOrg?._id || firstOrg?.id;
-              setActiveOrgIdState(localStorage.getItem("cb_active_org") || orgId);
+              setActiveOrgIdState(localStorage.getItem("cb_active_org") || orgId || null);
             }
           }
-        } catch (err: any) {
+        } catch (err: unknown) {
           console.error("Backend sync failed:", err);
-          // If 404, user needs to link wallet. We can set isConnected = false but Asgardeo is true.
         } finally {
-          setIsLoading(false);
+          if (!isCancelled) {
+            setIsLoading(false);
+          }
         }
-      } else if (!asgardeoState.isLoading) {
+      } else if (!asgardeoState?.isLoading && !isCancelled) {
         setIsLoading(false);
       }
     };
     
-    if (!asgardeoState.isLoading) {
-      handleAuth();
+    if (!asgardeoState?.isLoading) {
+      void handleAuth();
     }
-  }, [asgardeoState.isAuthenticated, asgardeoState.isLoading, getAccessToken]);
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [asgardeoState?.isAuthenticated, asgardeoState?.isLoading, getAccessToken]);
 
   const linkMetaMask = useCallback(async () => {
     try {
       if (!isMetaMaskInstalled()) throw new Error("MetaMask not installed");
-      const { user } = await linkWallet();
+      const { user: linkedUser } = await linkWallet();
       
-      setUser(user);
-      setWalletAddress(user.walletAddress);
+      setUser(linkedUser);
+      setWalletAddress(linkedUser.walletAddress);
       setIsConnected(true);
-    } catch (err: any) {
-      setError(err.message || "Failed to link MetaMask");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to link MetaMask";
+      setError(message);
       throw err;
     }
   }, []);
 
   const logout = useCallback(() => {
-    signOut();
+    if (signOut) {
+      void signOut();
+    }
     clearSession();
     setUser(null);
     setWalletAddress(null);
@@ -208,14 +261,16 @@ export function ChainBudgetAuthProvider({ children, asgardeoAuth }: { children: 
 
   const refreshUser = useCallback(async () => {
     try {
-      const res = await api.get("/users/me");
-      if (res.data) {
-        setUser(res.data);
+      const res = await api.get<{ user?: User } | User>("/auth/me");
+      const data = res.data;
+      const userData = "user" in data && data.user ? data.user : (data as User);
+      if (userData) {
+        setUser(userData);
         if (typeof window !== "undefined") {
-          localStorage.setItem("cb_user", JSON.stringify(res.data));
+          localStorage.setItem("cb_user", JSON.stringify(userData));
         }
       }
-    } catch (err) {
+    } catch (err: unknown) {
       console.error("Failed to refresh user:", err);
     }
   }, []);

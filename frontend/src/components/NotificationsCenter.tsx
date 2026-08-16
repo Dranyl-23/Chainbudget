@@ -1,11 +1,12 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Bell, AlertCircle, CheckCircle2, Link as LinkIcon, X } from "lucide-react";
+import { Bell, AlertCircle, CheckCircle2, Link as LinkIcon } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { io, Socket } from "socket.io-client";
 import api from "@/lib/api";
 
+// ── Types ────────────────────────────────────────────────────────────────────
 interface NotificationItem {
   id: string;
   title: string;
@@ -15,12 +16,28 @@ interface NotificationItem {
   isRead: boolean;
 }
 
+interface NewNotificationPayload {
+  id?: string;
+  _id?: string;
+  title: string;
+  message: string;
+  type?: "urgent" | "blockchain" | "system" | "info";
+  timestamp?: string;
+  createdAt?: string;
+  orgId?: string;
+  organizationId?: string;
+}
+
+interface NotificationsResponse {
+  notifications?: NotificationItem[];
+}
+
 export default function NotificationsCenter() {
   const { activeOrgId, isConnected } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const [socket, setSocket] = useState<Socket | null>(null);
+  const socketRef = useRef<Socket | null>(null);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -39,49 +56,57 @@ export default function NotificationsCenter() {
   useEffect(() => {
     if (!isConnected || !activeOrgId) return;
 
+    let isCancelled = false;
+
     const fetchNotifications = async () => {
       try {
-        const res = await api.get(`/notifications?orgId=${activeOrgId}`);
-        if (res.data.notifications) {
+        const res = await api.get<NotificationsResponse>(`/notifications?orgId=${activeOrgId}`);
+        if (!isCancelled && res.data.notifications) {
           setNotifications(res.data.notifications);
         }
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Failed to fetch notifications:", error);
       }
     };
-    fetchNotifications();
+
+    void fetchNotifications();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [isConnected, activeOrgId]);
 
-  // Connect to Socket.IO and listen for events
+  // Connect to Socket.IO and listen for real-time events
   useEffect(() => {
     if (!isConnected || !activeOrgId) return;
 
-    const backendUrl = process.env.NEXT_PUBLIC_API_URL 
-      ? process.env.NEXT_PUBLIC_API_URL.replace("/api", "") 
-      : "http://localhost:5000";
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL?.replace("/api", "") || "http://127.0.0.1:5001";
+    const socket = io(backendUrl);
+    socketRef.current = socket;
 
-    const newSocket = io(backendUrl);
-    setSocket(newSocket);
-
-    newSocket.on("new_notification", (data: any) => {
+    const handleNewNotification = (data: NewNotificationPayload) => {
+      const targetOrg = data.orgId || data.organizationId;
       // Only process notifications for the active organization
-      if (data.orgId === activeOrgId) {
-        setNotifications((prev) => [
-          {
-            id: data.id || Math.random().toString(),
-            title: data.title,
-            message: data.message,
-            type: data.type || "info",
-            timestamp: data.timestamp || new Date().toISOString(),
-            isRead: false,
-          },
-          ...prev,
-        ]);
+      if (!targetOrg || targetOrg === activeOrgId) {
+        const newNotif: NotificationItem = {
+          id: data.id || data._id || String(Date.now()),
+          title: data.title,
+          message: data.message,
+          type: data.type || "info",
+          timestamp: data.timestamp || data.createdAt || new Date().toISOString(),
+          isRead: false,
+        };
+
+        setNotifications((prev) => [newNotif, ...prev]);
       }
-    });
+    };
+
+    socket.on("new_notification", handleNewNotification);
 
     return () => {
-      newSocket.disconnect();
+      socket.off("new_notification", handleNewNotification);
+      socket.disconnect();
+      socketRef.current = null;
     };
   }, [isConnected, activeOrgId]);
 
@@ -91,8 +116,8 @@ export default function NotificationsCenter() {
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
     try {
       await api.post("/notifications/read-all", { orgId: activeOrgId });
-    } catch (err) {
-      console.error(err);
+    } catch (err: unknown) {
+      console.error("Failed to mark all as read:", err);
     }
   };
 
@@ -119,6 +144,7 @@ export default function NotificationsCenter() {
         className={`relative p-2 rounded-full transition-all duration-300 ${
           isOpen ? "bg-white/10" : "hover:bg-white/5"
         }`}
+        aria-label="Notifications"
       >
         <Bell className={`w-5 h-5 ${unreadCount > 0 ? "text-cyan-400" : "text-gray-400"} transition-colors`} />
         {unreadCount > 0 && (
@@ -166,16 +192,16 @@ export default function NotificationsCenter() {
                     }`}
                     onClick={async () => {
                       if (!notif.isRead) {
-                        setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, isRead: true } : n));
+                        setNotifications((prev) => prev.map((n) => (n.id === notif.id ? { ...n, isRead: true } : n)));
                         try {
                           await api.post(`/notifications/${notif.id}/read`);
-                        } catch (err) {
-                          console.error(err);
+                        } catch (err: unknown) {
+                          console.error("Failed to mark notification as read:", err);
                         }
                       }
                     }}
                   >
-                    <div className="flex-shrink-0 mt-0.5">
+                    <div className="shrink-0 mt-0.5">
                       {getIconForType(notif.type)}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -186,11 +212,11 @@ export default function NotificationsCenter() {
                         {notif.message}
                       </p>
                       <p className="text-[10px] text-gray-600 mt-1.5 font-mono">
-                        {new Date(notif.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {new Date(notif.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                       </p>
                     </div>
                     {!notif.isRead && (
-                      <div className="flex-shrink-0 flex items-center justify-center w-2">
+                      <div className="shrink-0 flex items-center justify-center w-2">
                         <div className="w-1.5 h-1.5 bg-cyan-400 rounded-full" />
                       </div>
                     )}

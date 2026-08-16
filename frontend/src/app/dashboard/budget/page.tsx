@@ -6,12 +6,33 @@ import { PiggyBank, TrendingUp, TrendingDown, Plus, X } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import api from "@/lib/api";
 import DashboardSkeleton from "@/components/DashboardSkeleton";
+import axios from "axios";
 
+// ── Types ────────────────────────────────────────────────────────────────────
 interface BudgetCategory {
   _id: string;
   name: string;
   allocated: number;
   spent: number;
+  color: string;
+  organization?: string;
+}
+
+interface UserOrgRef {
+  _id?: string;
+  name?: string;
+}
+
+interface UserMembership {
+  organization?: string | UserOrgRef;
+  roleLevel: number;
+  roleLabel?: string;
+  isActive?: boolean;
+}
+
+interface AddCategoryFormData {
+  name: string;
+  allocated: string;
   color: string;
 }
 
@@ -20,16 +41,22 @@ export default function BudgetPage() {
   const [budgetCategories, setBudgetCategories] = useState<BudgetCategory[]>(() => {
     if (typeof window !== "undefined") {
       const cached = sessionStorage.getItem("cb_cache_budgets");
-      if (cached) return JSON.parse(cached);
+      if (cached) {
+        try {
+          return JSON.parse(cached) as BudgetCategory[];
+        } catch {
+          return [];
+        }
+      }
     }
     return [];
   });
-  const [loading, setLoading] = useState(budgetCategories.length === 0);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<AddCategoryFormData>({
     name: "",
     allocated: "",
     color: "#6B55D9"
@@ -40,36 +67,51 @@ export default function BudgetPage() {
     "#E05C5C", "#F09292", "#10B981", "#34D399", "#F59E0B"
   ];
 
-  const fetchBudgets = async () => {
-    try {
-      
-      if (!activeOrgId) {
-        setLoading(false);
-        return;
-      }
-      const orgId = activeOrgId || "";
-      
-      const res = await api.get("/budget", { params: { orgId } });
-      const data = res.data || [];
-      setBudgetCategories(data);
-      sessionStorage.setItem("cb_cache_budgets", JSON.stringify(data));
-    } catch (err) {
-      console.error("Failed to fetch budgets:", err);
-      setError("Failed to load budgets");
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // ── Single Asynchronous Effect with Cancellation Guard ────────────────────
   useEffect(() => {
-    fetchBudgets();
+    if (!activeOrgId) return;
+
+    let isCancelled = false;
+
+    const loadBudgets = async () => {
+      try {
+        const res = await api.get<BudgetCategory[]>("/budget", {
+          params: { orgId: activeOrgId },
+        });
+        const data = res.data || [];
+        if (!isCancelled) {
+          setBudgetCategories(data);
+          sessionStorage.setItem("cb_cache_budgets", JSON.stringify(data));
+        }
+      } catch (err: unknown) {
+        console.error("Failed to fetch budgets:", err);
+        if (!isCancelled) {
+          let msg = "Failed to load budgets";
+          if (axios.isAxiosError(err)) {
+            msg = err.response?.data?.error || err.message || msg;
+          } else if (err instanceof Error) {
+            msg = err.message;
+          }
+          setError(msg);
+        }
+      } finally {
+        if (!isCancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadBudgets();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [activeOrgId]);
 
-  const handleAddCategory = async (e: React.FormEvent) => {
+  const handleAddCategory = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     
     if (!activeOrgId) return;
-    const orgId = activeOrgId || "";
 
     if (!formData.name.trim() || !formData.allocated || isNaN(Number(formData.allocated))) {
       setError("Please fill out all required fields correctly.");
@@ -79,17 +121,23 @@ export default function BudgetPage() {
     setIsSubmitting(true);
     setError(null);
     try {
-      const res = await api.post("/budget", {
-        organizationId: orgId,
-        name: formData.name,
+      const res = await api.post<BudgetCategory>("/budget", {
+        organizationId: activeOrgId,
+        name: formData.name.trim(),
         allocated: Number(formData.allocated),
         color: formData.color,
       });
       setBudgetCategories((prev) => [...prev, res.data]);
       setShowAddModal(false);
       setFormData({ name: "", allocated: "", color: "#6B55D9" });
-    } catch (err: any) {
-      setError(err.response?.data?.error || "Failed to create budget category.");
+    } catch (err: unknown) {
+      let msg = "Failed to create budget category.";
+      if (axios.isAxiosError(err)) {
+        msg = err.response?.data?.error || err.message || msg;
+      } else if (err instanceof Error) {
+        msg = err.message;
+      }
+      setError(msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -97,6 +145,14 @@ export default function BudgetPage() {
 
   const totalAllocated = budgetCategories.reduce((s, c) => s + c.allocated, 0);
   const totalSpent = budgetCategories.reduce((s, c) => s + c.spent, 0);
+
+  // RBAC: Only Level 1 & 2 or Super Admin can add categories. Level 3 is read-only.
+  const memberships = (user?.memberships || []) as UserMembership[];
+  const userRoleInOrg = memberships.find((m) => {
+    const orgId = typeof m.organization === "string" ? m.organization : m.organization?._id;
+    return orgId === activeOrgId;
+  })?.roleLevel || 4;
+  const canManageBudget = user?.isSuperAdmin || userRoleInOrg <= 2;
 
   if (loading) {
     return <DashboardSkeleton />;
@@ -109,8 +165,7 @@ export default function BudgetPage() {
           <h1 className="text-2xl font-bold mb-1">Budget</h1>
           <p className="text-sm text-gray-500">Manage and monitor your organizational budget allocations.</p>
         </div>
-        {/* RBAC Fix: Only Level 1 & 2 can add categories. Level 3 is read-only. */}
-        {(user?.isSuperAdmin || (user?.memberships?.find((m: any) => m.organization === activeOrgId || m.organization?._id === activeOrgId)?.roleLevel || 4) <= 2) && (
+        {canManageBudget && (
           <button className="btn-primary py-2 w-full sm:w-auto justify-center" onClick={() => { setShowAddModal(true); setError(null); }}>
             <Plus className="w-4 h-4" /> Add Category
           </button>
@@ -179,20 +234,20 @@ export default function BudgetPage() {
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie 
-                        data={budgetCategories.filter(c => c.spent > 0)} 
+                        data={budgetCategories.filter((c) => c.spent > 0)} 
                         cx="50%" cy="50%" innerRadius={60} outerRadius={90}
                         dataKey="spent" nameKey="name" paddingAngle={3}
                       >
-                        {budgetCategories.filter(c => c.spent > 0).map((entry, idx) => (
+                        {budgetCategories.filter((c) => c.spent > 0).map((entry, idx) => (
                           <Cell key={idx} fill={entry.color} />
                         ))}
                       </Pie>
                       <Tooltip
                         contentStyle={{ background: "#F8F6FF", border: "1px solid rgba(107,85,217,0.16)", borderRadius: "8px", color: "#1A1A2E" }}
-                        formatter={(val: any) => `₱${Number(val).toLocaleString()}`}
+                        formatter={(val: unknown) => `₱${Number(val ?? 0).toLocaleString()}`}
                       />
                       <Legend iconType="circle" iconSize={8}
-                        formatter={(value) => <span className="text-xs text-gray-400">{value}</span>}
+                        formatter={(value) => <span className="text-xs text-gray-400">{String(value)}</span>}
                       />
                     </PieChart>
                   </ResponsiveContainer>
@@ -209,7 +264,7 @@ export default function BudgetPage() {
             <div className="lg:col-span-2 glass p-6 rounded-xl">
               <h3 className="text-base font-semibold mb-6">Category Utilization</h3>
               {budgetCategories.length === 0 ? (
-                <div className="text-center text-gray-400 py-12">No budget categories defined. Click "Add Category" to start.</div>
+                <div className="text-center text-gray-400 py-12">No budget categories defined. Click &quot;Add Category&quot; to start.</div>
               ) : (
                 <div className="space-y-5">
                   {budgetCategories.map((cat, i) => {
@@ -257,7 +312,7 @@ export default function BudgetPage() {
           style={{ background: "rgba(26,26,46,0.55)", backdropFilter: "blur(4px)" }}
           onClick={(e) => { if (e.target === e.currentTarget) setShowAddModal(false); }}
         >
-          <div className="bg-[#160B2E] border border-purple-500/30 rounded-2xl p-8 w-full max-w-md shadow-[0_0_40px_rgba(0,0,0,0.8)] animate-fade-in relative z-[60]">
+          <div className="bg-[#160B2E] border border-purple-500/30 rounded-2xl p-8 w-full max-w-md shadow-[0_0_40px_rgba(0,0,0,0.8)] animate-fade-in relative z-60">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold">New Budget Category</h2>
               <button

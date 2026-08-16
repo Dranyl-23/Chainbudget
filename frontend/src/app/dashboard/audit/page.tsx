@@ -6,16 +6,41 @@ import { ShieldAlert, Activity, User, FileText, CheckCircle, XCircle, Download, 
 import api from "@/lib/api";
 import { exportToCSV } from "@/lib/exportUtils";
 import Portal from "@/components/Portal";
+import axios from "axios";
+
+// ── Types ────────────────────────────────────────────────────────────────────
+interface AuditActor {
+  displayName?: string;
+  walletAddress?: string;
+  _id?: string;
+}
 
 interface AuditLog {
   _id: string;
-  actor?: { displayName?: string; walletAddress?: string };
+  actor?: AuditActor;
   action: string;
   targetType: string;
-  details?: string;
+  details?: Record<string, unknown> | string;
   createdAt: string;
   ipAddress?: string;
   blockchainTxHash?: string;
+}
+
+interface AuditResponse {
+  logs?: AuditLog[];
+  total?: number;
+}
+
+interface UserOrgRef {
+  _id?: string;
+  name?: string;
+}
+
+interface MembershipItem {
+  organization?: string | UserOrgRef;
+  roleLevel: number;
+  roleLabel?: string;
+  isActive?: boolean;
 }
 
 export default function AuditPage() {
@@ -23,37 +48,62 @@ export default function AuditPage() {
   const [logs, setLogs] = useState<AuditLog[]>(() => {
     if (typeof window !== "undefined") {
       const cached = sessionStorage.getItem("cb_cache_audit");
-      if (cached) return JSON.parse(cached);
+      if (cached) {
+        try {
+          return JSON.parse(cached) as AuditLog[];
+        } catch {
+          return [];
+        }
+      }
     }
     return [];
   });
   const [loading, setLoading] = useState(logs.length === 0);
   const [error, setError] = useState<string | null>(null);
+  const [isPrintMode, setIsPrintMode] = useState(false);
 
   useEffect(() => {
+    let isCancelled = false;
+
     const fetchLogs = async () => {
       try {
         if (!activeOrgId) {
-          setLoading(false);
+          if (!isCancelled) setLoading(false);
           return;
         }
 
-        const res = await api.get("/audit", {
+        const res = await api.get<AuditResponse>("/audit", {
           params: { orgId: activeOrgId, limit: 100 },
         });
 
         const data = res.data.logs || [];
-        setLogs(data);
-        sessionStorage.setItem("cb_cache_audit", JSON.stringify(data));
-      } catch (err: any) {
+        if (!isCancelled) {
+          setLogs(data);
+          sessionStorage.setItem("cb_cache_audit", JSON.stringify(data));
+        }
+      } catch (err: unknown) {
         console.error("Failed to fetch audit logs:", err);
-        setError(err.response?.data?.error || "Failed to load audit logs");
+        if (!isCancelled) {
+          let msg = "Failed to load audit logs";
+          if (axios.isAxiosError(err)) {
+            msg = err.response?.data?.error || err.message || msg;
+          } else if (err instanceof Error) {
+            msg = err.message;
+          }
+          setError(msg);
+        }
       } finally {
-        setLoading(false);
+        if (!isCancelled) {
+          setLoading(false);
+        }
       }
     };
 
     fetchLogs();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [activeOrgId]);
 
   const getActionIcon = (action: string) => {
@@ -70,52 +120,61 @@ export default function AuditPage() {
     return "bg-cyan-500/10 border-cyan-400/30 text-cyan-300";
   };
 
-  const [isExporting, setIsExporting] = useState(false);
-  const [isPrintMode, setIsPrintMode] = useState(false);
-
-  const handleExport = (format: 'csv' | 'pdf') => {
-    if (format === 'pdf') {
-      setIsExporting(true);
+  const handleExport = (format: "csv" | "pdf") => {
+    if (format === "pdf") {
       setIsPrintMode(true);
       setTimeout(() => {
         window.print();
         setIsPrintMode(false);
-        setIsExporting(false);
       }, 500);
       return;
     }
 
     const headers = ["Timestamp", "Actor", "Wallet Address", "Action", "Details", "Blockchain Tx"];
-    const exportData = logs.map(log => [
+    const exportData = logs.map((log) => [
       new Date(log.createdAt).toLocaleString(),
       log.actor?.displayName || "System",
       log.actor?.walletAddress || "",
       log.action,
-      JSON.stringify(log.details || {}),
-      log.blockchainTxHash || "Off-chain event"
+      typeof log.details === "object" ? JSON.stringify(log.details) : String(log.details || ""),
+      log.blockchainTxHash || "Off-chain event",
     ]);
 
-    exportToCSV(headers, exportData, `Audit_Trail_${new Date().toISOString().split('T')[0]}`);
+    exportToCSV(headers, exportData, `Audit_Trail_${new Date().toISOString().split("T")[0]}`);
   };
 
   // RBAC: Only super admin, Level 1, or Level 2 can view audit logs
-  const membership = user?.memberships?.find((m: any) => m.organization === activeOrgId || m.organization?._id === activeOrgId);
+  const memberships = (user?.memberships || []) as MembershipItem[];
+  const membership = memberships.find((m) => {
+    const orgId = typeof m.organization === "string" ? m.organization : m.organization?._id;
+    return orgId === activeOrgId;
+  });
   const isAuthorized = user?.isSuperAdmin || (membership && membership.roleLevel <= 2);
 
-  const formatDetails = (details: any) => {
+  const formatDetails = (details: unknown) => {
     if (!details) return <span className="text-white/40 italic">No details</span>;
+
+    let parsedDetails: Record<string, unknown> | null = null;
+
     if (typeof details === "string") {
       try {
-        details = JSON.parse(details);
+        const parsed = JSON.parse(details);
+        if (typeof parsed === "object" && parsed !== null) {
+          parsedDetails = parsed as Record<string, unknown>;
+        } else {
+          return <span className="text-white/70">{details}</span>;
+        }
       } catch {
         return <span className="text-white/70">{details}</span>;
       }
+    } else if (typeof details === "object" && details !== null) {
+      parsedDetails = details as Record<string, unknown>;
     }
-    
-    if (typeof details === "object") {
+
+    if (parsedDetails) {
       return (
         <div className="flex flex-wrap gap-1.5 mt-1">
-          {Object.entries(details).map(([key, value]) => {
+          {Object.entries(parsedDetails).map(([key, value]) => {
             const formattedKey = key.replace(/([A-Z])/g, " $1").replace(/^./, (str) => str.toUpperCase());
             let formattedValue = String(value);
             if (key === "amount" && typeof value === "number") {
@@ -133,7 +192,8 @@ export default function AuditPage() {
         </div>
       );
     }
-    return String(details);
+
+    return <span className="text-white/70">{String(details)}</span>;
   };
 
   if (!isAuthorized && !loading) {
@@ -164,10 +224,10 @@ export default function AuditPage() {
           </p>
         </div>
         <div className="flex gap-3">
-          <button onClick={() => handleExport('csv')} className="btn glass border border-white/10 hover:border-cyan-400/50 hover:bg-white/5 text-white text-sm flex items-center gap-2 rounded-xl px-5 py-2.5 font-bold transition-all shadow-[0_0_15px_rgba(255,255,255,0.05)]">
+          <button onClick={() => handleExport("csv")} className="btn glass border border-white/10 hover:border-cyan-400/50 hover:bg-white/5 text-white text-sm flex items-center gap-2 rounded-xl px-5 py-2.5 font-bold transition-all shadow-[0_0_15px_rgba(255,255,255,0.05)]">
             <Download className="w-4 h-4 text-cyan-400" /> Export CSV
           </button>
-          <button onClick={() => handleExport('pdf')} className="btn glass border border-fuchsia-500/50 bg-gradient-to-r from-fuchsia-600/40 to-purple-600/40 hover:from-fuchsia-500/60 hover:to-purple-500/60 text-white text-sm flex items-center gap-2 rounded-xl px-5 py-2.5 font-bold transition-all shadow-[0_0_20px_rgba(217,70,239,0.3)]">
+          <button onClick={() => handleExport("pdf")} className="btn glass border border-fuchsia-500/50 bg-gradient-to-r from-fuchsia-600/40 to-purple-600/40 hover:from-fuchsia-500/60 hover:to-purple-500/60 text-white text-sm flex items-center gap-2 rounded-xl px-5 py-2.5 font-bold transition-all shadow-[0_0_20px_rgba(217,70,239,0.3)]">
             <FileText className="w-4 h-4 text-white" /> Export PDF
           </button>
         </div>
@@ -175,7 +235,7 @@ export default function AuditPage() {
 
       {error && (
         <div className="mb-6 p-4 glass bg-red-500/10 border border-red-500/30 rounded-xl text-sm text-red-400 shadow-[0_0_20px_rgba(248,113,113,0.2)] flex items-center gap-3">
-          <ShieldAlert className="w-5 h-5 flex-shrink-0" />
+          <ShieldAlert className="w-5 h-5 shrink-0" />
           {error}
         </div>
       )}
@@ -219,7 +279,7 @@ export default function AuditPage() {
                       </td>
                       <td className="p-4 align-top">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0 shadow-[inset_0_0_10px_rgba(255,255,255,0.05)]">
+                          <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0 shadow-[inset_0_0_10px_rgba(255,255,255,0.05)]">
                             <User className="w-4 h-4 text-fuchsia-400 drop-shadow-[0_0_8px_rgba(217,70,239,0.8)]" />
                           </div>
                           <div>
@@ -246,12 +306,12 @@ export default function AuditPage() {
                       <td className="p-4 align-top text-right pr-6">
                         {log.blockchainTxHash ? (
                           <div className="flex items-center justify-end gap-2">
-                            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_8px_rgba(34,211,238,0.8)] flex-shrink-0" />
+                            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_8px_rgba(34,211,238,0.8)] shrink-0" />
                             <a 
                               href={`https://amoy.polygonscan.com/tx/${log.blockchainTxHash}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-xs font-mono text-cyan-400 hover:text-cyan-300 hover:underline truncate max-w-[120px] block"
+                              className="text-xs font-mono text-cyan-400 hover:text-cyan-300 hover:underline truncate max-w-30 block"
                             >
                               {log.blockchainTxHash.slice(0, 10)}...
                             </a>
@@ -281,7 +341,7 @@ export default function AuditPage() {
               </div>
               <div className="text-right">
                 <p className="font-bold text-gray-800 uppercase tracking-wider text-xs">Date Generated</p>
-                <p className="text-gray-900 text-lg font-medium">{new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                <p className="text-gray-900 text-lg font-medium">{new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</p>
                 <p className="text-xs text-gray-500 mt-2">Time: {new Date().toLocaleTimeString()}</p>
               </div>
             </div>
@@ -297,7 +357,7 @@ export default function AuditPage() {
                 </tr>
               </thead>
               <tbody className="text-gray-700 divide-y divide-gray-200">
-                {logs.map(log => (
+                {logs.map((log) => (
                   <tr key={log._id}>
                     <td className="py-3 pr-2 align-top">{new Date(log.createdAt).toLocaleString()}</td>
                     <td className="py-3 pr-2 align-top font-medium">
@@ -306,7 +366,7 @@ export default function AuditPage() {
                     </td>
                     <td className="py-3 pr-2 align-top capitalize font-bold text-purple-700">{log.action.replace("transaction.", "").replace("user.", "").replace("_", " ")}</td>
                     <td className="py-3 pr-2 align-top text-[9px]">
-                      {typeof log.details === 'object' ? JSON.stringify(log.details) : log.details}
+                      {typeof log.details === "object" ? JSON.stringify(log.details) : log.details}
                     </td>
                     <td className="py-3 align-top font-mono text-[9px] break-all text-purple-600">{log.blockchainTxHash || "Off-chain event"}</td>
                   </tr>

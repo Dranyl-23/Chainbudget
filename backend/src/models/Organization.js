@@ -34,12 +34,16 @@ const OrganizationSchema = new mongoose.Schema(
       default: "none",
     },
     // The amount to be automatically subsidized on approval (in PHP/smallest unit)
-    subsidyAmount: { type: Number, default: 50000 },
+    subsidyAmount: { type: Number, default: 0 },
     isActive: { type: Boolean, default: true },
     isPrivate: { type: Boolean, default: false },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   },
   { timestamps: true }
 );
+
+// Performance indexes for public directories and admin lookups
+OrganizationSchema.index({ isActive: 1, isPrivate: 1, createdAt: -1 });
+OrganizationSchema.index({ createdBy: 1 });
 
 module.exports = mongoose.model("Organization", OrganizationSchema);

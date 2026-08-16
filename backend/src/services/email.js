@@ -1,16 +1,20 @@
 const nodemailer = require("nodemailer");
 
-// Create reusable transporter object using the default SMTP transport
-const createTransporter = () => {
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST || "smtp.gmail.com",
-    port: process.env.SMTP_PORT || 465,
-    secure: true, // true for 465, false for other ports
-    auth: {
-      user: process.env.SMTP_EMAIL, // Admin's gmail address
-      pass: process.env.SMTP_PASSWORD, // Gmail App Password
-    },
-  });
+let transporter = null;
+
+const getTransporter = () => {
+  if (!transporter && process.env.SMTP_EMAIL && process.env.SMTP_PASSWORD) {
+    transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST || "smtp.gmail.com",
+      port: Number(process.env.SMTP_PORT) || 465,
+      secure: true,
+      auth: {
+        user: process.env.SMTP_EMAIL,
+        pass: process.env.SMTP_PASSWORD,
+      },
+    });
+  }
+  return transporter;
 };
 
 /**
@@ -21,26 +25,28 @@ const createTransporter = () => {
  */
 const sendEmail = async (to, subject, html) => {
   try {
-    // If no SMTP configured, just log to console to prevent crashes
+    // If no SMTP configured, log to console to prevent crashes
     if (!process.env.SMTP_EMAIL || !process.env.SMTP_PASSWORD) {
-      console.warn("SMTP credentials not found in .env. Skipping actual email dispatch.");
-      console.log(`[MOCK EMAIL] To: ${to} | Subject: ${subject}`);
+      console.warn("[EMAIL] SMTP credentials not configured. Skipping email dispatch.");
       return false;
     }
 
-    const transporter = createTransporter();
+    const emailTransporter = getTransporter();
+    if (!emailTransporter) {
+      return false;
+    }
     
-    const info = await transporter.sendMail({
+    const info = await emailTransporter.sendMail({
       from: `"ChainBudget DAO" <${process.env.SMTP_EMAIL}>`,
       to,
       subject,
       html,
     });
 
-    console.log("Message sent: %s", info.messageId);
+    console.log("[EMAIL] Notification dispatched: %s", info.messageId);
     return true;
   } catch (error) {
-    console.error("Error sending email: ", error);
+    console.error("[EMAIL] Error sending email: ", error.message);
     return false;
   }
 };

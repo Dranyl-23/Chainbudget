@@ -1,17 +1,36 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import Image from "next/image";
 import { Download, X, Share } from "lucide-react";
 
+// ── Types ────────────────────────────────────────────────────────────────────
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{
+    outcome: "accepted" | "dismissed";
+    platform: string;
+  }>;
+}
+
+interface NavigatorWithStandalone extends Navigator {
+  standalone?: boolean;
+}
+
 export default function InstallPrompt() {
-  const [isReady, setIsReady] = useState(false);
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  const [isIOS, setIsIOS] = useState(false);
   const [showPrompt, setShowPrompt] = useState(false);
+  const deferredPromptRef = useRef<BeforeInstallPromptEvent | null>(null);
+
+  const isIOS = typeof window !== "undefined"
+    ? /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase())
+    : false;
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+
     // Check if already installed
-    const isStandalone = window.matchMedia("(display-mode: standalone)").matches || (window.navigator as any).standalone;
+    const nav = window.navigator as NavigatorWithStandalone;
+    const isStandalone = window.matchMedia("(display-mode: standalone)").matches || Boolean(nav.standalone);
     
     // Check if dismissed before
     const isDismissed = localStorage.getItem("pwa_prompt_dismissed");
@@ -20,63 +39,67 @@ export default function InstallPrompt() {
       return;
     }
 
-    // Detect iOS
-    const userAgent = window.navigator.userAgent.toLowerCase();
-    const isIOSDevice = /iphone|ipad|ipod/.test(userAgent);
-    setIsIOS(isIOSDevice);
+    let timerId: NodeJS.Timeout | null = null;
 
-    if (isIOSDevice) {
-      // iOS doesn't support beforeinstallprompt, just show the custom modal
-      setTimeout(() => setShowPrompt(true), 2000);
+    if (isIOS) {
+      // iOS doesn't support beforeinstallprompt, show custom instruction modal
+      timerId = setTimeout(() => setShowPrompt(true), 2000);
     } else {
       // Listen for Chrome/Android native install prompt
       const handleBeforeInstallPrompt = (e: Event) => {
         e.preventDefault();
-        setDeferredPrompt(e);
-        setTimeout(() => setShowPrompt(true), 2000); // Wait 2s before showing
+        deferredPromptRef.current = e as BeforeInstallPromptEvent;
+        timerId = setTimeout(() => setShowPrompt(true), 2000);
       };
 
       window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
 
       return () => {
+        if (timerId) clearTimeout(timerId);
         window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
       };
     }
-  }, []);
+
+    return () => {
+      if (timerId) clearTimeout(timerId);
+    };
+  }, [isIOS]);
 
   const handleInstall = async () => {
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
+    const promptEvent = deferredPromptRef.current;
+    if (promptEvent) {
+      await promptEvent.prompt();
+      const { outcome } = await promptEvent.userChoice;
       if (outcome === "accepted") {
         setShowPrompt(false);
       }
-      setDeferredPrompt(null);
+      deferredPromptRef.current = null;
     }
   };
 
   const handleDismiss = () => {
     setShowPrompt(false);
-    localStorage.setItem("pwa_prompt_dismissed", "true");
+    if (typeof window !== "undefined") {
+      localStorage.setItem("pwa_prompt_dismissed", "true");
+    }
   };
 
   if (!showPrompt) return null;
 
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] w-[90%] max-w-sm animate-fade-in-up">
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-100 w-[90%] max-w-sm animate-fade-in-up">
       <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-4 relative overflow-hidden">
-        {/* Decorative background removed per user request */}
-        
         <button 
           onClick={handleDismiss}
           className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 transition-colors"
+          aria-label="Dismiss install prompt"
         >
           <X className="w-4 h-4" />
         </button>
 
         <div className="flex items-start gap-4 pr-6">
-          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0 mt-1">
-            <img src="/icon.png" alt="App Icon" className="w-6 h-6 object-contain" />
+          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 mt-1">
+            <Image src="/icon.png" alt="App Icon" width={24} height={24} className="w-6 h-6 object-contain" />
           </div>
           
           <div className="flex-1">

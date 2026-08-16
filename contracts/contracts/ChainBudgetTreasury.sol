@@ -1,20 +1,22 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import "@openzeppelin/contracts/access/Ownable2Step.sol";
+import "@openzeppelin/contracts/utils/Pausable.sol";
 import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /// @title ChainBudgetTreasury
 /// @notice A gasless multi-signature treasury for organizations.
-/// @dev Verifies EIP-712 off-chain signatures to execute on-chain transfers.
-contract ChainBudgetTreasury is EIP712 {
+/// @dev Verifies EIP-712 off-chain signatures to execute on-chain transfers with emergency pause controls.
+contract ChainBudgetTreasury is Ownable2Step, Pausable, EIP712, ReentrancyGuard {
     using ECDSA for bytes32;
 
     // ────────────────────────────────────────────────────────────────────────
     // State
     // ────────────────────────────────────────────────────────────────────────
     
-    address public owner;
     uint256 public requiredApprovals;
     
     mapping(address => bool) public isApprover;
@@ -42,12 +44,12 @@ contract ChainBudgetTreasury is EIP712 {
     // ────────────────────────────────────────────────────────────────────────
     
     constructor(address[] memory _initialApprovers, uint256 _requiredApprovals) 
+        Ownable(msg.sender)
         EIP712("ChainBudget", "1") 
     {
         require(_requiredApprovals > 0, "Treasury: required approvals must be > 0");
         require(_initialApprovers.length >= _requiredApprovals, "Treasury: not enough approvers");
         
-        owner = msg.sender;
         requiredApprovals = _requiredApprovals;
 
         for (uint256 i = 0; i < _initialApprovers.length; i++) {
@@ -55,18 +57,25 @@ contract ChainBudgetTreasury is EIP712 {
         }
     }
 
-    modifier onlyOwner() {
-        require(msg.sender == owner, "Treasury: caller is not owner");
-        _;
-    }
-
     // Accept deposits
-    receive() external payable {
+    receive() external payable whenNotPaused {
         emit VaultDeposited(msg.sender, msg.value);
     }
 
     function getVaultBalance() external view returns (uint256) {
         return address(this).balance;
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
+    // Emergency Controls (Pausable)
+    // ────────────────────────────────────────────────────────────────────────
+
+    function pause() external onlyOwner {
+        _pause();
+    }
+
+    function unpause() external onlyOwner {
+        _unpause();
     }
 
     // ────────────────────────────────────────────────────────────────────────
@@ -83,7 +92,7 @@ contract ChainBudgetTreasury is EIP712 {
         string calldata description,
         address payable to,
         bytes[] calldata signatures
-    ) external {
+    ) external nonReentrant whenNotPaused {
         require(!executedTransactions[txId], "Treasury: Transaction already executed");
         require(signatures.length >= requiredApprovals, "Treasury: Not enough signatures provided");
         require(address(this).balance >= amountWei, "Treasury: Insufficient vault balance");

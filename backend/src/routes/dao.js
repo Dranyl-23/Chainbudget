@@ -118,8 +118,9 @@ router.post("/proposals", authenticate, async (req, res) => {
 
     const io = req.app.get("io");
     if (io) {
-      io.emit("dao_vote_updated", { orgId }); // Use same event to trigger refetch
-      io.emit("new_notification", {
+      // Scope DAO events to the org room — only members of this org should receive them
+      io.to(`org:${orgId}`).emit("dao_vote_updated", { orgId });
+      io.to(`org:${orgId}`).emit("new_notification", {
         orgId,
         id: newNotif._id,
         title: notifTitle,
@@ -152,7 +153,7 @@ router.post("/proposals", authenticate, async (req, res) => {
               <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Proposed By:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">${req.user.displayName}</td></tr>
             </table>
             <p>Please log in to the DAO Governance board to cast your vote.</p>
-            <a href="http://localhost:3000/dashboard/dao" style="display: inline-block; padding: 12px 24px; background-color: #4F46E5; color: white; text-decoration: none; border-radius: 8px; font-weight: bold;">Vote Now</a>
+            <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard/dao" style="display: inline-block; padding: 12px 24px; background-color: #4F46E5; color: white; text-decoration: none; border-radius: 8px; font-weight: bold;">Vote Now</a>
           </div>
           `
         ).catch(console.error);
@@ -218,10 +219,10 @@ router.post("/proposals/:id/vote", authenticate, async (req, res) => {
 
     await newVote.save();
     
-    // Emit real-time socket event
+    // Emit real-time socket event — scoped to the org so only members receive it
     const io = req.app.get("io");
     if (io) {
-      io.emit("dao_vote_updated", { proposalId: proposal._id });
+      io.to(`org:${proposal.organization}`).emit("dao_vote_updated", { proposalId: proposal._id });
     }
     
     // Check if we should auto-pass it based on some threshold

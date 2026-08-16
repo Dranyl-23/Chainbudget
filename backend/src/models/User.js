@@ -9,6 +9,7 @@ const mongoose = require("mongoose");
 
 const UserSchema = new mongoose.Schema(
   {
+    // ── Wallet Identity ───────────────────────────────────────────────────────
     walletAddress: {
       type: String,
       unique: true,
@@ -16,31 +17,34 @@ const UserSchema = new mongoose.Schema(
       lowercase: true,
       trim: true,
     },
-    asgardeoId: {
+    // secp256k1 uncompressed public key — used for signature verification.
+    // The private key is NEVER stored here.
+    publicKey: { type: String, sparse: true, trim: true },
+    // How the wallet was created
+    walletType: {
       type: String,
-      unique: true,
-      sparse: true,
+      enum: ["embedded_bip44", "external_metamask", "external_walletconnect", "asgardeo_generated"],
+      default: "asgardeo_generated",
     },
+    walletVersion: { type: Number, default: 1 },
+
+    // ── Asgardeo (browser-only) ───────────────────────────────────────────────
+    asgardeoId: { type: String, unique: true, sparse: true },
+
+    // ── Profile ───────────────────────────────────────────────────────────────
     displayName: { type: String, trim: true },
     avatarUrl: { type: String },
+    email: { type: String, trim: true, lowercase: true, sparse: true, unique: true },
     linkedWallets: [{ type: String, lowercase: true, trim: true }],
-    email: { type: String, trim: true, lowercase: true },
-    // Platform-level role (super admin or not)
+
+    // ── Platform role ─────────────────────────────────────────────────────────
     isSuperAdmin: { type: Boolean, default: false },
-    // Organization memberships
+
+    // ── Organization memberships ──────────────────────────────────────────────
     memberships: [
       {
-        organization: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: "Organization",
-        },
-        roleLevel: {
-          type: Number,
-          required: true,
-          min: 1,
-          max: 4,
-          default: 3,
-        },
+        organization: { type: mongoose.Schema.Types.ObjectId, ref: "Organization" },
+        roleLevel: { type: Number, required: true, min: 1, max: 4, default: 3 },
         roleLabel: { type: String, trim: true }, // e.g. "Treasurer", "President"
         isActive: { type: Boolean, default: true },
         joinedAt: { type: Date, default: Date.now },
@@ -48,10 +52,23 @@ const UserSchema = new mongoose.Schema(
         sbtTokenId: { type: String },
       },
     ],
+
+    // ── Session ───────────────────────────────────────────────────────────────
     isActive: { type: Boolean, default: true },
     lastLogin: { type: Date },
-    // Nonce for wallet signature challenge-response auth
+
+    // ── Web3 Auth challenge-response ──────────────────────────────────────────
+    // One-time nonce issued by GET /api/auth/nonce/:wallet
     nonce: { type: String },
+    // 5-minute TTL — expired nonces are rejected
+    nonceExpiresAt: { type: Date },
+    // Timestamp of last successful wallet signature authentication
+    lastAuthenticatedAt: { type: Date },
+
+    // ── Mobile security ───────────────────────────────────────────────────────
+    // Whether the user has viewed and acknowledged their recovery phrase.
+    // Used to show the backup reminder banner on mobile until confirmed.
+    hasBackedUpPhrase: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

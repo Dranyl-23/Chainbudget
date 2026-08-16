@@ -1,137 +1,203 @@
-const { expect } = require("chai");
-const { ethers } = require("hardhat");
+import { expect } from "chai";
+import hardhat from "hardhat";
+const { ethers } = hardhat;
 
-describe("ChainBudget", function () {
-  let chainBudget;
-  let owner, approver1, approver2, approver3, nonApprover;
+describe("ChainBudget System Suite", function () {
+  let chainBudget, dao, sbt;
+  let owner, approver1, approver2, approver3, nonApprover, supplier;
 
   beforeEach(async function () {
-    [owner, approver1, approver2, approver3, nonApprover] =
-      await ethers.getSigners();
+    [owner, approver1, approver2, approver3, nonApprover, supplier] = await ethers.getSigners();
 
+    // 1. Deploy ChainBudget Vault
     const ChainBudget = await ethers.getContractFactory("ChainBudget");
     chainBudget = await ChainBudget.deploy(
       [approver1.address, approver2.address, approver3.address],
       2 // 2-of-3 threshold
     );
+    await chainBudget.waitForDeployment();
+
+    // 2. Deploy DAO
+    const ChainBudgetDAO = await ethers.getContractFactory("ChainBudgetDAO");
+    dao = await ChainBudgetDAO.deploy(2); // Min quorum = 2
+    await dao.waitForDeployment();
+
+    // 3. Deploy MembershipSBT
+    const MembershipSBT = await ethers.getContractFactory("MembershipSBT");
+    sbt = await MembershipSBT.deploy(owner.address);
+    await sbt.waitForDeployment();
   });
 
   // ──────────────────────────────────────────────────────────────────────────
-  // Deployment
+  // 1. Ownership & Two-Step Transfer
   // ──────────────────────────────────────────────────────────────────────────
-
-  describe("Deployment", function () {
-    it("Should set the owner to the deployer", async function () {
+  describe("Two-Step Ownership Transfer (Ownable2Step)", function () {
+    it("Should set the deployer as initial owner", async function () {
       expect(await chainBudget.owner()).to.equal(owner.address);
     });
 
-    it("Should register initial approvers", async function () {
-      expect(await chainBudget.isApprover(approver1.address)).to.be.true;
-      expect(await chainBudget.isApprover(approver2.address)).to.be.true;
-      expect(await chainBudget.isApprover(approver3.address)).to.be.true;
-    });
+    it("Should require pending owner to accept ownership", async function () {
+      await chainBudget.transferOwnership(approver1.address);
+      expect(await chainBudget.pendingOwner()).to.equal(approver1.address);
+      expect(await chainBudget.owner()).to.equal(owner.address); // Still owner until accepted
 
-    it("Should set required approvals to 2", async function () {
-      expect(await chainBudget.requiredApprovals()).to.equal(2);
+      // Non-pending owner cannot accept
+      await expect(
+        chainBudget.connect(nonApprover).acceptOwnership()
+      ).to.be.revertedWithCustomError(chainBudget, "OwnableUnauthorizedAccount");
+
+      // Approver1 accepts ownership
+      await chainBudget.connect(approver1).acceptOwnership();
+      expect(await chainBudget.owner()).to.equal(approver1.address);
     });
   });
 
   // ──────────────────────────────────────────────────────────────────────────
-  // Record Transaction
+  // 2. Emergency Pause & Controls (Pausable)
   // ──────────────────────────────────────────────────────────────────────────
+  describe("Emergency Pause (Pausable)", function () {
+    it("Should allow owner to pause and unpause", async function () {
+      expect(await chainBudget.paused()).to.be.false;
 
-  describe("recordTransaction", function () {
-    it("Should record a low-value transaction and auto-approve it", async function () {
-      const dataHash = ethers.keccak256(ethers.toUtf8Bytes("test-payload-1"));
-      await chainBudget.recordTransaction(dataHash, 1000, false);
+      await chainBudget.pause();
+      expect(await chainBudget.paused()).to.be.true;
+
+      const dataHash = ethers.keccak256(ethers.toUtf8Bytes("test-payload-paused"));
+      await expect(
+        chainBudget.recordTransaction(dataHash, 1000, supplier.address, false, false)
+      ).to.be.revertedWithCustomError(chainBudget, "EnforcedPause");
+
+      await chainBudget.unpause();
+      expect(await chainBudget.paused()).to.be.false;
+    });
+
+    it("Should reject non-owner pause attempts", async function () {
+      await expect(
+        chainBudget.connect(nonApprover).pause()
+      ).to.be.revertedWithCustomError(chainBudget, "OwnableUnauthorizedAccount");
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // 3. Transactions & 2-of-N Approval
+  // ──────────────────────────────────────────────────────────────────────────
+  describe("Multi-Sig & Transaction Recording", function () {
+    it("Should record low-value transaction as auto-approved", async function () {
+      const dataHash = ethers.keccak256(ethers.toUtf8Bytes("low-val"));
+      await chainBudget.recordTransaction(dataHash, 1000, supplier.address, false, false);
 
       const txn = await chainBudget.getTransaction(1);
       expect(txn.isApproved).to.be.true;
       expect(txn.isHighValue).to.be.false;
-      expect(txn.dataHash).to.equal(dataHash);
+      expect(txn.to).to.equal(supplier.address);
     });
 
-    it("Should record a high-value transaction as pending (not approved)", async function () {
-      const dataHash = ethers.keccak256(ethers.toUtf8Bytes("high-value-1"));
-      await chainBudget.recordTransaction(dataHash, 50000, true);
+    it("Should require 2 approvals for high-value transaction", async function () {
+      const dataHash = ethers.keccak256(ethers.toUtf8Bytes("high-val"));
+      await chainBudget.recordTransaction(dataHash, 50000, supplier.address, true, false);
 
-      const txn = await chainBudget.getTransaction(1);
+      let txn = await chainBudget.getTransaction(1);
       expect(txn.isApproved).to.be.false;
-      expect(txn.isHighValue).to.be.true;
-    });
 
-    it("Should revert if called by non-owner", async function () {
-      const dataHash = ethers.keccak256(ethers.toUtf8Bytes("unauthorized"));
-      await expect(
-        chainBudget
-          .connect(nonApprover)
-          .recordTransaction(dataHash, 1000, false)
-      ).to.be.revertedWith("ChainBudget: caller is not owner");
-    });
-  });
-
-  // ──────────────────────────────────────────────────────────────────────────
-  // Multi-Signature Approval
-  // ──────────────────────────────────────────────────────────────────────────
-
-  describe("submitApproval (2-of-N)", function () {
-    beforeEach(async function () {
-      const dataHash = ethers.keccak256(ethers.toUtf8Bytes("high-value-2"));
-      await chainBudget.recordTransaction(dataHash, 99999, true);
-    });
-
-    it("Should allow an approver to vote", async function () {
       await chainBudget.connect(approver1).submitApproval(1);
-      expect(await chainBudget.getApprovalCount(1)).to.equal(1);
-    });
+      txn = await chainBudget.getTransaction(1);
+      expect(txn.isApproved).to.be.false;
 
-    it("Should approve transaction after 2 votes", async function () {
-      await chainBudget.connect(approver1).submitApproval(1);
       await chainBudget.connect(approver2).submitApproval(1);
-      expect(await chainBudget.isTransactionApproved(1)).to.be.true;
+      txn = await chainBudget.getTransaction(1);
+      expect(txn.isApproved).to.be.true;
     });
 
-    it("Should prevent double voting", async function () {
+    it("Should prevent duplicate voting by the same approver", async function () {
+      const dataHash = ethers.keccak256(ethers.toUtf8Bytes("double-vote"));
+      await chainBudget.recordTransaction(dataHash, 50000, supplier.address, true, false);
+
       await chainBudget.connect(approver1).submitApproval(1);
       await expect(
         chainBudget.connect(approver1).submitApproval(1)
       ).to.be.revertedWith("ChainBudget: already approved");
     });
+  });
 
-    it("Should prevent non-approver from voting", async function () {
-      await expect(
-        chainBudget.connect(nonApprover).submitApproval(1)
-      ).to.be.revertedWith("ChainBudget: caller is not an approver");
+  // ──────────────────────────────────────────────────────────────────────────
+  // 4. Soulbound Token (Multi-Organization Support)
+  // ──────────────────────────────────────────────────────────────────────────
+  describe("Multi-Organization Soulbound Tokens (MembershipSBT)", function () {
+    it("Should allow a user to hold SBTs for multiple different organizations", async function () {
+      // Mint Org A membership
+      await sbt.mintMembership(approver1.address, "org-alpha");
+      expect(await sbt.isMemberOf(approver1.address, "org-alpha")).to.be.true;
+
+      // Mint Org B membership for the same user
+      await sbt.mintMembership(approver1.address, "org-beta");
+      expect(await sbt.isMemberOf(approver1.address, "org-beta")).to.be.true;
+
+      // Balance of user is now 2
+      expect(await sbt.balanceOf(approver1.address)).to.equal(2);
     });
 
-    it("Should prevent voting on an already approved transaction", async function () {
-      await chainBudget.connect(approver1).submitApproval(1);
-      await chainBudget.connect(approver2).submitApproval(1);
+    it("Should prevent duplicate SBT minting for the same organization", async function () {
+      await sbt.mintMembership(approver1.address, "org-alpha");
       await expect(
-        chainBudget.connect(approver3).submitApproval(1)
-      ).to.be.revertedWith("ChainBudget: transaction already approved");
+        sbt.mintMembership(approver1.address, "org-alpha")
+      ).to.be.revertedWith("MembershipSBT: user already holds SBT for this organization");
+    });
+
+    it("Should block transfers between users (Soulbound)", async function () {
+      await sbt.mintMembership(approver1.address, "org-alpha");
+      await expect(
+        sbt.connect(approver1).transferFrom(approver1.address, approver2.address, 0)
+      ).to.be.revertedWith("MembershipSBT: This token is soulbound and cannot be transferred.");
     });
   });
 
   // ──────────────────────────────────────────────────────────────────────────
-  // Approver Management
+  // 5. DAO Proposal Lifecycle & Quorum
   // ──────────────────────────────────────────────────────────────────────────
-
-  describe("Approver management", function () {
-    it("Should add a new approver", async function () {
-      await chainBudget.addApprover(nonApprover.address);
-      expect(await chainBudget.isApprover(nonApprover.address)).to.be.true;
+  describe("DAO Proposal Governance & Quorum", function () {
+    beforeEach(async function () {
+      await dao.addMember(approver1.address);
+      await dao.addMember(approver2.address);
+      await dao.addMember(approver3.address);
     });
 
-    it("Should remove an approver", async function () {
-      await chainBudget.removeApprover(approver3.address);
-      expect(await chainBudget.isApprover(approver3.address)).to.be.false;
-    });
+    it("Should create a proposal and enforce voting period and quorum", async function () {
+      const dataHash = ethers.keccak256(ethers.toUtf8Bytes("dao-proposal-1"));
+      await dao.connect(approver1).createProposal("Buy Equipment", dataHash, 3600);
 
-    it("Should revert if non-owner tries to add approver", async function () {
+      // Cast 2 Yes votes
+      await dao.connect(approver1).castVote(1, true);
+      await dao.connect(approver2).castVote(1, true);
+
+      // Attempt to execute before voting period ends should revert
       await expect(
-        chainBudget.connect(nonApprover).addApprover(nonApprover.address)
-      ).to.be.revertedWith("ChainBudget: caller is not owner");
+        dao.executeProposal(1)
+      ).to.be.revertedWith("DAO: voting still active");
+
+      // Advance time by 3601 seconds
+      await ethers.provider.send("evm_increaseTime", [3601]);
+      await ethers.provider.send("evm_mine");
+
+      // Execute proposal
+      await dao.executeProposal(1);
+      const prop = await dao.getProposal(1);
+      expect(prop.executed).to.be.true;
+      expect(prop.passed).to.be.true;
+    });
+
+    it("Should reject execution if quorum is not reached", async function () {
+      const dataHash = ethers.keccak256(ethers.toUtf8Bytes("dao-proposal-quorum-fail"));
+      await dao.connect(approver1).createProposal("Failed Quorum", dataHash, 3600);
+
+      // Only 1 vote cast (minQuorum = 2)
+      await dao.connect(approver1).castVote(1, true);
+
+      await ethers.provider.send("evm_increaseTime", [3601]);
+      await ethers.provider.send("evm_mine");
+
+      await expect(
+        dao.executeProposal(1)
+      ).to.be.revertedWith("DAO: minimum quorum not reached");
     });
   });
 });

@@ -1,24 +1,24 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
+
+const emptySubscribe = () => () => {};
 
 /**
  * Portal — renders children directly under <body>, bypassing any parent
  * overflow/transform/backdrop-filter that would clip position:fixed modals.
  */
 export default function Portal({ children }: { children: React.ReactNode }) {
-  const [container, setContainer] = useState<HTMLDivElement | null>(null);
+  const isMounted = useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  );
 
-  useEffect(() => {
-    const el = document.createElement("div");
-    document.body.appendChild(el);
-    setContainer(el);
-    return () => {
-      document.body.removeChild(el);
-    };
-  }, []);
+  if (!isMounted || typeof document === "undefined") {
+    return null;
+  }
 
-  if (!container) return null;
-  return createPortal(children, container);
+  return createPortal(children, document.body);
 }

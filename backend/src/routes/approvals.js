@@ -121,9 +121,10 @@ router.post("/:txId", authenticate, requireRole(2), async (req, res) => {
         // Trigger Gasless Relayer Execution if Smart Contract is linked
         if (org.contractAddress) {
           try {
-            // Setup relayer using local Hardhat node for demo purposes
-            const provider = new ethers.JsonRpcProvider(process.env.POLYGON_RPC_URL || "http://127.0.0.1:8545");
-            const relayerPrivateKey = process.env.BACKEND_PRIVATE_KEY || "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"; // Default Hardhat Account #0
+            const rpcUrl = process.env.AMOY_RPC_URL || process.env.POLYGON_RPC_URL || "https://rpc-amoy.polygon.technology";
+            const provider = new ethers.JsonRpcProvider(rpcUrl);
+            const relayerPrivateKey = process.env.BACKEND_WALLET_PRIVATE_KEY || process.env.BACKEND_PRIVATE_KEY;
+            if (!relayerPrivateKey) throw new Error("BACKEND_WALLET_PRIVATE_KEY not set in environment");
             const relayerWallet = new ethers.Wallet(relayerPrivateKey, provider);
             
             let treasuryAbi;
@@ -201,11 +202,11 @@ router.post("/:txId", authenticate, requireRole(2), async (req, res) => {
     // Commit transaction
     await session.commitTransaction();
 
-    // Emit socket event
+    // Emit socket event — scoped to the org room so only members receive it
     const io = req.app.get("io");
     if (io) {
-      io.emit("transaction_updated", { orgId: org._id });
-      io.emit("new_notification", {
+      io.to(`org:${org._id}`).emit("transaction_updated", { orgId: org._id });
+      io.to(`org:${org._id}`).emit("new_notification", {
         orgId: org._id,
         id: txn._id,
         title: "Approval Granted",
@@ -246,6 +247,12 @@ router.patch("/:txId/hash", authenticate, async (req, res) => {
 
     const txn = await Transaction.findById(req.params.txId);
     if (!txn) return res.status(404).json({ error: "Transaction not found" });
+
+    // Authorization check (M-4): User must have role level <= 2 in the org
+    const roleLevel = req.user.getRoleInOrg(txn.organization);
+    if (!req.user.isSuperAdmin && (roleLevel === null || roleLevel > 2)) {
+      return res.status(403).json({ error: "Access denied. Requires role level 2 or above." });
+    }
 
     // Update the blockchain hash on the transaction
     txn.blockchainTxHash = blockchainTxHash;

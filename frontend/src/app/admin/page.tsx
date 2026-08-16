@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import {
-  Building2, Users, ArrowLeftRight, ShieldAlert, Activity,
+  Building2, Users, ArrowLeftRight, Activity,
   Search, RefreshCw, Ban, CheckCircle2, ChevronLeft,
   ChevronRight, Link2, Crown, AlertTriangle, BarChart3,
-  Clock, Globe, LogOut, Wallet,
+  Globe, LogOut, Wallet,
 } from "lucide-react";
 import api from "@/lib/api";
 import toast from "react-hot-toast";
@@ -88,10 +88,14 @@ export default function AdminPage() {
   const [orgPage, setOrgPage] = useState(1);
   const [orgSearch, setOrgSearch] = useState("");
   const [orgStatus, setOrgStatus] = useState("all");
+  const [orgRefreshTrigger, setOrgRefreshTrigger] = useState(0);
+
   const [users, setUsers] = useState<UserRow[]>([]);
   const [userTotal, setUserTotal] = useState(0);
   const [userPage, setUserPage] = useState(1);
   const [userSearch, setUserSearch] = useState("");
+  const [userRefreshTrigger, setUserRefreshTrigger] = useState(0);
+
   const [activity, setActivity] = useState<ActivityLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [suspending, setSuspending] = useState<string | null>(null);
@@ -105,62 +109,108 @@ export default function AdminPage() {
     }
   }, [isLoading, isConnected, user, router]);
 
-  // ── Fetch platform stats ────────────────────────────────────────────────────
-  const fetchStats = useCallback(async () => {
-    try {
-      const res = await api.get("/admin/stats");
-      setStats(res.data);
-    } catch {
-      toast.error("Failed to load platform stats");
-    }
-  }, []);
+  // ── Effect 1: Initial Platform Stats & Activity ────────────────────────────
+  useEffect(() => {
+    if (!user?.isSuperAdmin) return;
+    let isCancelled = false;
 
-  // ── Fetch organizations ─────────────────────────────────────────────────────
-  const fetchOrgs = useCallback(async () => {
-    try {
-      const res = await api.get("/admin/organizations", {
-        params: { search: orgSearch, status: orgStatus, page: orgPage, limit: 15 },
-      });
-      setOrgs(res.data.organizations);
-      setOrgTotal(res.data.total);
-    } catch {
-      toast.error("Failed to load organizations");
-    }
-  }, [orgSearch, orgStatus, orgPage]);
+    const loadOverview = async () => {
+      try {
+        const [statsRes, activityRes] = await Promise.all([
+          api.get("/admin/stats"),
+          api.get("/admin/activity"),
+        ]);
+        if (!isCancelled) {
+          setStats(statsRes.data);
+          setActivity(activityRes.data);
+        }
+      } catch {
+        if (!isCancelled) {
+          toast.error("Failed to load platform stats");
+        }
+      } finally {
+        if (!isCancelled) {
+          setLoading(false);
+        }
+      }
+    };
 
-  // ── Fetch users ─────────────────────────────────────────────────────────────
-  const fetchUsers = useCallback(async () => {
-    try {
-      const res = await api.get("/admin/users", {
-        params: { search: userSearch, page: userPage, limit: 15 },
-      });
-      setUsers(res.data.users);
-      setUserTotal(res.data.total);
-    } catch {
-      toast.error("Failed to load users");
-    }
-  }, [userSearch, userPage]);
+    loadOverview();
 
-  // ── Fetch activity ──────────────────────────────────────────────────────────
-  const fetchActivity = useCallback(async () => {
+    return () => {
+      isCancelled = true;
+    };
+  }, [user?.isSuperAdmin]);
+
+  // ── Effect 2: Load Organizations on filter, pagination, or refresh ────────
+  useEffect(() => {
+    if (!user?.isSuperAdmin) return;
+    let isCancelled = false;
+
+    const loadOrgs = async () => {
+      try {
+        const res = await api.get("/admin/organizations", {
+          params: { search: orgSearch, status: orgStatus, page: orgPage, limit: 15 },
+        });
+        if (!isCancelled) {
+          setOrgs(res.data.organizations);
+          setOrgTotal(res.data.total);
+        }
+      } catch {
+        if (!isCancelled) {
+          toast.error("Failed to load organizations");
+        }
+      }
+    };
+
+    loadOrgs();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [user?.isSuperAdmin, orgSearch, orgStatus, orgPage, orgRefreshTrigger]);
+
+  // ── Effect 3: Load Users on search, pagination, or refresh ────────────────
+  useEffect(() => {
+    if (!user?.isSuperAdmin) return;
+    let isCancelled = false;
+
+    const loadUsers = async () => {
+      try {
+        const res = await api.get("/admin/users", {
+          params: { search: userSearch, page: userPage, limit: 15 },
+        });
+        if (!isCancelled) {
+          setUsers(res.data.users);
+          setUserTotal(res.data.total);
+        }
+      } catch {
+        if (!isCancelled) {
+          toast.error("Failed to load users");
+        }
+      }
+    };
+
+    loadUsers();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [user?.isSuperAdmin, userSearch, userPage, userRefreshTrigger]);
+
+  // ── Refresh helpers ────────────────────────────────────────────────────────
+  const refreshActivity = async () => {
     try {
       const res = await api.get("/admin/activity");
       setActivity(res.data);
+      toast.success("Activity refreshed");
     } catch {
       toast.error("Failed to load activity");
     }
-  }, []);
+  };
 
-  // Initial load
-  useEffect(() => {
-    if (!user?.isSuperAdmin) return;
-    Promise.all([fetchStats(), fetchOrgs(), fetchUsers(), fetchActivity()]).finally(() =>
-      setLoading(false)
-    );
-  }, [user]);
-
-  useEffect(() => { if (user?.isSuperAdmin) fetchOrgs(); }, [fetchOrgs]);
-  useEffect(() => { if (user?.isSuperAdmin) fetchUsers(); }, [fetchUsers]);
+  const refreshOrgs = () => setOrgRefreshTrigger((t) => t + 1);
+  const refreshUsers = () => setUserRefreshTrigger((t) => t + 1);
 
   // ── Suspend / Activate org ──────────────────────────────────────────────────
   const toggleSuspend = async (org: OrgRow) => {
@@ -213,12 +263,12 @@ export default function AdminPage() {
           <div className="flex items-center gap-3">
             <button
               onClick={() => router.push("/dashboard")}
-              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors text-gray-500 flex-shrink-0"
+              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors text-gray-500 shrink-0"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
             <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary to-primary-2 flex items-center justify-center flex-shrink-0">
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary to-primary-2 flex items-center justify-center shrink-0">
                 <Crown className="w-4 h-4 text-white" />
               </div>
               <div>
@@ -236,7 +286,7 @@ export default function AdminPage() {
 
         <div className="flex items-center gap-3 overflow-x-auto pb-1 sm:pb-0 hide-scrollbar">
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary/5 border border-primary/10 whitespace-nowrap">
-            <Wallet className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+            <Wallet className="w-3.5 h-3.5 text-primary shrink-0" />
             <span className="text-xs font-mono text-gray-600">{walletAddress ? shortAddr(walletAddress) : ""}</span>
             <span className="text-[10px] sm:text-xs px-1.5 py-0.5 rounded-full bg-primary text-white font-semibold">SUPER ADMIN</span>
           </div>
@@ -325,7 +375,7 @@ export default function AdminPage() {
             {/* Status banner + pending alert */}
             {stats.pendingTransactions > 0 && (
               <div className="flex items-center gap-3 px-5 py-4 rounded-xl border border-amber-200 bg-amber-50">
-                <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0" />
+                <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
                 <div>
                   <p className="text-sm font-semibold text-amber-800">
                     {stats.pendingTransactions} transaction{stats.pendingTransactions !== 1 ? "s" : ""} awaiting approval
@@ -337,7 +387,7 @@ export default function AdminPage() {
 
             {stats.suspendedOrgs > 0 && (
               <div className="flex items-center gap-3 px-5 py-4 rounded-xl border border-red-200 bg-red-50">
-                <Ban className="w-5 h-5 text-red-500 flex-shrink-0" />
+                <Ban className="w-5 h-5 text-red-500 shrink-0" />
                 <div>
                   <p className="text-sm font-semibold text-red-800">
                     {stats.suspendedOrgs} organization{stats.suspendedOrgs !== 1 ? "s" : ""} currently suspended
@@ -360,7 +410,7 @@ export default function AdminPage() {
               <div className="space-y-2">
                 {activity.slice(0, 6).map((log) => (
                   <div key={log._id} className="flex items-center gap-3 py-2 border-t" style={{ borderColor: "var(--color-border)" }}>
-                    <div className="w-7 h-7 rounded-lg bg-primary/8 flex items-center justify-center flex-shrink-0">
+                    <div className="w-7 h-7 rounded-lg bg-primary/8 flex items-center justify-center shrink-0">
                       <Activity className="w-3.5 h-3.5 text-primary" />
                     </div>
                     <div className="flex-1 min-w-0">
@@ -406,7 +456,7 @@ export default function AdminPage() {
                 <option value="active">Active</option>
                 <option value="suspended">Suspended</option>
               </select>
-              <button onClick={fetchOrgs} className="btn-secondary py-2 px-3 flex items-center gap-2">
+              <button onClick={refreshOrgs} className="btn-secondary py-2 px-3 flex items-center gap-2">
                 <RefreshCw className="w-4 h-4" /> Refresh
               </button>
               <span className="text-sm text-gray-500 ml-auto">{orgTotal} organizations</span>
@@ -541,7 +591,7 @@ export default function AdminPage() {
                   onChange={(e) => { setUserSearch(e.target.value); setUserPage(1); }}
                 />
               </div>
-              <button onClick={fetchUsers} className="btn-secondary py-2 px-3 flex items-center gap-2">
+              <button onClick={refreshUsers} className="btn-secondary py-2 px-3 flex items-center gap-2">
                 <RefreshCw className="w-4 h-4" /> Refresh
               </button>
               <span className="text-sm text-gray-500 ml-auto">{userTotal} users</span>
@@ -632,7 +682,7 @@ export default function AdminPage() {
               <h2 className="font-semibold flex items-center gap-2">
                 <Globe className="w-4 h-4 text-primary" /> Platform-Wide Activity Feed
               </h2>
-              <button onClick={fetchActivity} className="btn-secondary py-2 px-3 flex items-center gap-2">
+              <button onClick={refreshActivity} className="btn-secondary py-2 px-3 flex items-center gap-2">
                 <RefreshCw className="w-4 h-4" /> Refresh
               </button>
             </div>

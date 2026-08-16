@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { useRouter } from "next/navigation";
 import {
   ArrowUpRight, ArrowDownRight, Wallet, Activity,
   ShieldCheck, FileText, BarChart2, Link2, CheckCircle,
@@ -14,6 +13,20 @@ import {
 } from "recharts";
 import Link from "next/link";
 import api from "@/lib/api";
+import DashboardSkeleton from "@/components/DashboardSkeleton";
+
+// ── Types ────────────────────────────────────────────────────────────────────
+interface UserOrgRef {
+  _id?: string;
+  name?: string;
+}
+
+interface UserMembership {
+  organization?: string | UserOrgRef;
+  roleLevel: number;
+  roleLabel?: string;
+  isActive?: boolean;
+}
 
 interface Transaction {
   _id: string;
@@ -26,34 +39,96 @@ interface Transaction {
   blockchainTxHash?: string;
 }
 
+interface TransactionsResponse {
+  transactions?: Transaction[];
+  total?: number;
+}
+
 interface CashFlowData {
   month: string;
   income: number;
   expense: number;
 }
 
-import DashboardSkeleton from "@/components/DashboardSkeleton";
+interface DashboardStats {
+  totalBalance: number;
+  totalIncome: number;
+  totalExpenses: number;
+  pendingCount: number;
+}
+
+interface TransparencyScore {
+  approved: number;
+  onChain: number;
+  percentage: number;
+}
+
+interface BudgetItem {
+  _id: string;
+  name: string;
+  allocated: number;
+  spent: number;
+}
+
+interface BudgetAlert {
+  name: string;
+  allocated: number;
+  spent: number;
+  percentage: number;
+}
+
+interface ReportsSummaryResponse {
+  totalIncome?: number;
+  totalExpenses?: number;
+  pendingApprovals?: number;
+  approvedTransactions?: number;
+  onChainTransactions?: number;
+  cashFlow?: CashFlowData[];
+}
+
+function getOrgId(org?: string | UserOrgRef): string | undefined {
+  if (!org) return undefined;
+  return typeof org === "string" ? org : org._id;
+}
 
 export default function DashboardPage() {
   const { user, activeOrgId } = useAuth();
   const [cashFlow, setCashFlow] = useState<CashFlowData[]>(() => {
     if (typeof window !== "undefined") {
       const cached = sessionStorage.getItem("cb_cache_dash_cashflow");
-      if (cached) return JSON.parse(cached);
+      if (cached) {
+        try {
+          return JSON.parse(cached) as CashFlowData[];
+        } catch {
+          return [];
+        }
+      }
     }
     return [];
   });
   const [recentTxs, setRecentTxs] = useState<Transaction[]>(() => {
     if (typeof window !== "undefined") {
       const cached = sessionStorage.getItem("cb_cache_dash_txs");
-      if (cached) return JSON.parse(cached);
+      if (cached) {
+        try {
+          return JSON.parse(cached) as Transaction[];
+        } catch {
+          return [];
+        }
+      }
     }
     return [];
   });
-  const [stats, setStats] = useState(() => {
+  const [stats, setStats] = useState<DashboardStats>(() => {
     if (typeof window !== "undefined") {
       const cached = sessionStorage.getItem("cb_cache_dash_stats");
-      if (cached) return JSON.parse(cached);
+      if (cached) {
+        try {
+          return JSON.parse(cached) as DashboardStats;
+        } catch {
+          // fallback
+        }
+      }
     }
     return {
       totalBalance: 0,
@@ -62,37 +137,48 @@ export default function DashboardPage() {
       pendingCount: 0,
     };
   });
-  const [loading, setLoading] = useState(cashFlow.length === 0);
-  const [error, setError] = useState<string | null>(null);
-  const [transparencyScore, setTransparencyScore] = useState({ approved: 0, onChain: 0, percentage: 0 });
-  const [budgetAlerts, setBudgetAlerts] = useState<Array<{name: string; allocated: number; spent: number; percentage: number}>>([]);
+  const [loading, setLoading] = useState(false);
+  const [transparencyScore, setTransparencyScore] = useState<TransparencyScore>({ approved: 0, onChain: 0, percentage: 0 });
+  const [budgetAlerts, setBudgetAlerts] = useState<BudgetAlert[]>([]);
 
-  const currentMembership = user?.memberships?.find(
-    (m: any) => m.organization === activeOrgId || m.organization?._id === activeOrgId
+  const memberships = (user?.memberships || []) as UserMembership[];
+  const currentMembership = memberships.find(
+    (m) => getOrgId(m.organization) === activeOrgId
   );
   const roleLevel = user?.isSuperAdmin ? 0 : (currentMembership?.roleLevel || 4);
 
   useEffect(() => {
+    if (!activeOrgId) {
+      return;
+    }
+
+    let isCancelled = false;
+    const orgId = activeOrgId;
+
+    const generateMockCashFlow = (): CashFlowData[] => [
+      { month: "Jan", income: 4000, expense: 2400 },
+      { month: "Feb", income: 3000, expense: 1398 },
+      { month: "Mar", income: 2000, expense: 9800 },
+      { month: "Apr", income: 2780, expense: 3908 },
+      { month: "May", income: 1890, expense: 4800 },
+      { month: "Jun", income: 2390, expense: 3800 },
+    ];
+
     const fetchData = async () => {
       try {
-        
-        if (!activeOrgId) {
-          setLoading(false);
-          return;
-        }
-
-        const orgId = activeOrgId || "";
-
-        // Fetch transactions
-        const txRes = await api.get("/transactions", {
+        // 1. Fetch recent transactions
+        const txRes = await api.get<TransactionsResponse>("/transactions", {
           params: { orgId, limit: 6 },
         });
         const allTxs: Transaction[] = txRes.data.transactions || [];
         const topTxs = allTxs.slice(0, 4);
-        setRecentTxs(topTxs);
-        sessionStorage.setItem("cb_cache_dash_txs", JSON.stringify(topTxs));
+        
+        if (!isCancelled) {
+          setRecentTxs(topTxs);
+          sessionStorage.setItem("cb_cache_dash_txs", JSON.stringify(topTxs));
+        }
 
-        // Calculate stats from transactions
+        // Calculate initial stats from transactions
         const income = allTxs
           .filter((t) => t.type === "income")
           .reduce((sum, t) => sum + t.amount, 0);
@@ -103,25 +189,27 @@ export default function DashboardPage() {
           (t) => t.status === "pending_approval"
         ).length;
 
-        const computedStats = {
+        const computedStats: DashboardStats = {
           totalBalance: income - expenses,
           totalIncome: income,
           totalExpenses: expenses,
           pendingCount: pending,
         };
-        setStats(computedStats);
-        sessionStorage.setItem("cb_cache_dash_stats", JSON.stringify(computedStats));
+        
+        if (!isCancelled) {
+          setStats(computedStats);
+          sessionStorage.setItem("cb_cache_dash_stats", JSON.stringify(computedStats));
+        }
 
-        // Fetch real summary stats + cashFlow from the reports API
+        // 2. Fetch real summary stats + cashFlow from reports API
         try {
-          const reportRes = await api.get("/reports/summary", {
+          const reportRes = await api.get<ReportsSummaryResponse>("/reports/summary", {
             params: { orgId },
           });
           const data = reportRes.data;
 
-          // Override stats with the accurate server-computed values
-          if (data) {
-            const accurateStats = {
+          if (data && !isCancelled) {
+            const accurateStats: DashboardStats = {
               totalBalance: (data.totalIncome || 0) - (data.totalExpenses || 0),
               totalIncome: data.totalIncome || 0,
               totalExpenses: data.totalExpenses || 0,
@@ -137,50 +225,60 @@ export default function DashboardPage() {
             setTransparencyScore({ approved, onChain, percentage: pct });
           }
 
-          // Use real cashFlow if available, otherwise fall back to mock
           if (Array.isArray(data?.cashFlow) && data.cashFlow.length > 0) {
-            setCashFlow(data.cashFlow);
-            sessionStorage.setItem("cb_cache_dash_cashflow", JSON.stringify(data.cashFlow));
+            if (!isCancelled) {
+              setCashFlow(data.cashFlow);
+              sessionStorage.setItem("cb_cache_dash_cashflow", JSON.stringify(data.cashFlow));
+            }
           } else {
-            generateMockCashFlow();
+            if (!isCancelled) {
+              setCashFlow(generateMockCashFlow());
+            }
           }
         } catch {
-          // Summary API unavailable — keep stats from transactions, use mock chart
-          generateMockCashFlow();
+          if (!isCancelled) {
+            setCashFlow(generateMockCashFlow());
+          }
         }
 
-        // Fetch budget data for security alerts
+        // 3. Fetch budget data for security alerts
         try {
-          const budgetRes = await api.get("/budget", { params: { orgId } });
+          const budgetRes = await api.get<BudgetItem[]>("/budget", { params: { orgId } });
           const budgets = budgetRes.data || [];
           // Find categories at 80%+ usage
-          const alerts = budgets
-            .map((b: any) => ({ name: b.name, allocated: b.allocated, spent: b.spent, percentage: b.allocated > 0 ? Math.round((b.spent / b.allocated) * 100) : 0 }))
-            .filter((b: any) => b.percentage >= 80)
-            .sort((a: any, b: any) => b.percentage - a.percentage);
-          setBudgetAlerts(alerts);
-        } catch { /* budget alerts are optional */ }
-      } catch (err) {
+          const alerts: BudgetAlert[] = budgets
+            .map((b) => ({
+              name: b.name,
+              allocated: b.allocated,
+              spent: b.spent,
+              percentage: b.allocated > 0 ? Math.round((b.spent / b.allocated) * 100) : 0
+            }))
+            .filter((b) => b.percentage >= 80)
+            .sort((a, b) => b.percentage - a.percentage);
+
+          if (!isCancelled) {
+            setBudgetAlerts(alerts);
+          }
+        } catch {
+          // budget alerts are optional
+        }
+      } catch (err: unknown) {
         console.error("Failed to fetch dashboard data:", err);
-        setError("Failed to load dashboard data");
-        generateMockCashFlow();
+        if (!isCancelled) {
+          setCashFlow(generateMockCashFlow());
+        }
       } finally {
-        setLoading(false);
+        if (!isCancelled) {
+          setLoading(false);
+        }
       }
     };
 
-    const generateMockCashFlow = () => {
-      setCashFlow([
-        { month: "Jan", income: 4000, expense: 2400 },
-        { month: "Feb", income: 3000, expense: 1398 },
-        { month: "Mar", income: 2000, expense: 9800 },
-        { month: "Apr", income: 2780, expense: 3908 },
-        { month: "May", income: 1890, expense: 4800 },
-        { month: "Jun", income: 2390, expense: 3800 },
-      ]);
-    };
-
     fetchData();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [activeOrgId]);
 
   if (loading) {
@@ -295,11 +393,11 @@ export default function DashboardPage() {
           {budgetAlerts.map((alert) => (
             <div key={alert.name} className={`flex items-center gap-4 p-4 rounded-xl border backdrop-blur-md shadow-lg ${
               alert.percentage >= 100 
-                ? 'bg-red-500/10 border-red-500/30 shadow-[0_0_15px_rgba(239,68,68,0.15)]' 
-                : 'bg-amber-500/10 border-amber-500/30 shadow-[0_0_15px_rgba(245,158,11,0.15)]'
+                ? "bg-red-500/10 border-red-500/30 shadow-[0_0_15px_rgba(239,68,68,0.15)]" 
+                : "bg-amber-500/10 border-amber-500/30 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
             }`}>
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 border ${
-                alert.percentage >= 100 ? 'bg-red-500/20 border-red-500/40' : 'bg-amber-500/20 border-amber-500/40'
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 border ${
+                alert.percentage >= 100 ? "bg-red-500/20 border-red-500/40" : "bg-amber-500/20 border-amber-500/40"
               }`}>
                 {alert.percentage >= 100 
                   ? <AlertTriangle className="w-5 h-5 text-red-400 drop-shadow-[0_0_5px_rgba(239,68,68,0.8)]" />
@@ -307,18 +405,18 @@ export default function DashboardPage() {
                 }
               </div>
               <div className="flex-1 min-w-0">
-                <p className={`text-sm font-bold uppercase tracking-wider ${alert.percentage >= 100 ? 'text-red-400' : 'text-amber-400'}`}>
-                  {alert.percentage >= 100 ? '🚨 Budget Exceeded' : 'Budget Running Low'}: <span className="text-white">"{alert.name}"</span>
+                <p className={`text-sm font-bold uppercase tracking-wider ${alert.percentage >= 100 ? "text-red-400" : "text-amber-400"}`}>
+                  {alert.percentage >= 100 ? "🚨 Budget Exceeded" : "Budget Running Low"}: <span className="text-white">&quot;{alert.name}&quot;</span>
                 </p>
-                <p className={`text-xs mt-0.5 font-medium ${alert.percentage >= 100 ? 'text-red-300' : 'text-amber-300'}`}>
+                <p className={`text-xs mt-0.5 font-medium ${alert.percentage >= 100 ? "text-red-300" : "text-amber-300"}`}>
                   ₱{Math.round(alert.spent).toLocaleString()} of ₱{Math.round(alert.allocated).toLocaleString()} used ({alert.percentage}%)
                 </p>
               </div>
-              <div className="w-24 flex-shrink-0">
-                <div className={`w-full rounded-full h-2 overflow-hidden ${alert.percentage >= 100 ? 'bg-red-950/50' : 'bg-amber-950/50'}`}>
-                  <div className={`h-full rounded-full transition-all ${alert.percentage >= 100 ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,1)]' : 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,1)]'}`} style={{ width: `${Math.min(alert.percentage, 100)}%` }} />
+              <div className="w-24 shrink-0">
+                <div className={`w-full rounded-full h-2 overflow-hidden ${alert.percentage >= 100 ? "bg-red-950/50" : "bg-amber-950/50"}`}>
+                  <div className={`h-full rounded-full transition-all ${alert.percentage >= 100 ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,1)]" : "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,1)]"}`} style={{ width: `${Math.min(alert.percentage, 100)}%` }} />
                 </div>
-                <p className={`text-[10px] text-center mt-1 font-bold ${alert.percentage >= 100 ? 'text-red-400' : 'text-amber-400'}`}>{alert.percentage}%</p>
+                <p className={`text-[10px] text-center mt-1 font-bold ${alert.percentage >= 100 ? "text-red-400" : "text-amber-400"}`}>{alert.percentage}%</p>
               </div>
             </div>
           ))}
@@ -359,7 +457,7 @@ export default function DashboardPage() {
                     boxShadow: "0 0 30px rgba(139, 92, 246, 0.2)"
                   }}
                   itemStyle={{ fontWeight: "bold" }}
-                  formatter={(v: any) => `₱${Number(v).toLocaleString()}`}
+                  formatter={(value: unknown) => `₱${Number(value || 0).toLocaleString()}`}
                 />
                 <Bar dataKey="income" fill="url(#colorIncome)" radius={[6, 6, 0, 0]} maxBarSize={40} name="Income" />
                 <Bar dataKey="expense" fill="url(#colorExpense)" radius={[6, 6, 0, 0]} maxBarSize={40} name="Expense" />
@@ -431,7 +529,7 @@ export default function DashboardPage() {
       <div className="glass p-6 rounded-xl mt-8 shadow-[0_0_40px_rgba(34,211,238,0.05)]">
         <div className="flex flex-col md:flex-row items-center gap-8">
           {/* Radial Gauge */}
-          <div className="relative w-40 h-40 flex-shrink-0 drop-shadow-[0_0_15px_rgba(34,211,238,0.2)]">
+          <div className="relative w-40 h-40 shrink-0 drop-shadow-[0_0_15px_rgba(34,211,238,0.2)]">
             <svg viewBox="0 0 120 120" className="w-full h-full -rotate-90">
               {/* Background circle */}
               <circle cx="60" cy="60" r="52" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="10" />

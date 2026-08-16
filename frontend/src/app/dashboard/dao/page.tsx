@@ -1,14 +1,43 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { ShieldCheck, Vote, CheckCircle2, XCircle, Clock, Search, Link2, X, Sparkles, BrainCircuit, Info, AlertTriangle } from "lucide-react";
+import { ShieldCheck, Vote, CheckCircle2, Search, Link2, X, Sparkles, BrainCircuit, Info, AlertTriangle } from "lucide-react";
 import api from "@/lib/api";
 import Portal from "@/components/Portal";
-import { ethers } from "ethers";
 import toast from "react-hot-toast";
 import { io } from "socket.io-client";
 import TableSkeleton from "@/components/TableSkeleton";
+import axios from "axios";
+
+// ── Types ────────────────────────────────────────────────────────────────────
+interface UserOrgRef {
+  _id?: string;
+  name?: string;
+}
+
+interface ProposalMemberMembership {
+  organization?: string | UserOrgRef;
+  role?: string;
+  roleLevel?: number;
+  roleLabel?: string;
+  isActive?: boolean;
+}
+
+interface ProposalCreator {
+  displayName: string;
+  walletAddress?: string;
+  memberships?: ProposalMemberMembership[];
+}
+
+interface VoteEntry {
+  support: boolean;
+  voter: {
+    displayName: string;
+    walletAddress?: string;
+    memberships?: ProposalMemberMembership[];
+  };
+}
 
 interface Proposal {
   _id: string;
@@ -17,21 +46,41 @@ interface Proposal {
   amount: number;
   status: "active" | "passed" | "rejected" | "executed";
   endTime: string;
-  creator: { 
-    displayName: string;
-    memberships?: any[];
-  };
+  creator: ProposalCreator;
   blockchainProposalId?: number;
   yesVotes?: number;
   noVotes?: number;
   hasVoted?: boolean;
-  votesList?: {
-    support: boolean;
-    voter: {
-      displayName: string;
-      memberships?: any[];
-    }
-  }[];
+  votesList?: VoteEntry[];
+}
+
+interface ProposalsResponse {
+  proposals?: Proposal[];
+  total?: number;
+}
+
+interface CreateProposalResponse {
+  proposal: Proposal;
+  message?: string;
+}
+
+interface AiInsightData {
+  riskScore: number;
+  riskReason: string;
+  summary: string;
+  pros?: string[];
+  cons?: string[];
+}
+
+// ── Helper to safely extract error message ──────────────────────────────────
+function getErrorMessage(err: unknown, fallback: string): string {
+  if (axios.isAxiosError(err)) {
+    return err.response?.data?.error || err.message || fallback;
+  }
+  if (err instanceof Error) {
+    return err.message;
+  }
+  return fallback;
 }
 
 export default function DAOGovernancePage() {
@@ -39,11 +88,17 @@ export default function DAOGovernancePage() {
   const [proposals, setProposals] = useState<Proposal[]>(() => {
     if (typeof window !== "undefined") {
       const cached = sessionStorage.getItem("cb_cache_dao");
-      if (cached) return JSON.parse(cached);
+      if (cached) {
+        try {
+          return JSON.parse(cached) as Proposal[];
+        } catch {
+          return [];
+        }
+      }
     }
     return [];
   });
-  const [loading, setLoading] = useState(proposals.length === 0);
+  const [loading, setLoading] = useState(false);
   const [votingOn, setVotingOn] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -58,13 +113,19 @@ export default function DAOGovernancePage() {
 
   // AI Insights State
   const [showAiModal, setShowAiModal] = useState<string | null>(null);
-  const [aiInsight, setAiInsight] = useState<any>(null);
+  const [aiInsight, setAiInsight] = useState<AiInsightData | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
-  // Reset pagination when filter or search changes
-  useEffect(() => {
+  // Pagination is reset directly on filter/search change without cascading useEffect
+  const handleFilterChange = (status: string) => {
+    setActiveFilter(status);
     setVisibleCount(6);
-  }, [activeFilter, searchQuery]);
+  };
+
+  const handleSearchChange = (query: string) => {
+    setSearchQuery(query);
+    setVisibleCount(6);
+  };
 
   const filteredProposals = proposals.filter((p) => {
     if (activeFilter !== "all" && p.status !== activeFilter) return false;
@@ -77,37 +138,65 @@ export default function DAOGovernancePage() {
     return true;
   });
 
-  useEffect(() => {
-    fetchProposals();
-
-    const socketUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || "http://localhost:5000";
-    const socket = io(socketUrl);
-
-    socket.on("dao_vote_updated", (data) => {
-      // Auto-refresh when someone votes
-      fetchProposals();
-    });
-
-    return () => {
-      socket.disconnect();
-    };
-  }, [activeOrgId]);
-
-  const fetchProposals = async () => {
+  const refreshProposals = useCallback(async () => {
+    if (!activeOrgId) return;
     try {
-      if (!activeOrgId) return;
-      const res = await api.get("/dao/proposals", { params: { orgId: activeOrgId } });
-      // In a real app, we would fetch the live vote counts from the smart contract here
+      const res = await api.get<ProposalsResponse>("/dao/proposals", {
+        params: { orgId: activeOrgId },
+      });
       const data = res.data.proposals || [];
       setProposals(data);
       sessionStorage.setItem("cb_cache_dao", JSON.stringify(data));
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to load proposals");
-    } finally {
-      setLoading(false);
+    } catch (err: unknown) {
+      console.error("Failed to refresh proposals:", err);
     }
-  };
+  }, [activeOrgId]);
+
+  // ── Data Fetching & Socket Lifecycle ──────────────────────────────────────
+  useEffect(() => {
+    if (!activeOrgId) return;
+
+    let isCancelled = false;
+
+    const loadProposals = async () => {
+      try {
+        const res = await api.get<ProposalsResponse>("/dao/proposals", {
+          params: { orgId: activeOrgId },
+        });
+        const data = res.data.proposals || [];
+        if (!isCancelled) {
+          setProposals(data);
+          sessionStorage.setItem("cb_cache_dao", JSON.stringify(data));
+        }
+      } catch (err: unknown) {
+        console.error("Failed to load proposals:", err);
+        if (!isCancelled) {
+          toast.error("Failed to load proposals");
+        }
+      } finally {
+        if (!isCancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadProposals();
+
+    const socketUrl = process.env.NEXT_PUBLIC_API_URL?.replace("/api", "") || "http://127.0.0.1:5001";
+    const socket = io(socketUrl);
+
+    socket.on("dao_vote_updated", () => {
+      // Auto-refresh when someone votes
+      if (!isCancelled) {
+        loadProposals();
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+      socket.disconnect();
+    };
+  }, [activeOrgId]);
 
   const handleVote = async (proposal: Proposal, support: boolean) => {
     if (!isConnected) {
@@ -115,54 +204,50 @@ export default function DAOGovernancePage() {
       return;
     }
     
-    // Placeholder for actual smart contract interaction
-    // await contract.castVote(proposal.blockchainProposalId, support);
-    
     setVotingOn(proposal._id);
     try {
       await api.post(`/dao/proposals/${proposal._id}/vote`, { support });
-      toast.success(`Vote "${support ? 'Yes' : 'No'}" cast successfully!`);
+      toast.success(`Vote "${support ? "Yes" : "No"}" cast successfully!`);
       
       // Re-fetch proposals to get updated votes list
-      fetchProposals();
-    } catch (err: any) {
-      console.error(err);
-      toast.error(err.response?.data?.error || "Voting failed");
+      await refreshProposals();
+    } catch (err: unknown) {
+      console.error("Voting failed:", err);
+      toast.error(getErrorMessage(err, "Voting failed"));
     } finally {
       setVotingOn(null);
     }
   };
 
-  const getCreatorLabel = (creatorObj: any) => {
+  const getCreatorLabel = (creatorObj?: ProposalCreator) => {
     if (!creatorObj || !creatorObj.displayName) return "Unknown User";
     let orgRole = "Member";
     if (creatorObj.memberships && creatorObj.memberships.length > 0 && activeOrgId) {
-      const activeMembership = creatorObj.memberships.find(
-        (m: any) => (m.organization?._id || m.organization) === activeOrgId
-      );
-      if (activeMembership) orgRole = activeMembership.role;
+      const activeMembership = creatorObj.memberships.find((m) => {
+        const orgId = typeof m.organization === "string" ? m.organization : m.organization?._id;
+        return orgId === activeOrgId;
+      });
+      if (activeMembership && activeMembership.role) {
+        orgRole = activeMembership.role;
+      }
     }
     return `${creatorObj.displayName} (${orgRole})`;
   };
-
-  const currentMembership = user?.memberships?.find(
-    (m: any) => (m.organization?._id || m.organization) === activeOrgId
-  );
 
   const handleAiInsight = async (proposal: Proposal) => {
     setShowAiModal(proposal._id);
     setIsAnalyzing(true);
     setAiInsight(null);
     try {
-      const res = await api.post("/ai/analyze-proposal", {
+      const res = await api.post<AiInsightData>("/ai/analyze-proposal", {
         title: proposal.title,
         description: proposal.description,
         amount: proposal.amount,
-        currentBudget: 500000 // In a real app we fetch actual org treasury
+        currentBudget: 500000 // Fetched or projected org treasury
       });
       setAiInsight(res.data);
-    } catch (err) {
-      console.error(err);
+    } catch (err: unknown) {
+      console.error("AI Insight error:", err);
       toast.error("Failed to generate AI insights");
       setShowAiModal(null);
     } finally {
@@ -170,23 +255,23 @@ export default function DAOGovernancePage() {
     }
   };
 
-  const handleCreateProposal = async (e: React.FormEvent) => {
+  const handleCreateProposal = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!activeOrgId) return;
     setIsSubmitting(true);
     try {
-      const res = await api.post("/dao/proposals", {
+      const res = await api.post<CreateProposalResponse>("/dao/proposals", {
         orgId: activeOrgId,
-        title: formData.title,
-        description: formData.description,
+        title: formData.title.trim(),
+        description: formData.description.trim(),
         amount: Number(formData.amount)
       });
-      setProposals([res.data.proposal, ...proposals]);
+      setProposals((prev) => [res.data.proposal, ...prev]);
       setShowCreateModal(false);
       setFormData({ title: "", description: "", amount: "" });
       toast.success("Proposal created successfully!");
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || "Failed to create proposal");
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, "Failed to create proposal"));
     } finally {
       setIsSubmitting(false);
     }
@@ -196,10 +281,12 @@ export default function DAOGovernancePage() {
     return <div className="flex h-[50vh] items-center justify-center animate-pulse text-gray-500">Loading Governance...</div>;
   }
 
-  const membership = user?.memberships?.find((m: any) => 
-    m.organization === activeOrgId || m.organization?._id === activeOrgId
-  );
-  const canInteract = user?.isSuperAdmin || (membership && membership.roleLevel <= 3);
+  const memberships = (user?.memberships || []) as ProposalMemberMembership[];
+  const userMembership = memberships.find((m) => {
+    const orgId = typeof m.organization === "string" ? m.organization : m.organization?._id;
+    return orgId === activeOrgId;
+  });
+  const canInteract = user?.isSuperAdmin || (userMembership && (userMembership.roleLevel || 4) <= 3);
 
   return (
     <div className="p-4 md:p-8 pb-20 animate-fade-in space-y-6">
@@ -217,7 +304,7 @@ export default function DAOGovernancePage() {
         {canInteract && (
           <button 
             onClick={() => setShowCreateModal(true)}
-            className="hidden md:flex btn-primary items-center gap-2 flex-shrink-0"
+            className="hidden md:flex btn-primary items-center gap-2 shrink-0"
           >
             <ShieldCheck className="w-4 h-4" /> Create Proposal
           </button>
@@ -233,7 +320,7 @@ export default function DAOGovernancePage() {
             {["active", "all", "passed", "rejected"].map((status) => (
               <button
                 key={status}
-                onClick={() => setActiveFilter(status)}
+                onClick={() => handleFilterChange(status)}
                 className={`flex-1 md:flex-none px-4 py-1.5 rounded-md text-sm font-medium capitalize transition-all whitespace-nowrap text-center ${
                   activeFilter === status 
                     ? "bg-primary text-white shadow-lg" 
@@ -253,7 +340,7 @@ export default function DAOGovernancePage() {
             type="text"
             placeholder="Search proposals..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
             className="w-full bg-transparent border border-gray-200 dark:border-white/10 rounded-lg pl-9 pr-4 py-1.5 text-sm text-gray-800 dark:text-white placeholder-gray-400 focus:outline-none focus:border-primary/50 transition-colors"
           />
         </div>
@@ -266,7 +353,7 @@ export default function DAOGovernancePage() {
           type="text"
           placeholder="Search proposals..."
           value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
+          onChange={(e) => handleSearchChange(e.target.value)}
           className="w-full bg-transparent border border-gray-200 dark:border-white/10 rounded-lg pl-10 pr-4 py-2 text-sm text-gray-800 dark:text-white placeholder-gray-400 focus:outline-none focus:border-primary/50 transition-colors"
         />
       </div>
@@ -283,10 +370,10 @@ export default function DAOGovernancePage() {
               <p>No {activeFilter !== "all" ? activeFilter : ""} proposals found.</p>
             </div>
           ) : (
-            filteredProposals.slice(0, visibleCount).map(p => (
+            filteredProposals.slice(0, visibleCount).map((p) => (
             <div key={p._id} className="glass p-3.5 md:p-6 rounded-xl md:rounded-2xl flex flex-col hover:-translate-y-1 transition-transform duration-300">
               <div className="flex justify-between items-start mb-2 md:mb-4">
-                <span className={`badge text-[10px] md:text-xs px-2 py-0.5 md:py-1 ${p.status === 'active' ? 'badge-pending' : p.status === 'passed' ? 'badge-approved' : 'badge-rejected'}`}>
+                <span className={`badge text-[10px] md:text-xs px-2 py-0.5 md:py-1 ${p.status === "active" ? "badge-pending" : p.status === "passed" ? "badge-approved" : "badge-rejected"}`}>
                   {p.status.toUpperCase()}
                 </span>
                 {p.blockchainProposalId && (
@@ -306,7 +393,7 @@ export default function DAOGovernancePage() {
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-[10px] md:text-xs text-gray-500 dark:text-gray-400">Proposed By</span>
-                    <span className="text-[10px] md:text-sm font-medium text-gray-700 dark:text-gray-300 truncate max-w-[130px] md:max-w-none text-right">{getCreatorLabel(p.creator)}</span>
+                    <span className="text-[10px] md:text-sm font-medium text-gray-700 dark:text-gray-300 truncate max-w-32.5 md:max-w-none text-right">{getCreatorLabel(p.creator)}</span>
                   </div>
                 </div>
 
@@ -343,15 +430,15 @@ export default function DAOGovernancePage() {
                   </div>
                 )}
 
-                {/* Display Voters Count Only */}
+                {/* Display Voters Count */}
                 <div className="mt-3 pt-3 md:mt-4 md:pt-4 border-t border-gray-100 dark:border-gray-800 flex gap-2 md:gap-4">
                   <div className="flex-1 bg-emerald-50/50 dark:bg-emerald-900/20 py-1.5 px-2 md:p-2 rounded-lg text-center border border-emerald-100/50 dark:border-emerald-800/30">
                     <span className="text-[9px] md:text-[10px] font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 block mb-0.5 md:mb-1">Yes Votes</span>
-                    <span className="text-lg md:text-xl font-bold text-emerald-700 dark:text-emerald-300">{p.yesVotes}</span>
+                    <span className="text-lg md:text-xl font-bold text-emerald-700 dark:text-emerald-300">{p.yesVotes ?? 0}</span>
                   </div>
                   <div className="flex-1 bg-red-50/50 dark:bg-red-900/20 py-1.5 px-2 md:p-2 rounded-lg text-center border border-red-100/50 dark:border-red-800/30">
                     <span className="text-[9px] md:text-[10px] font-semibold uppercase tracking-wider text-red-600 dark:text-red-400 block mb-0.5 md:mb-1">No Votes</span>
-                    <span className="text-lg md:text-xl font-bold text-red-700 dark:text-red-300">{p.noVotes}</span>
+                    <span className="text-lg md:text-xl font-bold text-red-700 dark:text-red-300">{p.noVotes ?? 0}</span>
                   </div>
                 </div>
               </div>
@@ -363,7 +450,7 @@ export default function DAOGovernancePage() {
         {filteredProposals.length > visibleCount && (
           <div className="flex justify-center mt-8 w-full">
             <button
-              onClick={() => setVisibleCount(prev => prev + 6)}
+              onClick={() => setVisibleCount((prev) => prev + 6)}
               className="px-8 py-3 rounded-full border border-primary/30 text-primary hover:bg-primary/10 transition-colors font-semibold text-sm flex items-center gap-2 shadow-[0_0_15px_rgba(139,92,246,0.1)] hover:-translate-y-1"
             >
               Load More Proposals
@@ -387,7 +474,7 @@ export default function DAOGovernancePage() {
       {showCreateModal && (
         <Portal>
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 overflow-hidden flex flex-col relative" style={{ maxHeight: '90vh' }}>
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 overflow-hidden flex flex-col relative" style={{ maxHeight: "90vh" }}>
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-bold flex items-center gap-2">
                   <ShieldCheck className="w-5 h-5 text-primary" />
@@ -466,7 +553,7 @@ export default function DAOGovernancePage() {
       {showAiModal && (
         <Portal>
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">
-            <div className="glass rounded-2xl shadow-[0_0_40px_rgba(168,85,247,0.15)] border border-purple-500/20 w-full max-w-lg p-6 overflow-hidden flex flex-col relative" style={{ maxHeight: '90vh' }}>
+            <div className="glass rounded-2xl shadow-[0_0_40px_rgba(168,85,247,0.15)] border border-purple-500/20 w-full max-w-lg p-6 overflow-hidden flex flex-col relative" style={{ maxHeight: "90vh" }}>
               <div className="flex items-center justify-between mb-6 border-b border-white/5 pb-4">
                 <h2 className="text-xl font-bold flex items-center gap-2 text-white">
                   <BrainCircuit className="w-6 h-6 text-purple-400" />
@@ -489,7 +576,7 @@ export default function DAOGovernancePage() {
                       <BrainCircuit className="absolute inset-0 m-auto w-6 h-6 text-purple-400 animate-pulse" />
                     </div>
                     <h3 className="text-lg font-bold text-gray-200">Analyzing Proposal</h3>
-                    <p className="text-sm text-gray-400 max-w-[250px] mx-auto mt-2">Our AI is reading the details and calculating the financial risk...</p>
+                    <p className="text-sm text-gray-400 max-w-62.5 mx-auto mt-2">Our AI is reading the details and calculating the financial risk...</p>
                   </div>
                 ) : aiInsight ? (
                   <div className="animate-fade-in space-y-5">
@@ -523,7 +610,7 @@ export default function DAOGovernancePage() {
                           <CheckCircle2 className="w-3.5 h-3.5" /> Pros
                         </h4>
                         <ul className="space-y-2">
-                          {aiInsight.pros?.map((pro: string, i: number) => (
+                          {aiInsight.pros?.map((pro, i) => (
                             <li key={i} className="text-xs text-gray-300 flex items-start gap-1.5">
                               <span className="text-emerald-500 mt-0.5">•</span> <span>{pro}</span>
                             </li>
@@ -535,7 +622,7 @@ export default function DAOGovernancePage() {
                           <AlertTriangle className="w-3.5 h-3.5" /> Cons
                         </h4>
                         <ul className="space-y-2">
-                          {aiInsight.cons?.map((con: string, i: number) => (
+                          {aiInsight.cons?.map((con, i) => (
                             <li key={i} className="text-xs text-gray-300 flex items-start gap-1.5">
                               <span className="text-red-500 mt-0.5">•</span> <span>{con}</span>
                             </li>

@@ -117,9 +117,19 @@ router.get("/:orgId", authenticate, requireRole(4), async (req, res) => {
 /// PATCH /api/organizations/:orgId — Update (Level 1 only)
 router.patch("/:orgId", authenticate, requireRole(1), async (req, res) => {
   try {
+    // Whitelist allowed fields to prevent mass assignment
+    const { name, description, highValueThreshold, requiredApprovals, isPrivate, logoUrl } = req.body;
+    const allowedUpdates = {};
+    if (name !== undefined) allowedUpdates.name = name;
+    if (description !== undefined) allowedUpdates.description = description;
+    if (highValueThreshold !== undefined) allowedUpdates.highValueThreshold = highValueThreshold;
+    if (requiredApprovals !== undefined) allowedUpdates.requiredApprovals = requiredApprovals;
+    if (isPrivate !== undefined) allowedUpdates.isPrivate = isPrivate;
+    if (logoUrl !== undefined) allowedUpdates.logoUrl = logoUrl;
+
     const org = await Organization.findByIdAndUpdate(
       req.params.orgId,
-      req.body,
+      allowedUpdates,
       { new: true, runValidators: true }
     );
     if (!org) return res.status(404).json({ error: "Organization not found" });

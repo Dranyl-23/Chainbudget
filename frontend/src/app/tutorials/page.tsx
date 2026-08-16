@@ -17,34 +17,34 @@ const tutorials = [
       {
         title: "Create a Google Account",
         desc: "Make sure you have a Google account ready (Gmail). This will be used to log in to ChainBudget.",
-        icon: <CheckCircle2 className="w-4 h-4 text-cyan-400 flex-shrink-0 mt-0.5" />,
+        icon: <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />,
       },
       {
         title: "Install MetaMask",
         desc: "Download and install the MetaMask browser extension from metamask.io. Create a new wallet and securely save your seed phrase. Never share your seed phrase with anyone!",
-        icon: <CheckCircle2 className="w-4 h-4 text-cyan-400 flex-shrink-0 mt-0.5" />,
+        icon: <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />,
         link: { label: "Get MetaMask →", href: "https://metamask.io/download/" },
       },
       {
         title: "Add Polygon Amoy Network",
         desc: "In MetaMask, go to Settings > Networks > Add Network. Add the Polygon Amoy Testnet (Chain ID: 80002). You can also use chainlist.org to add it automatically.",
-        icon: <CheckCircle2 className="w-4 h-4 text-cyan-400 flex-shrink-0 mt-0.5" />,
+        icon: <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />,
         link: { label: "Use Chainlist →", href: "https://chainlist.org/?search=amoy" },
       },
       {
         title: "Sign in with Google",
         desc: "Click 'Get Started' on the ChainBudget homepage, then click 'Sign in with Google'. Use your Google account credentials to log in.",
-        icon: <CheckCircle2 className="w-4 h-4 text-cyan-400 flex-shrink-0 mt-0.5" />,
+        icon: <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />,
       },
       {
         title: "Connect Your MetaMask Wallet",
         desc: "After logging in, you will be directed to a wallet connection screen. Click 'Connect MetaMask', approve the connection request, and sign the verification message. Your account is now fully set up!",
-        icon: <CheckCircle2 className="w-4 h-4 text-cyan-400 flex-shrink-0 mt-0.5" />,
+        icon: <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />,
       },
       {
         title: "Wait for Organization Invite",
         desc: "After connecting your wallet, share your wallet address with your Organization Admin. Once they add you to the organization, refresh the page and you will have access to the dashboard.",
-        icon: <CheckCircle2 className="w-4 h-4 text-cyan-400 flex-shrink-0 mt-0.5" />,
+        icon: <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />,
       },
     ],
   },
@@ -60,27 +60,27 @@ const tutorials = [
       {
         title: "Login & Connect Wallet",
         desc: "Make sure you are logged in with your Google account and your MetaMask wallet is connected (see Step 1 above).",
-        icon: <CheckCircle2 className="w-4 h-4 text-fuchsia-400 flex-shrink-0 mt-0.5" />,
+        icon: <CheckCircle2 className="w-4 h-4 text-fuchsia-400 shrink-0 mt-0.5" />,
       },
       {
         title: "Click 'Create Organization'",
         desc: "After logging in for the first time, you will see the Welcome screen. Click the 'Create Organization' card on the left side.",
-        icon: <CheckCircle2 className="w-4 h-4 text-fuchsia-400 flex-shrink-0 mt-0.5" />,
+        icon: <CheckCircle2 className="w-4 h-4 text-fuchsia-400 shrink-0 mt-0.5" />,
       },
       {
         title: "Fill in Organization Details",
         desc: "Enter your organization name, type (e.g., Student Org, University Department), and a short description. These details will be visible to the public in the Explorer.",
-        icon: <CheckCircle2 className="w-4 h-4 text-fuchsia-400 flex-shrink-0 mt-0.5" />,
+        icon: <CheckCircle2 className="w-4 h-4 text-fuchsia-400 shrink-0 mt-0.5" />,
       },
       {
         title: "Submit & Confirm",
         desc: "Click 'Create Organization'. You will automatically become the Level 1 Executive Admin of your organization with full control over budget management.",
-        icon: <CheckCircle2 className="w-4 h-4 text-fuchsia-400 flex-shrink-0 mt-0.5" />,
+        icon: <CheckCircle2 className="w-4 h-4 text-fuchsia-400 shrink-0 mt-0.5" />,
       },
       {
         title: "Set Up Your Treasury",
         desc: "Go to the Treasury tab in your dashboard to fund your organization's smart contract wallet and start managing budgets on-chain.",
-        icon: <CheckCircle2 className="w-4 h-4 text-fuchsia-400 flex-shrink-0 mt-0.5" />,
+        icon: <CheckCircle2 className="w-4 h-4 text-fuchsia-400 shrink-0 mt-0.5" />,
       },
     ],
   },
@@ -96,32 +96,32 @@ const tutorials = [
       {
         title: "Ask Members to Sign Up First",
         desc: "Before adding a member, they must first sign up to ChainBudget using their Google account and connect their MetaMask wallet. They can share their wallet address with you from the 'I Was Invited' screen.",
-        icon: <CheckCircle2 className="w-4 h-4 text-purple-400 flex-shrink-0 mt-0.5" />,
+        icon: <CheckCircle2 className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />,
       },
       {
         title: "Go to Team Management",
         desc: "In your dashboard sidebar, click on 'Team' to open the Team Management page. You must be a Level 1 Admin to add members.",
-        icon: <CheckCircle2 className="w-4 h-4 text-purple-400 flex-shrink-0 mt-0.5" />,
+        icon: <CheckCircle2 className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />,
       },
       {
         title: "Click 'Add Member'",
         desc: "Click the 'Add Member' button on the top right of the Team Management page to open the Add Member modal.",
-        icon: <CheckCircle2 className="w-4 h-4 text-purple-400 flex-shrink-0 mt-0.5" />,
+        icon: <CheckCircle2 className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />,
       },
       {
         title: "Paste Their Wallet Address",
         desc: "Paste the member's MetaMask wallet address (starting with 0x...) in the Wallet Address field. If they have already signed up, their Name and Email will be auto-filled automatically!",
-        icon: <CheckCircle2 className="w-4 h-4 text-purple-400 flex-shrink-0 mt-0.5" />,
+        icon: <CheckCircle2 className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />,
       },
       {
         title: "Assign Access Level & Position",
         desc: "Choose the member's access level: Level 1 (Executive Approver), Level 2 (Finance Officer), Level 3 (Member/Contributor), or Level 4 (Public Viewer). Enter their position or title (e.g., Treasurer, Secretary).",
-        icon: <CheckCircle2 className="w-4 h-4 text-purple-400 flex-shrink-0 mt-0.5" />,
+        icon: <CheckCircle2 className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />,
       },
       {
         title: "Click 'Add Member'",
         desc: "Click the 'Add Member' button. The member will now appear in your team list. Ask them to refresh their dashboard — they will now have access to your organization!",
-        icon: <CheckCircle2 className="w-4 h-4 text-purple-400 flex-shrink-0 mt-0.5" />,
+        icon: <CheckCircle2 className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />,
       },
     ],
   },
@@ -137,7 +137,7 @@ const TutorialSection = ({ tutorial }: { tutorial: any }) => {
     >
       {/* Tutorial Header */}
       <div className="px-6 py-5 border-b border-white/10 flex items-center gap-4">
-        <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${tutorial.color} border flex items-center justify-center flex-shrink-0`}>
+        <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${tutorial.color} border flex items-center justify-center shrink-0`}>
           {tutorial.icon}
         </div>
         <div className="flex-1 min-w-0">
@@ -155,8 +155,8 @@ const TutorialSection = ({ tutorial }: { tutorial: any }) => {
       <div className={`px-6 py-5 space-y-5 ${isExpanded ? 'block' : 'hidden sm:block'}`}>
         {tutorial.steps.map((step: any, stepIdx: number) => (
           <div key={stepIdx} className="flex gap-4">
-            <div className="flex flex-col items-center gap-1 flex-shrink-0">
-              <div className="w-7 h-7 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-xs font-bold text-white/70 flex-shrink-0">
+            <div className="flex flex-col items-center gap-1 shrink-0">
+              <div className="w-7 h-7 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-xs font-bold text-white/70 shrink-0">
                 {stepIdx + 1}
               </div>
               {stepIdx < tutorial.steps.length - 1 && (
@@ -207,7 +207,7 @@ export default function TutorialsPage() {
       {/* Nav */}
       <nav className="relative z-20 flex items-center justify-between px-4 md:px-12 py-4 border-b border-white/5 backdrop-blur-md bg-black/20">
         <Link href="/" className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-white/5 border border-white/10 flex-shrink-0">
+          <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-white/5 border border-white/10 shrink-0">
             <img src="/images/logo.png" alt="ChainBudget" className="w-5 h-5 object-contain rounded-lg" />
           </div>
           <span className="text-base font-bold tracking-tight hidden sm:block">

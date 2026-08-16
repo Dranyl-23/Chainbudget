@@ -1,0 +1,45 @@
+# Gitleaks Configuration for ChainBudget
+title = "ChainBudget Gitleaks Secret Detection Policy"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Global allowlists for harmless template files, tests, and examples"
+paths = [
+  '''^\.env\.example$''',
+  '''^backend/\.env\.example$''',
+  '''^frontend/\.env\.example$''',
+  '''^contracts/\.env\.example$''',
+  '''^mobile/\.env\.example$''',
+  '''package-lock\.json$''',
+  '''yarn\.lock$''',
+  '''pnpm-lock\.yaml$''',
+]
+regexes = [
+  '''0x0000000000000000000000000000000000000000''',
+  '''0000000000000000000000000000000000000000000000000000000000000000''',
+  '''your_[a-zA-Z0-9_]+_here''',
+  '''replace_with_[a-zA-Z0-9_]+''',
+]
+
+# Custom Rules
+[[rules]]
+id = "ethereum-private-key"
+description = "Unencrypted 64-character Ethereum/EVM Private Key"
+regex = '''(?i)(?:private_?key|priv_?key|deployer_?key|signing_?key)\s*(?:=|:)\s*["']?([a-f0-9]{64})["']?'''
+secretGroup = 1
+keywords = ["private_key", "priv_key", "deployer_key", "signing_key", "privatekey"]
+
+[[rules]]
+id = "mongodb-connection-uri"
+description = "MongoDB Connection URI with embedded username and password"
+regex = '''mongodb(?:\+srv)?:\/\/[a-zA-Z0-9_.\-%]+:[a-zA-Z0-9_.\-%]+@[a-zA-Z0-9_.\-]+'''
+keywords = ["mongodb://", "mongodb+srv://"]
+
+[[rules]]
+id = "asgardeo-client-secret"
+description = "Asgardeo / WSO2 Client Secret"
+regex = '''(?i)(?:asgardeo_client_secret|client_secret)\s*(?:=|:)\s*["']?([a-zA-Z0-9_-]{32,64})["']?'''
+secretGroup = 1
+keywords = ["asgardeo_client_secret", "client_secret"]

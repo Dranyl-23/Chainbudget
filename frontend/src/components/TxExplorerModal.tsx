@@ -18,23 +18,26 @@ interface TxData {
 }
 
 export default function TxExplorerModal({ isOpen, onClose, txHash }: TxExplorerModalProps) {
-  const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [currentHash, setCurrentHash] = useState<string | null>(null);
   const [txData, setTxData] = useState<TxData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const isScanning = isLoading || (isOpen && Boolean(txHash) && currentHash !== txHash);
+  const displayTxData = currentHash === txHash ? txData : null;
+  const displayError = currentHash === txHash ? error : null;
 
   useEffect(() => {
     if (!isOpen || !txHash) return;
 
-    let isMounted = true;
-    setLoading(true);
-    setError(null);
-    setTxData(null);
+    let isCancelled = false;
 
     const fetchTxData = async () => {
       try {
+        setIsLoading(true);
         // Use a public Polygon Amoy RPC
-        const provider = new ethers.JsonRpcProvider("https://rpc-amoy.polygon.technology");
+        const provider = new ethers.JsonRpcProvider("https://polygon-amoy.drpc.org");
         
         // Ensure we show the scanning animation for at least 1.5 seconds for the UX effect
         const minWait = new Promise((resolve) => setTimeout(resolve, 1500));
@@ -42,14 +45,16 @@ export default function TxExplorerModal({ isOpen, onClose, txHash }: TxExplorerM
         const txPromise = provider.getTransaction(txHash);
         const receiptPromise = provider.getTransactionReceipt(txHash);
         
-        const [_, tx, receipt] = await Promise.all([minWait, txPromise, receiptPromise]);
+        const [, tx, receipt] = await Promise.all([minWait, txPromise, receiptPromise]);
 
-        if (!isMounted) return;
+        if (isCancelled) return;
 
         if (!receipt || !tx) {
           // If receipt is null, it might still be pending or invalid
           setTxData({ status: "pending" });
-          setLoading(false);
+          setError(null);
+          setCurrentHash(txHash);
+          setIsLoading(false);
           return;
         }
 
@@ -70,28 +75,34 @@ export default function TxExplorerModal({ isOpen, onClose, txHash }: TxExplorerM
           gasFeeInMatic = ethers.formatEther(feeWei);
         }
 
-        setTxData({
-          status: receipt.status === 1 ? "success" : "failed",
-          blockNumber: receipt.blockNumber,
-          timestamp: timestampStr,
-          from: tx.from,
-          to: tx.to || "Contract Creation",
-          gasFee: parseFloat(gasFeeInMatic).toFixed(6),
-        });
-        setLoading(false);
-
-      } catch (err) {
+        if (!isCancelled) {
+          setTxData({
+            status: receipt.status === 1 ? "success" : "failed",
+            blockNumber: receipt.blockNumber,
+            timestamp: timestampStr,
+            from: tx.from,
+            to: tx.to || "Contract Creation",
+            gasFee: parseFloat(gasFeeInMatic).toFixed(6),
+          });
+          setError(null);
+          setCurrentHash(txHash);
+          setIsLoading(false);
+        }
+      } catch (err: unknown) {
         console.error("Error fetching tx data:", err);
-        if (isMounted) {
+        if (!isCancelled) {
           setError("Failed to fetch live data. The RPC might be busy.");
-          setLoading(false);
+          setCurrentHash(txHash);
+          setIsLoading(false);
         }
       }
     };
 
-    fetchTxData();
+    void fetchTxData();
 
-    return () => { isMounted = false; };
+    return () => {
+      isCancelled = true;
+    };
   }, [isOpen, txHash]);
 
   const handleCopy = () => {
@@ -104,7 +115,7 @@ export default function TxExplorerModal({ isOpen, onClose, txHash }: TxExplorerM
 
   return (
     <div 
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4 animate-fade-in"
+      className="fixed inset-0 z-60 flex items-center justify-center p-4 animate-fade-in"
       style={{ background: "rgba(11, 12, 16, 0.75)", backdropFilter: "blur(12px)" }}
     >
       <div className="absolute inset-0" onClick={onClose}></div>
@@ -122,14 +133,14 @@ export default function TxExplorerModal({ isOpen, onClose, txHash }: TxExplorerM
               <p className="text-xs text-purple-300/70 uppercase tracking-widest font-bold">Polygon Amoy Testnet</p>
             </div>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-white/10 text-white/50 hover:text-white transition-colors">
+          <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-white/10 text-white/50 hover:text-white transition-colors" aria-label="Close modal">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Content Area */}
         <div className="relative z-10">
-          {loading ? (
+          {isScanning ? (
             <div className="flex flex-col items-center justify-center py-12">
               <div className="relative w-24 h-24 flex items-center justify-center mb-6">
                 {/* Scanning Rings */}
@@ -142,18 +153,18 @@ export default function TxExplorerModal({ isOpen, onClose, txHash }: TxExplorerM
               <h3 className="text-lg font-bold text-white tracking-wider animate-pulse mb-2">SCANNING BLOCKCHAIN</h3>
               <p className="text-xs text-white/50 font-mono text-center">Fetching live data for<br/>{txHash.slice(0, 8)}...{txHash.slice(-8)}</p>
             </div>
-          ) : error ? (
+          ) : displayError ? (
             <div className="py-8 text-center">
               <div className="w-16 h-16 mx-auto rounded-full bg-red-500/10 flex items-center justify-center mb-4">
                 <AlertCircle className="w-8 h-8 text-red-500" />
               </div>
               <h3 className="text-lg font-bold text-red-400 mb-2">Connection Error</h3>
-              <p className="text-sm text-white/60 mb-6">{error}</p>
+              <p className="text-sm text-white/60 mb-6">{displayError}</p>
               <button onClick={onClose} className="px-6 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-sm font-bold text-white transition-colors">
                 Close
               </button>
             </div>
-          ) : txData ? (
+          ) : displayTxData ? (
             <div className="space-y-4">
               
               {/* Hash & Status Row */}
@@ -161,25 +172,25 @@ export default function TxExplorerModal({ isOpen, onClose, txHash }: TxExplorerM
                 <div className="flex justify-between items-start mb-3">
                   <span className="text-xs font-bold text-white/50 uppercase tracking-widest">Transaction Hash</span>
                   <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-widest border ${
-                    txData.status === "success" ? "bg-green-500/10 text-green-400 border-green-500/30 shadow-[0_0_10px_rgba(74,222,128,0.1)]" :
-                    txData.status === "failed" ? "bg-red-500/10 text-red-400 border-red-500/30" :
+                    displayTxData.status === "success" ? "bg-green-500/10 text-green-400 border-green-500/30 shadow-[0_0_10px_rgba(74,222,128,0.1)]" :
+                    displayTxData.status === "failed" ? "bg-red-500/10 text-red-400 border-red-500/30" :
                     "bg-amber-500/10 text-amber-400 border-amber-500/30"
                   }`}>
-                    {txData.status === "success" && <ShieldCheck className="w-3 h-3" />}
-                    {txData.status === "pending" && <Clock className="w-3 h-3 animate-spin-slow" />}
-                    {txData.status === "failed" && <AlertCircle className="w-3 h-3" />}
-                    {txData.status}
+                    {displayTxData.status === "success" && <ShieldCheck className="w-3 h-3" />}
+                    {displayTxData.status === "pending" && <Clock className="w-3 h-3 animate-spin-slow" />}
+                    {displayTxData.status === "failed" && <AlertCircle className="w-3 h-3" />}
+                    {displayTxData.status}
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="font-mono text-sm text-cyan-300 break-all">{txHash}</span>
-                  <button onClick={handleCopy} className="p-1.5 rounded-md hover:bg-white/10 text-white/40 hover:text-white transition-colors shrink-0">
+                  <button onClick={handleCopy} className="p-1.5 rounded-md hover:bg-white/10 text-white/40 hover:text-white transition-colors shrink-0" aria-label="Copy transaction hash">
                     {copied ? <CheckCircle2 className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
                   </button>
                 </div>
               </div>
 
-              {txData.status !== "pending" && (
+              {displayTxData.status !== "pending" && (
                 <>
                   {/* Grid Stats */}
                   <div className="grid grid-cols-2 gap-3">
@@ -188,14 +199,14 @@ export default function TxExplorerModal({ isOpen, onClose, txHash }: TxExplorerM
                         <Box className="w-4 h-4 text-purple-400" />
                         <span className="text-xs font-bold text-white/50 uppercase tracking-widest">Block</span>
                       </div>
-                      <span className="text-lg font-bold text-white">{txData.blockNumber}</span>
+                      <span className="text-lg font-bold text-white">{displayTxData.blockNumber}</span>
                     </div>
                     <div className="p-4 rounded-xl bg-white/5 border border-white/5 flex flex-col justify-center">
                       <div className="flex items-center gap-2 mb-1.5">
                         <Clock className="w-4 h-4 text-cyan-400" />
                         <span className="text-xs font-bold text-white/50 uppercase tracking-widest">Timestamp</span>
                       </div>
-                      <span className="text-xs font-bold text-white/90 leading-tight">{txData.timestamp}</span>
+                      <span className="text-xs font-bold text-white/90 leading-tight">{displayTxData.timestamp}</span>
                     </div>
                   </div>
 
@@ -203,15 +214,15 @@ export default function TxExplorerModal({ isOpen, onClose, txHash }: TxExplorerM
                   <div className="space-y-3 p-4 rounded-xl bg-white/5 border border-white/5">
                     <div className="flex justify-between items-center pb-3 border-b border-white/5">
                       <span className="text-xs font-bold text-white/50">Gas Fee</span>
-                      <span className="text-sm font-bold text-purple-300">{txData.gasFee} MATIC</span>
+                      <span className="text-sm font-bold text-purple-300">{displayTxData.gasFee} MATIC</span>
                     </div>
                     <div className="flex justify-between items-center pb-3 border-b border-white/5">
                       <span className="text-xs font-bold text-white/50">From</span>
-                      <span className="text-xs font-mono text-white/80">{txData.from?.slice(0,6)}...{txData.from?.slice(-4)}</span>
+                      <span className="text-xs font-mono text-white/80">{displayTxData.from?.slice(0,6)}...{displayTxData.from?.slice(-4)}</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-xs font-bold text-white/50">To</span>
-                      <span className="text-xs font-mono text-white/80">{txData.to?.slice(0,6)}...{txData.to?.slice(-4)}</span>
+                      <span className="text-xs font-mono text-white/80">{displayTxData.to?.slice(0,6)}...{displayTxData.to?.slice(-4)}</span>
                     </div>
                   </div>
                 </>
