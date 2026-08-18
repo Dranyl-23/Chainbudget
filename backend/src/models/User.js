@@ -18,8 +18,10 @@ const UserSchema = new mongoose.Schema(
       trim: true,
     },
     // secp256k1 uncompressed public key — used for signature verification.
-    // The private key is NEVER stored here.
+    // The private key is NEVER stored here in plaintext.
     publicKey: { type: String, sparse: true, trim: true },
+    encryptedPrivateKey: { type: String, select: false },
+    encryptedMnemonic: { type: String, select: false },
     // How the wallet was created
     walletType: {
       type: String,

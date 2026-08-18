@@ -13,8 +13,7 @@
 import axios from 'axios';
 import { signLoginChallenge } from './wallet';
 import { storeSessionToken, getSessionToken, clearAll } from './secureStorage';
-
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.100.14:5001/api';
+import { API_URL } from './api';
 
 /** User shape returned from the backend after successful auth */
 export type AuthUser = {

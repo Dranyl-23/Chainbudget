@@ -122,8 +122,9 @@ export default function GovernanceScreen() {
           </View>
         ) : (
           proposals.map(proposal => {
-            const hasVoted = proposal.votesList?.some((v: any) => v.voter._id === user?._id);
-            const myVote = proposal.votesList?.find((v: any) => v.voter._id === user?._id);
+            const currentUserId = user?.id || (user as any)?._id;
+            const hasVoted = proposal.votesList?.some((v: any) => (v.voter?._id || v.voter?.id || v.voter) === currentUserId);
+            const myVote = proposal.votesList?.find((v: any) => (v.voter?._id || v.voter?.id || v.voter) === currentUserId);
             
             const yesVotes = proposal.votesList?.filter((v: any) => v.support).length || 0;
             const noVotes = proposal.votesList?.filter((v: any) => !v.support).length || 0;

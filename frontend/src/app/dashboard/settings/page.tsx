@@ -6,7 +6,7 @@ import Image from "next/image";
 import { ethers } from "ethers";
 import api from "@/lib/api";
 import toast from "react-hot-toast";
-import { Save, Wallet, Upload, User as UserIcon, ShieldCheck, ExternalLink } from "lucide-react";
+import { Save, Wallet, Upload, User as UserIcon, ShieldCheck, ExternalLink, Copy, Check, Smartphone } from "lucide-react";
 import axios from "axios";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -31,8 +31,12 @@ interface PendingLiquidationOrg {
 }
 
 interface AutoWalletKeys {
-  privateKey: string;
-  mnemonic: string;
+  privateKey?: string;
+  mnemonic?: string;
+  isNonCustodial?: boolean;
+  walletType?: string;
+  message?: string;
+  error?: string;
 }
 
 interface UploadResponse {
@@ -66,6 +70,15 @@ export default function SettingsPage() {
   const [showKeys, setShowKeys] = useState(false);
   const [autoWalletKeys, setAutoWalletKeys] = useState<AutoWalletKeys | null>(null);
   const [isLoadingKeys, setIsLoadingKeys] = useState(false);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  const handleCopy = (text: string, field: string) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedField(field);
+    toast.success("Copied to clipboard!");
+    setTimeout(() => setCopiedField(null), 2000);
+  };
 
   useEffect(() => {
     let isCancelled = false;
@@ -368,18 +381,69 @@ export default function SettingsPage() {
 
               {showKeys && autoWalletKeys && (
                 <div className="mt-6 space-y-4 animate-fade-in">
-                  <div className="bg-black/50 p-4 rounded-lg border border-red-500/30">
-                    <p className="text-xs font-bold text-red-400 uppercase tracking-widest mb-1">Recovery Phrase (12 Words)</p>
-                    <p className="text-sm font-mono text-gray-300 break-words">{autoWalletKeys.mnemonic}</p>
+                  <div className="bg-black/60 p-5 rounded-2xl border border-orange-500/25 shadow-xl">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-orange-500/15">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-lg bg-orange-500/15 border border-orange-500/30 flex items-center justify-center">
+                          <Smartphone className="w-4 h-4 text-orange-400" />
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-bold text-orange-400 uppercase tracking-wider">
+                            Mobile Login Recovery Phrase
+                          </h4>
+                          <p className="text-[11px] text-gray-400">12-word BIP-39 mnemonic seed phrase</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleCopy(autoWalletKeys.mnemonic || "", "mnemonic")}
+                        className="text-xs flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-lg bg-orange-500/15 hover:bg-orange-500/25 active:scale-95 text-orange-300 border border-orange-500/30 transition-all font-medium cursor-pointer shadow-sm"
+                      >
+                        {copiedField === "mnemonic" ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-orange-300" />}
+                        <span>{copiedField === "mnemonic" ? "Copied All Words!" : "Copy 12 Words"}</span>
+                      </button>
+                    </div>
+                    
+                    {/* 12-Word Numbered Grid with clean fixed-width badges */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-3 mb-4">
+                      {autoWalletKeys.mnemonic?.trim().split(/\s+/).map((word, idx) => (
+                        <div 
+                          key={idx} 
+                          className="bg-white/5 border border-white/10 hover:border-orange-500/40 rounded-xl px-3.5 py-2.5 flex items-center gap-3 transition-colors group min-w-0 shadow-sm"
+                        >
+                          <span className="w-6 h-6 rounded-md bg-black/40 border border-white/10 flex items-center justify-center text-[11px] font-mono font-medium text-gray-400 select-none shrink-0 group-hover:text-orange-400 group-hover:border-orange-500/30 transition-colors">
+                            {idx + 1}
+                          </span>
+                          <span className="text-sm font-mono font-semibold text-orange-100 tracking-normal select-all truncate">
+                            {word}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl p-3.5 flex items-start gap-2.5 text-xs text-orange-200/90 leading-relaxed">
+                      <span className="text-base leading-none mt-0.5">📲</span>
+                      <div>
+                        <strong className="text-orange-300 font-semibold">How to log in on Mobile:</strong> Open the ChainBudget app on your phone &rarr; click <strong className="text-cyan-300">Log In with Recovery Phrase</strong> &rarr; paste or enter these 12 words.
+                      </div>
+                    </div>
                   </div>
                   
-                  <div className="bg-black/50 p-4 rounded-lg border border-red-500/30">
-                    <p className="text-xs font-bold text-red-400 uppercase tracking-widest mb-1">Private Key</p>
-                    <p className="text-sm font-mono text-gray-300 break-all">{autoWalletKeys.privateKey}</p>
+                  <div className="bg-black/60 p-4 rounded-xl border border-white/10">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Private Key</p>
+                      <button
+                        onClick={() => handleCopy(autoWalletKeys.privateKey || "", "privkey")}
+                        className="text-xs flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white/5 hover:bg-white/10 text-gray-300 border border-white/10 transition-colors cursor-pointer"
+                      >
+                        {copiedField === "privkey" ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                        {copiedField === "privkey" ? "Copied!" : "Copy Key"}
+                      </button>
+                    </div>
+                    <p className="text-xs font-mono text-gray-300 break-all bg-black/40 p-2.5 rounded-lg border border-white/5">{autoWalletKeys.privateKey}</p>
                   </div>
 
                   <p className="text-xs text-red-400 font-medium">
-                    ⚠️ WARNING: Never share these keys with anyone. Anyone with your private key or recovery phrase has full control over your funds.
+                    ⚠️ WARNING: Never share your recovery phrase with anyone. Anyone with these 12 words has full control over your wallet.
                   </p>
                 </div>
               )}
