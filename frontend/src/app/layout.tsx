@@ -12,6 +12,11 @@ export const metadata: Metadata = {
     "A blockchain-based budget management system for transparent organizational fund monitoring.",
   keywords: ["blockchain", "budget", "transparency", "organization", "audit"],
   manifest: "/manifest.json",
+  icons: {
+    icon: "/2D-Chainbudget.png",
+    shortcut: "/2D-Chainbudget.png",
+    apple: "/2D-Chainbudget.png",
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
