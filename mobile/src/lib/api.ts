@@ -1,13 +1,17 @@
 import axios from 'axios';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import { getSessionToken } from './secureStorage';
 
+// Automatically detect host IP from Expo dev server or fallback to Android emulator host
+const devHost = Constants.expoConfig?.hostUri?.split(':')[0];
 export const API_URL =
   process.env.EXPO_PUBLIC_API_URL ||
-  (Platform.OS === 'android' ? 'http://10.0.2.2:5001/api' : 'http://192.168.100.14:5001/api');
+  (devHost ? `http://${devHost}:5001/api` : (Platform.OS === 'android' ? 'http://10.0.2.2:5001/api' : 'http://localhost:5001/api'));
 
 const api = axios.create({
   baseURL: API_URL,
+  timeout: 10000,
 });
 
 // Attach the ChainBudget JWT from hardware-backed SecureStore on every request.
