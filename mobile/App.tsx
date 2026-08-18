@@ -1,11 +1,15 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import 'react-native-get-random-values';
 import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, ActivityIndicator, Alert } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as Device from 'expo-device';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
+
+// Splash Screen
+import SplashScreen from './src/screens/SplashScreen';
 
 // Authenticated navigator
 import RootStackNavigator from './src/navigation/RootStackNavigator';
@@ -50,19 +54,16 @@ function AuthNavigator() {
   );
 }
 
-/** Root navigator — switches between auth, no-org holding, and main app. */
+/** Root navigator — switches between splash, auth (landing), no-org holding, and main app. */
 const RootNavigator = () => {
   const { user, isLoading } = useAuth();
+  const [isSplashComplete, setIsSplashComplete] = useState(false);
 
-  if (isLoading) {
-    return (
-      <View style={{ flex: 1, backgroundColor: '#09090b', alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color="#e879f9" size="large" />
-      </View>
-    );
+  if (!isSplashComplete || isLoading) {
+    return <SplashScreen onFinish={() => setIsSplashComplete(true)} />;
   }
 
-  // Not logged in → auth flow
+  // Not logged in → auth flow (Landing Page)
   if (!user) return <AuthNavigator />;
 
   // Logged in but no active org memberships yet → holding screen
@@ -105,8 +106,10 @@ export default function App() {
   }, []);
 
   return (
-    <AuthProvider>
-      <RootNavigator />
-    </AuthProvider>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <RootNavigator />
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }

@@ -289,6 +289,19 @@ const attachUser = async (req, res, next) => {
 
 const authenticate = [checkJwt, attachUser];
 
+/** Optional authentication: attaches req.user if a valid token is provided, otherwise proceeds as guest */
+const optionalAuthenticate = async (req, res, next) => {
+  if (!req.headers.authorization) {
+    return next();
+  }
+  checkJwt(req, res, (jwtErr) => {
+    if (jwtErr) return next();
+    attachUser(req, res, (attachErr) => {
+      next();
+    });
+  });
+};
+
 const requireRole = (maxLevel) => async (req, res, next) => {
   if (req.user.isSuperAdmin) return next();
 
@@ -322,4 +335,4 @@ const requireSuperAdmin = (req, res, next) => {
   next();
 };
 
-module.exports = { authenticate, requireRole, requireSuperAdmin };
+module.exports = { authenticate, optionalAuthenticate, requireRole, requireSuperAdmin };

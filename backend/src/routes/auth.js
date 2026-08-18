@@ -3,8 +3,8 @@ const router = express.Router();
 const { ethers } = require("ethers");
 const User = require("../models/User");
 const AuditLog = require("../models/AuditLog");
-const { decrypt } = require("../utils/crypto");
-const { authenticate } = require("../middleware/auth");
+const { encrypt, decrypt } = require("../utils/crypto");
+const { authenticate, optionalAuthenticate } = require("../middleware/auth");
 const {
   nonceRateLimiter,
   verifyRateLimiter,
@@ -24,7 +24,7 @@ router.get("/csrf-token", (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// MOBILE WEB3 AUTH ENDPOINTS (no Asgardeo required)
+// MOBILE & WEB WEB3 AUTH ENDPOINTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// POST /api/auth/register
@@ -68,15 +68,11 @@ router.post("/register", verifyRateLimiter, async (req, res) => {
       const emailUser = await User.findOne({ email: email.toLowerCase().trim() });
       if (emailUser) {
         // ── Case A: Asgardeo browser user linking their mobile wallet ────────
-        // They already have a server-generated wallet — replace it with their
-        // personal non-custodial mobile wallet. The asgardeoId is preserved so
-        // browser login via Asgardeo continues to work unchanged.
         if (emailUser.asgardeoId) {
           emailUser.walletAddress = addr;
           if (publicKey) emailUser.publicKey = publicKey;
           emailUser.walletType = "embedded_bip44";
           emailUser.walletVersion = 1;
-          // Clear old server-held keys — no longer needed (non-custodial now)
           emailUser.encryptedPrivateKey = undefined;
           emailUser.encryptedMnemonic = undefined;
           await emailUser.save();
@@ -125,25 +121,35 @@ router.post("/register", verifyRateLimiter, async (req, res) => {
 });
 
 /// GET /api/auth/nonce/:walletAddress
-/// Public endpoint — no auth required. Issues a one-time login challenge.
-/// Rate limited to prevent brute force.
-router.get("/nonce/:walletAddress", nonceRateLimiter, async (req, res) => {
+/// Public / optionally authenticated endpoint.
+/// If user is logged in (has valid token in Authorization header) -> issues a Link Wallet nonce for req.user.
+/// If unauthenticated -> looks up User by walletAddress to issue a Login challenge nonce.
+router.get("/nonce/:walletAddress", optionalAuthenticate, nonceRateLimiter, async (req, res) => {
   try {
     const wallet = req.params.walletAddress.toLowerCase();
     if (!isValidEthereumAddress(wallet)) {
       return res.status(400).json({ error: "Invalid Ethereum address format" });
     }
 
+    const randomHex = require("crypto").randomBytes(32).toString("hex");
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes TTL
+
+    // ── Case A: Authenticated User Linking a Wallet ─────────────────────────
+    if (req.user) {
+      const nonce = `ChainBudget Link Wallet: ${Date.now()}-${randomHex}`;
+      req.user.nonce = nonce;
+      req.user.nonceExpiresAt = expiresAt;
+      await req.user.save();
+      return res.json({ nonce, expiresAt });
+    }
+
+    // ── Case B: Unauthenticated Mobile / Web Login ──────────────────────────
     const user = await User.findOne({ walletAddress: wallet });
     if (!user) {
       return res.status(404).json({ error: "Wallet not registered. Please register first." });
     }
 
-    // Generate a cryptographically random nonce with timestamp for replay protection
-    const randomHex = require("crypto").randomBytes(32).toString("hex");
     const nonce = `ChainBudget Auth [${Date.now()}]: ${randomHex}`;
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes TTL
-
     user.nonce = nonce;
     user.nonceExpiresAt = expiresAt;
     await user.save();
@@ -255,6 +261,88 @@ router.get("/validate", authenticate, (req, res) => {
   res.json({ valid: true, userId: req.user._id });
 });
 
+/// GET /api/auth/keys
+/// Returns the decrypted auto-generated wallet keys (private key + 12-word mnemonic) for the authenticated user,
+/// enabling seamless backup and account restore on mobile.
+/// Protected by authenticate middleware and strict rate limiting.
+router.get("/keys", authenticate, keyExportRateLimiter, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select("+encryptedPrivateKey +encryptedMnemonic");
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    let privateKey = null;
+    let mnemonic = "";
+
+    // ── Attempt 1: Decrypt existing encrypted keys ──────────────────────────
+    if (user.encryptedPrivateKey) {
+      try {
+        const decryptedPriv = decrypt(user.encryptedPrivateKey);
+        const decryptedMnem = user.encryptedMnemonic ? decrypt(user.encryptedMnemonic) : "";
+
+        // Verify validity (valid EVM private key is 64 hex chars or 0x + 64 hex chars)
+        if (decryptedPriv && (decryptedPriv.startsWith("0x") || decryptedPriv.length === 64)) {
+          privateKey = decryptedPriv.startsWith("0x") ? decryptedPriv : `0x${decryptedPriv}`;
+          mnemonic = decryptedMnem;
+        }
+      } catch (decryptErr) {
+        console.warn("[auth/keys] Decryption of legacy record failed, will regenerate:", decryptErr.message);
+      }
+    }
+
+    // ── Attempt 2: Auto-generate a valid BIP-39 wallet if missing or legacy ──
+    if (!privateKey || !mnemonic || mnemonic.trim().split(/\s+/).length !== 12) {
+      const wallet = ethers.Wallet.createRandom();
+      privateKey = wallet.privateKey;
+      mnemonic = wallet.mnemonic.phrase;
+
+      user.walletAddress = wallet.address.toLowerCase();
+      user.walletType = "asgardeo_generated";
+      user.encryptedPrivateKey = encrypt(privateKey);
+      user.encryptedMnemonic = encrypt(mnemonic);
+      await user.save();
+      console.log(`[auth/keys] Generated new BIP-39 wallet for user ${user._id}: ${user.walletAddress}`);
+    } else {
+      // Auto-migrate legacy format to modern v2 in background
+      if (user.encryptedPrivateKey && !user.encryptedPrivateKey.startsWith("v2:")) {
+        try {
+          user.encryptedPrivateKey = encrypt(privateKey);
+          if (mnemonic) {
+            user.encryptedMnemonic = encrypt(mnemonic);
+          }
+          await user.save();
+        } catch (migrationErr) {
+          console.warn("[auth/keys] Non-blocking format migration warning:", migrationErr.message);
+        }
+      }
+    }
+
+    // Log the security-critical export event to AuditLog
+    try {
+      await AuditLog.create({
+        organization: user.memberships?.[0]?.organization || null,
+        performedBy: user._id,
+        action: "RECOVERY_KEYS_EXPORTED",
+        details: `User exported wallet recovery keys for wallet ${user.walletAddress || "unknown"}`,
+        ipAddress: req.ip || req.connection?.remoteAddress,
+        userAgent: req.headers["user-agent"],
+      });
+    } catch (auditErr) {
+      console.warn("Failed to log key export audit event:", auditErr.message);
+    }
+
+    res.json({
+      privateKey,
+      mnemonic,
+      walletAddress: user.walletAddress,
+    });
+  } catch (err) {
+    console.error("[auth/keys] Unexpected error for user:", req.user?._id, err.message);
+    res.status(500).json({ error: "Failed to retrieve wallet keys. Please try again." });
+  }
+});
+
 /// POST /api/auth/confirm-backup
 /// Called from mobile after the user confirms they saved their recovery phrase.
 /// Sets hasBackedUpPhrase = true so the reminder banner is dismissed permanently.
@@ -303,27 +391,6 @@ router.get("/me", authenticate, async (req, res) => {
         hasBackedUpPhrase: req.user.hasBackedUpPhrase,
       }
     });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-/// GET /api/auth/nonce/:walletAddress
-/// Returns a one-time nonce for the wallet to sign (used for linking)
-router.get("/nonce/:walletAddress", authenticate, nonceRateLimiter, async (req, res) => {
-  try {
-    const wallet = req.params.walletAddress.toLowerCase();
-    if (!isValidEthereumAddress(wallet)) {
-      return res.status(400).json({ error: "Invalid Ethereum address format" });
-    }
-
-    const nonce = `ChainBudget Link Wallet: ${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    
-    // Store nonce on the CURRENT user
-    req.user.nonce = nonce;
-    await req.user.save();
-
-    res.json({ nonce });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

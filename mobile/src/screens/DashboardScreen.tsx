@@ -46,8 +46,8 @@ export default function DashboardScreen() {
       if (orgRes.data.length > 0 && !activeOrgId) {
         setActiveOrgId(orgRes.data[0]._id);
       }
-    } catch (err) {
-      console.error("Failed to fetch initial dashboard data:", err);
+    } catch (err: any) {
+      console.warn("Failed to fetch initial dashboard data:", err?.message || err);
     }
   };
 
@@ -67,8 +67,8 @@ export default function DashboardScreen() {
           setUnreadNotifCount(unread);
         }
       }).catch(() => {});
-    } catch (err) {
-      console.error("Failed to fetch org content:", err);
+    } catch (err: any) {
+      console.warn("Failed to fetch org content:", err?.message || err);
     } finally {
       setLoadingContent(false);
     }

@@ -1,7 +1,10 @@
 import axios from 'axios';
+import { Platform } from 'react-native';
 import { getSessionToken } from './secureStorage';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.100.14:5001/api';
+export const API_URL =
+  process.env.EXPO_PUBLIC_API_URL ||
+  (Platform.OS === 'android' ? 'http://10.0.2.2:5001/api' : 'http://192.168.100.14:5001/api');
 
 const api = axios.create({
   baseURL: API_URL,

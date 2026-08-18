@@ -43,8 +43,8 @@ export default function PublicLedgerScreen() {
       ]);
       setOrganizations(orgsRes.data || []);
       setFeed(feedRes.data || []);
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.warn('[PublicLedger] Failed to fetch data:', err?.message || err);
     } finally {
       setLoading(false);
       setRefreshing(false);

@@ -183,9 +183,9 @@ export default function LoginScreen({ navigation }: any) {
                 onPress={() => navigation.navigate('RestoreWallet')}
                 activeOpacity={0.7}
               >
-                <Ionicons name="refresh-outline" size={16} color="#a855f7" style={{ marginRight: 6 }} />
-                <Text style={[styles.secondaryBtnText, { color: '#a855f7' }]}>
-                  Restore Existing Account
+                <Ionicons name="key-outline" size={16} color="#00E5FF" style={{ marginRight: 6 }} />
+                <Text style={[styles.secondaryBtnText, { color: '#00E5FF', fontWeight: '600' }]}>
+                  Log In with Recovery Phrase
                 </Text>
               </TouchableOpacity>
             </>

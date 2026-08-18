@@ -19,7 +19,6 @@ export default function RootStackNavigator() {
           backgroundColor: '#09090b',
         },
         headerTintColor: '#fff',
-        headerBackTitleVisible: false,
         contentStyle: { backgroundColor: '#09090b' },
       }}
     >

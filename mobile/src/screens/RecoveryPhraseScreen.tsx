@@ -24,12 +24,13 @@ import { useAuth } from '../context/AuthContext';
 import api from '../lib/api';
 
 type Props = {
-  route: { params: { walletAddress: string; autoLogin?: boolean } };
-  navigation: any;
+  route?: { params?: { walletAddress?: string; autoLogin?: boolean } };
+  navigation?: any;
 };
 
 export default function RecoveryPhraseScreen({ route, navigation }: Props) {
-  const { walletAddress, autoLogin } = route.params;
+  const walletAddress = route?.params?.walletAddress;
+  const autoLogin = route?.params?.autoLogin;
   const { login } = useAuth();
 
   const [words, setWords] = useState<string[]>([]);
@@ -80,14 +81,14 @@ export default function RecoveryPhraseScreen({ route, navigation }: Props) {
       // Non-fatal — banner will show again next session if this fails
     }
 
-    if (autoLogin) {
+    if (autoLogin && walletAddress) {
       try {
         await login(walletAddress);
       } catch (err: any) {
         Alert.alert('Login Failed', err.message || 'Could not complete sign in.');
       }
     } else {
-      navigation.goBack();
+      navigation?.goBack();
     }
   }, [autoLogin, walletAddress, login, navigation]);
 
