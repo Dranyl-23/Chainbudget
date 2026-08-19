@@ -6,7 +6,7 @@ import Image from "next/image";
 import { ethers } from "ethers";
 import api from "@/lib/api";
 import toast from "react-hot-toast";
-import { Save, Wallet, Upload, User as UserIcon, ShieldCheck, ExternalLink, Copy, Check, Smartphone } from "lucide-react";
+import { Save, Wallet, Upload, User as UserIcon, ShieldCheck, ExternalLink, Copy, Check, Smartphone, CheckCircle2, Sparkles, X } from "lucide-react";
 import axios from "axios";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -78,6 +78,7 @@ export default function SettingsPage() {
   const [avatarPreview, setAvatarPreview] = useState<string>("");
   const [imageError, setImageError] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [successBanner, setSuccessBanner] = useState<string | null>(null);
 
   const currentDisplayName = displayName || user?.displayName || "";
   const activeAvatar = avatarPreview || (!imageError ? formatAvatarUrl(user?.avatarUrl) : null);
@@ -218,6 +219,7 @@ export default function SettingsPage() {
       await refreshUser();
       setAvatarFile(null);
       setAvatarPreview("");
+      setSuccessBanner("Your new profile picture and display name are now saved to the database and active across Web and Mobile.");
       
       toast.success("Profile updated successfully!");
     } catch (err: unknown) {
@@ -311,6 +313,31 @@ export default function SettingsPage() {
         <div className="md:col-span-2 space-y-6">
           <div className="glass p-6 rounded-2xl">
             <h2 className="text-xl font-bold text-gray-800 mb-6 border-b pb-2">Personal Information</h2>
+            
+            {successBanner && (
+              <div className="mb-6 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 backdrop-blur-md flex items-center justify-between gap-3 animate-fade-in shadow-[0_0_20px_rgba(16,185,129,0.15)]">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center shrink-0">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-400 drop-shadow-[0_0_6px_rgba(16,185,129,0.8)]" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-emerald-300 flex items-center gap-1.5">
+                      Profile Saved Successfully! <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                    </p>
+                    <p className="text-xs text-emerald-400/80">
+                      {successBanner}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSuccessBanner(null)}
+                  className="p-1.5 rounded-lg text-emerald-400/60 hover:text-emerald-300 hover:bg-emerald-500/10 transition-colors"
+                  title="Dismiss"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
             
             <div className="flex flex-col sm:flex-row gap-6 items-center sm:items-start mb-6">
               <div className="relative flex flex-col items-center">
