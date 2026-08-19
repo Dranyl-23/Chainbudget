@@ -1,31 +1,67 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, RefreshControl, TouchableOpacity, FlatList, ActivityIndicator, Image, Modal, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  ScrollView,
+  RefreshControl,
+  TouchableOpacity,
+  Image,
+  Alert,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Clipboard from 'expo-clipboard';
+import { triggerLightHaptic, triggerSuccessHaptic } from '../lib/biometrics';
 import api from '../lib/api';
 import { useAuth } from '../context/AuthContext';
+import { useSocket } from '../context/SocketContext';
+import { useTheme } from '../context/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  SkeletonBalanceCard,
+  SkeletonBudgetList,
+  SkeletonTransactionList,
+} from '../components/SkeletonLoader';
+import BudgetChart from '../components/BudgetChart';
+import OrgBottomSheet from '../components/OrgBottomSheet';
+import { getCachedDashboard, setCachedDashboard } from '../lib/cache';
 
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const { on } = useSocket();
+  const { colors, isDark } = useTheme();
   const navigation = useNavigation<any>();
+
   const [organizations, setOrganizations] = useState<any[]>([]);
   const [activeOrgId, setActiveOrgId] = useState<string | null>(null);
-  
+
   const [budgets, setBudgets] = useState<any[]>([]);
   const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
   const [personalBalance, setPersonalBalance] = useState<string>('0.0');
-  
+
   const [viewMode, setViewMode] = useState<'treasury' | 'personal'>('treasury');
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingInitial, setLoadingInitial] = useState(true);
   const [loadingContent, setLoadingContent] = useState(false);
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
-  const [showOrgDropdown, setShowOrgDropdown] = useState(false);
+  const [showOrgSheet, setShowOrgSheet] = useState(false);
 
-  // Initial load
+  // Load cached snapshot instantly on mount (cold-start optimization)
   useEffect(() => {
+    async function loadCache() {
+      const cached = await getCachedDashboard();
+      if (cached) {
+        if (cached.organizations) setOrganizations(cached.organizations);
+        if (cached.activeOrgId) setActiveOrgId(cached.activeOrgId);
+        if (cached.personalBalance) setPersonalBalance(cached.personalBalance);
+        if (cached.budgets) setBudgets(cached.budgets);
+        if (cached.recentTransactions) setRecentTransactions(cached.recentTransactions);
+        setLoadingInitial(false);
+      }
+    }
+    loadCache();
     fetchInitialData();
   }, []);
 
@@ -36,18 +72,87 @@ export default function DashboardScreen() {
     }
   }, [activeOrgId]);
 
+  // Live WebSocket Subscription: Auto-update on new transactions, approvals, or notifications
+  useEffect(() => {
+    if (!activeOrgId) return;
+
+    const unsubTx = on('transaction_updated', (data: any) => {
+      if (!data?.orgId || data.orgId === activeOrgId) {
+        fetchOrgContent(activeOrgId);
+        triggerLightHaptic();
+      }
+    });
+
+    const unsubNotif = on('new_notification', (data: any) => {
+      if (!data?.orgId || data.orgId === activeOrgId) {
+        setUnreadNotifCount((prev) => prev + 1);
+        triggerLightHaptic();
+      }
+    });
+
+    return () => {
+      unsubTx();
+      unsubNotif();
+    };
+  }, [activeOrgId, on]);
+
   const fetchInitialData = async () => {
+    // 1. Immediately seed from user.memberships from session
+    if (user?.memberships && user.memberships.length > 0) {
+      const initialOrgs = user.memberships
+        .filter((m: any) => m.isActive)
+        .map((m: any) => ({
+          _id: m.organization?._id || m.organization,
+          name: m.organization?.name || m.organizationName || 'Organization',
+          subsidyAmount: m.organization?.subsidyAmount || 0,
+          ...m.organization,
+        }));
+      if (initialOrgs.length > 0) {
+        setOrganizations(initialOrgs);
+        if (!activeOrgId) {
+          setActiveOrgId(initialOrgs[0]._id);
+        }
+      }
+    }
+
     try {
-      api.get('/users/me/balance').then(res => setPersonalBalance(res.data.balance || '0.0')).catch(() => {});
+      api
+        .get('/users/me/balance')
+        .then((res) => {
+          const bal = res.data.balance || '0.0';
+          setPersonalBalance(bal);
+          setCachedDashboard({ personalBalance: bal });
+        })
+        .catch(() => {});
 
       const orgRes = await api.get('/organizations');
-      setOrganizations(orgRes.data);
+      let orgs = orgRes.data || [];
 
-      if (orgRes.data.length > 0 && !activeOrgId) {
-        setActiveOrgId(orgRes.data[0]._id);
+      // If orgs is empty from /organizations, fall back to user.memberships
+      if (orgs.length === 0 && user?.memberships && user.memberships.length > 0) {
+        orgs = user.memberships
+          .filter((m: any) => m.isActive)
+          .map((m: any) => ({
+            _id: m.organization?._id || m.organization,
+            name: m.organization?.name || m.organizationName || 'Organization',
+            subsidyAmount: m.organization?.subsidyAmount || 0,
+            ...m.organization,
+          }));
+      }
+
+      if (orgs.length > 0) {
+        setOrganizations(orgs);
+        let targetOrgId = activeOrgId;
+        if (!targetOrgId || !orgs.some((o: any) => o._id === targetOrgId)) {
+          targetOrgId = orgs[0]._id;
+          setActiveOrgId(targetOrgId);
+        }
+        setCachedDashboard({ organizations: orgs, activeOrgId: targetOrgId || undefined });
       }
     } catch (err: any) {
-      console.warn("Failed to fetch initial dashboard data:", err?.message || err);
+      console.warn('Failed to fetch initial dashboard data:', err?.message || err);
+    } finally {
+      setLoadingInitial(false);
     }
   };
 
@@ -55,20 +160,33 @@ export default function DashboardScreen() {
     setLoadingContent(true);
     try {
       const budgetRes = await api.get(`/budget?orgId=${orgId}`);
-      setBudgets(budgetRes.data);
+      const budgetData = budgetRes.data || [];
+      setBudgets(budgetData);
 
       const txRes = await api.get(`/transactions?orgId=${orgId}&limit=5`);
-      const txData = txRes.data.data ? txRes.data.data : (Array.isArray(txRes.data) ? txRes.data : []);
-      setRecentTransactions(txData.slice(0, 5));
+      const txData = txRes.data.data
+        ? txRes.data.data
+        : Array.isArray(txRes.data)
+        ? txRes.data
+        : [];
+      setRecentTransactions(txData);
 
-      api.get(`/notifications?orgId=${orgId}`).then(res => {
-        if (res.data && res.data.notifications) {
-          const unread = res.data.notifications.filter((n: any) => !n.isRead).length;
-          setUnreadNotifCount(unread);
-        }
-      }).catch(() => {});
+      setCachedDashboard({
+        budgets: budgetData,
+        recentTransactions: txData,
+      });
+
+      api
+        .get(`/notifications?orgId=${orgId}`)
+        .then((res) => {
+          if (res.data && res.data.notifications) {
+            const unread = res.data.notifications.filter((n: any) => !n.isRead).length;
+            setUnreadNotifCount(unread);
+          }
+        })
+        .catch(() => {});
     } catch (err: any) {
-      console.warn("Failed to fetch org content:", err?.message || err);
+      console.warn('Failed to fetch org content:', err?.message || err);
     } finally {
       setLoadingContent(false);
     }
@@ -76,41 +194,66 @@ export default function DashboardScreen() {
 
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
+    triggerLightHaptic();
     fetchInitialData().then(() => {
       if (activeOrgId) fetchOrgContent(activeOrgId);
       setRefreshing(false);
     });
   }, [activeOrgId]);
 
-  const activeOrg = organizations.find(o => o._id === activeOrgId);
+  const activeOrg = organizations.find((o) => o._id === activeOrgId);
 
   return (
-    <View className="flex-1 bg-[#09090b]">
+    <View style={{ backgroundColor: colors.background }} className="flex-1">
       {/* Header & Org Switcher (Fixed at top) */}
-      <View 
-        style={{ paddingTop: (insets.top || 0) + 16 }}
-        className="pb-2 px-4 bg-[#09090b] z-10"
+      <View
+        style={{
+          paddingTop: (insets.top || 0) + 16,
+          backgroundColor: colors.background,
+        }}
+        className="pb-2 px-4 z-10"
       >
         <View className="flex-row justify-between items-start mb-4">
           <View>
-            <Text className="text-white/60 text-sm mb-1">Welcome back,</Text>
-            <Text className="text-2xl font-bold text-white">{user?.displayName}</Text>
+            <Text style={{ color: colors.textSecondary }} className="text-sm mb-1">Welcome back,</Text>
+            <Text style={{ color: colors.textPrimary }} className="text-2xl font-bold">{user?.displayName}</Text>
           </View>
           <View className="flex-row items-center gap-4">
-            <TouchableOpacity className="relative" onPress={() => navigation.navigate('Notifications')}>
-              <Ionicons name="notifications-outline" size={24} color="white" />
+            <TouchableOpacity
+              className="relative"
+              onPress={() => navigation.navigate('Notifications')}
+            >
+              <Ionicons name="notifications-outline" size={24} color={colors.textPrimary} />
               {unreadNotifCount > 0 && (
-                <View className="absolute -top-1 -right-1 bg-fuchsia-500 rounded-full w-4 h-4 items-center justify-center border border-[#09090b]">
+                <View 
+                  style={{ backgroundColor: colors.primary, borderColor: colors.background }}
+                  className="absolute -top-1 -right-1 rounded-full w-4 h-4 items-center justify-center border"
+                >
                   <Text className="text-[9px] text-white font-bold">{unreadNotifCount}</Text>
                 </View>
               )}
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => navigation.navigate('Profile')} className="w-10 h-10 rounded-full bg-indigo-900 border border-fuchsia-500 items-center justify-center overflow-hidden">
+            <TouchableOpacity
+              onPress={() => navigation.navigate('Profile')}
+              style={{ backgroundColor: colors.primaryMuted, borderColor: colors.primary }}
+              className="w-10 h-10 rounded-full border items-center justify-center overflow-hidden"
+            >
               {user?.avatarUrl ? (
-                <Image source={{ uri: user.avatarUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                <Image
+                  source={{ uri: user.avatarUrl }}
+                  style={{ width: '100%', height: '100%' }}
+                  resizeMode="cover"
+                />
               ) : (
-                <Text className="text-white font-bold text-sm">
-                  {user?.displayName ? user.displayName.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() : 'U'}
+                <Text style={{ color: colors.primary }} className="font-bold text-sm">
+                  {user?.displayName
+                    ? user.displayName
+                        .split(' ')
+                        .map((n: string) => n[0])
+                        .join('')
+                        .substring(0, 2)
+                        .toUpperCase()
+                    : 'U'}
                 </Text>
               )}
             </TouchableOpacity>
@@ -118,47 +261,81 @@ export default function DashboardScreen() {
         </View>
 
         {organizations.length > 0 ? (
-          <TouchableOpacity 
-            onPress={() => setShowOrgDropdown(true)}
-            className="flex-row items-center bg-white/5 border border-white/10 rounded-full px-3 py-1.5 self-start"
+          <TouchableOpacity
+            onPress={() => {
+              triggerLightHaptic();
+              setShowOrgSheet(true);
+            }}
+            style={{ backgroundColor: colors.cardGlass, borderColor: colors.border }}
+            className="flex-row items-center border rounded-full px-3 py-1.5 self-start shadow-sm"
           >
-            <View className="w-2.5 h-2.5 rounded-full bg-fuchsia-500 mr-2" />
-            <Text className="text-white font-medium mr-2">{activeOrg?.name || 'Select Org'}</Text>
-            <Ionicons name="chevron-down" size={14} color="rgba(255,255,255,0.5)" />
+            <View style={{ backgroundColor: colors.primary }} className="w-2.5 h-2.5 rounded-full mr-2" />
+            <Text style={{ color: colors.textPrimary }} className="font-medium mr-2">{activeOrg?.name || 'Select Org'}</Text>
+            <Ionicons name="chevron-down" size={14} color={colors.textMuted} />
           </TouchableOpacity>
         ) : (
-          <View className="px-4 py-2 rounded-full bg-white/5 border border-white/10 self-start">
-            <Text className="text-white/40 font-medium text-xs">No Organization</Text>
+          <View 
+            style={{ backgroundColor: colors.cardGlass, borderColor: colors.border }}
+            className="px-4 py-2 rounded-full border self-start"
+          >
+            <Text style={{ color: colors.textMuted }} className="font-medium text-xs">No Organization</Text>
           </View>
         )}
       </View>
 
-      <ScrollView 
-        className="flex-1 p-4"
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#e879f9" />}
+      {/* Main Content Area */}
+      <ScrollView
+        className="flex-1 px-4 mt-2"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }
       >
-        {activeOrg ? (
+        {loadingInitial && organizations.length === 0 ? (
+          <View className="py-6">
+            <SkeletonBalanceCard />
+            <SkeletonBudgetList />
+            <SkeletonTransactionList count={4} />
+          </View>
+        ) : activeOrg ? (
           <>
-            {/* Main Balance Card */}
+            {/* Balance Card Container */}
             {viewMode === 'treasury' ? (
               <LinearGradient
-                colors={['#2e1065', '#170f36']}
+                colors={isDark ? ['#4a154b', '#1a092b', '#09090b'] : ['#86198f', '#a21caf', '#701a75']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={{ borderRadius: 24, padding: 24, marginBottom: 24 }}
               >
-                <Image 
+                <Image
                   source={require('../../assets/Dashboard-Wallet.png')}
-                  style={{ position: 'absolute', right: 5, top: 50, width: 170, height: 170, opacity: 1 }}
+                  style={{
+                    position: 'absolute',
+                    right: 5,
+                    top: 50,
+                    width: 170,
+                    height: 170,
+                    opacity: 0.95,
+                  }}
                   resizeMode="contain"
                 />
-                
+
                 <View className="flex-row justify-between items-center mb-6">
                   <View className="flex-row bg-black/40 p-1 rounded-xl">
-                    <TouchableOpacity onPress={() => setViewMode('treasury')} className="px-4 py-1.5 rounded-lg bg-fuchsia-600">
+                    <TouchableOpacity
+                      onPress={() => setViewMode('treasury')}
+                      className="px-4 py-1.5 rounded-lg bg-fuchsia-600"
+                    >
                       <Text className="text-xs font-bold text-white">Treasury</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity onPress={() => setViewMode('personal')} className="px-4 py-1.5 rounded-lg">
+                    <TouchableOpacity
+                      onPress={() => setViewMode('personal')}
+                      className="px-4 py-1.5 rounded-lg"
+                    >
                       <Text className="text-xs font-bold text-white/50">Personal</Text>
                     </TouchableOpacity>
                   </View>
@@ -167,38 +344,56 @@ export default function DashboardScreen() {
                   </View>
                 </View>
 
-                <Text className="text-white/60 text-[10px] mb-1 font-medium uppercase tracking-widest relative">
+                <Text className="text-white/70 text-[10px] mb-1 font-medium uppercase tracking-widest relative">
                   {activeOrg.name} Balance (PHP)
                 </Text>
-                
+
                 <Text className="text-[42px] font-extrabold text-white mb-6 relative">
-                  ₱{activeOrg.subsidyAmount?.toLocaleString() || "0"}
+                  ₱{activeOrg.subsidyAmount?.toLocaleString() || '0'}
                 </Text>
 
-                <View className="flex-row items-center bg-blue-900/40 self-start px-3 py-1.5 rounded-full border border-blue-500/30 relative">
-                  <Ionicons name="shield-checkmark" size={14} color="#60a5fa" style={{ marginRight: 6 }} />
-                  <Text className="text-blue-200 text-[10px] font-bold">Secured & Non-custodial</Text>
+                <View className="flex-row items-center bg-black/30 self-start px-3 py-1.5 rounded-full border border-white/20 relative">
+                  <Ionicons
+                    name="shield-checkmark"
+                    size={14}
+                    color="#4ade80"
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text className="text-green-200 text-[10px] font-bold">Secured Vault</Text>
                 </View>
               </LinearGradient>
             ) : (
               <LinearGradient
-                colors={['#1a0b2e', '#0f0f1c']}
+                colors={isDark ? ['#1a0b2e', '#0f0f1c'] : ['#4338ca', '#3730a3', '#1e1b4b']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={{ borderRadius: 24, padding: 24, marginBottom: 24 }}
               >
-                <Image 
+                <Image
                   source={require('../../assets/Matic-logo.png')}
-                  style={{ position: 'absolute', right: -5, top: 55, width: 210, height: 210, opacity: 1 }}
+                  style={{
+                    position: 'absolute',
+                    right: 5,
+                    top: 45,
+                    width: 205,
+                    height: 205,
+                    opacity: 0.95,
+                  }}
                   resizeMode="contain"
                 />
-                
+
                 <View className="flex-row justify-between items-center mb-6">
                   <View className="flex-row bg-black/40 p-1 rounded-xl relative z-20">
-                    <TouchableOpacity onPress={() => setViewMode('treasury')} className="px-4 py-1.5 rounded-lg">
+                    <TouchableOpacity
+                      onPress={() => setViewMode('treasury')}
+                      className="px-4 py-1.5 rounded-lg"
+                    >
                       <Text className="text-xs font-bold text-white/50">Treasury</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity onPress={() => setViewMode('personal')} className="px-4 py-1.5 rounded-lg bg-[#8b5cf6]">
+                    <TouchableOpacity
+                      onPress={() => setViewMode('personal')}
+                      className="px-4 py-1.5 rounded-lg bg-[#8b5cf6]"
+                    >
                       <Text className="text-xs font-bold text-white">Personal</Text>
                     </TouchableOpacity>
                   </View>
@@ -207,45 +402,69 @@ export default function DashboardScreen() {
                   </View>
                 </View>
 
-                <Text className="text-white/60 text-[10px] mb-1 font-medium uppercase tracking-widest relative">
+                <Text className="text-white/70 text-[10px] mb-1 font-medium uppercase tracking-widest relative">
                   YOUR BALANCE (MATIC)
                 </Text>
-                
+
                 <Text className="text-[42px] font-extrabold text-white leading-none relative">
-                  {personalBalance || "0.0"}
+                  {personalBalance || '0.0'}
                 </Text>
-                <Text className="text-[32px] font-extrabold text-[#8b5cf6] mb-4 relative">
+                <Text className="text-[32px] font-extrabold text-[#c084fc] mb-4 relative">
                   MATIC
                 </Text>
 
-                <View className="flex-row items-center bg-white/5 self-start px-3 py-1.5 rounded-full mb-6 relative">
-                  <Ionicons name="trending-up" size={14} color="#8b5cf6" style={{ marginRight: 6 }} />
-                  <Text className="text-white text-[10px] font-bold">₱0.00 PHP</Text>
-                </View>
-
                 {/* Bottom Panels */}
-                <View className="flex-row justify-between border-t border-white/10 pt-4 mt-2 relative">
+                <View className="flex-row justify-between border-t border-white/15 pt-4 mt-2 relative">
                   <View className="flex-row items-center flex-1 pr-2">
                     <View className="bg-white/10 w-9 h-9 rounded-xl items-center justify-center mr-2.5">
                       <Ionicons name="cube-outline" size={18} color="#c084fc" />
                     </View>
                     <View className="flex-shrink">
-                      <Text className="text-white/50 text-[9px] uppercase tracking-widest mb-0.5">NETWORK</Text>
-                      <Text className="text-fuchsia-400 text-[11px] font-bold" numberOfLines={1} adjustsFontSizeToFit>Polygon Mainnet</Text>
+                      <Text className="text-white/60 text-[9px] uppercase tracking-widest mb-0.5">
+                        NETWORK
+                      </Text>
+                      <Text
+                        className="text-fuchsia-300 text-[11px] font-bold"
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                      >
+                        Polygon Amoy
+                      </Text>
                     </View>
                   </View>
-                  
-                  <View className="flex-row items-center flex-1 border-l border-white/10 pl-3">
+
+                  <TouchableOpacity
+                    className="flex-row items-center flex-1 border-l border-white/15 pl-3"
+                    activeOpacity={0.7}
+                    onPress={async () => {
+                      if (user?.walletAddress) {
+                        await Clipboard.setStringAsync(user.walletAddress);
+                        await triggerSuccessHaptic();
+                        Alert.alert(
+                          'Copied!',
+                          'Your wallet address has been copied to clipboard.'
+                        );
+                      }
+                    }}
+                  >
                     <View className="bg-white/10 w-9 h-9 rounded-xl items-center justify-center mr-2.5">
                       <Ionicons name="copy-outline" size={16} color="#fff" />
                     </View>
                     <View className="flex-shrink">
-                      <Text className="text-white/50 text-[9px] uppercase tracking-widest mb-0.5">ADDRESS</Text>
-                      <Text className="text-purple-300 text-[11px] font-mono" numberOfLines={1} adjustsFontSizeToFit>
-                        {user?.walletAddress ? `${user.walletAddress.slice(0, 6)}...${user.walletAddress.slice(-4)}` : '0x00...000'}
+                      <Text className="text-white/60 text-[9px] uppercase tracking-widest mb-0.5">
+                        ADDRESS
+                      </Text>
+                      <Text
+                        className="text-purple-200 text-[11px] font-mono"
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                      >
+                        {user?.walletAddress
+                          ? `${user.walletAddress.slice(0, 6)}...${user.walletAddress.slice(-4)}`
+                          : '0x00...000'}
                       </Text>
                     </View>
-                  </View>
+                  </TouchableOpacity>
                 </View>
               </LinearGradient>
             )}
@@ -253,184 +472,200 @@ export default function DashboardScreen() {
             {/* Quick Actions Grid */}
             <View className="flex-row justify-between mb-8">
               {[
-                { icon: 'add', label: 'Request', color: '#e879f9', route: 'Scanner' },
-                { icon: 'people-outline', label: 'Members', color: '#34d399', route: 'Members' },
-                { icon: 'send-outline', label: 'Send', color: '#3b82f6', route: 'Transfer' },
-                { icon: 'time-outline', label: 'History', color: '#f59e0b', route: 'History' },
+                { icon: 'add', label: 'Request', color: colors.primary, route: 'Scanner' },
+                { icon: 'send-outline', label: 'Send', color: colors.accentBlue, route: 'Transfer' },
+                { icon: 'qr-code-outline', label: 'Receive', color: colors.accentPurple, route: 'Receive' },
+                { icon: 'people-outline', label: 'Members', color: colors.success, route: 'Members' },
+                { icon: 'time-outline', label: 'History', color: colors.warning, route: 'History' },
               ].map((action, idx) => (
-                <TouchableOpacity 
-                  key={idx} 
-                  className="items-center bg-[#15151e] rounded-[20px] border border-white/5" 
-                  style={{ width: '23%', paddingVertical: 18 }}
+                <TouchableOpacity
+                  key={idx}
+                  style={{
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
+                  }}
+                  className="items-center rounded-[18px] border flex-1 mx-1 py-3.5 shadow-sm"
                   activeOpacity={0.7}
                   onPress={() => {
+                    triggerLightHaptic();
                     if (action.route === 'Scanner') {
                       navigation.navigate('MainTabs', { screen: 'Scanner' });
                     } else {
-                      navigation.navigate(action.route, { orgId: activeOrgId });
+                      navigation.navigate(action.route, {
+                        orgId: activeOrgId,
+                        initialOrgId: activeOrgId,
+                      });
                     }
                   }}
                 >
-                  <Ionicons name={action.icon as any} size={28} color={action.color} style={{ marginBottom: 10 }} />
-                  <Text className="text-white/80 text-[11px] font-medium">{action.label}</Text>
+                  <Ionicons
+                    name={action.icon as any}
+                    size={22}
+                    color={action.color}
+                    style={{ marginBottom: 6 }}
+                  />
+                  <Text style={{ color: colors.textPrimary }} className="text-[10px] font-semibold" numberOfLines={1}>
+                    {action.label}
+                  </Text>
                 </TouchableOpacity>
               ))}
             </View>
 
-            {/* Budgets Section */}
+            {/* Visual Budget Utilization Chart */}
+            {budgets.length > 0 && <BudgetChart budgets={budgets} currency="₱" />}
+
+            {/* Budgets Progress Section */}
             <View className="mb-8">
               <View className="flex-row justify-between items-center mb-4">
-                <Text className="text-white font-bold text-lg">Budget Progress</Text>
-                <TouchableOpacity 
-                  className="flex-row items-center"
-                  onPress={() => Alert.alert("Coming Soon", "Full budget analytics view is coming in a future update!")}
-                >
-                  <Text className="text-fuchsia-400 text-[11px] font-bold mr-1">View All</Text>
-                  <Ionicons name="chevron-forward" size={12} color="#e879f9" />
-                </TouchableOpacity>
+                <Text style={{ color: colors.textPrimary }} className="font-bold text-lg">Category Budgets</Text>
               </View>
 
-              {loadingContent ? (
-                <ActivityIndicator color="#e879f9" />
+              {loadingContent && budgets.length === 0 ? (
+                <SkeletonBudgetList />
               ) : budgets.length > 0 ? (
-                budgets.map((budget: any, index: number) => {
-                  const percent = budget.allocated > 0 ? Math.min((budget.spent / budget.allocated) * 100, 100) : 0;
-                  const icons = [
-                    { name: 'shield-checkmark-outline', color: '#e879f9', bg: 'rgba(232, 121, 249, 0.1)' },
-                    { name: 'calendar-outline', color: '#34d399', bg: 'rgba(52, 211, 153, 0.1)' },
-                    { name: 'megaphone-outline', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.1)' },
-                    { name: 'cube-outline', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.1)' },
-                  ];
-                  const visual = icons[index % icons.length];
+                budgets.map((b: any) => {
+                  const spent = b.spentAmount || b.spent || 0;
+                  const total = b.allocatedAmount || b.amount || 0;
+                  const pct = total > 0 ? Math.min(100, Math.round((spent / total) * 100)) : 0;
+                  const isHigh = pct >= 85;
 
                   return (
-                    <TouchableOpacity key={budget._id} activeOpacity={0.7} className="bg-[#15151e] p-4 rounded-[20px] border border-white/5 mb-3 flex-row items-center">
-                      <View 
-                        style={{ backgroundColor: visual.bg, width: 44, height: 44, borderRadius: 14 }} 
-                        className="items-center justify-center mr-4"
-                      >
-                        <Ionicons name={visual.name as any} size={22} color={visual.color} />
-                      </View>
-                      
-                      <View className="flex-1 mr-2">
-                        <View className="flex-row justify-between mb-2">
-                          <Text className="text-white font-bold text-sm">{budget.name}</Text>
-                          <Text className="text-white/60 text-[10px] font-mono">₱{budget.spent} / ₱{budget.allocated}</Text>
-                        </View>
-                        <View className="h-1.5 w-full bg-black/40 rounded-full overflow-hidden mb-1.5">
-                          <View 
-                            className="h-full rounded-full" 
-                            style={{ 
-                              width: `${percent}%`, 
-                              backgroundColor: visual.color
-                            }} 
-                          />
-                        </View>
-                        <Text style={{ color: visual.color, fontSize: 10, fontWeight: '700' }}>
-                          {percent.toFixed(0)}%
+                    <View
+                      key={b._id || b.category}
+                      style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                      className="p-4 rounded-[20px] border mb-3 shadow-sm"
+                    >
+                      <View className="flex-row justify-between items-center mb-2">
+                        <Text style={{ color: colors.textPrimary }} className="font-bold text-sm">{b.category}</Text>
+                        <Text style={{ color: colors.textSecondary }} className="text-xs font-semibold">
+                          ₱{spent.toLocaleString()} / ₱{total.toLocaleString()}
                         </Text>
                       </View>
-                      <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.2)" />
-                    </TouchableOpacity>
+
+                      {/* Progress Bar */}
+                      <View 
+                        style={{ backgroundColor: colors.cardGlass }}
+                        className="h-2 rounded-full overflow-hidden mb-2"
+                      >
+                        <View
+                          style={{
+                            width: `${pct}%`,
+                            backgroundColor: isHigh ? colors.error : colors.primary,
+                            height: '100%',
+                            borderRadius: 4,
+                          }}
+                        />
+                      </View>
+
+                      <View className="flex-row justify-between items-center">
+                        <Text style={{ color: colors.textMuted }} className="text-[10px]">{pct}% utilized</Text>
+                        {isHigh && (
+                          <Text style={{ color: colors.error }} className="text-[10px] font-bold">
+                            Approaching Limit
+                          </Text>
+                        )}
+                      </View>
+                    </View>
                   );
                 })
               ) : (
-                <View className="bg-[#15151e] p-4 rounded-[20px] border border-white/5 items-center">
-                  <Text className="text-white/40 text-sm">No budget categories defined.</Text>
+                <View 
+                  style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                  className="p-4 rounded-[20px] border items-center"
+                >
+                  <Text style={{ color: colors.textMuted }} className="text-sm">No budget categories defined.</Text>
                 </View>
               )}
             </View>
 
             {/* Recent Activity */}
-            <View className="mb-2 mt-6">
+            <View className="mb-2 mt-2">
               <View className="flex-row justify-between items-end mb-4">
-                <Text className="text-xl font-bold text-white tracking-tight">Recent Activity</Text>
-                <TouchableOpacity 
+                <Text style={{ color: colors.textPrimary }} className="text-xl font-bold tracking-tight">Recent Activity</Text>
+                <TouchableOpacity
                   className="flex-row items-center"
                   onPress={() => navigation.navigate('History', { orgId: activeOrgId })}
                 >
-                  <Text className="text-fuchsia-400 text-xs font-bold mr-1">View All</Text>
-                  <Ionicons name="chevron-forward" size={12} color="#e879f9" />
+                  <Text style={{ color: colors.primary }} className="text-xs font-bold mr-1">View All</Text>
+                  <Ionicons name="chevron-forward" size={12} color={colors.primary} />
                 </TouchableOpacity>
               </View>
 
-              {recentTransactions.length > 0 ? (
+              {loadingContent && recentTransactions.length === 0 ? (
+                <SkeletonTransactionList count={3} />
+              ) : recentTransactions.length > 0 ? (
                 recentTransactions.map((tx: any) => (
-                  <TouchableOpacity key={tx._id} className="bg-[#15151e] p-4 rounded-[20px] border border-white/5 mb-3 flex-row items-center justify-between">
+                  <TouchableOpacity
+                    key={tx._id}
+                    onPress={() => navigation.navigate('TransactionDetail', { txId: tx._id })}
+                    style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                    className="p-4 rounded-[20px] border mb-3 flex-row items-center justify-between shadow-sm"
+                  >
                     <View className="flex-row items-center flex-1">
-                      <View className="w-11 h-11 rounded-2xl bg-black/40 items-center justify-center mr-3 border border-white/5">
-                        <Ionicons 
-                          name={tx.type === 'expense' ? 'arrow-up-outline' : 'arrow-down-outline'} 
-                          size={18} 
-                          color={tx.type === 'expense' ? '#f43f5e' : '#10b981'} 
+                      <View 
+                        style={{
+                          backgroundColor: tx.type === 'expense' ? colors.errorBg : colors.successBg,
+                          borderColor: tx.type === 'expense' ? colors.errorBorder : colors.successBorder,
+                        }}
+                        className="w-11 h-11 rounded-2xl items-center justify-center mr-3 border"
+                      >
+                        <Ionicons
+                          name={tx.type === 'expense' ? 'arrow-up-outline' : 'arrow-down-outline'}
+                          size={18}
+                          color={tx.type === 'expense' ? colors.error : colors.success}
                         />
                       </View>
                       <View className="flex-1 pr-2">
-                        <Text className="text-white font-bold text-sm mb-0.5" numberOfLines={1}>{tx.description}</Text>
-                        <Text className="text-white/40 text-[10px]">{new Date(tx.createdAt).toLocaleDateString()}</Text>
+                        <Text style={{ color: colors.textPrimary }} className="font-bold text-sm mb-0.5" numberOfLines={1}>
+                          {tx.description}
+                        </Text>
+                        <Text style={{ color: colors.textMuted }} className="text-[10px]">
+                          {new Date(tx.createdAt).toLocaleDateString()}
+                        </Text>
                       </View>
                     </View>
-                    <Text className={`font-bold text-sm ${tx.type === 'expense' ? 'text-white' : 'text-emerald-400'}`}>
-                      {tx.type === 'expense' ? '-' : '+'}₱{tx.amount.toLocaleString()}
+                    <Text
+                      style={{ color: tx.type === 'expense' ? colors.textPrimary : colors.success }}
+                      className="font-bold text-sm"
+                    >
+                      {tx.type === 'expense' ? '-' : '+'}₱{tx.amount?.toLocaleString() || '0'}
                     </Text>
                   </TouchableOpacity>
                 ))
               ) : (
-                <View className="bg-[#15151e] p-4 rounded-[20px] border border-white/5 items-center">
-                  <Text className="text-white/40 text-sm">No recent activity.</Text>
+                <View 
+                  style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                  className="p-4 rounded-[20px] border items-center"
+                >
+                  <Text style={{ color: colors.textMuted }} className="text-sm">No recent activity.</Text>
                 </View>
               )}
             </View>
-            
           </>
         ) : (
-          <View className="bg-white/5 p-6 rounded-3xl border border-white/10 items-center justify-center mt-10">
-            <Ionicons name="business" size={40} color="#666" className="mb-4" />
-            <Text className="text-white text-center font-bold text-lg">No Organization Found</Text>
-            <Text className="text-white/50 text-center text-sm mt-2">Ask your founder to invite you via email, or create one on the desktop portal.</Text>
+          <View 
+            style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+            className="p-6 rounded-3xl border items-center justify-center mt-10 shadow-sm"
+          >
+            <Ionicons name="business" size={40} color={colors.textMuted} className="mb-4" />
+            <Text style={{ color: colors.textPrimary }} className="text-center font-bold text-lg">No Organization Found</Text>
+            <Text style={{ color: colors.textSecondary }} className="text-center text-sm mt-2">
+              Ask your founder to invite you via email, or create one on the desktop portal.
+            </Text>
           </View>
         )}
-        
+
         <View className="h-10" />
       </ScrollView>
 
-      {/* Organization Switcher Dropdown Modal */}
-      <Modal visible={showOrgDropdown} transparent animationType="fade">
-        <TouchableOpacity 
-          activeOpacity={1} 
-          onPress={() => setShowOrgDropdown(false)}
-          className="flex-1 bg-black/60"
-        >
-          {/* Position the dropdown box near the top left, right under the header */}
-          <View 
-            style={{ marginTop: (insets.top || 0) + 90, marginLeft: 16 }}
-            className="w-56 bg-[#1a1a24] rounded-2xl border border-white/10 overflow-hidden shadow-2xl"
-          >
-            {organizations.map((org, index) => {
-              const isActive = org._id === activeOrgId;
-              return (
-                <TouchableOpacity
-                  key={org._id}
-                  onPress={() => {
-                    setActiveOrgId(org._id);
-                    setShowOrgDropdown(false);
-                  }}
-                  className={`px-4 py-4 flex-row items-center justify-between ${index !== organizations.length - 1 ? 'border-b border-white/5' : ''}`}
-                  style={{ backgroundColor: isActive ? 'rgba(232, 121, 249, 0.1)' : 'transparent' }}
-                >
-                  <View className="flex-row items-center">
-                    <View className={`w-2.5 h-2.5 rounded-full mr-3 ${isActive ? 'bg-fuchsia-500' : 'bg-white/20'}`} />
-                    <Text className={`font-bold ${isActive ? 'text-fuchsia-400' : 'text-white'}`}>
-                      {org.name}
-                    </Text>
-                  </View>
-                  {isActive && <Ionicons name="checkmark" size={16} color="#e879f9" />}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </TouchableOpacity>
-      </Modal>
+      {/* Organization Switcher Bottom Sheet */}
+      <OrgBottomSheet
+        visible={showOrgSheet}
+        onClose={() => setShowOrgSheet(false)}
+        organizations={organizations}
+        activeOrgId={activeOrgId}
+        onSelectOrg={(orgId) => setActiveOrgId(orgId)}
+      />
     </View>
   );
 }

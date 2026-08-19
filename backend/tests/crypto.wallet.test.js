@@ -126,6 +126,28 @@ describe("Wallet Cryptographic Engine (AES-256-GCM & Backward Compatibility)", (
     assert.equal(decrypted, sampleMnemonic, "Legacy v0 static-salt format must decrypt successfully");
   });
 
+  test("security: source file does NOT contain hardcoded candidate secrets or fallback wordlists", () => {
+    const fs = require("fs");
+    const path = require("path");
+    const source = fs.readFileSync(path.resolve(__dirname, "../src/utils/crypto.js"), "utf8");
+    assert.ok(!source.includes("CANDIDATE_SECRETS"), "CANDIDATE_SECRETS must not exist in crypto.js");
+    assert.ok(!source.includes("ChainBudget2024!"), "Hardcoded candidate 'ChainBudget2024!' must not exist in crypto.js");
+    assert.ok(!source.includes("test-encryption-secret-12345678"), "Hardcoded candidate secret must not exist in crypto.js");
+  });
+
+  test("security: decryption fails fast without attempting candidate keys", () => {
+    // Encrypt with a key that was previously in CANDIDATE_SECRETS
+    const oldSecret = "ChainBudget2024!";
+    const encrypted = encrypt(samplePrivateKey, oldSecret);
+
+    // Attempt to decrypt with active ENCRYPTION_SECRET - must fail immediately
+    assert.throws(
+      () => decrypt(encrypted),
+      /Unsupported state or unable to authenticate data|authentication tag/i,
+      "Decryption of data encrypted with old key must NOT automatically succeed via hardcoded guess list"
+    );
+  });
+
   test("handles null or undefined input gracefully", () => {
     assert.equal(encrypt(null), null);
     assert.equal(decrypt(null), null);

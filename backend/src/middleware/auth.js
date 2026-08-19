@@ -335,4 +335,11 @@ const requireSuperAdmin = (req, res, next) => {
   next();
 };
 
-module.exports = { authenticate, optionalAuthenticate, requireRole, requireSuperAdmin };
+module.exports = {
+  authenticate,
+  optionalAuthenticate,
+  requireRole,
+  requireSuperAdmin,
+  verifyChainBudgetJWT: verifyInternalJWT,
+  verifyInternalJWT,
+};

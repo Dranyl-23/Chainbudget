@@ -67,11 +67,9 @@ export default function VerifyPage() {
 
       {/* ── Nav ── */}
       <nav className="relative z-20 flex items-center justify-between px-8 py-5 border-b border-purple-500/20 bg-[#160B2E]/40 backdrop-blur-md">
-        <Link href="/" className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-white/5 border border-white/10 backdrop-blur-md">
-            <img src="/images/logo.png" alt="ChainBudget logo" className="w-7 h-7 object-contain rounded-lg" />
-          </div>
-          <span className="font-bold text-lg tracking-tight text-white">
+        <Link href="/" className="flex items-center gap-2.5">
+          <img src="/3D-Chainbudget.png" alt="ChainBudget logo" className="w-10 h-10 md:w-11 md:h-11 object-contain drop-shadow-md shrink-0" />
+          <span className="font-bold text-xl tracking-tight text-white">
             CHAIN<span className="text-fuchsia-400">BUDGET</span>
           </span>
         </Link>

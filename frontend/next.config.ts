@@ -18,7 +18,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: '/api/:path*',
-        destination: 'http://127.0.0.1:5001/api/:path*', // Proxy to Backend
+        destination: process.env.BACKEND_API_URL || 'https://chainbudget-api.fly.dev/api/:path*', // Proxy to Backend
       },
     ];
   },

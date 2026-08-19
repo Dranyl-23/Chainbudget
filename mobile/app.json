@@ -6,7 +6,7 @@
     "scheme": "chainbudget",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./assets/3D-Chainbudget.png",
       "resizeMode": "contain",

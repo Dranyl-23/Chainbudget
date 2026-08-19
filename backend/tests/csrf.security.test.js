@@ -147,4 +147,96 @@ describe("CSRF Security Middleware — Fix 3: No Hardcoded Fallback Secret", () 
       assert.notEqual(t1, t2, "Each generated token must be unique");
     });
   });
+
+  describe("CSRF Middleware Route-Anchoring & Exemption Logic", () => {
+    let csrfMod;
+
+    before(() => {
+      const { randomBytes } = require("crypto");
+      const secret = randomBytes(32).toString("hex");
+      const { result } = loadSecurityModule({ CSRF_SECRET: secret });
+      csrfMod = result;
+    });
+
+    function runMiddleware(req) {
+      let nextCalled = false;
+      let statusCode = null;
+      let responseBody = null;
+      let headers = {};
+
+      const res = {
+        status(code) {
+          statusCode = code;
+          return this;
+        },
+        json(body) {
+          responseBody = body;
+          return this;
+        },
+        set(k, v) {
+          headers[k] = v;
+          return this;
+        },
+      };
+
+      const next = () => {
+        nextCalled = true;
+      };
+
+      csrfMod.csrfProtection(req, res, next);
+      return { nextCalled, statusCode, responseBody, headers };
+    }
+
+    it("exempts safe HTTP methods (GET, HEAD, OPTIONS)", () => {
+      const { nextCalled } = runMiddleware({ method: "GET", path: "/transactions", headers: {} });
+      assert.equal(nextCalled, true, "GET requests must skip CSRF");
+    });
+
+    it("exempts exact /api/auth routes", () => {
+      const r1 = runMiddleware({ method: "POST", path: "/auth/token", originalUrl: "/api/auth/token", headers: {} });
+      assert.equal(r1.nextCalled, true, "/api/auth/token must skip CSRF");
+
+      const r2 = runMiddleware({ method: "POST", path: "/api/auth/nonce", originalUrl: "/api/auth/nonce", headers: {} });
+      assert.equal(r2.nextCalled, true, "/api/auth/nonce must skip CSRF");
+    });
+
+    it("strictly requires CSRF token for substring collisions like /api/authorizations", () => {
+      const r1 = runMiddleware({
+        method: "POST",
+        path: "/authorizations",
+        originalUrl: "/api/authorizations",
+        headers: {},
+        body: {},
+      });
+      assert.equal(r1.nextCalled, false, "/api/authorizations must NOT skip CSRF");
+      assert.equal(r1.statusCode, 403);
+      assert.equal(r1.responseBody?.error, "CSRF token missing");
+    });
+
+    it("strictly requires CSRF token for routes containing 'auth' in other segments", () => {
+      const r1 = runMiddleware({
+        method: "POST",
+        path: "/users/author-profile",
+        originalUrl: "/api/users/author-profile",
+        headers: {},
+        body: {},
+      });
+      assert.equal(r1.nextCalled, false, "/api/users/author-profile must require CSRF");
+      assert.equal(r1.statusCode, 403);
+    });
+
+    it("accepts valid CSRF token on protected non-auth routes", () => {
+      const validToken = csrfMod.generateCSRFToken();
+      const r1 = runMiddleware({
+        method: "POST",
+        path: "/transactions",
+        originalUrl: "/api/transactions",
+        headers: { "x-csrf-token": validToken },
+        body: {},
+      });
+      assert.equal(r1.nextCalled, true, "Valid CSRF token must allow request");
+      assert.ok(r1.headers["X-CSRF-Token"], "Must issue rotated CSRF token in response header");
+    });
+  });
 });
+

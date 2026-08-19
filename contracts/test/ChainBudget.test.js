@@ -200,4 +200,141 @@ describe("ChainBudget System Suite", function () {
       ).to.be.revertedWith("DAO: minimum quorum not reached");
     });
   });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // 6. Escrow Two-Party Authorization & Signatures
+  // ──────────────────────────────────────────────────────────────────────────
+  describe("Escrow Two-Party Authorization & Signatures", function () {
+    let escrowTxId;
+    const escrowAmount = ethers.parseEther("1.0");
+
+    beforeEach(async function () {
+      // 1. Fund the vault with MATIC
+      await owner.sendTransaction({
+        to: await chainBudget.getAddress(),
+        value: ethers.parseEther("5.0"),
+      });
+
+      // 2. Record an escrow transaction (isEscrow = true, isHighValue = false for auto-approved recording)
+      const dataHash = ethers.keccak256(ethers.toUtf8Bytes("escrow-service-contract-1"));
+      await chainBudget.recordTransaction(dataHash, escrowAmount, supplier.address, false, true);
+      escrowTxId = 1;
+
+      // 3. Execute transaction to fund the escrow
+      await chainBudget.executeTransaction(escrowTxId);
+      const esc = await chainBudget.escrows(escrowTxId);
+      expect(esc.isFunded).to.be.true;
+      expect(esc.isReleased).to.be.false;
+    });
+
+    it("Direct 2-party release: requires both payee (supplier) and payer (approver/owner)", async function () {
+      const initialSupplierBalance = await ethers.provider.getBalance(supplier.address);
+
+      // Payer approves
+      await chainBudget.connect(owner).releaseEscrow(escrowTxId);
+      let esc = await chainBudget.escrows(escrowTxId);
+      expect(esc.payerApproved).to.be.true;
+      expect(esc.payeeApproved).to.be.false;
+      expect(esc.isReleased).to.be.false;
+
+      // Payee (supplier) approves
+      const tx = await chainBudget.connect(supplier).releaseEscrow(escrowTxId);
+      const receipt = await tx.wait();
+      const gasUsed = receipt.gasUsed * receipt.gasPrice;
+
+      esc = await chainBudget.escrows(escrowTxId);
+      expect(esc.payeeApproved).to.be.true;
+      expect(esc.isReleased).to.be.true;
+
+      const finalSupplierBalance = await ethers.provider.getBalance(supplier.address);
+      expect(finalSupplierBalance).to.equal(initialSupplierBalance + escrowAmount - gasUsed);
+    });
+
+    it("Relayed release with cryptographic payee signature (releaseEscrowWithPayeeSignature)", async function () {
+      const initialSupplierBalance = await ethers.provider.getBalance(supplier.address);
+      const contractAddress = await chainBudget.getAddress();
+      const network = await ethers.provider.getNetwork();
+      const chainId = network.chainId;
+
+      // Payer approves
+      await chainBudget.connect(approver1).releaseEscrow(escrowTxId);
+
+      // Payee signs authorization message
+      const messageHash = ethers.solidityPackedKeccak256(
+        ["address", "uint256", "uint256", "uint256", "address", "string"],
+        [contractAddress, chainId, escrowTxId, escrowAmount, supplier.address, "ESCROW_RELEASE"]
+      );
+      const payeeSig = await supplier.signMessage(ethers.getBytes(messageHash));
+
+      // Relayer (owner or backend) submits the transaction with payee's signature
+      await chainBudget.connect(owner).releaseEscrowWithPayeeSignature(escrowTxId, payeeSig);
+
+      const esc = await chainBudget.escrows(escrowTxId);
+      expect(esc.payeeApproved).to.be.true;
+      expect(esc.isReleased).to.be.true;
+
+      const finalSupplierBalance = await ethers.provider.getBalance(supplier.address);
+      expect(finalSupplierBalance).to.equal(initialSupplierBalance + escrowAmount);
+    });
+
+    it("Rejects forged or invalid signature on releaseEscrowWithPayeeSignature", async function () {
+      const contractAddress = await chainBudget.getAddress();
+      const network = await ethers.provider.getNetwork();
+      const chainId = network.chainId;
+
+      // Non-payee (nonApprover) signs instead of supplier
+      const messageHash = ethers.solidityPackedKeccak256(
+        ["address", "uint256", "uint256", "uint256", "address", "string"],
+        [contractAddress, chainId, escrowTxId, escrowAmount, supplier.address, "ESCROW_RELEASE"]
+      );
+      const forgedSig = await nonApprover.signMessage(ethers.getBytes(messageHash));
+
+      await expect(
+        chainBudget.connect(owner).releaseEscrowWithPayeeSignature(escrowTxId, forgedSig)
+      ).to.be.revertedWith("ChainBudget: invalid payee signature");
+    });
+
+    it("Prevents single-party unilateral release by owner without payee consent", async function () {
+      // Owner calls releaseEscrow — only sets payerApproved, does NOT set payeeApproved
+      await chainBudget.connect(owner).releaseEscrow(escrowTxId);
+
+      const esc = await chainBudget.escrows(escrowTxId);
+      expect(esc.payerApproved).to.be.true;
+      expect(esc.payeeApproved).to.be.false;
+      expect(esc.isReleased).to.be.false;
+
+      // Non-authorized user cannot release
+      await expect(
+        chainBudget.connect(nonApprover).releaseEscrow(escrowTxId)
+      ).to.be.revertedWith("ChainBudget: not authorized to release this escrow");
+    });
+
+    it("Auditable override: recordOffchainPayeeConfirmation requires evidence URI and records audit event", async function () {
+      // Payer approves
+      await chainBudget.connect(owner).releaseEscrow(escrowTxId);
+
+      // Attempt with empty evidence URI must revert
+      await expect(
+        chainBudget.connect(owner).recordOffchainPayeeConfirmation(escrowTxId, "")
+      ).to.be.revertedWith("ChainBudget: evidence URI required");
+
+      // Non-owner cannot use operational override
+      await expect(
+        chainBudget.connect(nonApprover).recordOffchainPayeeConfirmation(escrowTxId, "ipfs://QmProof123")
+      ).to.be.revertedWithCustomError(chainBudget, "OwnableUnauthorizedAccount");
+
+      // Owner calls with valid IPFS evidence URI
+      const evidenceURI = "ipfs://QmDeliveryConfirmationHash123456789";
+      await expect(
+        chainBudget.connect(owner).recordOffchainPayeeConfirmation(escrowTxId, evidenceURI)
+      )
+        .to.emit(chainBudget, "PayeeConfirmationRecordedOffchain")
+        .withArgs(escrowTxId, owner.address, evidenceURI);
+
+      const esc = await chainBudget.escrows(escrowTxId);
+      expect(esc.payeeApproved).to.be.true;
+      expect(esc.isReleased).to.be.true;
+    });
+  });
 });
+

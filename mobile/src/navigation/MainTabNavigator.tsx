@@ -3,6 +3,7 @@ import { View, Text } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTheme } from '../context/ThemeContext';
 
 import DashboardScreen from '../screens/DashboardScreen';
 import ScannerScreen from '../screens/ScannerScreen';
@@ -14,6 +15,7 @@ const Tab = createBottomTabNavigator();
 
 export default function MainTabNavigator() {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
 
   return (
     <Tab.Navigator
@@ -41,16 +43,16 @@ export default function MainTabNavigator() {
               {route.name === 'Scanner' ? 'Request' : route.name === 'Inbox' ? 'Approvals' : route.name}
             </Text>
             {focused && (
-              <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#e879f9', marginTop: 4 }} />
+              <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: colors.primary, marginTop: 4 }} />
             )}
           </View>
         ),
-        tabBarActiveTintColor: '#e879f9', // fuchsia-400
-        tabBarInactiveTintColor: 'gray',
+        tabBarActiveTintColor: colors.tabBarActive,
+        tabBarInactiveTintColor: colors.tabBarInactive,
         tabBarStyle: {
-          backgroundColor: '#09090b', // Cyberpunk dark
+          backgroundColor: colors.tabBarBackground,
           borderTopWidth: 0.5,
-          borderTopColor: '#333',
+          borderTopColor: colors.tabBarBorder,
           paddingBottom: Math.max(insets.bottom, 8),
           height: 55 + Math.max(insets.bottom, 0),
         },

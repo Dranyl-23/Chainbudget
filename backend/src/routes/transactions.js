@@ -679,17 +679,29 @@ router.post("/:id/release-escrow", authenticate, async (req, res) => {
           const receipt = await tx.wait();
           blockchainTxHash = receipt.hash;
         } else if (isSupplier && !isOrgAdmin) {
-          const tx = await contract.setPayeeApprovalByOwner(txn.onChainTxId);
+          let tx;
+          if (req.body?.payeeSig) {
+            tx = await contract.releaseEscrowWithPayeeSignature(txn.onChainTxId, req.body.payeeSig);
+          } else {
+            const evidenceURI = req.body?.evidenceURI || `chainbudget://escrow/release/${txn._id}`;
+            tx = await contract.recordOffchainPayeeConfirmation(txn.onChainTxId, evidenceURI);
+          }
           const receipt = await tx.wait();
           blockchainTxHash = receipt.hash;
         } else {
           // Admin is acting as both payer and payee (e.g. supplier account is
           // the same as the org admin). Call payer release first, then record
-          // payee approval on-chain. Use tx2 — not the undefined outer `tx`.
+          // payee confirmation on-chain. Use tx2 — not the undefined outer `tx`.
           const tx1 = await contract.releaseEscrow(txn.onChainTxId);
           await tx1.wait();
-          const tx2 = await contract.setPayeeApprovalByOwner(txn.onChainTxId);
-          const receipt = await tx2.wait(); // FIX: was `tx` (undefined) — must be `tx2`
+          let tx2;
+          if (req.body?.payeeSig) {
+            tx2 = await contract.releaseEscrowWithPayeeSignature(txn.onChainTxId, req.body.payeeSig);
+          } else {
+            const evidenceURI = req.body?.evidenceURI || `chainbudget://escrow/release/${txn._id}`;
+            tx2 = await contract.recordOffchainPayeeConfirmation(txn.onChainTxId, evidenceURI);
+          }
+          const receipt = await tx2.wait();
           blockchainTxHash = receipt.hash;
         }
       } catch (chainErr) {

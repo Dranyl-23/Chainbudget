@@ -1,5 +1,6 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { useTheme } from '../context/ThemeContext';
 
 import MainTabNavigator from './MainTabNavigator';
 import HistoryScreen from '../screens/HistoryScreen';
@@ -8,18 +9,24 @@ import TransferScreen from '../screens/TransferScreen';
 import MembersScreen from '../screens/MembersScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
 import RecoveryPhraseScreen from '../screens/RecoveryPhraseScreen';
+import ReceiveScreen from '../screens/ReceiveScreen';
 
 const Stack = createNativeStackNavigator();
 
 export default function RootStackNavigator() {
+  const { colors } = useTheme();
+
   return (
     <Stack.Navigator
       screenOptions={{
         headerStyle: {
-          backgroundColor: '#09090b',
+          backgroundColor: colors.headerBackground,
         },
-        headerTintColor: '#fff',
-        contentStyle: { backgroundColor: '#09090b' },
+        headerTintColor: colors.headerText,
+        headerTitleStyle: {
+          fontWeight: '700',
+        },
+        contentStyle: { backgroundColor: colors.background },
       }}
     >
       {/* The main tab interface is the root screen */}
@@ -44,6 +51,11 @@ export default function RootStackNavigator() {
         name="Transfer"
         component={TransferScreen}
         options={{ title: 'Send / Transfer' }}
+      />
+      <Stack.Screen
+        name="Receive"
+        component={ReceiveScreen}
+        options={{ title: 'Receive Funds / QR' }}
       />
       <Stack.Screen
         name="Members"

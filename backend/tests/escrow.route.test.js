@@ -1,60 +1,62 @@
 /**
- * Tests: Escrow Admin Dual-Release (Fix 2 — MEDIUM)
+ * Tests: Escrow Dual-Release & Relayer Verification
  *
- * Regression test for the ReferenceError in the admin dual-release path
- * where `tx` was used instead of `tx2`, causing a crash.
+ * Verifies that the escrow release routes correctly call:
+ *  - releaseEscrow (for payer/admin approval)
+ *  - releaseEscrowWithPayeeSignature or recordOffchainPayeeConfirmation (for payee confirmation)
+ *  - Properly coordinates tx1 and tx2 and returns valid blockchain transaction hashes.
  *
  * Run: node --test tests/escrow.route.test.js
  */
 
 "use strict";
 
-const { describe, it, before, after } = require("node:test");
+const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
 
-// ── Unit-level test: verify the dual-release code path itself ─────────────────
-//
-// We test the logic that was broken (the `else` branch) in isolation by
-// re-implementing the exact patched code path and verifying it executes
-// without throwing a ReferenceError and returns a hash from tx2.
-
-describe("Escrow Admin Dual-Release — Fix 2 Regression", () => {
+describe("Escrow Two-Party Route & Dual-Release Relayer", () => {
 
   /**
-   * Simulates the fixed escrow dual-release code path.
-   * This mirrors the patched `else` branch in transactions.js so any
-   * regression (re-introducing the undefined `tx`) is caught immediately.
+   * Simulates the escrow release logic in transactions.js.
    */
-  async function simulateDualRelease(contract, onChainTxId) {
+  async function simulateRelease({ isOrgAdmin, isSupplier, contract, onChainTxId, payeeSig, evidenceURI }) {
     let blockchainTxHash = null;
-
-    const isOrgAdmin = true;
-    const isSupplier = true; // both == admin dual-release path (the buggy `else` branch)
 
     if (isOrgAdmin && !isSupplier) {
       const tx = await contract.releaseEscrow(onChainTxId);
       const receipt = await tx.wait();
       blockchainTxHash = receipt.hash;
     } else if (isSupplier && !isOrgAdmin) {
-      const tx = await contract.setPayeeApprovalByOwner(onChainTxId);
+      let tx;
+      if (payeeSig) {
+        tx = await contract.releaseEscrowWithPayeeSignature(onChainTxId, payeeSig);
+      } else {
+        const uri = evidenceURI || `chainbudget://escrow/release/${onChainTxId}`;
+        tx = await contract.recordOffchainPayeeConfirmation(onChainTxId, uri);
+      }
       const receipt = await tx.wait();
       blockchainTxHash = receipt.hash;
     } else {
-      // FIXED: was `await tx.wait()` — `tx` is undefined here.
-      // Correct reference is tx2.
+      // Admin is acting as both payer and payee
       const tx1 = await contract.releaseEscrow(onChainTxId);
       await tx1.wait();
-      const tx2 = await contract.setPayeeApprovalByOwner(onChainTxId);
-      const receipt = await tx2.wait(); // FIX: tx2, not tx
+      let tx2;
+      if (payeeSig) {
+        tx2 = await contract.releaseEscrowWithPayeeSignature(onChainTxId, payeeSig);
+      } else {
+        const uri = evidenceURI || `chainbudget://escrow/release/${onChainTxId}`;
+        tx2 = await contract.recordOffchainPayeeConfirmation(onChainTxId, uri);
+      }
+      const receipt = await tx2.wait();
       blockchainTxHash = receipt.hash;
     }
 
     return blockchainTxHash;
   }
 
-  it("admin dual-release executes without ReferenceError and returns tx2 hash", async () => {
+  it("admin dual-release executes with signature without ReferenceError and returns tx2 hash", async () => {
     let releaseEscrowCalled = false;
-    let setPayeeApprovalCalled = false;
+    let payeeSigCalled = false;
 
     const mockContract = {
       async releaseEscrow(txId) {
@@ -65,104 +67,119 @@ describe("Escrow Admin Dual-Release — Fix 2 Regression", () => {
           },
         };
       },
-      async setPayeeApprovalByOwner(txId) {
-        setPayeeApprovalCalled = true;
+      async releaseEscrowWithPayeeSignature(txId, sig) {
+        payeeSigCalled = true;
         return {
           async wait() {
-            return { hash: "0xtx2-payee-approval-hash" };
+            return { hash: "0xtx2-payee-sig-hash" };
           },
         };
       },
     };
 
     let hash;
-    // This must NOT throw ReferenceError: tx is not defined
     await assert.doesNotReject(async () => {
-      hash = await simulateDualRelease(mockContract, 42);
-    }, "Admin dual-release must not throw ReferenceError");
+      hash = await simulateRelease({
+        isOrgAdmin: true,
+        isSupplier: true,
+        contract: mockContract,
+        onChainTxId: 42,
+        payeeSig: "0xdeadbeef12345678",
+      });
+    });
 
     assert.equal(releaseEscrowCalled, true, "releaseEscrow must be called");
-    assert.equal(setPayeeApprovalCalled, true, "setPayeeApprovalByOwner must be called");
-    // The hash must come from tx2 (setPayeeApprovalByOwner), not tx1
-    assert.equal(hash, "0xtx2-payee-approval-hash", "blockchainTxHash must be from tx2.wait()");
+    assert.equal(payeeSigCalled, true, "releaseEscrowWithPayeeSignature must be called");
+    assert.equal(hash, "0xtx2-payee-sig-hash", "blockchainTxHash must be from tx2.wait()");
+  });
+
+  it("admin dual-release executes with offchain evidence without ReferenceError and returns tx2 hash", async () => {
+    let releaseEscrowCalled = false;
+    let evidenceCalled = false;
+
+    const mockContract = {
+      async releaseEscrow(txId) {
+        releaseEscrowCalled = true;
+        return {
+          async wait() {
+            return { hash: "0xtx1-release-hash" };
+          },
+        };
+      },
+      async recordOffchainPayeeConfirmation(txId, uri) {
+        evidenceCalled = true;
+        return {
+          async wait() {
+            return { hash: "0xtx2-evidence-hash" };
+          },
+        };
+      },
+    };
+
+    const hash = await simulateRelease({
+      isOrgAdmin: true,
+      isSupplier: true,
+      contract: mockContract,
+      onChainTxId: 42,
+      evidenceURI: "ipfs://QmDelivery123",
+    });
+
+    assert.equal(releaseEscrowCalled, true);
+    assert.equal(evidenceCalled, true);
+    assert.equal(hash, "0xtx2-evidence-hash");
   });
 
   it("admin-only path (isOrgAdmin && !isSupplier) calls releaseEscrow only", async () => {
     let releaseEscrowCalled = false;
-    let setPayeeApprovalCalled = false;
-
-    async function adminOnlyPath(contract, onChainTxId) {
-      const isOrgAdmin = true;
-      const isSupplier = false;
-      let blockchainTxHash = null;
-
-      if (isOrgAdmin && !isSupplier) {
-        const tx = await contract.releaseEscrow(onChainTxId);
-        const receipt = await tx.wait();
-        blockchainTxHash = receipt.hash;
-      } else if (isSupplier && !isOrgAdmin) {
-        const tx = await contract.setPayeeApprovalByOwner(onChainTxId);
-        const receipt = await tx.wait();
-        blockchainTxHash = receipt.hash;
-      }
-
-      return blockchainTxHash;
-    }
+    let payeeSigCalled = false;
 
     const mockContract = {
       async releaseEscrow() {
         releaseEscrowCalled = true;
         return { async wait() { return { hash: "0xadmin-only" }; } };
       },
-      async setPayeeApprovalByOwner() {
-        setPayeeApprovalCalled = true;
+      async releaseEscrowWithPayeeSignature() {
+        payeeSigCalled = true;
         return { async wait() { return { hash: "0xpayee" }; } };
       },
     };
 
-    const hash = await adminOnlyPath(mockContract, 10);
+    const hash = await simulateRelease({
+      isOrgAdmin: true,
+      isSupplier: false,
+      contract: mockContract,
+      onChainTxId: 10,
+    });
     assert.equal(releaseEscrowCalled, true);
-    assert.equal(setPayeeApprovalCalled, false, "setPayeeApprovalByOwner must NOT be called in admin-only path");
+    assert.equal(payeeSigCalled, false);
     assert.equal(hash, "0xadmin-only");
   });
 
-  it("supplier-only path calls setPayeeApprovalByOwner and not releaseEscrow", async () => {
+  it("supplier-only path calls releaseEscrowWithPayeeSignature and not releaseEscrow", async () => {
     let releaseEscrowCalled = false;
-    let setPayeeApprovalCalled = false;
-
-    async function supplierOnlyPath(contract, onChainTxId) {
-      const isOrgAdmin = false;
-      const isSupplier = true;
-      let blockchainTxHash = null;
-
-      if (isOrgAdmin && !isSupplier) {
-        const tx = await contract.releaseEscrow(onChainTxId);
-        const receipt = await tx.wait();
-        blockchainTxHash = receipt.hash;
-      } else if (isSupplier && !isOrgAdmin) {
-        const tx = await contract.setPayeeApprovalByOwner(onChainTxId);
-        const receipt = await tx.wait();
-        blockchainTxHash = receipt.hash;
-      }
-
-      return blockchainTxHash;
-    }
+    let payeeSigCalled = false;
 
     const mockContract = {
       async releaseEscrow() {
         releaseEscrowCalled = true;
         return { async wait() { return { hash: "0xrelease" }; } };
       },
-      async setPayeeApprovalByOwner() {
-        setPayeeApprovalCalled = true;
-        return { async wait() { return { hash: "0xpayee-only" }; } };
+      async releaseEscrowWithPayeeSignature() {
+        payeeSigCalled = true;
+        return { async wait() { return { hash: "0xpayee-sig" }; } };
       },
     };
 
-    const hash = await supplierOnlyPath(mockContract, 10);
+    const hash = await simulateRelease({
+      isOrgAdmin: false,
+      isSupplier: true,
+      contract: mockContract,
+      onChainTxId: 10,
+      payeeSig: "0xsig123",
+    });
     assert.equal(releaseEscrowCalled, false, "releaseEscrow must NOT be called in supplier-only path");
-    assert.equal(setPayeeApprovalCalled, true);
-    assert.equal(hash, "0xpayee-only");
+    assert.equal(payeeSigCalled, true);
+    assert.equal(hash, "0xpayee-sig");
   });
 
   it("dual-release handles contract error and propagates it correctly", async () => {
@@ -172,15 +189,22 @@ describe("Escrow Admin Dual-Release — Fix 2 Regression", () => {
           async wait() { throw new Error("On-chain call reverted: already released"); },
         };
       },
-      async setPayeeApprovalByOwner() {
+      async releaseEscrowWithPayeeSignature() {
         return { async wait() { return { hash: "0xpayee" }; } };
       },
     };
 
     await assert.rejects(
-      () => simulateDualRelease(failingContract, 99),
+      () => simulateRelease({
+        isOrgAdmin: true,
+        isSupplier: true,
+        contract: failingContract,
+        onChainTxId: 99,
+        payeeSig: "0xsig",
+      }),
       { message: "On-chain call reverted: already released" },
       "Contract errors must propagate so the caller can handle them"
     );
   });
 });
+

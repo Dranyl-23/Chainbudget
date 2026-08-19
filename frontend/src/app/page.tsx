@@ -69,11 +69,9 @@ export default function LandingPage() {
 
       {/* ── Nav ── */}
       <nav className="relative z-20 flex items-center justify-between px-4 md:px-8 py-4 md:py-6">
-        <div className="flex items-center gap-2 md:gap-3">
-          <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg md:rounded-xl flex items-center justify-center bg-white/5 border border-white/10 backdrop-blur-md">
-            <img src="/images/logo.png" alt="ChainBudget logo" className="w-5 h-5 md:w-7 md:h-7 object-contain rounded-md md:rounded-lg" />
-          </div>
-          <span className="text-lg md:text-xl font-bold tracking-tight text-white">
+        <div className="flex items-center gap-2.5 md:gap-3">
+          <img src="/3D-Chainbudget.png" alt="ChainBudget logo" className="w-10 h-10 md:w-12 md:h-12 object-contain drop-shadow-md shrink-0" />
+          <span className="text-xl md:text-2xl font-extrabold tracking-tight text-white">
             CHAIN<span className="text-fuchsia-400">BUDGET</span>
           </span>
         </div>
@@ -232,7 +230,7 @@ export default function LandingPage() {
                 <div className="flex flex-col items-center justify-center z-10 relative">
                   {/* Outer glowing ring for the logo */}
                   <div className="w-24 h-24 rounded-full bg-white/5 border border-white/20 flex items-center justify-center shadow-[0_0_30px_rgba(255,255,255,0.1)] mb-4">
-                    <img src="/3D-Chainbudget.png" alt="ChainBudget" className="w-20 h-20 object-contain drop-shadow-[0_0_15px_rgba(255,255,255,0.9)]" />
+                    <img src="/3D-Chainbudget.png" alt="ChainBudget" className="w-40 h-40 object-contain drop-shadow-[0_0_15px_rgba(255,255,255,0.9)]" />
                   </div>
                   <span className="text-white font-extrabold tracking-[0.2em] text-lg uppercase drop-shadow-[0_0_10px_rgba(255,255,255,0.5)] bg-clip-text text-transparent bg-gradient-to-r from-white to-white/70">
                     ChainBudget

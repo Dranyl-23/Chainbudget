@@ -183,9 +183,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <SessionExpiredModal />
       {/* ── Mobile Header ── */}
       <div className="md:hidden flex items-center justify-between px-4 py-3 border-b bg-white z-20" style={{ borderColor: "var(--color-border)" }}>
-        <div className="flex items-center gap-2">
-          <Image src={displayLogo} alt="ChainBudget logo" width={32} height={32} unoptimized className="w-8 h-8 object-contain rounded-lg shadow-sm shrink-0" />
-          <span className="font-bold text-lg tracking-tight">
+        <div className="flex items-center gap-3">
+          <Image src="/3D-Chainbudget.png" alt="ChainBudget logo" width={52} height={52} unoptimized className="w-12 h-12 object-contain drop-shadow-md shrink-0" />
+          <span className="font-extrabold text-2xl tracking-tight">
             Chain<span className="gradient-text">Budget</span>
           </span>
         </div>
@@ -210,27 +210,38 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* ── Sidebar ── */}
       <aside 
         className={`
-          fixed md:static inset-y-0 left-0 z-40 flex flex-col border-r transform transition-all duration-300 ease-in-out
+          fixed md:static inset-y-0 left-0 z-40 flex flex-col border-r transform transition-all duration-300 ease-in-out relative
           ${isCollapsed ? "w-20" : "w-64"}
           ${isMobileOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0
         `} 
         style={{ background: "#ffffff", minHeight: "100vh", borderRight: "1px solid var(--color-border)" }}
       >
-        {/* Logo (Hidden on very small screens since it's in the header, but keep it for md+) */}
-        <div className={`px-5 mb-8 mt-4 hidden md:flex items-center ${isCollapsed ? "justify-center" : "justify-between"}`}>
+        {/* Floating Sidebar Toggle Button on the Right Border */}
+        <button 
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          className="hidden md:flex absolute -right-3.5 top-6 w-7 h-7 rounded-full bg-[#121215] border border-white/20 text-gray-300 hover:text-white hover:border-fuchsia-500/60 hover:bg-[#1a1a22] shadow-md items-center justify-center transition-all z-50 cursor-pointer active:scale-95"
+          aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          {isCollapsed ? <ChevronRight className="w-3.5 h-3.5 text-fuchsia-400" /> : <ChevronLeft className="w-3.5 h-3.5" />}
+        </button>
+
+        {/* Brand Header */}
+        <div className={`h-16 mt-2 mb-4 hidden md:flex items-center transition-all duration-300 ${isCollapsed ? "justify-center px-2" : "justify-start px-5"}`}>
           <div className="flex items-center gap-3">
-            <Image src={displayLogo} alt="ChainBudget logo" width={32} height={32} unoptimized className="w-8 h-8 object-contain rounded-lg shadow-sm shrink-0" />
-            <span className={`font-bold text-lg tracking-tight transition-all duration-300 overflow-hidden whitespace-nowrap ${isCollapsed ? "max-w-0 opacity-0" : "max-w-37.5 opacity-100"}`}>
+            <Image 
+              src="/3D-Chainbudget.png" 
+              alt="ChainBudget logo" 
+              width={52} 
+              height={52} 
+              unoptimized 
+              className="w-12 h-12 object-contain drop-shadow-md shrink-0 transition-transform hover:scale-105 cursor-pointer"
+              onClick={() => isCollapsed && setIsCollapsed(false)}
+            />
+            <span className={`font-extrabold text-2xl tracking-tight transition-all duration-300 overflow-hidden whitespace-nowrap ${isCollapsed ? "max-w-0 opacity-0 hidden" : "max-w-40 opacity-100"}`}>
               Chain<span className="gradient-text">Budget</span>
             </span>
           </div>
-          <button 
-            onClick={() => setIsCollapsed(!isCollapsed)}
-            className="p-1 rounded-md hover:bg-gray-100 text-gray-500 transition-colors hidden md:block"
-            aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          >
-            {isCollapsed ? <ChevronRight className="w-5 h-5" /> : <ChevronLeft className="w-5 h-5" />}
-          </button>
         </div>
 
         {/* Org selector component */}
