@@ -34,7 +34,7 @@ const app = express();
 // Enable trust proxy so rate limiter works behind Render's load balancer
 app.set("trust proxy", 1);
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 
 // ── WebSocket Server ──────────────────────────────────────────────────────────
 const server = http.createServer(app);
