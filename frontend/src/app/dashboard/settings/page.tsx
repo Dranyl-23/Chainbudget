@@ -54,13 +54,30 @@ function getErrorMessage(err: unknown, fallback: string): string {
   return fallback;
 }
 
+function formatAvatarUrl(url?: string) {
+  if (!url) return "";
+  if (url.startsWith("blob:") || url.startsWith("data:")) return url;
+  if (url.startsWith("/uploads")) {
+    const backendBase = process.env.NEXT_PUBLIC_BACKEND_URL || "https://chainbudget-api.fly.dev";
+    return `${backendBase}${url}`;
+  }
+  if (url.includes("localhost:5001") || url.includes("127.0.0.1:5001")) {
+    const backendBase = process.env.NEXT_PUBLIC_BACKEND_URL || "https://chainbudget-api.fly.dev";
+    return url.replace(/http:\/\/(localhost|127\.0\.0\.1):5001/, backendBase);
+  }
+  return url;
+}
+
 export default function SettingsPage() {
   const { user, refreshUser, activeOrgId } = useAuth();
   
-  const [displayName, setDisplayName] = useState(user?.displayName || "");
+  const [displayName, setDisplayName] = useState("");
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
-  const [avatarPreview, setAvatarPreview] = useState<string>(user?.avatarUrl || "");
+  const [avatarPreview, setAvatarPreview] = useState<string>("");
   const [isSaving, setIsSaving] = useState(false);
+
+  const currentDisplayName = displayName || user?.displayName || "";
+  const currentAvatarPreview = avatarPreview || formatAvatarUrl(user?.avatarUrl);
   const [isLinking, setIsLinking] = useState(false);
   const [walletBalance, setWalletBalance] = useState<string | null>(null);
   const [pendingLiquidations, setPendingLiquidations] = useState<PendingLiquidationOrg[]>([]);
@@ -154,12 +171,14 @@ export default function SettingsPage() {
 
       // 2. Update user profile
       await api.put("/users/me", {
-        displayName,
+        displayName: currentDisplayName,
         avatarUrl
       });
 
       // 3. Refresh context
       await refreshUser();
+      setAvatarFile(null);
+      setAvatarPreview("");
       
       toast.success("Profile updated successfully!");
     } catch (err: unknown) {
@@ -258,14 +277,15 @@ export default function SettingsPage() {
               <div className="relative flex flex-col items-center">
                 <div className="relative group mb-3">
                   <div className="w-24 h-24 rounded-full bg-gray-200 border-4 border-white shadow-lg overflow-hidden flex items-center justify-center shrink-0">
-                    {avatarPreview ? (
+                    {currentAvatarPreview ? (
                       <Image
-                        src={avatarPreview}
+                        src={currentAvatarPreview}
                         alt="Avatar"
                         width={96}
                         height={96}
                         unoptimized
                         className="w-full h-full object-cover"
+                        onError={() => setAvatarPreview("")}
                       />
                     ) : (
                       <UserIcon className="w-10 h-10 text-gray-400" />
@@ -289,7 +309,7 @@ export default function SettingsPage() {
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Display Name</label>
                   <input
                     type="text"
-                    value={displayName}
+                    value={currentDisplayName}
                     onChange={(e) => setDisplayName(e.target.value)}
                     className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all dark:text-white"
                     placeholder="Enter your display name"

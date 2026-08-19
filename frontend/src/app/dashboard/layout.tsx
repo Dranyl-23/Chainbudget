@@ -75,6 +75,43 @@ const navItems = [
   { href: "/dashboard/settings",     icon: <UserCircle      className="w-4 h-4" />, label: "Profile",      minRole: 4 },
 ];
 
+function UserAvatar({ src, name, size = 40, className = "" }: { src?: string; name?: string; size?: number; className?: string }) {
+  const [hasError, setHasError] = useState(false);
+
+  const formattedSrc = useMemo(() => {
+    if (!src) return null;
+    if (src.startsWith("/uploads")) {
+      const backendBase = process.env.NEXT_PUBLIC_BACKEND_URL || "https://chainbudget-api.fly.dev";
+      return `${backendBase}${src}`;
+    }
+    if (src.includes("localhost:5001") || src.includes("127.0.0.1:5001")) {
+      const backendBase = process.env.NEXT_PUBLIC_BACKEND_URL || "https://chainbudget-api.fly.dev";
+      return src.replace(/http:\/\/(localhost|127\.0\.0\.1):5001/, backendBase);
+    }
+    return src;
+  }, [src]);
+
+  if (!formattedSrc || hasError) {
+    return (
+      <div className={`w-full h-full flex items-center justify-center bg-purple-500/20 text-purple-300 font-bold text-xs ${className}`}>
+        {name ? name.trim().charAt(0).toUpperCase() : <UserCircle className="w-full h-full text-purple-400" />}
+      </div>
+    );
+  }
+
+  return (
+    <Image
+      src={formattedSrc}
+      alt={name || "Avatar"}
+      width={size}
+      height={size}
+      unoptimized
+      className={`w-full h-full object-cover ${className}`}
+      onError={() => setHasError(true)}
+    />
+  );
+}
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { isConnected, isLoading, user, logout, walletAddress, activeOrgId } = useAuth();
   const router = useRouter();
@@ -210,7 +247,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* ── Sidebar ── */}
       <aside 
         className={`
-          fixed md:static inset-y-0 left-0 z-40 flex flex-col border-r transform transition-all duration-300 ease-in-out relative
+          fixed md:static inset-y-0 left-0 z-40 flex flex-col border-r transform transition-all duration-300 ease-in-out
           ${isCollapsed ? "w-20" : "w-64"}
           ${isMobileOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0
         `} 
@@ -320,12 +357,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             >
               <div className="flex items-center gap-2">
                 <div className="nft-avatar-wrapper scale-[0.7] origin-left">
-                  <div className="w-10 h-10 nft-avatar border border-purple-500/30 shadow-[inset_0_0_10px_rgba(139,92,246,0.2)]">
-                    {user?.avatarUrl ? (
-                      <Image src={user.avatarUrl} alt="Avatar" width={40} height={40} unoptimized className="w-full h-full object-cover" />
-                    ) : (
-                      <UserCircle className="w-5 h-5 text-purple-400 drop-shadow-[0_0_5px_rgba(168,85,247,0.8)]" />
-                    )}
+                  <div className="w-10 h-10 nft-avatar border border-purple-500/30 shadow-[inset_0_0_10px_rgba(139,92,246,0.2)] overflow-hidden">
+                    <UserAvatar src={user?.avatarUrl} name={user?.displayName} size={40} />
                   </div>
                 </div>
                 <div className="flex flex-col -ml-2 gap-0.5">
@@ -442,18 +475,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <span className="text-[10px] font-mono text-cyan-400/70 group-hover:text-cyan-300 transition-colors">{shortAddress}</span>
               </div>
               <div className="w-10 h-10 rounded-full border border-purple-500/30 overflow-hidden shadow-[inset_0_0_10px_rgba(139,92,246,0.2)]">
-                 {user?.avatarUrl ? <Image src={user.avatarUrl} alt="Avatar" width={40} height={40} unoptimized className="w-full h-full object-cover" /> : <UserCircle className="w-full h-full text-purple-400 bg-white/5" />}
+                <UserAvatar src={user?.avatarUrl} name={user?.displayName} size={40} />
               </div>
             </div>
-
-            {/* Disconnect */}
-            <button 
-              onClick={() => setShowDisconnectModal(true)}
-              className="p-2 rounded-lg bg-white/5 hover:bg-red-500/20 text-gray-400 hover:text-red-400 border border-white/5 hover:border-red-500/30 transition-all ml-1"
-              title="Disconnect"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
           </div>
         </div>
 
