@@ -129,6 +129,22 @@ export function ChainBudgetAuthProvider({ children, asgardeoAuth }: { children: 
                 setActiveOrgIdState(orgId);
               }
             }
+
+            // Sync latest user details (avatar, name, roles) directly from DB
+            try {
+              const res = await api.get<{ user?: User } | User>("/users/me");
+              const data = res.data;
+              const userData = "user" in data && data.user ? data.user : (data as User);
+              if (userData && !isCancelled) {
+                setUser(userData);
+                setWalletAddress(userData.walletAddress);
+                if (typeof window !== "undefined") {
+                  localStorage.setItem("cb_user", JSON.stringify(userData));
+                }
+              }
+            } catch (syncErr) {
+              console.warn("Could not sync fresh profile:", syncErr);
+            }
           } else if (!isCancelled) {
             // Token expired, clear session
             clearSession();
@@ -261,7 +277,7 @@ export function ChainBudgetAuthProvider({ children, asgardeoAuth }: { children: 
 
   const refreshUser = useCallback(async () => {
     try {
-      const res = await api.get<{ user?: User } | User>("/auth/me");
+      const res = await api.get<{ user?: User } | User>("/users/me");
       const data = res.data;
       const userData = "user" in data && data.user ? data.user : (data as User);
       if (userData) {
