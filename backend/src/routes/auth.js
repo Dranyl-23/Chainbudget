@@ -261,6 +261,27 @@ router.get("/validate", authenticate, (req, res) => {
   res.json({ valid: true, userId: req.user._id });
 });
 
+/// GET /api/auth/me — Get authenticated user details
+router.get("/me", authenticate, async (req, res) => {
+  try {
+    await req.user.populate("memberships.organization", "name type logoUrl");
+    const formatted = {
+      id: req.user._id,
+      _id: req.user._id,
+      walletAddress: req.user.walletAddress,
+      displayName: req.user.displayName,
+      email: req.user.email,
+      avatarUrl: req.user.avatarUrl,
+      linkedWallets: req.user.linkedWallets,
+      isSuperAdmin: req.user.isSuperAdmin,
+      memberships: req.user.memberships,
+    };
+    res.json({ user: formatted, ...formatted });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 /// GET /api/auth/keys
 /// Returns the decrypted auto-generated wallet keys (private key + 12-word mnemonic) for the authenticated user,
 /// enabling seamless backup and account restore on mobile.

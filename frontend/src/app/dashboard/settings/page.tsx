@@ -41,6 +41,8 @@ interface AutoWalletKeys {
 
 interface UploadResponse {
   documentUrl: string;
+  isLocal?: boolean;
+  documentHash?: string;
 }
 
 // ── Helper to safely extract error message ──────────────────────────────────
@@ -147,35 +149,70 @@ export default function SettingsPage() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error("Image file must be under 5MB");
+        return;
+      }
       setAvatarFile(file);
-      setAvatarPreview(URL.createObjectURL(file));
+      
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new window.Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          const size = 256;
+          canvas.width = size;
+          canvas.height = size;
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            const minDim = Math.min(img.width, img.height);
+            const startX = (img.width - minDim) / 2;
+            const startY = (img.height - minDim) / 2;
+            ctx.drawImage(img, startX, startY, minDim, minDim, 0, 0, size, size);
+            const dataUrl = canvas.toDataURL("image/jpeg", 0.88);
+            setAvatarPreview(dataUrl);
+          } else {
+            setAvatarPreview(event.target?.result as string);
+          }
+        };
+        img.src = event.target?.result as string;
+      };
+      reader.readAsDataURL(file);
     }
   };
 
   const handleSaveProfile = async () => {
     try {
       setIsSaving(true);
-      let avatarUrl = user?.avatarUrl;
+      let avatarUrl = avatarPreview || user?.avatarUrl;
 
-      // 1. Upload new avatar if selected
+      // 1. If a new avatar file was chosen, try uploading to cloud storage / Pinata IPFS first
       if (avatarFile) {
-        const formData = new FormData();
-        formData.append("file", avatarFile);
-        
-        const uploadRes = await api.post<UploadResponse>("/upload", formData, {
-          headers: { "Content-Type": "multipart/form-data" }
-        });
-        
-        avatarUrl = uploadRes.data.documentUrl;
+        try {
+          const formData = new FormData();
+          formData.append("file", avatarFile);
+          const uploadRes = await api.post<UploadResponse>("/upload", formData, {
+            headers: { "Content-Type": "multipart/form-data" }
+          });
+          if (uploadRes.data?.documentUrl && !uploadRes.data.isLocal) {
+            avatarUrl = uploadRes.data.documentUrl;
+          }
+        } catch {
+          // If server upload failed, avatarUrl uses the reliable 256x256 Base64 data URL
+        }
       }
 
-      // 2. Update user profile
-      await api.put("/users/me", {
+      // 2. Update user profile directly in MongoDB Atlas
+      const updateRes = await api.put("/users/me", {
         displayName: currentDisplayName,
         avatarUrl
       });
 
-      // 3. Refresh context
+      // 3. Update localStorage and React Auth state immediately
+      const updatedUser = updateRes.data?.user || updateRes.data;
+      if (updatedUser && typeof window !== "undefined") {
+        localStorage.setItem("cb_user", JSON.stringify(updatedUser));
+      }
       await refreshUser();
       setAvatarFile(null);
       setAvatarPreview("");
