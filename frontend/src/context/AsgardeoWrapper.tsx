@@ -5,11 +5,19 @@ import { AuthProvider as AsgardeoAuthProvider, useAuthContext } from "@asgardeo/
 import { ChainBudgetAuthProvider } from "./AuthContext";
 
 const asgardeoConfig = {
-  signInRedirectURL: process.env.NEXT_PUBLIC_ASGARDEO_REDIRECT_URL || "http://localhost:3000",
-  signOutRedirectURL: process.env.NEXT_PUBLIC_ASGARDEO_REDIRECT_URL || "http://localhost:3000",
-  clientID: process.env.NEXT_PUBLIC_ASGARDEO_CLIENT_ID || "",
-  baseUrl: process.env.NEXT_PUBLIC_ASGARDEO_BASE_URL || "",
-  scope: ["openid", "profile", "email"]
+  signInRedirectURL:
+    typeof window !== "undefined"
+      ? window.location.origin
+      : process.env.NEXT_PUBLIC_ASGARDEO_REDIRECT_URL || "https://chainbudget.vercel.app",
+  signOutRedirectURL:
+    typeof window !== "undefined"
+      ? window.location.origin
+      : process.env.NEXT_PUBLIC_ASGARDEO_REDIRECT_URL || "https://chainbudget.vercel.app",
+  clientID:
+    process.env.NEXT_PUBLIC_ASGARDEO_CLIENT_ID || "3WDw8ZfjPsNGaBKYIjeCwjw3raIa",
+  baseUrl:
+    process.env.NEXT_PUBLIC_ASGARDEO_BASE_URL || "https://api.asgardeo.io/t/orgs3xfu",
+  scope: ["openid", "profile", "email"],
 };
 
 console.log("Asgardeo Config:", asgardeoConfig);
