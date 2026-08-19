@@ -13,14 +13,18 @@ const asgardeoConfig = {
     typeof window !== "undefined"
       ? window.location.origin
       : process.env.NEXT_PUBLIC_ASGARDEO_REDIRECT_URL || "https://chainbudget.vercel.app",
-  clientID:
-    process.env.NEXT_PUBLIC_ASGARDEO_CLIENT_ID || "3WDw8ZfjPsNGaBKYIjeCwjw3raIa",
-  baseUrl:
-    process.env.NEXT_PUBLIC_ASGARDEO_BASE_URL || "https://api.asgardeo.io/t/orgs3xfu",
+  clientID: (() => {
+    const id = process.env.NEXT_PUBLIC_ASGARDEO_CLIENT_ID;
+    if (!id) throw new Error("Missing NEXT_PUBLIC_ASGARDEO_CLIENT_ID environment variable");
+    return id;
+  })(),
+  baseUrl: (() => {
+    const url = process.env.NEXT_PUBLIC_ASGARDEO_BASE_URL;
+    if (!url) throw new Error("Missing NEXT_PUBLIC_ASGARDEO_BASE_URL environment variable");
+    return url;
+  })(),
   scope: ["openid", "profile", "email"],
 };
-
-console.log("Asgardeo Config:", asgardeoConfig);
 
 function InnerWrapper({ children }: { children: React.ReactNode }) {
   const asgardeoAuth = useAuthContext();

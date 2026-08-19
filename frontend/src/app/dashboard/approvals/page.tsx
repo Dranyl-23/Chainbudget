@@ -10,6 +10,7 @@ import toast from "react-hot-toast";
 import TableSkeleton from "@/components/TableSkeleton";
 import confetti from "canvas-confetti";
 import axios from "axios";
+import { BACKEND_URL } from "@/lib/config";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface SubmittedByUser {
@@ -58,6 +59,7 @@ interface Approval {
   type?: string;
   documentUrl?: string;
   urgency?: "normal" | "urgent";
+  to?: string;
 }
 
 interface BudgetItem {
@@ -222,14 +224,18 @@ export default function ApprovalsPage() {
         { name: "action", type: "string" },
         { name: "txId", type: "string" },
         { name: "amount", type: "string" },
-        { name: "description", type: "string" }
+        { name: "description", type: "string" },
+        { name: "to", type: "address" },
+        { name: "amountWei", type: "uint256" }
       ]
     };
     const message = {
       action,
       txId: req._id,
       amount: req.amount.toString(),
-      description: req.description
+      description: req.description,
+      to: req.to || req.submittedBy || "",
+      amountWei: req.amount.toString()
     };
     
     toast.loading(`Please sign the ${action} action in MetaMask...`, { id: "txToast" });
@@ -251,7 +257,7 @@ export default function ApprovalsPage() {
         try {
           await window.ethereum.request({
             method: "wallet_switchEthereumChain",
-            params: [{ chainId: "0x7a69" }],
+            params: [{ chainId: "0x13882" }],
           });
         } catch (switchError: unknown) {
           if (getRpcErrorCode(switchError) === 4902) {
@@ -260,16 +266,16 @@ export default function ApprovalsPage() {
                 method: "wallet_addEthereumChain",
                 params: [
                   {
-                    chainId: "0x7a69",
-                    chainName: "Hardhat Localhost",
-                    rpcUrls: ["http://localhost:8545"],
-                    nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
+                    chainId: "0x13882",
+                    chainName: "Polygon Amoy Testnet",
+                    rpcUrls: ["https://polygon-amoy.drpc.org"],
+                    nativeCurrency: { name: "POL", symbol: "POL", decimals: 18 },
                   },
                 ],
               });
             } catch (addError: unknown) {
               console.error("Add network error:", addError);
-              toast.error("Failed to add Hardhat network", { id: "txToast" });
+              toast.error("Failed to add Polygon Amoy network", { id: "txToast" });
             }
           }
         }
@@ -302,7 +308,9 @@ export default function ApprovalsPage() {
         action: "approved",
         comment: "Approved via dashboard",
         organizationId: activeOrgId,
-        signature
+        signature,
+        to: req.to || req.submittedBy || "",
+        amountWei: req.amount.toString()
       });
 
       toast.success("Approval recorded successfully!", { id: "txToast" });
@@ -334,7 +342,9 @@ export default function ApprovalsPage() {
         action: "rejected",
         comment: "Rejected via dashboard",
         organizationId: activeOrgId,
-        signature
+        signature,
+        to: req.to || req.submittedBy || "",
+        amountWei: req.amount.toString()
       });
       await refreshApprovals();
       toast.success("Rejection vote recorded", { id: "txToast" });
@@ -459,7 +469,7 @@ export default function ApprovalsPage() {
                     </div>
                     {req.documentUrl && (
                       <a
-                        href={req.documentUrl.startsWith("http") ? req.documentUrl : `${process.env.NEXT_PUBLIC_BACKEND_URL || "http://127.0.0.1:5001"}${req.documentUrl}`}
+                        href={req.documentUrl.startsWith("http") ? req.documentUrl : `${BACKEND_URL}${req.documentUrl}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={(e) => e.stopPropagation()}

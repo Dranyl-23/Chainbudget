@@ -28,6 +28,9 @@ jobs:
   dependency-audit:
     name: npm Security Audit
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        project: [backend, frontend, mobile, contracts]
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -37,10 +40,10 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Audit Backend Dependencies
-        working-directory: ./backend
-        run: npm audit --audit-level=high || true
+      - name: Install Dependencies
+        working-directory: ./${{ matrix.project }}
+        run: npm ci --ignore-scripts || npm install --ignore-scripts
 
-      - name: Audit Frontend Dependencies
-        working-directory: ./frontend
+      - name: Run npm audit
+        working-directory: ./${{ matrix.project }}
         run: npm audit --audit-level=high || true

@@ -34,8 +34,7 @@ import TableSkeleton from "@/components/TableSkeleton";
 import TxExplorerModal from "@/components/TxExplorerModal";
 import { exportToCSV, exportToPDF } from "@/lib/exportUtils";
 import axios from "axios";
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL?.replace("/api", "") || "http://127.0.0.1:5001";
+import { BACKEND_URL } from "@/lib/config";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface UserOrgRef {

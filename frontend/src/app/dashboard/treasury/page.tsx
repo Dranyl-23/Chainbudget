@@ -6,6 +6,7 @@ import { Box, Save, Activity, ShieldAlert, Link as LinkIcon, RefreshCw, Layers }
 import api from "@/lib/api";
 import toast from "react-hot-toast";
 import { ethers } from "ethers";
+import { getAmoyProvider } from "@/lib/rpcProvider";
 import axios from "axios";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -74,7 +75,7 @@ export default function TreasuryPage() {
     try {
       setIsFetchingBalance(true);
       // Connect to Polygon Amoy Public RPC
-      const provider = new ethers.JsonRpcProvider("https://polygon-amoy.drpc.org");
+      const provider = getAmoyProvider();
       const bal = await provider.getBalance(address);
       setBalance(ethers.formatEther(bal));
     } catch (err: unknown) {

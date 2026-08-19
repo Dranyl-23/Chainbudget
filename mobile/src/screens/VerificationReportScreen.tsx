@@ -40,7 +40,7 @@ export default function VerificationReportScreen() {
 
   const openPolygonScan = () => {
     if (report?.transactionHash) {
-      Linking.openURL(`https://polygonscan.com/tx/${report.transactionHash}`);
+      Linking.openURL(`https://amoy.polygonscan.com/tx/${report.transactionHash}`);
     }
   };
 

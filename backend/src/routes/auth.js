@@ -73,8 +73,8 @@ router.post("/register", verifyRateLimiter, async (req, res) => {
           if (publicKey) emailUser.publicKey = publicKey;
           emailUser.walletType = "embedded_bip44";
           emailUser.walletVersion = 1;
-          emailUser.encryptedPrivateKey = undefined;
-          emailUser.encryptedMnemonic = undefined;
+          // NOTE: Preserve existing encryptedPrivateKey and encryptedMnemonic
+          // to prevent key loss when user exports via GET /keys
           await emailUser.save();
           return res.json({
             message: "Mobile wallet linked to your existing account. You can now sign in on both browser and mobile.",
@@ -264,6 +264,24 @@ router.get("/validate", authenticate, (req, res) => {
 /// GET /api/auth/me — Get authenticated user details
 router.get("/me", authenticate, async (req, res) => {
   try {
+    // Sync avatar from Asgardeo ID token if available and not yet set
+    const idToken = req.headers["x-id-token"];
+    if (idToken && (!req.user.avatarUrl || req.user.avatarUrl.includes("googleusercontent"))) {
+      try {
+        const payloadBase64 = idToken.split(".")[1];
+        const payloadJson = Buffer.from(payloadBase64, "base64").toString("utf-8");
+        const decoded = JSON.parse(payloadJson);
+        const picture = decoded.picture || decoded.profileUrl;
+        
+        if (picture && req.user.avatarUrl !== picture) {
+          req.user.avatarUrl = picture;
+          await req.user.save();
+        }
+      } catch (err) {
+        console.warn("Failed to decode X-ID-Token for picture:", err.message);
+      }
+    }
+
     await req.user.populate("memberships.organization", "name type logoUrl");
     const formatted = {
       id: req.user._id,
@@ -275,6 +293,7 @@ router.get("/me", authenticate, async (req, res) => {
       linkedWallets: req.user.linkedWallets,
       isSuperAdmin: req.user.isSuperAdmin,
       memberships: req.user.memberships,
+      hasBackedUpPhrase: req.user.hasBackedUpPhrase,
     };
     res.json({ user: formatted, ...formatted });
   } catch (err) {
@@ -376,46 +395,8 @@ router.post("/confirm-backup", authenticate, async (req, res) => {
   }
 });
 
-/// GET /api/auth/me
-/// Returns the current user profile (relies on authenticate middleware to check Asgardeo JWT)
-router.get("/me", authenticate, async (req, res) => {
-  try {
-    // Attempt to extract picture from X-ID-Token if the user has no avatar
-    const idToken = req.headers["x-id-token"];
-    if (idToken && (!req.user.avatarUrl || req.user.avatarUrl.includes("googleusercontent"))) {
-      try {
-        const payloadBase64 = idToken.split(".")[1];
-        const payloadJson = Buffer.from(payloadBase64, "base64").toString("utf-8");
-        const decoded = JSON.parse(payloadJson);
-        const picture = decoded.picture || decoded.profileUrl;
-        
-        if (picture && req.user.avatarUrl !== picture) {
-          req.user.avatarUrl = picture;
-          await req.user.save();
-        }
-      } catch (err) {
-        console.warn("Failed to decode X-ID-Token for picture:", err.message);
-      }
-    }
 
-    await req.user.populate("memberships.organization", "name type logoUrl");
-    res.json({
-      user: {
-        id: req.user._id,
-        walletAddress: req.user.walletAddress,
-        displayName: req.user.displayName,
-        email: req.user.email,
-        avatarUrl: req.user.avatarUrl,
-        linkedWallets: req.user.linkedWallets,
-        isSuperAdmin: req.user.isSuperAdmin,
-        memberships: req.user.memberships,
-        hasBackedUpPhrase: req.user.hasBackedUpPhrase,
-      }
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+
 
 /// POST /api/auth/link-wallet
 /// Verifies the signed nonce and links the wallet to the Asgardeo user

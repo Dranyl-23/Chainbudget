@@ -5,6 +5,7 @@ import { Bell, AlertCircle, CheckCircle2, Link as LinkIcon } from "lucide-react"
 import { useAuth } from "@/context/AuthContext";
 import { io, Socket } from "socket.io-client";
 import api from "@/lib/api";
+import { BACKEND_URL } from "@/lib/config";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface NotificationItem {
@@ -80,7 +81,7 @@ export default function NotificationsCenter() {
   useEffect(() => {
     if (!isConnected || !activeOrgId) return;
 
-    const backendUrl = process.env.NEXT_PUBLIC_API_URL?.replace("/api", "") || "http://127.0.0.1:5001";
+    const backendUrl = BACKEND_URL;
     const socket = io(backendUrl);
     socketRef.current = socket;
 

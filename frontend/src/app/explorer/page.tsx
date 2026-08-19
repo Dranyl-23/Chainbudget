@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { Search, Globe, ShieldCheck, ArrowRight, ArrowUpRight, ArrowDownRight, Activity } from "lucide-react";
 import api from "@/lib/api";
+import { BACKEND_URL } from "@/lib/config";
 
 interface Organization {
   _id: string;
@@ -57,9 +58,7 @@ export default function ExplorerPage() {
     return "text-red-400 bg-red-400/10 border-red-400/30";
   };
 
-  const backendUrl = process.env.NEXT_PUBLIC_API_URL 
-    ? process.env.NEXT_PUBLIC_API_URL.replace("/api", "") 
-    : "http://127.0.0.1:5001";
+  const backendUrl = BACKEND_URL;
 
   return (
     <main className="min-h-screen bg-[#050505] text-white">

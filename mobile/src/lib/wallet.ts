@@ -128,7 +128,9 @@ export async function signApprovalAction(
   txId: string,
   action: 'approved' | 'rejected',
   amount: string,
-  description: string
+  description: string,
+  to: string,
+  amountWei: string
 ): Promise<string> {
   const privateKey = await getPrivateKey();
   if (!privateKey) {
@@ -144,9 +146,11 @@ export async function signApprovalAction(
       { name: 'txId',        type: 'string' },
       { name: 'amount',      type: 'string' },
       { name: 'description', type: 'string' },
+      { name: 'to',          type: 'address' },
+      { name: 'amountWei',   type: 'uint256' },
     ],
   };
-  const message = { action, txId, amount, description };
+  const message = { action, txId, amount, description, to, amountWei };
 
   const signature = await wallet.signTypedData(domain, types, message);
   return signature;

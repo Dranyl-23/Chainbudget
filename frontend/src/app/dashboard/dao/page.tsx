@@ -9,6 +9,7 @@ import toast from "react-hot-toast";
 import { io } from "socket.io-client";
 import TableSkeleton from "@/components/TableSkeleton";
 import axios from "axios";
+import { BACKEND_URL } from "@/lib/config";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface UserOrgRef {
@@ -182,7 +183,7 @@ export default function DAOGovernancePage() {
 
     loadProposals();
 
-    const socketUrl = process.env.NEXT_PUBLIC_API_URL?.replace("/api", "") || "http://127.0.0.1:5001";
+    const socketUrl = BACKEND_URL;
     const socket = io(socketUrl);
 
     socket.on("dao_vote_updated", () => {

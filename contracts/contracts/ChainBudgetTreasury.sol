@@ -26,7 +26,7 @@ contract ChainBudgetTreasury is Ownable2Step, Pausable, EIP712, ReentrancyGuard 
     mapping(string => bool) public executedTransactions;
 
     bytes32 private constant APPROVAL_TYPEHASH = keccak256(
-        "Approval(string action,string txId,string amount,string description)"
+        "Approval(string action,string txId,string amount,string description,address to,uint256 amountWei)"
     );
 
     // ────────────────────────────────────────────────────────────────────────
@@ -104,7 +104,9 @@ contract ChainBudgetTreasury is Ownable2Step, Pausable, EIP712, ReentrancyGuard 
                 keccak256(bytes(action)),
                 keccak256(bytes(txId)),
                 keccak256(bytes(amountStr)),
-                keccak256(bytes(description))
+                keccak256(bytes(description)),
+                to,
+                amountWei
             )
         );
         
@@ -155,6 +157,7 @@ contract ChainBudgetTreasury is Ownable2Step, Pausable, EIP712, ReentrancyGuard 
 
     function removeApprover(address approver) external onlyOwner {
         require(isApprover[approver], "Treasury: not an approver");
+        require(approvers.length - 1 >= requiredApprovals, "Treasury: cannot remove, would drop below required approvals");
         isApprover[approver] = false;
         
         for (uint256 i = 0; i < approvers.length; i++) {

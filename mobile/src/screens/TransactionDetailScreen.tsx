@@ -98,8 +98,10 @@ export default function TransactionDetailScreen() {
         // Supplier signs the EIP-191 digest on-device using SecureStore key
         const contractAddress =
           tx.organization?.contractAddress ||
-          tx.organization?.vaultAddress ||
-          '0x726e632A461E2eB233b66eD964956B316C40822A'; // default Amoy address fallback
+          tx.organization?.vaultAddress;
+        if (!contractAddress) {
+          throw new Error('No smart contract configured for this organization. Cannot sign escrow release.');
+        }
         const chainId = tx.organization?.chainId || DEFAULT_CHAIN_ID;
         const nonce = tx.escrowNonce || 0;
 

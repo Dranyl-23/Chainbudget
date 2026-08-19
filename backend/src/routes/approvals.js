@@ -14,7 +14,7 @@ router.post("/:txId", authenticate, requireRole(2), async (req, res) => {
   session.startTransaction();
   
   try {
-    const { action, comment, blockchainTxHash, signature } = req.body;
+    const { action, comment, blockchainTxHash, signature, to: signedTo, amountWei: signedAmountWei } = req.body;
     
     // Input validation
     if (!action || !["approved", "rejected"].includes(action)) {
@@ -67,14 +67,18 @@ router.post("/:txId", authenticate, requireRole(2), async (req, res) => {
           { name: "action", type: "string" },
           { name: "txId", type: "string" },
           { name: "amount", type: "string" },
-          { name: "description", type: "string" }
+          { name: "description", type: "string" },
+          { name: "to", type: "address" },
+          { name: "amountWei", type: "uint256" }
         ]
       };
       const message = {
         action,
         txId: txn._id.toString(),
         amount: txn.amount.toString(),
-        description: txn.description
+        description: txn.description,
+        to: signedTo || "",
+        amountWei: (signedAmountWei || txn.amount).toString()
       };
       
       const recoveredAddress = ethers.verifyTypedData(domain, types, message, signature);

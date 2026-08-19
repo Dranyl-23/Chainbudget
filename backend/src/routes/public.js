@@ -166,8 +166,7 @@ router.get("/verify/:hash", async (req, res) => {
 
     const transaction = await Transaction.findOne(query)
       .populate("organization", "name isPrivate contractAddress")
-      .populate("requestedBy", "displayName walletAddress")
-      .populate("approvers.user", "displayName walletAddress")
+      .populate("submittedBy", "displayName walletAddress")
       .lean();
 
     if (!transaction) {
@@ -177,6 +176,12 @@ router.get("/verify/:hash", async (req, res) => {
     if (transaction.organization && transaction.organization.isPrivate) {
       return res.status(403).json({ error: "This transaction belongs to a private organization and cannot be publicly audited." });
     }
+
+    // Fetch approval signatures from the separate Approval collection
+    const Approval = require("../models/Approval");
+    const approvals = await Approval.find({ transaction: transaction._id })
+      .populate("approver", "displayName walletAddress")
+      .lean();
 
     // Format a clean verification report
     const report = {
@@ -194,12 +199,13 @@ router.get("/verify/:hash", async (req, res) => {
       description: transaction.description,
       receiptIpfsHash: transaction.receiptIpfsHash, // Provide the raw receipt for auditing
       receiptUrl: transaction.receiptUrl,
-      requestedBy: transaction.requestedBy?.displayName || transaction.requestedBy?.walletAddress,
-      signatures: transaction.approvers.map(a => ({
-        name: a.user?.displayName,
-        wallet: a.user?.walletAddress,
-        signature: a.signature, // Cryptographic proof of approval
-        date: a.date
+      submittedBy: transaction.submittedBy?.displayName || transaction.submittedBy?.walletAddress,
+      signatures: approvals.map(a => ({
+        name: a.approver?.displayName,
+        wallet: a.approver?.walletAddress || a.walletAddress,
+        signature: a.digitalSignature, // Cryptographic proof of approval
+        action: a.action,
+        date: a.createdAt
       }))
     };
 

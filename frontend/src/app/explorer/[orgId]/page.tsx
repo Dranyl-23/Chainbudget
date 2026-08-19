@@ -6,6 +6,8 @@ import Link from "next/link";
 import { ArrowLeft, ShieldCheck, Activity, Link as LinkIcon, AlertTriangle, ArrowUpRight, ArrowDownRight, ArrowRight, ExternalLink, Lock } from "lucide-react";
 import api from "@/lib/api";
 import { ethers } from "ethers";
+import { getAmoyProvider } from "@/lib/rpcProvider";
+import { BACKEND_URL } from "@/lib/config";
 
 interface Organization {
   _id: string;
@@ -58,7 +60,7 @@ export default function PublicDashboardPage() {
         // Fetch live balance if contract address exists
         if (orgData.contractAddress) {
           try {
-            const provider = new ethers.JsonRpcProvider("https://polygon-amoy.drpc.org");
+            const provider = getAmoyProvider();
             const balanceWei = await provider.getBalance(orgData.contractAddress);
             const balancePol = ethers.formatEther(balanceWei);
             setBalance(parseFloat(balancePol).toFixed(4));
@@ -110,9 +112,7 @@ export default function PublicDashboardPage() {
     );
   }
 
-  const backendUrl = process.env.NEXT_PUBLIC_API_URL 
-    ? process.env.NEXT_PUBLIC_API_URL.replace("/api", "") 
-    : "http://127.0.0.1:5001";
+  const backendUrl = BACKEND_URL;
 
   const getScoreColor = (score: number) => {
     if (score >= 90) return "text-green-400 border-green-400/50 shadow-[0_0_15px_rgba(74,222,128,0.2)]";
