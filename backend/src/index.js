@@ -121,6 +121,8 @@ app.use(helmet({
 }));
 const allowedOrigins = [
   process.env.FRONTEND_URL || "http://localhost:3000",
+  "https://chainbudget-dranyl-23s-projects.vercel.app",
+  "https://chainbudget.vercel.app",
   "http://localhost:3000",
   "http://127.0.0.1:3000",
   "capacitor://localhost",
@@ -134,6 +136,7 @@ app.use(cors({
     if (!origin) return callback(null, true);
     if (
       allowedOrigins.includes(origin) ||
+      origin.endsWith('.vercel.app') ||
       origin.endsWith('.trycloudflare.com') ||
       origin.endsWith('.ngrok-free.app') ||
       process.env.NODE_ENV !== 'production'
