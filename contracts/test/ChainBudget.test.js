@@ -336,5 +336,81 @@ describe("ChainBudget System Suite", function () {
       expect(esc.isReleased).to.be.true;
     });
   });
-});
 
+  // ──────────────────────────────────────────────────────────────────────────
+  // 7. Escrow Balance Segregation (SC-2)
+  // ──────────────────────────────────────────────────────────────────────────
+  describe("Escrow Balance Segregation", function () {
+    it("Should track totalLockedEscrow when escrow is funded", async function () {
+      const escrowAmount = ethers.parseEther("2.0");
+      await owner.sendTransaction({
+        to: await chainBudget.getAddress(),
+        value: ethers.parseEther("5.0"),
+      });
+
+      const dataHash = ethers.keccak256(ethers.toUtf8Bytes("escrow-segregation-test"));
+      await chainBudget.recordTransaction(dataHash, escrowAmount, supplier.address, false, true);
+      await chainBudget.executeTransaction(1);
+
+      expect(await chainBudget.totalLockedEscrow()).to.equal(escrowAmount);
+      expect(await chainBudget.getAvailableBalance()).to.equal(ethers.parseEther("3.0"));
+    });
+
+    it("Should prevent non-escrow transaction from spending reserved escrow funds", async function () {
+      await owner.sendTransaction({
+        to: await chainBudget.getAddress(),
+        value: ethers.parseEther("3.0"),
+      });
+
+      // Lock 2 ETH in escrow
+      const dataHash1 = ethers.keccak256(ethers.toUtf8Bytes("escrow-lock"));
+      await chainBudget.recordTransaction(dataHash1, ethers.parseEther("2.0"), supplier.address, false, true);
+      await chainBudget.executeTransaction(1);
+
+      // Try to spend 2 ETH (only 1 ETH is available)
+      const dataHash2 = ethers.keccak256(ethers.toUtf8Bytes("regular-spend"));
+      await chainBudget.recordTransaction(dataHash2, ethers.parseEther("2.0"), nonApprover.address, false, false);
+      await expect(
+        chainBudget.executeTransaction(2)
+      ).to.be.revertedWith("ChainBudget: insufficient available balance (escrow funds reserved)");
+    });
+
+    it("Should release totalLockedEscrow after escrow is finalized", async function () {
+      const escrowAmount = ethers.parseEther("1.0");
+      await owner.sendTransaction({
+        to: await chainBudget.getAddress(),
+        value: ethers.parseEther("5.0"),
+      });
+
+      const dataHash = ethers.keccak256(ethers.toUtf8Bytes("escrow-release-lock"));
+      await chainBudget.recordTransaction(dataHash, escrowAmount, supplier.address, false, true);
+      await chainBudget.executeTransaction(1);
+
+      expect(await chainBudget.totalLockedEscrow()).to.equal(escrowAmount);
+
+      // Two-party release
+      await chainBudget.connect(owner).releaseEscrow(1);
+      await chainBudget.connect(supplier).releaseEscrow(1);
+
+      expect(await chainBudget.totalLockedEscrow()).to.equal(0);
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // 8. Approver Removal Threshold Guard (SC-3)
+  // ──────────────────────────────────────────────────────────────────────────
+  describe("Approver Removal Threshold Guard", function () {
+    it("Should prevent removing approver if it would drop below requiredApprovals", async function () {
+      // We have 3 approvers, requiredApprovals = 2
+      // Removing one leaves 2, which is still >= 2 → should succeed
+      await chainBudget.removeApprover(approver3.address);
+      const remaining = await chainBudget.getApprovers();
+      expect(remaining.length).to.equal(2);
+
+      // Removing another would leave 1 < 2 → should revert
+      await expect(
+        chainBudget.removeApprover(approver2.address)
+      ).to.be.revertedWith("ChainBudget: cannot remove, would drop below required approvals");
+    });
+  });
+});

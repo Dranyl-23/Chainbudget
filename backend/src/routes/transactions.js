@@ -138,7 +138,7 @@ router.post("/", authenticate, requireRole(3), async (req, res) => {
 
         blockchainResult = await recordTransactionOnChain(
           payload,
-          Math.round(amount),
+        Math.floor(amount),
           req.user.walletAddress || "0x0000000000000000000000000000000000000000",
           isHighValue,
           isEscrow === true
@@ -480,7 +480,7 @@ router.patch("/:id/process-request", authenticate, requireRole(2), async (req, r
 
       blockchainResult = await recordTransactionOnChain(
         payload,
-        Math.round(txn.amount),
+        Math.floor(txn.amount),
         toAddress,
         isHighValue,
         txn.isEscrow === true
@@ -825,7 +825,7 @@ router.post("/:id/retry-sync", authenticate, requireRole(2), async (req, res) =>
 
     const blockchainResult = await recordTransactionOnChain(
       payload,
-      Math.round(txn.amount),
+      Math.floor(txn.amount),
       toAddress,
       txn.isHighValue,
       txn.isEscrow === true

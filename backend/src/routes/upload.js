@@ -40,12 +40,6 @@ router.post("/", authenticate, upload.single("file"), async (req, res) => {
     return res.status(400).json({ error: "No file uploaded" });
   }
 
-    // Save locally first as a reliable fallback
-    const localFilename = `${Date.now()}_${req.file.originalname.replace(/\s+/g, '_')}`;
-    const localFilePath = path.join(UPLOADS_DIR, localFilename);
-    fs.writeFileSync(localFilePath, req.file.buffer);
-    const localUrl = `${req.protocol}://${req.get("host")}/uploads/${localFilename}`;
-
     try {
       const pinataJWT = process.env.PINATA_JWT;
       if (!pinataJWT) {
@@ -87,18 +81,24 @@ router.post("/", authenticate, upload.single("file"), async (req, res) => {
         documentHash: ipfsHash,
         originalName: req.file.originalname,
         mimeType: req.file.mimetype,
-        localUrl // Also provide localUrl just in case
       });
     } catch (err) {
       console.warn("Pinata IPFS upload failed, falling back to local storage:", err?.response?.data || err.message);
       
-      // Return local URL as fallback
+      // Only write to local disk as a last-resort fallback
+      const localFilename = `${Date.now()}_${req.file.originalname.replace(/\s+/g, '_')}`;
+      const localFilePath = path.join(UPLOADS_DIR, localFilename);
+      fs.writeFileSync(localFilePath, req.file.buffer);
+      const localUrl = `${req.protocol}://${req.get("host")}/uploads/${localFilename}`;
+
+      // Return local URL as fallback with explicit warning
       return res.status(201).json({
         documentUrl: localUrl,
         documentHash: "local_" + crypto.randomBytes(8).toString("hex"),
         originalName: req.file.originalname,
         mimeType: req.file.mimetype,
-        isLocal: true
+        isLocal: true,
+        warning: "File stored locally. It may be lost on server restart. Configure PINATA_JWT for persistent IPFS storage."
       });
     }
 });

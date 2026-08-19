@@ -12,7 +12,7 @@
 
 **Backend (.env file in `backend/` folder):**
 ```env
-PORT=5000
+PORT=5001
 MONGO_URI=<your_mongodb_atlas_connection_string>
 JWT_SECRET=<generate_random_secret_key>
 AMOY_RPC_URL=https://rpc-amoy.polygon.technology/

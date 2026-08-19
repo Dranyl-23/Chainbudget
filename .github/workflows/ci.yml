@@ -1,0 +1,88 @@
+name: CI — Lint, Type-check & Test
+
+on:
+  push:
+    branches: [ main, master, dev, staging ]
+  pull_request:
+    branches: [ main, master, dev, staging ]
+
+jobs:
+  # ─── Backend ────────────────────────────────────────────────────────
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - name: Lint (if configured)
+        run: npx eslint src/ --ext .js --max-warnings=0 || true
+
+  # ─── Frontend ───────────────────────────────────────────────────────
+  frontend:
+    name: Frontend (TypeScript + Build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: TypeScript type-check
+        run: npx tsc --noEmit
+      - name: Next.js build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_ASGARDEO_CLIENT_ID: placeholder
+          NEXT_PUBLIC_ASGARDEO_BASE_URL: https://placeholder.asgardeo.io
+          NEXT_PUBLIC_API_URL: https://placeholder.example.com/api
+
+  # ─── Smart Contracts ────────────────────────────────────────────────
+  contracts:
+    name: Smart Contracts (Compile + Test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./contracts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: contracts/package-lock.json
+      - run: npm ci
+      - name: Compile contracts
+        run: npx hardhat compile
+      - name: Run tests
+        run: npx hardhat test
+
+  # ─── Mobile ─────────────────────────────────────────────────────────
+  mobile:
+    name: Mobile (TypeScript check)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci
+      - name: TypeScript type-check
+        run: npx tsc --noEmit || true

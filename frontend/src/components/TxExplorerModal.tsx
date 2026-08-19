@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { X, ExternalLink, Copy, CheckCircle2, Activity, Box, Clock, ShieldCheck, AlertCircle } from "lucide-react";
 import { ethers } from "ethers";
+import { getAmoyProvider } from "@/lib/rpcProvider";
 
 interface TxExplorerModalProps {
   isOpen: boolean;
@@ -37,7 +38,7 @@ export default function TxExplorerModal({ isOpen, onClose, txHash }: TxExplorerM
       try {
         setIsLoading(true);
         // Use a public Polygon Amoy RPC
-        const provider = new ethers.JsonRpcProvider("https://polygon-amoy.drpc.org");
+        const provider = getAmoyProvider();
         
         // Ensure we show the scanning animation for at least 1.5 seconds for the UX effect
         const minWait = new Promise((resolve) => setTimeout(resolve, 1500));

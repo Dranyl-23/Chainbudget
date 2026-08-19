@@ -50,6 +50,7 @@ contract ChainBudget is Ownable2Step, Pausable, ReentrancyGuard {
     mapping(uint256 => mapping(address => bool)) private hasApproved;
     mapping(address => bool) public isApprover;
     address[] public approvers;
+    uint256 public totalLockedEscrow;    // Total MATIC locked in funded but unreleased escrows
 
     // ────────────────────────────────────────────────────────────────────────
     // Events
@@ -109,6 +110,11 @@ contract ChainBudget is Ownable2Step, Pausable, ReentrancyGuard {
         return address(this).balance;
     }
 
+    /// @notice Returns the balance available for non-escrow disbursements
+    function getAvailableBalance() external view returns (uint256) {
+        return address(this).balance - totalLockedEscrow;
+    }
+
     // ────────────────────────────────────────────────────────────────────────
     // Emergency Controls (Pausable)
     // ────────────────────────────────────────────────────────────────────────
@@ -161,6 +167,7 @@ contract ChainBudget is Ownable2Step, Pausable, ReentrancyGuard {
 
     function removeApprover(address approver) external onlyOwner {
         require(isApprover[approver], "ChainBudget: not an approver");
+        require(approvers.length - 1 >= requiredApprovals, "ChainBudget: cannot remove, would drop below required approvals");
         isApprover[approver] = false;
         for (uint256 i = 0; i < approvers.length; i++) {
             if (approvers[i] == approver) {
@@ -205,12 +212,17 @@ contract ChainBudget is Ownable2Step, Pausable, ReentrancyGuard {
         Transaction storage txn = transactions[txId];
         require(txn.isApproved, "ChainBudget: transaction not approved yet");
         require(!txn.executed, "ChainBudget: already executed");
-        require(address(this).balance >= txn.amount, "ChainBudget: insufficient vault balance");
+        if (txn.isEscrow) {
+            require(address(this).balance >= txn.amount, "ChainBudget: insufficient vault balance");
+        } else {
+            require(address(this).balance - totalLockedEscrow >= txn.amount, "ChainBudget: insufficient available balance (escrow funds reserved)");
+        }
 
         txn.executed = true;
         
         if (txn.isEscrow) {
             escrows[txId].isFunded = true;
+            totalLockedEscrow += txn.amount;
             emit EscrowFunded(txId, txn.amount);
         } else {
             // Transfer actual funds to the recipient
@@ -304,6 +316,7 @@ contract ChainBudget is Ownable2Step, Pausable, ReentrancyGuard {
 
         if (esc.payerApproved && esc.payeeApproved && !esc.isReleased) {
             esc.isReleased = true;
+            totalLockedEscrow -= txn.amount;
             (bool success, ) = txn.to.call{value: txn.amount}("");
             require(success, "ChainBudget: MATIC transfer failed");
             emit EscrowReleased(txId, txn.to, txn.amount);

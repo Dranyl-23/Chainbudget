@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import Image from "next/image";
 import { ethers } from "ethers";
+import { getAmoyProvider } from "@/lib/rpcProvider";
 import api from "@/lib/api";
 import toast from "react-hot-toast";
 import { Save, Wallet, Upload, User as UserIcon, ShieldCheck, ExternalLink, Copy, Check, Smartphone, CheckCircle2, Sparkles, X } from "lucide-react";
@@ -107,7 +108,7 @@ export default function SettingsPage() {
     const fetchBalance = async () => {
       if (!user?.walletAddress) return;
       try {
-        const provider = new ethers.JsonRpcProvider("https://polygon-amoy.drpc.org");
+        const provider = getAmoyProvider();
         const balance = await provider.getBalance(user.walletAddress);
         const balanceInMatic = ethers.formatEther(balance);
         if (!isCancelled) {

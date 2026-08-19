@@ -94,16 +94,23 @@ export default function ApprovalsScreen() {
       await triggerLightHaptic();
       setSigningTxId(tx._id);
 
+      const toAddress = tx.to || tx.submittedBy?.walletAddress || tx.submittedBy || '';
+      const amountWei = (tx.amount || 0).toString();
+
       const signature = await signApprovalAction(
         tx._id.toString(),
         action,
-        tx.amount?.toString() || '0',
-        tx.description || ''
+        amountWei,
+        tx.description || '',
+        toAddress,
+        amountWei
       );
 
       await api.post(`/transactions/${tx._id}/approve`, {
         action,
         signature,
+        to: toAddress,
+        amountWei,
       });
 
       await triggerSuccessHaptic();

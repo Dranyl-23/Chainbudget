@@ -3,12 +3,14 @@ import { View, Text, TouchableOpacity, Image, TextInput, ActivityIndicator, Aler
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import { useRoute } from '@react-navigation/native';
 import api from '../lib/api';
 import { useTheme } from '../context/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { triggerSuccessHaptic, triggerErrorHaptic, triggerLightHaptic } from '../lib/biometrics';
 
 export default function ScannerScreen() {
+  const route = useRoute<any>();
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
   const [image, setImage] = useState<string | null>(null);
@@ -83,12 +85,16 @@ export default function ScannerScreen() {
 
     setIsSubmitting(true);
     try {
-      const orgRes = await api.get('/organizations');
-      if (!orgRes.data || orgRes.data.length === 0) throw new Error("No organization found");
-      const orgId = orgRes.data[0]._id;
+      // Use active org from route params if available, otherwise fall back to API
+      let activeOrgId = route.params?.orgId;
+      if (!activeOrgId) {
+        const orgRes = await api.get('/organizations');
+        if (!orgRes.data || orgRes.data.length === 0) throw new Error("No organization found");
+        activeOrgId = orgRes.data[0]._id;
+      }
 
       await api.post(`/transactions`, {
-        organization: orgId,
+        organizationId: activeOrgId,
         type: 'expense',
         amount: Number(amount),
         description,
