@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import 'react-native-get-random-values';
-import { NavigationContainer, DarkTheme } from '@react-navigation/native';
+import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, ActivityIndicator, Alert } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as Device from 'expo-device';
+import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
+import { SocketProvider } from './src/context/SocketContext';
 
 // Splash Screen
 import SplashScreen from './src/screens/SplashScreen';
@@ -31,25 +33,27 @@ const AuthStack = createNativeStackNavigator();
 
 /** Unauthenticated flow: Login → Register | Restore → RecoveryPhrase */
 function AuthNavigator() {
+  const { colors, navigationTheme } = useTheme();
+
   return (
-    <NavigationContainer theme={DarkTheme}>
+    <NavigationContainer theme={navigationTheme}>
       <AuthStack.Navigator
         screenOptions={{
           headerShown: false,
-          contentStyle: { backgroundColor: '#09090b' },
+          contentStyle: { backgroundColor: colors.background },
           animation: 'fade_from_bottom',
         }}
       >
         <AuthStack.Screen name="WelcomeLanding" component={WelcomeLandingScreen} />
-        <AuthStack.Screen name="PublicLedger"   component={PublicLedgerScreen} />
+        <AuthStack.Screen name="PublicLedger" component={PublicLedgerScreen} />
         <AuthStack.Screen name="VerifyTransaction" component={VerifyTransactionScreen} />
         <AuthStack.Screen name="VerificationReport" component={VerificationReportScreen} />
-        <AuthStack.Screen name="Login"          component={LoginScreen} />
-        <AuthStack.Screen name="Register"       component={RegisterScreen} />
+        <AuthStack.Screen name="Login" component={LoginScreen} />
+        <AuthStack.Screen name="Register" component={RegisterScreen} />
         <AuthStack.Screen name="RecoveryPhrase" component={RecoveryPhraseScreen} />
-        <AuthStack.Screen name="RestoreWallet"  component={RestoreWalletScreen} />
+        <AuthStack.Screen name="RestoreWallet" component={RestoreWalletScreen} />
       </AuthStack.Navigator>
-      <StatusBar style="light" />
+      <StatusBar style={colors.statusBarStyle} />
     </NavigationContainer>
   );
 }
@@ -57,6 +61,7 @@ function AuthNavigator() {
 /** Root navigator — switches between splash, auth (landing), no-org holding, and main app. */
 const RootNavigator = () => {
   const { user, isLoading } = useAuth();
+  const { colors, navigationTheme } = useTheme();
   const [isSplashComplete, setIsSplashComplete] = useState(false);
 
   if (!isSplashComplete || isLoading) {
@@ -70,18 +75,18 @@ const RootNavigator = () => {
   const hasActiveMembership = user.memberships?.some((m: any) => m.isActive);
   if (!hasActiveMembership) {
     return (
-      <NavigationContainer theme={DarkTheme}>
+      <NavigationContainer theme={navigationTheme}>
         <NoOrganizationScreen />
-        <StatusBar style="light" />
+        <StatusBar style={colors.statusBarStyle} />
       </NavigationContainer>
     );
   }
 
   // Logged in + has org → main app
   return (
-    <NavigationContainer theme={DarkTheme}>
+    <NavigationContainer theme={navigationTheme}>
       <RootStackNavigator />
-      <StatusBar style="light" />
+      <StatusBar style={colors.statusBarStyle} />
     </NavigationContainer>
   );
 };
@@ -107,9 +112,13 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <AuthProvider>
-        <RootNavigator />
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <SocketProvider>
+            <RootNavigator />
+          </SocketProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 }

@@ -4,6 +4,8 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts/access/Ownable2Step.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 
 /// @title ChainBudget (Tokenized Treasury Vault)
 /// @notice Records budget transactions on-chain, holds organization funds, enforces 2-of-N 
@@ -62,6 +64,7 @@ contract ChainBudget is Ownable2Step, Pausable, ReentrancyGuard {
     event EscrowFunded(uint256 indexed txId, uint256 amount);
     event EscrowApproved(uint256 indexed txId, address approver, bool isPayer);
     event EscrowReleased(uint256 indexed txId, address indexed to, uint256 amount);
+    event PayeeConfirmationRecordedOffchain(uint256 indexed txId, address indexed recordedBy, string evidenceURI);
 
     event ApproverAdded(address indexed approver);
     event ApproverRemoved(address indexed approver);
@@ -229,7 +232,7 @@ contract ChainBudget is Ownable2Step, Pausable, ReentrancyGuard {
         require(esc.isFunded, "ChainBudget: escrow not funded yet");
         require(!esc.isReleased, "ChainBudget: escrow already released");
 
-        // Allow owner (backend wrapper) or direct caller
+        // Allow direct payee/supplier or org approver/owner
         if (msg.sender == txn.to) {
             esc.payeeApproved = true;
             emit EscrowApproved(txId, msg.sender, false);
@@ -240,27 +243,70 @@ contract ChainBudget is Ownable2Step, Pausable, ReentrancyGuard {
             revert("ChainBudget: not authorized to release this escrow");
         }
 
-        if (esc.payerApproved && esc.payeeApproved) {
+        _finalizeEscrowIfApproved(txId);
+    }
+
+    /// @notice Releases escrow using a cryptographic signature from the payee (supplier)
+    /// @dev Allows relayer/backend to submit on behalf of payee with cryptographically verifiable consent
+    function releaseEscrowWithPayeeSignature(uint256 txId, bytes calldata payeeSig)
+        external
+        nonReentrant
+        txExists(txId)
+        whenNotPaused
+    {
+        Transaction storage txn = transactions[txId];
+        EscrowDetails storage esc = escrows[txId];
+
+        require(txn.isEscrow, "ChainBudget: not an escrow transaction");
+        require(esc.isFunded, "ChainBudget: escrow not funded yet");
+        require(!esc.isReleased, "ChainBudget: escrow already released");
+
+        bytes32 messageHash = keccak256(
+            abi.encodePacked(address(this), block.chainid, txId, txn.amount, txn.to, "ESCROW_RELEASE")
+        );
+        bytes32 ethSignedDigest = MessageHashUtils.toEthSignedMessageHash(messageHash);
+        address signer = ECDSA.recover(ethSignedDigest, payeeSig);
+
+        require(signer == txn.to, "ChainBudget: invalid payee signature");
+
+        esc.payeeApproved = true;
+        emit EscrowApproved(txId, signer, false);
+
+        _finalizeEscrowIfApproved(txId);
+    }
+
+    /// @notice Records an off-chain confirmation with mandatory evidence URI (e.g. IPFS delivery proof)
+    /// @dev Explicit auditable operational override path
+    function recordOffchainPayeeConfirmation(uint256 txId, string calldata evidenceURI)
+        external
+        nonReentrant
+        onlyOwner
+        txExists(txId)
+        whenNotPaused
+    {
+        Transaction storage txn = transactions[txId];
+        EscrowDetails storage esc = escrows[txId];
+
+        require(bytes(evidenceURI).length > 0, "ChainBudget: evidence URI required");
+        require(txn.isEscrow, "ChainBudget: not an escrow transaction");
+        require(esc.isFunded, "ChainBudget: escrow not funded yet");
+        require(!esc.isReleased, "ChainBudget: escrow already released");
+
+        esc.payeeApproved = true;
+        emit PayeeConfirmationRecordedOffchain(txId, msg.sender, evidenceURI);
+
+        _finalizeEscrowIfApproved(txId);
+    }
+
+    function _finalizeEscrowIfApproved(uint256 txId) internal {
+        Transaction storage txn = transactions[txId];
+        EscrowDetails storage esc = escrows[txId];
+
+        if (esc.payerApproved && esc.payeeApproved && !esc.isReleased) {
             esc.isReleased = true;
             (bool success, ) = txn.to.call{value: txn.amount}("");
             require(success, "ChainBudget: MATIC transfer failed");
             emit EscrowReleased(txId, txn.to, txn.amount);
-        }
-    }
-
-    function setPayeeApprovalByOwner(uint256 txId) external nonReentrant onlyOwner txExists(txId) whenNotPaused {
-        EscrowDetails storage esc = escrows[txId];
-        require(transactions[txId].isEscrow, "Not an escrow");
-        require(!esc.isReleased, "Already released");
-        
-        esc.payeeApproved = true;
-        emit EscrowApproved(txId, msg.sender, false);
-        
-        if (esc.payerApproved && esc.payeeApproved) {
-            esc.isReleased = true;
-            (bool success, ) = transactions[txId].to.call{value: transactions[txId].amount}("");
-            require(success, "MATIC transfer failed");
-            emit EscrowReleased(txId, transactions[txId].to, transactions[txId].amount);
         }
     }
 

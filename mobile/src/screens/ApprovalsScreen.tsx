@@ -5,12 +5,18 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import api from '../lib/api';
 import { useAuth } from '../context/AuthContext';
+import { useSocket } from '../context/SocketContext';
+import { useTheme } from '../context/ThemeContext';
 import { signApprovalAction } from '../lib/wallet';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { triggerSuccessHaptic, triggerErrorHaptic, triggerLightHaptic } from '../lib/biometrics';
+import { SkeletonTransactionList } from '../components/SkeletonLoader';
 
 export default function ApprovalsScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const { on } = useSocket();
+  const { colors, isDark } = useTheme();
   const navigation = useNavigation<any>();
   const [organizations, setOrganizations] = useState<any[]>([]);
   const [activeOrgId, setActiveOrgId] = useState<string | null>(null);
@@ -29,11 +35,25 @@ export default function ApprovalsScreen() {
     }
   }, [activeOrgId]);
 
+  // Live WebSocket Subscription: Auto-update approvals list on real-time transaction updates
+  useEffect(() => {
+    if (!activeOrgId) return;
+
+    const unsub = on('transaction_updated', (data: any) => {
+      if (!data?.orgId || data.orgId === activeOrgId) {
+        fetchPending(activeOrgId);
+        triggerLightHaptic();
+      }
+    });
+
+    return () => unsub();
+  }, [activeOrgId, on]);
+
   const fetchOrgs = async () => {
     try {
       const orgRes = await api.get('/organizations');
-      setOrganizations(orgRes.data);
-      if (orgRes.data.length > 0 && !activeOrgId) {
+      setOrganizations(orgRes.data || []);
+      if (orgRes.data?.length > 0 && !activeOrgId) {
         setActiveOrgId(orgRes.data[0]._id);
       }
     } catch (err) {
@@ -46,7 +66,7 @@ export default function ApprovalsScreen() {
     try {
       const res = await api.get(`/transactions?orgId=${orgId}&status=pending_approval`);
       const data = res.data.data || res.data;
-      setPendingTx(data);
+      setPendingTx(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error(err);
     } finally {
@@ -71,48 +91,48 @@ export default function ApprovalsScreen() {
 
   const handleSign = async (tx: any, action: 'approved' | 'rejected') => {
     try {
+      await triggerLightHaptic();
       setSigningTxId(tx._id);
 
-      // Sign using the private key stored locally in hardware-backed SecureStore.
-      // This triggers biometric authentication (FaceID / Fingerprint / PIN).
-      // The private key NEVER leaves the device — only the signature is sent.
       const signature = await signApprovalAction(
         tx._id.toString(),
         action,
-        tx.amount.toString(),
-        tx.description
+        tx.amount?.toString() || '0',
+        tx.description || ''
       );
 
-      await api.post(`/approvals/${tx._id}`, {
+      await api.post(`/transactions/${tx._id}/approve`, {
         action,
         signature,
-        organizationId: activeOrgId,
-        comment: `Transaction ${action} by mobile.`
       });
 
-      Alert.alert("Success", `Transaction ${action} successfully!`);
+      await triggerSuccessHaptic();
+      Alert.alert(
+        "Success", 
+        `Transaction has been ${action} successfully.`
+      );
       if (activeOrgId) fetchPending(activeOrgId);
-
     } catch (err: any) {
-      console.error(err);
-      if (err.response?.status === 401) {
-        Alert.alert("Security Required", "Please unlock your vault first to sign transactions.");
-      } else {
-        Alert.alert("Error", err.response?.data?.error || err.message);
-      }
+      await triggerErrorHaptic();
+      console.error("Sign / Approve Error:", err);
+      Alert.alert("Action Failed", err.response?.data?.error || err.message || "Failed to process approval.");
     } finally {
       setSigningTxId(null);
     }
   };
 
   return (
-    <View className="flex-1 bg-[#09090b]">
+    <View style={{ backgroundColor: colors.background }} className="flex-1">
       {/* Header & Org Switcher */}
       <View 
-        style={{ paddingTop: (insets.top || 0) + 16 }}
-        className="pb-2 px-4 bg-[#09090b] border-b border-white/5 z-10"
+        style={{ 
+          paddingTop: (insets.top || 0) + 16,
+          backgroundColor: colors.background,
+          borderBottomColor: colors.borderSubtle,
+        }}
+        className="pb-2 px-4 border-b z-10"
       >
-        <Text className="text-2xl font-bold text-white mb-4">Inbox & Approvals</Text>
+        <Text style={{ color: colors.textPrimary }} className="text-2xl font-bold mb-4">Inbox & Approvals</Text>
         
         {organizations.length > 0 && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row">
@@ -121,11 +141,18 @@ export default function ApprovalsScreen() {
               return (
                 <TouchableOpacity
                   key={org._id}
-                  onPress={() => setActiveOrgId(org._id)}
-                  className={`mr-3 px-4 py-2 rounded-full border flex-row items-center ${isActive ? 'bg-fuchsia-500/20 border-fuchsia-500/50' : 'bg-white/5 border-white/10'}`}
+                  onPress={() => {
+                    triggerLightHaptic();
+                    setActiveOrgId(org._id);
+                  }}
+                  style={{
+                    backgroundColor: isActive ? colors.primaryMuted : colors.surface,
+                    borderColor: isActive ? colors.primary : colors.border,
+                  }}
+                  className="mr-3 px-4 py-2 rounded-full border flex-row items-center shadow-sm"
                 >
-                  {isActive && <Ionicons name="radio-button-on" size={14} color="#e879f9" style={{ marginRight: 6 }} />}
-                  <Text className={isActive ? 'text-fuchsia-300 font-bold' : 'text-white/60 font-medium'}>
+                  {isActive && <Ionicons name="radio-button-on" size={14} color={colors.primary} style={{ marginRight: 6 }} />}
+                  <Text style={{ color: isActive ? colors.primary : colors.textSecondary }} className="font-semibold text-xs">
                     {org.name}
                   </Text>
                 </TouchableOpacity>
@@ -137,18 +164,32 @@ export default function ApprovalsScreen() {
 
       <ScrollView 
         className="flex-1 p-4"
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#e879f9" />}
+        refreshControl={
+          <RefreshControl 
+            refreshing={refreshing} 
+            onRefresh={onRefresh} 
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }
       >
         {!isAdmin ? (
-          <View className="bg-white/5 p-6 rounded-3xl border border-red-500/20 items-center justify-center mt-10">
-            <Ionicons name="lock-closed" size={40} color="#ef4444" className="mb-4" />
-            <Text className="text-red-400 text-center font-bold text-lg">Access Restricted</Text>
-            <Text className="text-white/50 text-center text-sm mt-2">Only DAO Admins and Managers (Role Level 1 & 2) can access the Approvals Inbox.</Text>
+          <View 
+            style={{ backgroundColor: colors.surface, borderColor: colors.errorBorder }}
+            className="p-6 rounded-3xl border items-center justify-center mt-10 shadow-sm"
+          >
+            <Ionicons name="lock-closed" size={40} color={colors.error} className="mb-4" />
+            <Text style={{ color: colors.error }} className="text-center font-bold text-lg">Access Restricted</Text>
+            <Text style={{ color: colors.textSecondary }} className="text-center text-sm mt-2">
+              Only DAO Admins and Managers (Role Level 1 & 2) can access the Approvals Inbox.
+            </Text>
           </View>
         ) : (
           <>
             {loading ? (
-              <ActivityIndicator color="#e879f9" style={{ marginTop: 20 }} />
+              <View className="py-2">
+                <SkeletonTransactionList count={4} />
+              </View>
             ) : pendingTx.length > 0 ? (
               pendingTx.map((tx: any) => (
                 <TouchableOpacity 
@@ -157,7 +198,7 @@ export default function ApprovalsScreen() {
                   activeOpacity={0.8}
                 >
                   <LinearGradient
-                    colors={['#1a1a24', '#0d0d12']}
+                    colors={isDark ? ['#1a1a24', '#0d0d12'] : ['#ffffff', '#f1f5f9']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                     style={{
@@ -165,39 +206,49 @@ export default function ApprovalsScreen() {
                       padding: 16,
                       marginBottom: 12,
                       borderWidth: 1,
-                      borderColor: 'rgba(255, 255, 255, 0.08)'
+                      borderColor: colors.border,
                     }}
                   >
                     <View className="flex-row justify-between items-start mb-2">
-                      <View className="flex-1">
-                        <Text className="text-white font-bold text-lg mb-1">{tx.description}</Text>
-                        <Text className="text-white/50 text-xs">Requested by: {tx.submittedBy?.displayName || 'Unknown'}</Text>
+                      <View className="flex-1 mr-2">
+                        <Text style={{ color: colors.textPrimary }} className="font-bold text-lg mb-1">{tx.description}</Text>
+                        <Text style={{ color: colors.textMuted }} className="text-xs">
+                          Requested by: {tx.submittedBy?.displayName || 'Unknown'}
+                        </Text>
                       </View>
-                      <Text className="text-fuchsia-400 font-extrabold text-xl">₱{tx.amount}</Text>
+                      <Text style={{ color: colors.primary }} className="font-extrabold text-xl">₱{tx.amount?.toLocaleString()}</Text>
                     </View>
 
                     {/* Actions */}
                     <View className="flex-row gap-3 mt-4">
                       <TouchableOpacity 
-                        className="flex-1 bg-red-500/20 border border-red-500/40 py-3 rounded-xl items-center flex-row justify-center"
+                        style={{
+                          backgroundColor: colors.errorBg,
+                          borderColor: colors.errorBorder,
+                        }}
+                        className="flex-1 border py-3 rounded-xl items-center flex-row justify-center"
                         onPress={() => handleSign(tx, 'rejected')}
                         disabled={signingTxId === tx._id}
                       >
-                        <Ionicons name="close-circle" size={18} color="#f87171" style={{ marginRight: 6 }} />
-                        <Text className="text-red-400 font-bold">Reject</Text>
+                        <Ionicons name="close-circle" size={18} color={colors.error} style={{ marginRight: 6 }} />
+                        <Text style={{ color: colors.error }} className="font-bold">Reject</Text>
                       </TouchableOpacity>
 
                       <TouchableOpacity 
-                        className="flex-1 bg-emerald-500/20 border border-emerald-500/40 py-3 rounded-xl items-center flex-row justify-center"
+                        style={{
+                          backgroundColor: colors.successBg,
+                          borderColor: colors.successBorder,
+                        }}
+                        className="flex-1 border py-3 rounded-xl items-center flex-row justify-center"
                         onPress={() => handleSign(tx, 'approved')}
                         disabled={signingTxId === tx._id}
                       >
                         {signingTxId === tx._id ? (
-                          <ActivityIndicator size="small" color="#34d399" />
+                          <ActivityIndicator size="small" color={colors.success} />
                         ) : (
                           <>
-                            <Ionicons name="checkmark-circle" size={18} color="#34d399" style={{ marginRight: 6 }} />
-                            <Text className="text-emerald-400 font-bold">Approve</Text>
+                            <Ionicons name="checkmark-circle" size={18} color={colors.success} style={{ marginRight: 6 }} />
+                            <Text style={{ color: colors.success }} className="font-bold">Approve</Text>
                           </>
                         )}
                       </TouchableOpacity>
@@ -206,10 +257,15 @@ export default function ApprovalsScreen() {
                 </TouchableOpacity>
               ))
             ) : (
-              <View className="bg-white/5 p-6 rounded-3xl border border-white/10 items-center justify-center mt-10">
-                <Ionicons name="checkmark-done-circle" size={50} color="#34d399" className="mb-4" />
-                <Text className="text-white text-center font-bold text-lg">Inbox Zero!</Text>
-                <Text className="text-white/50 text-center text-sm mt-2">There are no pending budget requests requiring your approval in this organization.</Text>
+              <View 
+                style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                className="p-6 rounded-3xl border items-center justify-center mt-10 shadow-sm"
+              >
+                <Ionicons name="checkmark-done-circle" size={50} color={colors.success} className="mb-4" />
+                <Text style={{ color: colors.textPrimary }} className="text-center font-bold text-lg">Inbox Zero!</Text>
+                <Text style={{ color: colors.textSecondary }} className="text-center text-sm mt-2">
+                  There are no pending budget requests requiring your approval in this organization.
+                </Text>
               </View>
             )}
           </>

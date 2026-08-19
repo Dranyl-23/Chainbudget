@@ -206,11 +206,9 @@ export default function TutorialsPage() {
 
       {/* Nav */}
       <nav className="relative z-20 flex items-center justify-between px-4 md:px-12 py-4 border-b border-white/5 backdrop-blur-md bg-black/20">
-        <Link href="/" className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-white/5 border border-white/10 shrink-0">
-            <img src="/images/logo.png" alt="ChainBudget" className="w-5 h-5 object-contain rounded-lg" />
-          </div>
-          <span className="text-base font-bold tracking-tight hidden sm:block">
+        <Link href="/" className="flex items-center gap-2.5">
+          <img src="/3D-Chainbudget.png" alt="ChainBudget" className="w-9 h-9 md:w-10 md:h-10 object-contain drop-shadow-md shrink-0" />
+          <span className="text-lg md:text-xl font-bold tracking-tight hidden sm:block text-white">
             CHAIN<span className="text-fuchsia-400">BUDGET</span>
           </span>
         </Link>

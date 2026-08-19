@@ -91,11 +91,11 @@ router.get("/", authenticate, async (req, res) => {
     if (req.user.isSuperAdmin) {
       orgs = await Organization.find().sort({ createdAt: -1 });
     } else {
-      const orgIds = req.user.memberships
+      const orgIds = (req.user.memberships || [])
         .filter((m) => m.isActive)
-        .map((m) => m.organization);
+        .map((m) => m.organization?._id || m.organization);
 
-      orgs = await Organization.find({ _id: { $in: orgIds }, isActive: true });
+      orgs = await Organization.find({ _id: { $in: orgIds }, isActive: { $ne: false } });
     }
     res.json(orgs);
   } catch (err) {

@@ -1,12 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, ActivityIndicator, TouchableOpacity, RefreshControl } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../lib/api';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { useTheme } from '../context/ThemeContext';
+import { SkeletonTransactionList } from '../components/SkeletonLoader';
 
 export default function HistoryScreen() {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
+  const { colors } = useTheme();
   const { orgId } = route.params || {};
 
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -40,37 +43,60 @@ export default function HistoryScreen() {
 
   if (!orgId) {
     return (
-      <View className="flex-1 bg-[#09090b] items-center justify-center p-6">
-        <Ionicons name="alert-circle" size={50} color="#666" className="mb-4" />
-        <Text className="text-white text-lg font-bold">No Organization Selected</Text>
-        <Text className="text-white/50 text-center mt-2">Please select an organization from the dashboard first.</Text>
+      <View 
+        style={{ backgroundColor: colors.background }}
+        className="flex-1 items-center justify-center p-6"
+      >
+        <Ionicons name="alert-circle" size={50} color={colors.textMuted} className="mb-4" />
+        <Text style={{ color: colors.textPrimary }} className="text-lg font-bold">No Organization Selected</Text>
+        <Text style={{ color: colors.textSecondary }} className="text-center mt-2">
+          Please select an organization from the dashboard first.
+        </Text>
       </View>
     );
   }
 
   const renderItem = ({ item }: { item: any }) => (
     <TouchableOpacity 
-      className="flex-row items-center bg-white/5 p-4 rounded-xl border border-white/5 mb-3"
+      style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+      className="flex-row items-center p-4 rounded-2xl border mb-3 shadow-sm"
       onPress={() => navigation.navigate('TransactionDetail', { txId: item._id })}
     >
-      <View className={`w-12 h-12 rounded-full items-center justify-center mr-4 border ${item.type === 'expense' ? 'bg-red-500/10 border-red-500/20' : 'bg-emerald-500/10 border-emerald-500/20'}`}>
-        <Ionicons name={item.type === 'expense' ? 'arrow-up' : 'arrow-down'} size={20} color={item.type === 'expense' ? '#f87171' : '#34d399'} />
+      <View 
+        style={{
+          backgroundColor: item.type === 'expense' ? colors.errorBg : colors.successBg,
+          borderColor: item.type === 'expense' ? colors.errorBorder : colors.successBorder,
+        }}
+        className="w-12 h-12 rounded-2xl items-center justify-center mr-4 border"
+      >
+        <Ionicons 
+          name={item.type === 'expense' ? 'arrow-up' : 'arrow-down'} 
+          size={20} 
+          color={item.type === 'expense' ? colors.error : colors.success} 
+        />
       </View>
-      <View className="flex-1">
-        <Text className="text-white font-bold text-base mb-1" numberOfLines={1}>{item.description || 'Transaction'}</Text>
-        <Text className="text-white/50 text-xs">{new Date(item.createdAt).toLocaleDateString()} • {item.status.toUpperCase()}</Text>
+      <View className="flex-1 mr-2">
+        <Text style={{ color: colors.textPrimary }} className="font-bold text-base mb-1" numberOfLines={1}>
+          {item.description || 'Transaction'}
+        </Text>
+        <Text style={{ color: colors.textMuted }} className="text-xs">
+          {new Date(item.createdAt).toLocaleDateString()} • {item.status?.toUpperCase()}
+        </Text>
       </View>
-      <Text className={`font-bold text-lg ${item.type === 'expense' ? 'text-white' : 'text-emerald-400'}`}>
-        {item.type === 'expense' ? '-' : '+'}₱{item.amount}
+      <Text 
+        style={{ color: item.type === 'expense' ? colors.textPrimary : colors.success }}
+        className="font-bold text-lg"
+      >
+        {item.type === 'expense' ? '-' : '+'}₱{item.amount?.toLocaleString() || '0'}
       </Text>
     </TouchableOpacity>
   );
 
   return (
-    <View className="flex-1 bg-[#09090b]">
+    <View style={{ backgroundColor: colors.background }} className="flex-1">
       {loading ? (
-        <View className="flex-1 justify-center items-center">
-          <ActivityIndicator color="#e879f9" />
+        <View className="p-4 pt-6">
+          <SkeletonTransactionList count={6} />
         </View>
       ) : (
         <FlatList
@@ -78,11 +104,20 @@ export default function HistoryScreen() {
           keyExtractor={(item) => item._id}
           renderItem={renderItem}
           contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#e879f9" />}
+          refreshControl={
+            <RefreshControl 
+              refreshing={refreshing} 
+              onRefresh={onRefresh} 
+              tintColor={colors.primary}
+              colors={[colors.primary]}
+            />
+          }
           ListEmptyComponent={
-            <View className="items-center justify-center py-10">
-              <Ionicons name="receipt-outline" size={50} color="#333" className="mb-4" />
-              <Text className="text-white/50 font-medium text-center">No transactions found in this organization.</Text>
+            <View className="items-center justify-center py-12">
+              <Ionicons name="receipt-outline" size={50} color={colors.textMuted} className="mb-4" />
+              <Text style={{ color: colors.textSecondary }} className="font-medium text-center">
+                No transactions found in this organization.
+              </Text>
             </View>
           }
         />

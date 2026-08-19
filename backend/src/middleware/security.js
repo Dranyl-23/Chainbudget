@@ -151,6 +151,20 @@ function validateCSRFToken(token) {
 }
 
 /**
+ * Helper to determine if a request targets the /auth route family.
+ * Strictly checks path segment boundaries to prevent false matches (e.g. /authorizations).
+ */
+function isAuthRoute(req) {
+  const checkSegment = (p) => {
+    if (!p || typeof p !== "string") return false;
+    const clean = p.startsWith("/api") ? p.slice(4) : p;
+    return clean === "/auth" || clean.startsWith("/auth/") || clean.startsWith("/auth?");
+  };
+
+  return checkSegment(req.path) || checkSegment((req.originalUrl || "").split("?")[0]);
+}
+
+/**
  * Middleware to validate CSRF token for state-changing HTTP requests (POST, PUT, PATCH, DELETE)
  */
 function csrfProtection(req, res, next) {
@@ -160,7 +174,7 @@ function csrfProtection(req, res, next) {
   }
 
   // Skip CSRF check for auth endpoints (protected by wallet/OAuth cryptographic signatures)
-  if (req.path.includes("/auth")) {
+  if (isAuthRoute(req)) {
     return next();
   }
 

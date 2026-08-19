@@ -4,10 +4,13 @@ import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import api from '../lib/api';
+import { useTheme } from '../context/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { triggerSuccessHaptic, triggerErrorHaptic, triggerLightHaptic } from '../lib/biometrics';
 
 export default function ScannerScreen() {
   const insets = useSafeAreaInsets();
+  const { colors, isDark } = useTheme();
   const [image, setImage] = useState<string | null>(null);
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
@@ -15,6 +18,7 @@ export default function ScannerScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const pickImage = async (useCamera: boolean) => {
+    await triggerLightHaptic();
     let result;
     if (useCamera) {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
@@ -35,7 +39,6 @@ export default function ScannerScreen() {
 
     if (!result.canceled) {
       setImage(result.assets[0].uri);
-      // Call Real AI Scanning
       performRealAIScan(result.assets[0].uri);
     }
   };
@@ -60,8 +63,10 @@ export default function ScannerScreen() {
 
       setAmount(res.data.totalAmount?.toString() || '');
       setDescription(`${res.data.merchant ? res.data.merchant + ' - ' : ''}Receipt`);
+      await triggerSuccessHaptic();
       Alert.alert('Scan Complete', 'AI has automatically filled in the details from your receipt!');
     } catch (err: any) {
+      await triggerErrorHaptic();
       console.error("AI Scan Error:", err);
       Alert.alert('Scan Failed', err.response?.data?.error || 'Failed to scan receipt. Please enter details manually.');
     } finally {
@@ -71,16 +76,15 @@ export default function ScannerScreen() {
 
   const submitRequest = async () => {
     if (!amount || !description) {
+      await triggerErrorHaptic();
       Alert.alert('Error', 'Please fill in the amount and description.');
       return;
     }
 
     setIsSubmitting(true);
     try {
-      // In a real scenario, you'd upload the image to IPFS/S3 first, then submit the request.
-      // We will simulate a simple API call here assuming the org ID is known or fetched from context.
       const orgRes = await api.get('/organizations');
-      if (orgRes.data.length === 0) throw new Error("No organization found");
+      if (!orgRes.data || orgRes.data.length === 0) throw new Error("No organization found");
       const orgId = orgRes.data[0]._id;
 
       await api.post(`/transactions`, {
@@ -88,14 +92,16 @@ export default function ScannerScreen() {
         type: 'expense',
         amount: Number(amount),
         description,
-        category: 'Operations & Supplies', // default for now
+        category: 'Operations & Supplies',
       });
 
+      await triggerSuccessHaptic();
       Alert.alert('Success', 'Fund request submitted successfully!');
       setImage(null);
       setAmount('');
       setDescription('');
     } catch (err: any) {
+      await triggerErrorHaptic();
       Alert.alert('Error', err.response?.data?.error || err.message || 'Failed to submit request');
     } finally {
       setIsSubmitting(false);
@@ -104,68 +110,119 @@ export default function ScannerScreen() {
 
   return (
     <KeyboardAwareScrollView 
-      className="flex-1 bg-[#09090b]"
+      style={{ backgroundColor: colors.background }}
       contentContainerStyle={{ padding: 16, paddingTop: (insets.top || 0) + 16, paddingBottom: 100 }}
       keyboardShouldPersistTaps="handled"
       enableOnAndroid={true}
       extraScrollHeight={20}
     >
       <View className="mb-6">
-        <Text className="text-2xl font-bold text-white mb-2">Request Funds</Text>
-        <Text className="text-white/60 text-sm">Scan a receipt using AI or enter details manually to request reimbursement.</Text>
+        <Text style={{ color: colors.textPrimary }} className="text-2xl font-bold mb-1">Request Funds</Text>
+        <Text style={{ color: colors.textSecondary }} className="text-sm">
+          Scan a receipt using AI or enter details manually to request reimbursement.
+        </Text>
       </View>
 
-      <View className="flex-row gap-3 mb-6">
+      {/* Action Buttons: Camera & Gallery */}
+      <View style={{ flexDirection: 'row', gap: 12, marginBottom: 24 }}>
         <TouchableOpacity 
           onPress={() => pickImage(true)}
-          className="flex-1 bg-white/5 border border-cyan-500/30 p-4 rounded-xl items-center justify-center flex-row gap-2"
+          activeOpacity={0.7}
+          style={{ 
+            flex: 1,
+            height: 52,
+            backgroundColor: colors.surface, 
+            borderColor: colors.accentCyan + (isDark ? '60' : '80'),
+            borderWidth: 1.5,
+            borderRadius: 16,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            paddingHorizontal: 12,
+          }}
         >
-          <Ionicons name="camera" size={20} color="#22d3ee" />
-          <Text className="text-cyan-400 font-bold">Camera</Text>
+          <Ionicons name="camera" size={20} color={colors.accentCyan} style={{ marginRight: 8 }} />
+          <Text style={{ color: colors.accentCyan, fontWeight: '700', fontSize: 14, textAlign: 'center' }}>
+            Camera
+          </Text>
         </TouchableOpacity>
         
         <TouchableOpacity 
           onPress={() => pickImage(false)}
-          className="flex-1 bg-white/5 border border-fuchsia-500/30 p-4 rounded-xl items-center justify-center flex-row gap-2"
+          activeOpacity={0.7}
+          style={{ 
+            flex: 1,
+            height: 52,
+            backgroundColor: colors.surface, 
+            borderColor: colors.primary + (isDark ? '60' : '80'),
+            borderWidth: 1.5,
+            borderRadius: 16,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            paddingHorizontal: 12,
+          }}
         >
-          <Ionicons name="image" size={20} color="#e879f9" />
-          <Text className="text-fuchsia-400 font-bold">Gallery</Text>
+          <Ionicons name="image" size={20} color={colors.primary} style={{ marginRight: 8 }} />
+          <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 14, textAlign: 'center' }}>
+            Gallery
+          </Text>
         </TouchableOpacity>
       </View>
 
       {image && (
         <View className="mb-6 items-center">
-          <Image source={{ uri: image }} className="w-48 h-64 rounded-xl border border-white/20" resizeMode="cover" />
+          <Image source={{ uri: image }} className="w-48 h-64 rounded-2xl border" style={{ borderColor: colors.border }} resizeMode="cover" />
           {isScanning && (
-            <View className="absolute inset-0 bg-black/60 rounded-xl items-center justify-center">
-              <ActivityIndicator color="#22d3ee" size="large" />
-              <Text className="text-cyan-400 font-bold mt-2 animate-pulse">AI Scanning...</Text>
+            <View 
+              style={{ backgroundColor: colors.modalBackdrop }}
+              className="absolute inset-0 rounded-2xl items-center justify-center"
+            >
+              <ActivityIndicator color={colors.primary} size="large" />
+              <Text style={{ color: colors.primary }} className="font-bold mt-2">AI Scanning...</Text>
             </View>
           )}
         </View>
       )}
 
-      <View className="space-y-4 mb-8">
-        <View>
-          <Text className="text-white/60 text-xs uppercase tracking-widest font-bold mb-1 ml-1">Amount (PHP)</Text>
+      <View 
+        style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+        className="p-5 rounded-3xl border mb-8 shadow-sm space-y-4"
+      >
+        <View className="mb-4">
+          <Text style={{ color: colors.textSecondary }} className="text-xs uppercase tracking-widest font-bold mb-2">
+            Amount (PHP)
+          </Text>
           <TextInput
             value={amount}
             onChangeText={setAmount}
             keyboardType="numeric"
             placeholder="0.00"
-            placeholderTextColor="#666"
-            className="bg-white/5 border border-white/10 text-white p-4 rounded-xl text-lg font-bold"
+            placeholderTextColor={colors.inputPlaceholder}
+            style={{ 
+              backgroundColor: isDark ? 'rgba(0,0,0,0.45)' : colors.backgroundSecondary,
+              borderColor: colors.border,
+              color: colors.textPrimary,
+            }}
+            className="border p-4 rounded-2xl text-lg font-bold"
           />
         </View>
 
-        <View className="mt-4">
-          <Text className="text-white/60 text-xs uppercase tracking-widest font-bold mb-1 ml-1">Description</Text>
+        <View>
+          <Text style={{ color: colors.textSecondary }} className="text-xs uppercase tracking-widest font-bold mb-2">
+            Description
+          </Text>
           <TextInput
             value={description}
             onChangeText={setDescription}
             placeholder="What is this for?"
-            placeholderTextColor="#666"
-            className="bg-white/5 border border-white/10 text-white p-4 rounded-xl"
+            placeholderTextColor={colors.inputPlaceholder}
+            style={{ 
+              backgroundColor: isDark ? 'rgba(0,0,0,0.45)' : colors.backgroundSecondary,
+              borderColor: colors.border,
+              color: colors.textPrimary,
+            }}
+            className="border p-4 rounded-2xl"
             multiline
           />
         </View>
@@ -174,14 +231,15 @@ export default function ScannerScreen() {
       <TouchableOpacity 
         onPress={submitRequest}
         disabled={isSubmitting || isScanning}
-        className={`w-full py-4 rounded-xl items-center justify-center mb-10 ${
-          isSubmitting || isScanning ? 'bg-fuchsia-500/50' : 'bg-fuchsia-500'
-        }`}
+        style={{
+          backgroundColor: isSubmitting || isScanning ? colors.borderStrong : colors.primary,
+        }}
+        className="w-full py-4 rounded-2xl items-center justify-center mb-10 shadow-lg"
       >
         {isSubmitting ? (
-          <ActivityIndicator color="white" />
+          <ActivityIndicator color="#ffffff" />
         ) : (
-          <Text className="text-white font-bold text-lg">Submit Request</Text>
+          <Text className="text-white font-extrabold text-base">Submit Request</Text>
         )}
       </TouchableOpacity>
     </KeyboardAwareScrollView>

@@ -1,15 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
 import api from '../lib/api';
 import { useAuth } from '../context/AuthContext';
+import { useSocket } from '../context/SocketContext';
+import { useTheme } from '../context/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { authenticateWithBiometrics, triggerSuccessHaptic, triggerErrorHaptic, triggerLightHaptic } from '../lib/biometrics';
 
 export default function GovernanceScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const navigation = useNavigation<any>();
+  const { on } = useSocket();
+  const { colors, isDark } = useTheme();
   
   const [organizations, setOrganizations] = useState<any[]>([]);
   const [activeOrgId, setActiveOrgId] = useState<string | null>(null);
@@ -28,11 +31,25 @@ export default function GovernanceScreen() {
     }
   }, [activeOrgId]);
 
+  // Live WebSocket Subscription: Auto-update proposals when new votes or proposals are recorded
+  useEffect(() => {
+    if (!activeOrgId) return;
+
+    const unsub = on('dao_vote_updated', (data: any) => {
+      if (!data?.orgId || data.orgId === activeOrgId) {
+        fetchProposals(activeOrgId);
+        triggerLightHaptic();
+      }
+    });
+
+    return () => unsub();
+  }, [activeOrgId, on]);
+
   const fetchOrgs = async () => {
     try {
       const orgRes = await api.get('/organizations');
-      setOrganizations(orgRes.data);
-      if (orgRes.data.length > 0 && !activeOrgId) {
+      setOrganizations(orgRes.data || []);
+      if (orgRes.data?.length > 0 && !activeOrgId) {
         setActiveOrgId(orgRes.data[0]._id);
       }
     } catch (err) {
@@ -61,16 +78,26 @@ export default function GovernanceScreen() {
   };
 
   const handleVote = async (proposalId: string, support: boolean) => {
+    await triggerLightHaptic();
+    
+    // Require biometric confirmation before casting DAO vote
+    const auth = await authenticateWithBiometrics(
+      `Authorize DAO Vote: ${support ? 'YES (Support)' : 'NO (Reject)'}`
+    );
+    if (!auth.success) return;
+
     setVotingOn(proposalId);
     try {
       await api.post(`/dao/vote`, {
         proposalId,
         support,
-        reason: "" // Optional reason could be added via a modal later
+        reason: ""
       });
+      await triggerSuccessHaptic();
       Alert.alert('Success', `You successfully voted ${support ? 'Yes' : 'No'}!`);
       if (activeOrgId) fetchProposals(activeOrgId);
     } catch (err: any) {
+      await triggerErrorHaptic();
       console.error(err);
       Alert.alert('Error', err.response?.data?.error || 'Failed to cast vote');
     } finally {
@@ -81,44 +108,61 @@ export default function GovernanceScreen() {
   const activeOrg = organizations.find(o => o._id === activeOrgId);
 
   return (
-    <View className="flex-1 bg-[#09090b]">
+    <View style={{ backgroundColor: colors.background }} className="flex-1">
       {/* Header */}
       <View 
-        style={{ paddingTop: (insets.top || 0) + 16 }}
-        className="pb-4 px-4 bg-[#09090b] border-b border-white/5 z-10"
+        style={{ 
+          paddingTop: (insets.top || 0) + 16,
+          backgroundColor: colors.background,
+          borderBottomColor: colors.borderSubtle,
+        }}
+        className="pb-4 px-4 border-b z-10"
       >
-        <View className="flex-row justify-between items-center mb-2">
-          <Text className="text-2xl font-bold text-white tracking-tight">Governance</Text>
+        <View className="flex-row justify-between items-center mb-1">
+          <Text style={{ color: colors.textPrimary }} className="text-2xl font-bold tracking-tight">Governance</Text>
         </View>
-        <Text className="text-white/50 text-xs">Vote on active DAO proposals</Text>
+        <Text style={{ color: colors.textSecondary }} className="text-xs">Vote on active DAO proposals</Text>
       </View>
 
       <ScrollView 
         className="flex-1 p-4"
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#e879f9" />}
+        refreshControl={
+          <RefreshControl 
+            refreshing={refreshing} 
+            onRefresh={onRefresh} 
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }
       >
         {/* Org Switcher / Identifier */}
         {activeOrg && (
-          <View className="flex-row items-center bg-white/5 p-3 rounded-xl border border-white/10 mb-6">
-            <View className="w-8 h-8 rounded-lg bg-black/40 items-center justify-center mr-3 border border-white/5">
-              <Ionicons name="library" size={14} color="#e879f9" />
+          <View 
+            style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+            className="flex-row items-center p-3 rounded-2xl border mb-6 shadow-sm"
+          >
+            <View 
+              style={{ backgroundColor: colors.primaryMuted, borderColor: colors.primary + '40' }}
+              className="w-9 h-9 rounded-xl items-center justify-center mr-3 border"
+            >
+              <Ionicons name="library" size={16} color={colors.primary} />
             </View>
             <View className="flex-1">
-              <Text className="text-white/60 text-[10px] uppercase font-bold">Active Organization</Text>
-              <Text className="text-white text-sm font-bold">{activeOrg.name}</Text>
+              <Text style={{ color: colors.textMuted }} className="text-[10px] uppercase font-bold">Active Organization</Text>
+              <Text style={{ color: colors.textPrimary }} className="text-sm font-bold">{activeOrg.name}</Text>
             </View>
           </View>
         )}
 
         {loading ? (
           <View className="py-10 items-center justify-center">
-            <ActivityIndicator color="#e879f9" />
-            <Text className="text-white/50 mt-4 text-xs">Loading proposals...</Text>
+            <ActivityIndicator color={colors.primary} />
+            <Text style={{ color: colors.textSecondary }} className="mt-4 text-xs">Loading proposals...</Text>
           </View>
         ) : proposals.length === 0 ? (
-          <View className="py-10 items-center justify-center">
-            <Ionicons name="document-text-outline" size={48} color="rgba(255,255,255,0.1)" />
-            <Text className="text-white/40 mt-4">No proposals found</Text>
+          <View className="py-12 items-center justify-center">
+            <Ionicons name="document-text-outline" size={48} color={colors.textMuted} />
+            <Text style={{ color: colors.textSecondary }} className="mt-4 font-medium">No proposals found</Text>
           </View>
         ) : (
           proposals.map(proposal => {
@@ -134,34 +178,58 @@ export default function GovernanceScreen() {
             const isClosed = proposal.status !== 'active';
 
             return (
-              <View key={proposal._id} className="bg-[#15151e] rounded-2xl border border-white/5 mb-4 p-5">
+              <View 
+                key={proposal._id} 
+                style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                className="rounded-2xl border mb-4 p-5 shadow-sm"
+              >
                 <View className="flex-row justify-between items-start mb-3">
                   <View className="flex-1 mr-3">
-                    <Text className="text-white font-bold text-lg mb-1">{proposal.title}</Text>
-                    <Text className="text-white/50 text-xs">
-                      Proposed by {proposal.creator?.displayName}
+                    <Text style={{ color: colors.textPrimary }} className="font-bold text-lg mb-1">{proposal.title}</Text>
+                    <Text style={{ color: colors.textMuted }} className="text-xs">
+                      Proposed by {proposal.creator?.displayName || 'DAO Member'}
                     </Text>
                   </View>
-                  <View className={`px-2 py-1 rounded-md ${isClosed ? (proposal.status === 'executed' ? 'bg-emerald-500/20' : 'bg-rose-500/20') : 'bg-fuchsia-500/20'}`}>
-                    <Text className={`text-[10px] font-bold uppercase ${isClosed ? (proposal.status === 'executed' ? 'text-emerald-400' : 'text-rose-400') : 'text-fuchsia-400'}`}>
+                  <View 
+                    style={{
+                      backgroundColor: isClosed 
+                        ? (proposal.status === 'executed' ? colors.successBg : colors.errorBg) 
+                        : colors.primaryMuted,
+                      borderColor: isClosed
+                        ? (proposal.status === 'executed' ? colors.successBorder : colors.errorBorder)
+                        : colors.primary + '40',
+                    }}
+                    className="px-2.5 py-1 rounded-full border"
+                  >
+                    <Text 
+                      style={{
+                        color: isClosed
+                          ? (proposal.status === 'executed' ? colors.success : colors.error)
+                          : colors.primary,
+                      }}
+                      className="text-[10px] font-extrabold uppercase"
+                    >
                       {proposal.status}
                     </Text>
                   </View>
                 </View>
 
-                <Text className="text-white/70 text-sm mb-5 leading-relaxed">
+                <Text style={{ color: colors.textSecondary }} className="text-sm mb-5 leading-relaxed">
                   {proposal.description}
                 </Text>
 
                 {/* Progress Bar */}
                 <View className="mb-5">
                   <View className="flex-row justify-between mb-2">
-                    <Text className="text-emerald-400 text-xs font-bold">Yes: {yesVotes}</Text>
-                    <Text className="text-rose-400 text-xs font-bold">No: {noVotes}</Text>
+                    <Text style={{ color: colors.success }} className="text-xs font-bold">Yes: {yesVotes}</Text>
+                    <Text style={{ color: colors.error }} className="text-xs font-bold">No: {noVotes}</Text>
                   </View>
-                  <View className="h-2 w-full bg-black/40 rounded-full overflow-hidden flex-row">
-                    <View style={{ width: `${yesPercentage}%` }} className="h-full bg-emerald-500" />
-                    <View style={{ width: `${100 - yesPercentage}%` }} className="h-full bg-rose-500" />
+                  <View 
+                    style={{ backgroundColor: colors.cardGlass }}
+                    className="h-2.5 w-full rounded-full overflow-hidden flex-row"
+                  >
+                    <View style={{ width: `${yesPercentage}%`, backgroundColor: colors.success }} className="h-full" />
+                    <View style={{ width: `${100 - yesPercentage}%`, backgroundColor: colors.error }} className="h-full" />
                   </View>
                 </View>
 
@@ -171,14 +239,15 @@ export default function GovernanceScreen() {
                     <TouchableOpacity 
                       onPress={() => handleVote(proposal._id, true)}
                       disabled={votingOn === proposal._id}
-                      className="flex-1 bg-emerald-500/20 border border-emerald-500/30 py-3 rounded-xl items-center flex-row justify-center"
+                      style={{ backgroundColor: colors.successBg, borderColor: colors.successBorder }}
+                      className="flex-1 border py-3 rounded-xl items-center flex-row justify-center"
                     >
                       {votingOn === proposal._id ? (
-                        <ActivityIndicator size="small" color="#34d399" />
+                        <ActivityIndicator size="small" color={colors.success} />
                       ) : (
                         <>
-                          <Ionicons name="checkmark-circle-outline" size={16} color="#34d399" style={{ marginRight: 6 }} />
-                          <Text className="text-emerald-400 font-bold">Vote Yes</Text>
+                          <Ionicons name="checkmark-circle-outline" size={16} color={colors.success} style={{ marginRight: 6 }} />
+                          <Text style={{ color: colors.success }} className="font-bold">Vote Yes</Text>
                         </>
                       )}
                     </TouchableOpacity>
@@ -186,14 +255,15 @@ export default function GovernanceScreen() {
                     <TouchableOpacity 
                       onPress={() => handleVote(proposal._id, false)}
                       disabled={votingOn === proposal._id}
-                      className="flex-1 bg-rose-500/20 border border-rose-500/30 py-3 rounded-xl items-center flex-row justify-center"
+                      style={{ backgroundColor: colors.errorBg, borderColor: colors.errorBorder }}
+                      className="flex-1 border py-3 rounded-xl items-center flex-row justify-center"
                     >
                       {votingOn === proposal._id ? (
-                        <ActivityIndicator size="small" color="#fb7185" />
+                        <ActivityIndicator size="small" color={colors.error} />
                       ) : (
                         <>
-                          <Ionicons name="close-circle-outline" size={16} color="#fb7185" style={{ marginRight: 6 }} />
-                          <Text className="text-rose-400 font-bold">Vote No</Text>
+                          <Ionicons name="close-circle-outline" size={16} color={colors.error} style={{ marginRight: 6 }} />
+                          <Text style={{ color: colors.error }} className="font-bold">Vote No</Text>
                         </>
                       )}
                     </TouchableOpacity>
@@ -201,10 +271,13 @@ export default function GovernanceScreen() {
                 )}
 
                 {hasVoted && (
-                  <View className="bg-black/20 py-3 rounded-xl items-center mt-2 border border-white/5">
-                    <Text className="text-white/60 text-xs">
-                      You voted <Text className={myVote.support ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>
-                        {myVote.support ? 'Yes' : 'No'}
+                  <View 
+                    style={{ backgroundColor: colors.cardGlass, borderColor: colors.borderSubtle }}
+                    className="py-3 rounded-xl items-center mt-2 border"
+                  >
+                    <Text style={{ color: colors.textSecondary }} className="text-xs">
+                      You voted <Text style={{ color: myVote?.support ? colors.success : colors.error, fontWeight: 'bold' }}>
+                        {myVote?.support ? 'Yes' : 'No'}
                       </Text>
                     </Text>
                   </View>

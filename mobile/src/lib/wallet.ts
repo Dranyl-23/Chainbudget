@@ -153,6 +153,47 @@ export async function signApprovalAction(
 }
 
 /**
+ * signEscrowRelease
+ *
+ * Cryptographically signs an EIP-191 escrow release authorization message
+ * using the payee's device-stored private key.
+ *
+ * Contract Verification Digest:
+ *   keccak256(abi.encodePacked(contractAddress, chainId, onChainTxId, amountWei, supplierAddress, "ESCROW_RELEASE"))
+ *
+ * The resulting signature can be submitted gaslessly via the backend relayer.
+ */
+export async function signEscrowRelease(
+  contractAddress: string,
+  chainId: number | bigint,
+  onChainTxId: number | string,
+  amountWei: bigint | string,
+  supplierAddress: string
+): Promise<string> {
+  const privateKey = await getPrivateKey();
+  if (!privateKey) {
+    throw new Error('No wallet found on this device. Please restore your wallet.');
+  }
+
+  const wallet = new ethers.Wallet(privateKey);
+
+  const messageHash = ethers.solidityPackedKeccak256(
+    ['address', 'uint256', 'uint256', 'uint256', 'address', 'string'],
+    [
+      ethers.getAddress(contractAddress),
+      BigInt(chainId),
+      BigInt(onChainTxId),
+      BigInt(amountWei),
+      ethers.getAddress(supplierAddress),
+      'ESCROW_RELEASE'
+    ]
+  );
+
+  const signature = await wallet.signMessage(ethers.getBytes(messageHash));
+  return signature;
+}
+
+/**
  * getStoredWalletAddress
  *
  * Returns the locally stored wallet address without biometric prompt.

@@ -2,25 +2,30 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, Alert, Modal, ScrollView } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import api from '../lib/api';
 import { Ionicons } from '@expo/vector-icons';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
-import * as LocalAuthentication from 'expo-local-authentication';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'react-native';
 import { getPrivateKey, getMnemonic } from '../lib/secureStorage';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { triggerLightHaptic, triggerErrorHaptic } from '../lib/biometrics';
+import ThemeSelectorModal from '../components/ThemeSelectorModal';
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { user, logout, refreshUser } = useAuth();
+  const { colors, isDark, themeMode } = useTheme();
   const navigation = useNavigation();
 
   const [showSecurityModal, setShowSecurityModal] = useState(false);
   const [showNetworkModal, setShowNetworkModal] = useState(false);
   const [showAboutModal, setShowAboutModal] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [showThemeModal, setShowThemeModal] = useState(false);
   
   // Vault state
   const [activeTab, setActiveTab] = useState<'menu' | 'phrase' | 'privateKey'>('menu');
@@ -30,9 +35,6 @@ export default function ProfileScreen() {
   const fetchKeys = async (target: 'phrase' | 'privateKey') => {
     setIsLoadingKeys(true);
     try {
-      // Read keys directly from hardware-backed SecureStore on this device.
-      // getMnemonic() and getPrivateKey() each trigger biometric authentication.
-      // No network request is made — keys never leave the device.
       if (!keys) {
         const [mnemonic, privateKey] = await Promise.all([
           getMnemonic(),
@@ -51,7 +53,6 @@ export default function ProfileScreen() {
       setIsLoadingKeys(false);
     }
   };
-
 
   const copyToClipboard = async (text: string, label: string) => {
     await Clipboard.setStringAsync(text);
@@ -112,19 +113,19 @@ export default function ProfileScreen() {
   const getRoleBadge = (level: number) => {
     switch (level) {
       case 1:
-        return { label: 'Level 1: Executive Approver', color: '#e879f9', bg: 'rgba(232, 121, 249, 0.15)' };
+        return { label: 'Level 1: Executive Approver', color: colors.primary, bg: colors.primaryMuted };
       case 2:
-        return { label: 'Level 2: Finance Officer', color: '#38bdf8', bg: 'rgba(56, 189, 248, 0.15)' };
+        return { label: 'Level 2: Finance Officer', color: colors.accentBlue, bg: colors.infoBg };
       case 3:
-        return { label: 'Level 3: Member / Contributor', color: '#34d399', bg: 'rgba(52, 211, 153, 0.15)' };
+        return { label: 'Level 3: Member / Contributor', color: colors.success, bg: colors.successBg };
       default:
-        return { label: 'Level 4: Viewer', color: '#9ca3af', bg: 'rgba(156, 163, 175, 0.15)' };
+        return { label: 'Level 4: Viewer', color: colors.textMuted, bg: colors.cardGlass };
     }
   };
 
   return (
     <KeyboardAwareScrollView 
-      className="flex-1 bg-[#09090b]"
+      style={{ backgroundColor: colors.background }}
       contentContainerStyle={{ padding: 16, paddingTop: (insets.top || 0) + 16, paddingBottom: 100 }}
       keyboardShouldPersistTaps="handled"
       enableOnAndroid={true}
@@ -132,8 +133,8 @@ export default function ProfileScreen() {
     >
       {/* Header */}
       <View className="mb-6">
-        <Text className="text-2xl font-bold text-white mb-1">My Account</Text>
-        <Text className="text-white/50 text-xs">Profile, organization memberships, and security</Text>
+        <Text style={{ color: colors.textPrimary }} className="text-2xl font-bold mb-1">My Account</Text>
+        <Text style={{ color: colors.textSecondary }} className="text-xs">Profile, organization memberships, and security</Text>
       </View>
 
       {/* ── Backup Reminder Banner ─────────────────────────────────────────── */}
@@ -171,10 +172,13 @@ export default function ProfileScreen() {
       )}
 
       {/* User Identity Card */}
-      <View className="bg-white/5 border border-white/10 rounded-2xl p-6 items-center mb-6 relative overflow-hidden">
-        
+      <View 
+        style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+        className="border rounded-3xl p-6 items-center mb-6 relative overflow-hidden shadow-sm"
+      >
         <TouchableOpacity 
-          className="w-24 h-24 rounded-full mb-3 border-2 border-fuchsia-500/50 relative overflow-hidden"
+          style={{ borderColor: colors.primary }}
+          className="w-24 h-24 rounded-full mb-3 border-2 relative overflow-hidden"
           onPress={handlePickImage}
           disabled={isUploading}
         >
@@ -195,37 +199,48 @@ export default function ProfileScreen() {
         </TouchableOpacity>
 
         <Text 
-          className="text-white font-bold text-xl mb-1 text-center"
+          style={{ color: colors.textPrimary }}
+          className="font-bold text-xl mb-1 text-center"
           numberOfLines={1}
           adjustsFontSizeToFit
         >
           {user?.displayName?.replace(/\n/g, ' ')}
         </Text>
-        <Text className="text-white/50 text-sm mb-4">{user?.email || 'No email provided'}</Text>
+        <Text style={{ color: colors.textSecondary }} className="text-sm mb-4">{user?.email || 'No email provided'}</Text>
         
         {/* Wallet Address Pill */}
         <TouchableOpacity 
           onPress={() => copyToClipboard(user?.walletAddress || '', 'Wallet address')}
           activeOpacity={0.7}
-          className="bg-black/60 px-4 py-2.5 rounded-full border border-cyan-500/40 w-full flex-row items-center justify-center"
+          style={{ 
+            backgroundColor: isDark ? 'rgba(0,0,0,0.6)' : colors.backgroundSecondary,
+            borderColor: colors.accentCyan + '60',
+          }}
+          className="px-4 py-2.5 rounded-full border w-full flex-row items-center justify-center"
         >
-          <Ionicons name="wallet-outline" size={16} color="#22d3ee" />
-          <Text className="text-cyan-400 font-mono text-xs ml-2 mr-2">
+          <Ionicons name="wallet-outline" size={16} color={colors.accentCyan} />
+          <Text style={{ color: colors.accentCyan }} className="font-mono text-xs ml-2 mr-2 font-bold">
             {user?.walletAddress ? `${user.walletAddress.slice(0, 10)}...${user.walletAddress.slice(-8)}` : 'No Auto-Wallet'}
           </Text>
-          <Ionicons name="copy-outline" size={14} color="#22d3ee" />
+          <Ionicons name="copy-outline" size={14} color={colors.accentCyan} />
         </TouchableOpacity>
       </View>
 
       {/* Organization Memberships Section */}
-      <View className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-6">
+      <View 
+        style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+        className="border rounded-3xl p-5 mb-6 shadow-sm"
+      >
         <View className="flex-row items-center justify-between mb-4">
           <View className="flex-row items-center gap-2">
-            <Ionicons name="ribbon-outline" size={22} color="#e879f9" />
-            <Text className="text-white font-bold text-base">Memberships</Text>
+            <Ionicons name="ribbon-outline" size={22} color={colors.primary} />
+            <Text style={{ color: colors.textPrimary }} className="font-bold text-base">Memberships</Text>
           </View>
-          <View className="bg-fuchsia-500/20 px-2.5 py-1 rounded-full border border-fuchsia-500/30">
-            <Text className="text-fuchsia-400 text-xs font-bold">
+          <View 
+            style={{ backgroundColor: colors.primaryMuted, borderColor: colors.primary + '40' }}
+            className="px-2.5 py-1 rounded-full border"
+          >
+            <Text style={{ color: colors.primary }} className="text-xs font-bold">
               {user?.memberships?.length || 0} Active
             </Text>
           </View>
@@ -239,7 +254,7 @@ export default function ProfileScreen() {
             return (
               <LinearGradient
                 key={m._id || idx}
-                colors={['#1a1a24', '#0d0d12']}
+                colors={isDark ? ['#1a1a24', '#0d0d12'] : ['#ffffff', '#f1f5f9']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={{
@@ -247,33 +262,39 @@ export default function ProfileScreen() {
                   padding: 16,
                   marginBottom: 12,
                   borderWidth: 1,
-                  borderColor: 'rgba(255, 255, 255, 0.08)'
+                  borderColor: colors.border,
                 }}
               >
                 <View className="flex-row justify-between items-start mb-4">
                   {/* Left: Avatar & Text */}
                   <View className="flex-row flex-1 mr-2">
-                    <View className="w-12 h-12 rounded-2xl bg-fuchsia-500/10 border border-fuchsia-500/30 items-center justify-center mr-3 shadow-sm">
-                      <Text className="text-fuchsia-400 font-extrabold text-xl">
+                    <View 
+                      style={{ backgroundColor: colors.primaryMuted, borderColor: colors.primary + '40' }}
+                      className="w-12 h-12 rounded-2xl items-center justify-center mr-3 shadow-sm border"
+                    >
+                      <Text style={{ color: colors.primary }} className="font-extrabold text-xl">
                         {orgName.charAt(0).toUpperCase()}
                       </Text>
                     </View>
                     <View className="flex-1 justify-center">
-                      <Text className="text-white font-extrabold text-lg tracking-wide" numberOfLines={1}>{orgName}</Text>
-                      <Text className="text-white/60 text-xs mt-0.5 font-medium">{m.roleLabel || 'Member'}</Text>
+                      <Text style={{ color: colors.textPrimary }} className="font-extrabold text-lg tracking-wide" numberOfLines={1}>{orgName}</Text>
+                      <Text style={{ color: colors.textSecondary }} className="text-xs mt-0.5 font-medium">{m.roleLabel || 'Member'}</Text>
                     </View>
                   </View>
 
                   {/* Right: SBT Verified Pill */}
-                  <View className="flex-row items-center bg-emerald-500/15 px-2 py-1.5 rounded-lg border border-emerald-500/40">
-                    <Ionicons name="shield-checkmark" size={12} color="#34d399" />
-                    <Text className="text-emerald-400 text-[9px] font-bold ml-1 uppercase tracking-widest">SBT Verified</Text>
+                  <View 
+                    style={{ backgroundColor: colors.successBg, borderColor: colors.successBorder }}
+                    className="flex-row items-center px-2 py-1.5 rounded-lg border"
+                  >
+                    <Ionicons name="shield-checkmark" size={12} color={colors.success} />
+                    <Text style={{ color: colors.success }} className="text-[9px] font-bold ml-1 uppercase tracking-widest">SBT Verified</Text>
                   </View>
                 </View>
 
                 {/* Role Badge (Bottom Full Width) */}
                 <View 
-                  style={{ backgroundColor: badge.bg, borderColor: 'rgba(255,255,255,0.05)' }}
+                  style={{ backgroundColor: badge.bg, borderColor: colors.borderSubtle }}
                   className="px-3 py-2.5 rounded-xl border flex-row items-center justify-center"
                 >
                   <Ionicons name="star" size={14} color={badge.color} />
@@ -285,15 +306,57 @@ export default function ProfileScreen() {
             );
           })
         ) : (
-          <Text className="text-white/50 text-xs text-center py-3">
+          <Text style={{ color: colors.textMuted }} className="text-xs text-center py-3">
             No active organization memberships found.
           </Text>
         )}
       </View>
 
       {/* Settings Menu List */}
-      <View className="bg-white/5 border border-white/10 rounded-2xl p-2 mb-6">
-        <Text className="text-white/50 text-xs font-bold uppercase tracking-widest px-4 pt-3 pb-2">Settings & Security</Text>
+      <View 
+        style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+        className="border rounded-3xl p-2 mb-6 shadow-sm"
+      >
+        <Text style={{ color: colors.textMuted }} className="text-xs font-bold uppercase tracking-widest px-4 pt-3 pb-2">
+          Settings & Preferences
+        </Text>
+
+        {/* Appearance & Theme Item */}
+        <TouchableOpacity 
+          onPress={() => {
+            triggerLightHaptic();
+            setShowThemeModal(true);
+          }}
+          activeOpacity={0.7}
+          style={{ borderBottomColor: colors.borderSubtle }}
+          className="flex-row items-center justify-between p-4 border-b"
+        >
+          <View className="flex-row items-center gap-3">
+            <View 
+              style={{ backgroundColor: colors.primaryMuted, borderColor: colors.primary + '40' }}
+              className="w-9 h-9 rounded-xl items-center justify-center border"
+            >
+              <Ionicons name="color-palette-outline" size={20} color={colors.primary} />
+            </View>
+            <View>
+              <Text style={{ color: colors.textPrimary }} className="font-bold text-sm">Appearance & Theme</Text>
+              <Text style={{ color: colors.textSecondary }} className="text-xs">
+                {themeMode === 'system' ? `System (${isDark ? 'Dark' : 'Light'})` : themeMode === 'dark' ? 'Dark Mode' : 'Light Mode'}
+              </Text>
+            </View>
+          </View>
+          <View className="flex-row items-center gap-1.5">
+            <View 
+              style={{ backgroundColor: colors.cardGlass, borderColor: colors.border }}
+              className="px-2.5 py-1 rounded-full border"
+            >
+              <Text style={{ color: colors.primary }} className="text-[11px] font-extrabold uppercase">
+                {themeMode}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </View>
+        </TouchableOpacity>
 
         {/* Security & Web3 Vault Item */}
         <TouchableOpacity 
@@ -302,36 +365,38 @@ export default function ProfileScreen() {
             setShowSecurityModal(true);
           }}
           activeOpacity={0.7}
-          className="flex-row items-center justify-between p-4 border-b border-white/5"
+          style={{ borderBottomColor: colors.borderSubtle }}
+          className="flex-row items-center justify-between p-4 border-b"
         >
           <View className="flex-row items-center gap-3">
             <View className="w-9 h-9 rounded-xl bg-orange-500/20 items-center justify-center border border-orange-500/30">
               <Ionicons name="shield-checkmark-outline" size={20} color="#f97316" />
             </View>
             <View>
-              <Text className="text-white font-bold text-sm">Web3 Security & Keys</Text>
-              <Text className="text-white/50 text-xs">Backup seed phrase & private key</Text>
+              <Text style={{ color: colors.textPrimary }} className="font-bold text-sm">Web3 Security & Keys</Text>
+              <Text style={{ color: colors.textSecondary }} className="text-xs">Backup seed phrase & private key</Text>
             </View>
           </View>
-          <Ionicons name="chevron-forward" size={18} color="#666" />
+          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
         </TouchableOpacity>
 
         {/* Network Status Item */}
         <TouchableOpacity 
           onPress={() => setShowNetworkModal(true)}
           activeOpacity={0.7}
-          className="flex-row items-center justify-between p-4 border-b border-white/5"
+          style={{ borderBottomColor: colors.borderSubtle }}
+          className="flex-row items-center justify-between p-4 border-b"
         >
           <View className="flex-row items-center gap-3">
             <View className="w-9 h-9 rounded-xl bg-cyan-500/20 items-center justify-center border border-cyan-500/30">
               <Ionicons name="hardware-chip-outline" size={20} color="#22d3ee" />
             </View>
             <View>
-              <Text className="text-white font-bold text-sm">Network Status</Text>
-              <Text className="text-white/50 text-xs">Polygon Amoy & Relayer details</Text>
+              <Text style={{ color: colors.textPrimary }} className="font-bold text-sm">Network Status</Text>
+              <Text style={{ color: colors.textSecondary }} className="text-xs">Polygon Amoy & Relayer details</Text>
             </View>
           </View>
-          <Ionicons name="chevron-forward" size={18} color="#666" />
+          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
         </TouchableOpacity>
 
         {/* About Item */}
@@ -341,26 +406,36 @@ export default function ProfileScreen() {
           className="flex-row items-center justify-between p-4"
         >
           <View className="flex-row items-center gap-3">
-            <View className="w-9 h-9 rounded-xl bg-fuchsia-500/20 items-center justify-center border border-fuchsia-500/30">
-              <Ionicons name="information-circle-outline" size={20} color="#e879f9" />
+            <View 
+              style={{ backgroundColor: colors.primaryMuted, borderColor: colors.primary + '40' }}
+              className="w-9 h-9 rounded-xl items-center justify-center border"
+            >
+              <Ionicons name="information-circle-outline" size={20} color={colors.primary} />
             </View>
             <View>
-              <Text className="text-white font-bold text-sm">About ChainBudget</Text>
-              <Text className="text-white/50 text-xs">v1.0.0 Capstone Edition</Text>
+              <Text style={{ color: colors.textPrimary }} className="font-bold text-sm">About ChainBudget</Text>
+              <Text style={{ color: colors.textSecondary }} className="text-xs">v1.0.0 Capstone Edition</Text>
             </View>
           </View>
-          <Ionicons name="chevron-forward" size={18} color="#666" />
+          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
         </TouchableOpacity>
       </View>
 
       {/* Logout Button */}
       <TouchableOpacity
-        onPress={logout}
+        onPress={() => {
+          triggerLightHaptic();
+          setShowLogoutModal(true);
+        }}
         activeOpacity={0.8}
-        className="bg-red-500/10 border border-red-500/30 py-4 rounded-xl items-center flex-row justify-center gap-2 mb-10"
+        style={{
+          backgroundColor: colors.errorBg,
+          borderColor: colors.errorBorder,
+        }}
+        className="border py-4 rounded-2xl items-center flex-row justify-center gap-2 mb-10"
       >
-        <Ionicons name="log-out-outline" size={20} color="#ef4444" />
-        <Text className="text-red-400 font-bold text-base">Sign Out</Text>
+        <Ionicons name="log-out-outline" size={20} color={colors.error} />
+        <Text style={{ color: colors.error }} className="font-bold text-base">Sign Out</Text>
       </TouchableOpacity>
 
       {/* ── MODAL 1: Professional Web3 Security Vault ── */}
@@ -368,20 +443,27 @@ export default function ProfileScreen() {
         visible={showSecurityModal}
         animationType="slide"
         transparent={true}
+        statusBarTranslucent={true}
         onRequestClose={() => setShowSecurityModal(false)}
       >
-        <View className="flex-1 bg-black/80 justify-end">
-          <View className="bg-[#121215] border-t border-white/10 rounded-t-3xl p-6 max-h-[85%]">
+        <View 
+          style={{ backgroundColor: colors.modalBackdrop }}
+          className="flex-1 justify-end"
+        >
+          <View 
+            style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+            className="border-t rounded-t-3xl p-6 max-h-[85%]"
+          >
             {/* Modal Header */}
             <View className="flex-row justify-between items-center mb-5">
               <View className="flex-row items-center gap-2">
                 {activeTab !== 'menu' && (
                   <TouchableOpacity onPress={() => setActiveTab('menu')} className="mr-1">
-                    <Ionicons name="arrow-back" size={22} color="#fff" />
+                    <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
                   </TouchableOpacity>
                 )}
                 <Ionicons name="shield-checkmark" size={24} color="#f97316" />
-                <Text className="text-white font-bold text-lg">
+                <Text style={{ color: colors.textPrimary }} className="font-bold text-lg">
                   {activeTab === 'menu' && 'Web3 Vault Settings'}
                   {activeTab === 'phrase' && 'Recovery Seed Phrase'}
                   {activeTab === 'privateKey' && 'Export Private Key'}
@@ -390,16 +472,17 @@ export default function ProfileScreen() {
 
               <TouchableOpacity 
                 onPress={() => setShowSecurityModal(false)}
-                className="w-8 h-8 rounded-full bg-white/10 items-center justify-center"
+                style={{ backgroundColor: colors.cardGlass }}
+                className="w-8 h-8 rounded-full items-center justify-center"
               >
-                <Ionicons name="close" size={20} color="#fff" />
+                <Ionicons name="close" size={20} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
             {/* TAB 1: MENU SELECTION */}
             {activeTab === 'menu' && (
               <View className="space-y-4">
-                <Text className="text-white/60 text-xs leading-relaxed mb-4">
+                <Text style={{ color: colors.textSecondary }} className="text-xs leading-relaxed mb-4">
                   Select a security item to view. Each action requires device authentication (Biometrics or PIN).
                 </Text>
 
@@ -408,18 +491,19 @@ export default function ProfileScreen() {
                   onPress={() => fetchKeys('phrase')}
                   disabled={isLoadingKeys}
                   activeOpacity={0.8}
-                  className="bg-white/5 border border-white/10 p-4 rounded-xl flex-row items-center justify-between mb-3"
+                  style={{ backgroundColor: colors.cardGlass, borderColor: colors.border }}
+                  className="border p-4 rounded-2xl flex-row items-center justify-between mb-3"
                 >
                   <View className="flex-row items-center gap-3">
                     <View className="w-10 h-10 rounded-xl bg-orange-500/20 items-center justify-center border border-orange-500/30">
                       <Ionicons name="document-text-outline" size={22} color="#f97316" />
                     </View>
                     <View>
-                      <Text className="text-white font-bold text-sm">Backup Recovery Seed Phrase</Text>
-                      <Text className="text-white/50 text-xs">12-word secret mnemonic</Text>
+                      <Text style={{ color: colors.textPrimary }} className="font-bold text-sm">Backup Recovery Seed Phrase</Text>
+                      <Text style={{ color: colors.textMuted }} className="text-xs">12-word secret mnemonic</Text>
                     </View>
                   </View>
-                  {isLoadingKeys ? <ActivityIndicator color="#f97316" /> : <Ionicons name="chevron-forward" size={18} color="#666" />}
+                  {isLoadingKeys ? <ActivityIndicator color="#f97316" /> : <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />}
                 </TouchableOpacity>
 
                 {/* Option 2: Export Private Key */}
@@ -427,18 +511,19 @@ export default function ProfileScreen() {
                   onPress={() => fetchKeys('privateKey')}
                   disabled={isLoadingKeys}
                   activeOpacity={0.8}
-                  className="bg-white/5 border border-white/10 p-4 rounded-xl flex-row items-center justify-between mb-6"
+                  style={{ backgroundColor: colors.cardGlass, borderColor: colors.border }}
+                  className="border p-4 rounded-2xl flex-row items-center justify-between mb-6"
                 >
                   <View className="flex-row items-center gap-3">
                     <View className="w-10 h-10 rounded-xl bg-red-500/20 items-center justify-center border border-red-500/30">
-                      <Ionicons name="key-outline" size={22} color="#ef4444" />
+                      <Ionicons name="key-outline" size={22} color={colors.error} />
                     </View>
                     <View>
-                      <Text className="text-white font-bold text-sm">Export Wallet Private Key</Text>
-                      <Text className="text-white/50 text-xs">Raw hex private key for import</Text>
+                      <Text style={{ color: colors.textPrimary }} className="font-bold text-sm">Export Wallet Private Key</Text>
+                      <Text style={{ color: colors.textMuted }} className="text-xs">Raw hex private key for import</Text>
                     </View>
                   </View>
-                  {isLoadingKeys ? <ActivityIndicator color="#ef4444" /> : <Ionicons name="chevron-forward" size={18} color="#666" />}
+                  {isLoadingKeys ? <ActivityIndicator color={colors.error} /> : <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />}
                 </TouchableOpacity>
               </View>
             )}
@@ -446,7 +531,7 @@ export default function ProfileScreen() {
             {/* TAB 2: SEED PHRASE DISPLAY (NUMBERED GRID) */}
             {activeTab === 'phrase' && keys && (
               <ScrollView contentContainerStyle={{ paddingBottom: 20 }}>
-                <Text className="text-white/60 text-xs leading-relaxed mb-4">
+                <Text style={{ color: colors.textSecondary }} className="text-xs leading-relaxed mb-4">
                   Write down these 12 words in order. Keep them stored offline in a safe place.
                 </Text>
 
@@ -455,10 +540,14 @@ export default function ProfileScreen() {
                   {keys.mnemonic.split(' ').map((word, index) => (
                     <View 
                       key={index}
-                      className="bg-black/60 border border-white/10 rounded-xl p-3 w-[48%] flex-row items-center mb-2"
+                      style={{ 
+                        backgroundColor: isDark ? 'rgba(0,0,0,0.6)' : colors.backgroundSecondary,
+                        borderColor: colors.border,
+                      }}
+                      className="border rounded-xl p-3 w-[48%] flex-row items-center mb-2"
                     >
                       <Text className="text-orange-400 font-mono text-xs font-bold mr-2">{index + 1}.</Text>
-                      <Text className="text-white font-mono text-sm font-semibold">{word}</Text>
+                      <Text style={{ color: colors.textPrimary }} className="font-mono text-sm font-semibold">{word}</Text>
                     </View>
                   ))}
                 </View>
@@ -494,16 +583,25 @@ export default function ProfileScreen() {
             {/* TAB 3: PRIVATE KEY DISPLAY */}
             {activeTab === 'privateKey' && keys && (
               <ScrollView contentContainerStyle={{ paddingBottom: 20 }}>
-                <View className="bg-red-500/10 border border-red-500/30 p-3.5 rounded-xl mb-4 flex-row items-center gap-2">
-                  <Ionicons name="warning" size={20} color="#ef4444" />
-                  <Text className="text-red-400 text-xs font-medium flex-1 ml-2">
+                <View 
+                  style={{ backgroundColor: colors.errorBg, borderColor: colors.errorBorder }}
+                  className="border p-3.5 rounded-xl mb-4 flex-row items-center gap-2"
+                >
+                  <Ionicons name="warning" size={20} color={colors.error} />
+                  <Text style={{ color: colors.error }} className="text-xs font-medium flex-1 ml-2">
                     Never share your Private Key with anyone. Anyone with this key can access your funds.
                   </Text>
                 </View>
 
-                <View className="bg-black/80 p-4 rounded-xl border border-red-500/40 mb-4">
-                  <Text className="text-red-400 text-xs font-bold uppercase tracking-widest mb-2">Private Key</Text>
-                  <Text className="text-gray-200 font-mono text-xs leading-5" selectable>{keys.privateKey}</Text>
+                <View 
+                  style={{ 
+                    backgroundColor: isDark ? 'rgba(0,0,0,0.8)' : colors.backgroundSecondary,
+                    borderColor: colors.errorBorder,
+                  }}
+                  className="p-4 rounded-xl border mb-4"
+                >
+                  <Text style={{ color: colors.error }} className="text-xs font-bold uppercase tracking-widest mb-2">Private Key</Text>
+                  <Text style={{ color: colors.textPrimary }} className="font-mono text-xs leading-5" selectable>{keys.privateKey}</Text>
                 </View>
 
                 {/* Copy Button Wrapper */}
@@ -516,8 +614,8 @@ export default function ProfileScreen() {
                       flexDirection: 'row',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      backgroundColor: 'rgba(239, 68, 68, 0.15)',
-                      borderColor: 'rgba(239, 68, 68, 0.5)',
+                      backgroundColor: colors.errorBg,
+                      borderColor: colors.errorBorder,
                       borderWidth: 1.5,
                       borderRadius: 16,
                       paddingVertical: 14,
@@ -525,8 +623,8 @@ export default function ProfileScreen() {
                       marginBottom: 16
                     }}
                   >
-                    <Ionicons name="copy-outline" size={18} color="#ef4444" />
-                    <Text style={{ color: '#ef4444', fontWeight: 'bold', fontSize: 14, marginLeft: 8 }}>
+                    <Ionicons name="copy-outline" size={18} color={colors.error} />
+                    <Text style={{ color: colors.error, fontWeight: 'bold', fontSize: 14, marginLeft: 8 }}>
                       Copy Private Key
                     </Text>
                   </TouchableOpacity>
@@ -542,37 +640,63 @@ export default function ProfileScreen() {
         visible={showNetworkModal}
         animationType="slide"
         transparent={true}
+        statusBarTranslucent={true}
         onRequestClose={() => setShowNetworkModal(false)}
       >
-        <View className="flex-1 bg-black/80 justify-end">
-          <View className="bg-[#121215] border-t border-white/10 rounded-t-3xl p-6">
+        <View 
+          style={{ backgroundColor: colors.modalBackdrop }}
+          className="flex-1 justify-end"
+        >
+          <View 
+            style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+            className="border-t rounded-t-3xl p-6"
+          >
             <View className="flex-row justify-between items-center mb-5">
               <View className="flex-row items-center gap-2">
-                <Ionicons name="hardware-chip-outline" size={24} color="#22d3ee" />
-                <Text className="text-white font-bold text-lg">Network & Protocol</Text>
+                <Ionicons name="hardware-chip-outline" size={24} color={colors.accentCyan} />
+                <Text style={{ color: colors.textPrimary }} className="font-bold text-lg">Network & Protocol</Text>
               </View>
               <TouchableOpacity 
                 onPress={() => setShowNetworkModal(false)}
-                className="w-8 h-8 rounded-full bg-white/10 items-center justify-center"
+                style={{ backgroundColor: colors.cardGlass }}
+                className="w-8 h-8 rounded-full items-center justify-center"
               >
-                <Ionicons name="close" size={20} color="#fff" />
+                <Ionicons name="close" size={20} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
             <View className="space-y-3 mb-6">
-              <View className="flex-row items-center justify-between bg-black/40 p-4 rounded-xl border border-white/10 mb-2">
-                <Text className="text-white/70 text-xs font-bold">Network Name</Text>
-                <Text className="text-emerald-400 font-bold text-xs">Polygon Amoy Testnet</Text>
+              <View 
+                style={{ 
+                  backgroundColor: isDark ? 'rgba(0,0,0,0.4)' : colors.backgroundSecondary,
+                  borderColor: colors.border,
+                }}
+                className="flex-row items-center justify-between p-4 rounded-xl border mb-2"
+              >
+                <Text style={{ color: colors.textSecondary }} className="text-xs font-bold">Network Name</Text>
+                <Text style={{ color: colors.success }} className="font-bold text-xs">Polygon Amoy Testnet</Text>
               </View>
 
-              <View className="flex-row items-center justify-between bg-black/40 p-4 rounded-xl border border-white/10 mb-2">
-                <Text className="text-white/70 text-xs font-bold">Chain ID</Text>
-                <Text className="text-cyan-400 font-mono text-xs">80002</Text>
+              <View 
+                style={{ 
+                  backgroundColor: isDark ? 'rgba(0,0,0,0.4)' : colors.backgroundSecondary,
+                  borderColor: colors.border,
+                }}
+                className="flex-row items-center justify-between p-4 rounded-xl border mb-2"
+              >
+                <Text style={{ color: colors.textSecondary }} className="text-xs font-bold">Chain ID</Text>
+                <Text style={{ color: colors.accentCyan }} className="font-mono text-xs font-bold">80002</Text>
               </View>
 
-              <View className="flex-row items-center justify-between bg-black/40 p-4 rounded-xl border border-white/10">
-                <Text className="text-white/70 text-xs font-bold">Gasless Relayer</Text>
-                <Text className="text-emerald-400 font-bold text-xs">Active (Zero-Gas for Users)</Text>
+              <View 
+                style={{ 
+                  backgroundColor: isDark ? 'rgba(0,0,0,0.4)' : colors.backgroundSecondary,
+                  borderColor: colors.border,
+                }}
+                className="flex-row items-center justify-between p-4 rounded-xl border"
+              >
+                <Text style={{ color: colors.textSecondary }} className="text-xs font-bold">Gasless Relayer</Text>
+                <Text style={{ color: colors.success }} className="font-bold text-xs">Active (Zero-Gas for Users)</Text>
               </View>
             </View>
           </View>
@@ -584,10 +708,17 @@ export default function ProfileScreen() {
         visible={showAboutModal}
         animationType="slide"
         transparent={true}
+        statusBarTranslucent={true}
         onRequestClose={() => setShowAboutModal(false)}
       >
-        <View className="flex-1 bg-black/80 justify-end">
-          <View className="bg-[#121215] border-t border-white/10 rounded-t-3xl p-6">
+        <View 
+          style={{ backgroundColor: colors.modalBackdrop }}
+          className="flex-1 justify-end"
+        >
+          <View 
+            style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+            className="border-t rounded-t-3xl p-6"
+          >
             <View className="items-center mb-6">
               <View className="items-center justify-center mb-4">
                 <Image 
@@ -596,22 +727,97 @@ export default function ProfileScreen() {
                   resizeMode="contain" 
                 />
               </View>
-              <Text className="text-2xl font-bold text-white mb-2">ChainBudget Mobile</Text>
-              <Text className="text-fuchsia-400 font-bold mb-6">Version 1.0.0 (Capstone Edition)</Text>
+              <Text style={{ color: colors.textPrimary }} className="text-2xl font-bold mb-2">ChainBudget Mobile</Text>
+              <Text style={{ color: colors.primary }} className="font-bold mb-6">Version 1.0.0 (Capstone Edition)</Text>
             </View>
-            <Text className="text-white/60 text-xs text-center leading-relaxed mb-6">
+            <Text style={{ color: colors.textSecondary }} className="text-xs text-center leading-relaxed mb-6">
               A Transparent & Accountable On-Chain Budget Dissemination System powered by Polygon Blockchain, Asgardeo SSO, and AI Receipt Processing.
             </Text>
 
             <TouchableOpacity 
               onPress={() => setShowAboutModal(false)}
-              className="bg-white/10 border border-white/20 py-3 px-8 rounded-xl"
+              style={{ backgroundColor: colors.cardGlass, borderColor: colors.border }}
+              className="border py-3 px-8 rounded-xl items-center"
             >
-              <Text className="text-white font-bold text-sm">Close</Text>
+              <Text style={{ color: colors.textPrimary }} className="font-bold text-sm">Close</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
+
+      {/* ── MODAL 4: Sign Out Confirmation Modal ── */}
+      <Modal
+        visible={showLogoutModal}
+        animationType="fade"
+        transparent={true}
+        statusBarTranslucent={true}
+        onRequestClose={() => setShowLogoutModal(false)}
+      >
+        <View 
+          style={{ backgroundColor: colors.modalBackdrop }}
+          className="flex-1 items-center justify-center p-6"
+        >
+          <View 
+            style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+            className="w-full max-w-sm border rounded-3xl p-6 shadow-2xl items-center"
+          >
+            <Text style={{ color: colors.textPrimary }} className="text-xl font-extrabold text-center mb-2">
+              Sign Out?
+            </Text>
+
+            <Text style={{ color: colors.textSecondary }} className="text-xs text-center leading-relaxed mb-5 px-2">
+              Are you sure you want to sign out of ChainBudget? You will need to log back in to access your organization dashboards and wallets.
+            </Text>
+
+            {/* Warning if phrase not backed up */}
+            {!user?.hasBackedUpPhrase && (
+              <View 
+                style={{ backgroundColor: colors.warningBg, borderColor: colors.warningBorder }}
+                className="w-full rounded-2xl p-3.5 mb-5 flex-row items-center gap-2.5 border"
+              >
+                <Ionicons name="warning-outline" size={20} color={colors.warning} />
+                <Text style={{ color: colors.warning }} className="text-xs flex-1 leading-snug font-medium">
+                  Make sure you have backed up your recovery phrase before signing out!
+                </Text>
+              </View>
+            )}
+
+            {/* Action Buttons: Cancel vs Sign Out */}
+            <View className="w-full flex-row gap-3">
+              <TouchableOpacity
+                onPress={() => {
+                  triggerLightHaptic();
+                  setShowLogoutModal(false);
+                }}
+                activeOpacity={0.7}
+                style={{ backgroundColor: colors.cardGlass, borderColor: colors.border }}
+                className="flex-1 py-3.5 rounded-2xl border items-center justify-center"
+              >
+                <Text style={{ color: colors.textPrimary }} className="font-bold text-sm">Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={async () => {
+                  await triggerErrorHaptic();
+                  setShowLogoutModal(false);
+                  logout();
+                }}
+                activeOpacity={0.8}
+                className="flex-1 py-3.5 rounded-2xl bg-red-600 active:bg-red-700 items-center justify-center flex-row gap-2 shadow-lg shadow-red-900/50"
+              >
+                <Ionicons name="log-out" size={16} color="#ffffff" />
+                <Text className="text-white font-extrabold text-sm">Sign Out</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── MODAL 5: Theme Selector Modal ── */}
+      <ThemeSelectorModal
+        visible={showThemeModal}
+        onClose={() => setShowThemeModal(false)}
+      />
     </KeyboardAwareScrollView>
   );
 }

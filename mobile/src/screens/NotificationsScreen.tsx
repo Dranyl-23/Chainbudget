@@ -2,7 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../lib/api';
-import { useAuth } from '../context/AuthContext';
+import { useSocket } from '../context/SocketContext';
+import { useTheme } from '../context/ThemeContext';
+import { triggerLightHaptic } from '../lib/biometrics';
 
 function timeAgo(dateString: string) {
   const date = new Date(dateString);
@@ -20,7 +22,8 @@ function timeAgo(dateString: string) {
 }
 
 export default function NotificationsScreen() {
-  const { user } = useAuth();
+  const { on } = useSocket();
+  const { colors } = useTheme();
   const [organizations, setOrganizations] = useState<any[]>([]);
   const [activeOrgId, setActiveOrgId] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -37,11 +40,25 @@ export default function NotificationsScreen() {
     }
   }, [activeOrgId]);
 
+  // Live WebSocket Subscription: Auto-update notifications when new notifications arrive
+  useEffect(() => {
+    if (!activeOrgId) return;
+
+    const unsub = on('new_notification', (data: any) => {
+      if (!data?.orgId || data.orgId === activeOrgId) {
+        fetchNotifications(activeOrgId);
+        triggerLightHaptic();
+      }
+    });
+
+    return () => unsub();
+  }, [activeOrgId, on]);
+
   const fetchOrgs = async () => {
     try {
       const orgRes = await api.get('/organizations');
-      setOrganizations(orgRes.data);
-      if (orgRes.data.length > 0 && !activeOrgId) {
+      setOrganizations(orgRes.data || []);
+      if (orgRes.data?.length > 0 && !activeOrgId) {
         setActiveOrgId(orgRes.data[0]._id);
       }
     } catch (err) {
@@ -92,47 +109,68 @@ export default function NotificationsScreen() {
   };
 
   return (
-    <View className="flex-1 bg-[#09090b]">
+    <View style={{ backgroundColor: colors.background }} className="flex-1">
       {notifications.some(n => !n.isRead) && (
         <View className="px-4 pt-4 items-end">
-          <TouchableOpacity onPress={markAllAsRead} className="bg-fuchsia-500/20 px-3 py-1.5 rounded-full border border-fuchsia-500/30">
-            <Text className="text-fuchsia-400 font-bold text-[10px] uppercase">Mark all as read</Text>
+          <TouchableOpacity 
+            onPress={markAllAsRead} 
+            style={{ backgroundColor: colors.primaryMuted, borderColor: colors.primary + '40' }}
+            className="px-3 py-1.5 rounded-full border"
+          >
+            <Text style={{ color: colors.primary }} className="font-bold text-[10px] uppercase">Mark all as read</Text>
           </TouchableOpacity>
         </View>
       )}
       
       <ScrollView 
         className="flex-1 p-4"
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#e879f9" />}
+        refreshControl={
+          <RefreshControl 
+            refreshing={refreshing} 
+            onRefresh={onRefresh} 
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }
       >
         {loading ? (
           <View className="py-10 items-center justify-center">
-            <ActivityIndicator color="#e879f9" />
+            <ActivityIndicator color={colors.primary} />
           </View>
         ) : notifications.length === 0 ? (
-          <View className="py-10 items-center justify-center">
-            <Ionicons name="notifications-off-outline" size={48} color="rgba(255,255,255,0.1)" />
-            <Text className="text-white/40 mt-4 text-sm">No notifications yet</Text>
+          <View className="py-12 items-center justify-center">
+            <Ionicons name="notifications-off-outline" size={48} color={colors.textMuted} />
+            <Text style={{ color: colors.textSecondary }} className="mt-4 text-sm font-medium">No notifications yet</Text>
           </View>
         ) : (
           notifications.map(notif => (
             <TouchableOpacity 
               key={notif.id} 
               onPress={() => markAsRead(notif.id, notif.isRead)}
-              className={`mb-3 p-4 rounded-xl border ${notif.isRead ? 'bg-white/5 border-white/5' : 'bg-[#15151e] border-fuchsia-500/30'}`}
+              style={{
+                backgroundColor: notif.isRead ? colors.surface : colors.card,
+                borderColor: notif.isRead ? colors.borderSubtle : colors.primary + '60',
+              }}
+              className="mb-3 p-4 rounded-2xl border shadow-sm"
             >
               <View className="flex-row justify-between items-start mb-1">
-                <Text className={`font-bold flex-1 mr-3 ${notif.isRead ? 'text-white/60' : 'text-white'}`}>
+                <Text 
+                  style={{ color: notif.isRead ? colors.textSecondary : colors.textPrimary }}
+                  className="font-bold flex-1 mr-3"
+                >
                   {notif.title}
                 </Text>
                 {!notif.isRead && (
-                  <View className="w-2 h-2 rounded-full bg-fuchsia-500 mt-1" />
+                  <View style={{ backgroundColor: colors.primary }} className="w-2 h-2 rounded-full mt-1" />
                 )}
               </View>
-              <Text className={`text-sm mb-2 leading-5 ${notif.isRead ? 'text-white/40' : 'text-white/80'}`}>
+              <Text 
+                style={{ color: notif.isRead ? colors.textMuted : colors.textSecondary }}
+                className="text-sm mb-2 leading-5"
+              >
                 {notif.message}
               </Text>
-              <Text className="text-[10px] text-white/30 uppercase font-bold">
+              <Text style={{ color: colors.textMuted }} className="text-[10px] uppercase font-bold">
                 {timeAgo(notif.timestamp)}
               </Text>
             </TouchableOpacity>
