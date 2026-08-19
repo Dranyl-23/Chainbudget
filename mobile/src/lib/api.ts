@@ -3,11 +3,12 @@ import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { getSessionToken } from './secureStorage';
 
-// Automatically detect host IP from Expo dev server or fallback to Android emulator host
+// Production cloud backend by default; overridable via EXPO_PUBLIC_API_URL, extra.apiUrl, or devHost
 const devHost = Constants.expoConfig?.hostUri?.split(':')[0];
 export const API_URL =
   process.env.EXPO_PUBLIC_API_URL ||
-  (devHost ? `http://${devHost}:5001/api` : (Platform.OS === 'android' ? 'http://10.0.2.2:5001/api' : 'http://localhost:5001/api'));
+  Constants.expoConfig?.extra?.apiUrl ||
+  (devHost ? `http://${devHost}:5001/api` : 'https://chainbudget-api.fly.dev/api');
 
 const api = axios.create({
   baseURL: API_URL,

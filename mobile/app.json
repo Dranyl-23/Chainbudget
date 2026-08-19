@@ -41,6 +41,7 @@
       ]
     ],
     "extra": {
+      "apiUrl": "https://chainbudget-api.fly.dev/api",
       "eas": {
         "projectId": "66cf1759-d813-4685-be36-c5ae002b87bc"
       }
