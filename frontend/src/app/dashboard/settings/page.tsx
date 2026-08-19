@@ -76,10 +76,11 @@ export default function SettingsPage() {
   const [displayName, setDisplayName] = useState("");
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string>("");
+  const [imageError, setImageError] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   const currentDisplayName = displayName || user?.displayName || "";
-  const currentAvatarPreview = avatarPreview || formatAvatarUrl(user?.avatarUrl);
+  const activeAvatar = avatarPreview || (!imageError ? formatAvatarUrl(user?.avatarUrl) : null);
   const [isLinking, setIsLinking] = useState(false);
   const [walletBalance, setWalletBalance] = useState<string | null>(null);
   const [pendingLiquidations, setPendingLiquidations] = useState<PendingLiquidationOrg[]>([]);
@@ -154,6 +155,7 @@ export default function SettingsPage() {
         return;
       }
       setAvatarFile(file);
+      setImageError(false);
       
       const reader = new FileReader();
       reader.onload = (event) => {
@@ -313,19 +315,21 @@ export default function SettingsPage() {
             <div className="flex flex-col sm:flex-row gap-6 items-center sm:items-start mb-6">
               <div className="relative flex flex-col items-center">
                 <div className="relative group mb-3">
-                  <div className="w-24 h-24 rounded-full bg-gray-200 border-4 border-white shadow-lg overflow-hidden flex items-center justify-center shrink-0">
-                    {currentAvatarPreview ? (
+                  <div className="w-24 h-24 rounded-full bg-purple-500/10 border-4 border-purple-500/30 shadow-lg overflow-hidden flex items-center justify-center shrink-0">
+                    {activeAvatar ? (
                       <Image
-                        src={currentAvatarPreview}
+                        src={activeAvatar}
                         alt="Avatar"
                         width={96}
                         height={96}
                         unoptimized
                         className="w-full h-full object-cover"
-                        onError={() => setAvatarPreview("")}
+                        onError={() => setImageError(true)}
                       />
                     ) : (
-                      <UserIcon className="w-10 h-10 text-gray-400" />
+                      <div className="w-full h-full flex items-center justify-center bg-purple-500/20 text-purple-300 font-bold text-3xl">
+                        {currentDisplayName ? currentDisplayName.trim().charAt(0).toUpperCase() : <UserIcon className="w-10 h-10 text-purple-400" />}
+                      </div>
                     )}
                   </div>
                   <label className="absolute bottom-0 right-0 bg-primary text-white p-2 rounded-full cursor-pointer shadow-md hover:bg-primary-hover transition-colors">
