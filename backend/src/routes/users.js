@@ -266,4 +266,91 @@ router.delete(
   }
 );
 
+/// POST /api/users/push-token — Register or refresh an Expo push token for a device
+/// Called by mobile app after login; safe to call on every login (deduplicates).
+router.post("/push-token", authenticate, async (req, res) => {
+  try {
+    const { token, platform } = req.body;
+    if (!token || !platform) {
+      return res.status(400).json({ error: "token and platform are required" });
+    }
+    if (!["ios", "android"].includes(platform)) {
+      return res.status(400).json({ error: "platform must be 'ios' or 'android'" });
+    }
+    if (!token.startsWith("ExponentPushToken[")) {
+      return res.status(400).json({ error: "Invalid Expo push token format" });
+    }
+
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    // Deduplicate: update existing token or push a new one
+    const existingIdx = user.pushTokens?.findIndex((t) => t.token === token);
+    if (existingIdx !== undefined && existingIdx >= 0) {
+      user.pushTokens[existingIdx].updatedAt = new Date();
+    } else {
+      user.pushTokens = user.pushTokens || [];
+      user.pushTokens.push({ token, platform });
+    }
+
+    await user.save();
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[push-token]", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
+
+/**
+ * sendPushNotifications
+ *
+ * Sends push notifications to one or more users via the Expo Push API.
+ * This is a fire-and-forget helper — failures are logged but do not throw.
+ *
+ * @param {string[]} userIds       - MongoDB User IDs to notify
+ * @param {string}   title         - Notification title
+ * @param {string}   body          - Notification body text
+ * @param {object}   data          - Extra data payload (e.g. { txId, screen })
+ */
+async function sendPushNotifications(userIds, title, body, data = {}) {
+  try {
+    // Fetch push tokens for all target users
+    const users = await User.find({ _id: { $in: userIds }, "pushTokens.0": { $exists: true } })
+      .select("pushTokens")
+      .lean();
+
+    const tokens = users.flatMap((u) => u.pushTokens?.map((t) => t.token) || []);
+    if (tokens.length === 0) return;
+
+    const messages = tokens.map((to) => ({
+      to,
+      sound: "default",
+      title,
+      body,
+      data,
+      channelId: data.channelId || "chainbudget-default",
+    }));
+
+    // Send via Expo Push API (https://exp.host/--/api/v2/push/send)
+    const response = await fetch("https://exp.host/--/api/v2/push/send", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Accept-Encoding": "gzip, deflate",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(messages),
+    });
+
+    const result = await response.json();
+    if (result.errors) {
+      console.warn("[Push] Expo push API errors:", result.errors);
+    }
+  } catch (err) {
+    console.error("[Push] Failed to send push notifications:", err.message || err);
+  }
+}
+
+module.exports.sendPushNotifications = sendPushNotifications;

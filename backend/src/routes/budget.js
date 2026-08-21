@@ -81,14 +81,14 @@ router.post("/", authenticate, async (req, res) => {
     const budget = new Budget({
       organization: organizationId,
       name: name.trim(),
-      allocated,
+      allocated: allocated ?? req.body.allocatedAmount,
       color: color || "#6B55D9"
     });
 
     await budget.save();
     
     // Return with spent = 0 since it's brand new
-    res.status(201).json({ ...budget.toObject(), spent: 0 });
+    res.status(201).json({ ...budget.toObject(), spent: 0, allocatedAmount: budget.allocated });
   } catch (err) {
     if (err.code === 11000) {
       return res.status(400).json({ error: "Budget category with this name already exists in this organization." });
@@ -98,4 +98,57 @@ router.post("/", authenticate, async (req, res) => {
   }
 });
 
+/// PUT /api/budget/:id — Update a budget category (Level 1 & 2)
+router.put("/:id", authenticate, async (req, res) => {
+  try {
+    const { name, allocated, allocatedAmount, color } = req.body;
+    const budget = await Budget.findById(req.params.id);
+    if (!budget) return res.status(404).json({ error: "Budget category not found" });
+
+    const role = req.user.getRoleInOrg(budget.organization);
+    if (!req.user.isSuperAdmin && (!role || role > 2)) {
+      return res.status(403).json({ error: "Insufficient permissions to edit budget" });
+    }
+
+    if (name && typeof name === "string") budget.name = name.trim();
+    if (allocated !== undefined || allocatedAmount !== undefined) {
+      const newAllocated = Number(allocated ?? allocatedAmount);
+      if (isNaN(newAllocated) || newAllocated < 0) {
+        return res.status(400).json({ error: "Valid allocated amount required" });
+      }
+      budget.allocated = newAllocated;
+    }
+    if (color && typeof color === "string") budget.color = color;
+
+    await budget.save();
+    res.json(budget);
+  } catch (err) {
+    if (err.code === 11000) {
+      return res.status(400).json({ error: "Budget category with this name already exists." });
+    }
+    console.error("Update budget error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/// DELETE /api/budget/:id — Delete a budget category (Level 1 & 2)
+router.delete("/:id", authenticate, async (req, res) => {
+  try {
+    const budget = await Budget.findById(req.params.id);
+    if (!budget) return res.status(404).json({ error: "Budget category not found" });
+
+    const role = req.user.getRoleInOrg(budget.organization);
+    if (!req.user.isSuperAdmin && (!role || role > 2)) {
+      return res.status(403).json({ error: "Insufficient permissions to delete budget" });
+    }
+
+    await Budget.findByIdAndDelete(req.params.id);
+    res.json({ success: true, message: "Budget category deleted" });
+  } catch (err) {
+    console.error("Delete budget error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
+

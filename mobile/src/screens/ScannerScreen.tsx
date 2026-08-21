@@ -1,23 +1,52 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, Image, TextInput, ActivityIndicator, Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, Image, TextInput, ActivityIndicator, Alert, ScrollView } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
-import { useRoute } from '@react-navigation/native';
+import { useRoute, useNavigation } from '@react-navigation/native';
 import api from '../lib/api';
+import { useOrg } from '../context/OrgContext';
+import { useToast } from '../context/ToastContext';
 import { useTheme } from '../context/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { triggerSuccessHaptic, triggerErrorHaptic, triggerLightHaptic } from '../lib/biometrics';
 
 export default function ScannerScreen() {
   const route = useRoute<any>();
+  const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
+  const { activeOrgId, organizations } = useOrg();
+  const { showToast } = useToast();
+
+  const currentOrgId = route.params?.orgId || activeOrgId;
+
   const [image, setImage] = useState<string | null>(null);
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [categories, setCategories] = useState<any[]>([]);
   const [isScanning, setIsScanning] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (currentOrgId) {
+      fetchCategories(currentOrgId);
+    }
+  }, [currentOrgId]);
+
+  const fetchCategories = async (orgId: string) => {
+    try {
+      const res = await api.get(`/budget?orgId=${orgId}`);
+      const cats = res.data || [];
+      setCategories(cats);
+      if (cats.length > 0 && !selectedCategory) {
+        setSelectedCategory(cats[0].name);
+      }
+    } catch {
+      // Fallback
+    }
+  };
 
   const pickImage = async (useCamera: boolean) => {
     await triggerLightHaptic();
@@ -25,7 +54,7 @@ export default function ScannerScreen() {
     if (useCamera) {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (!permission.granted) {
-        Alert.alert('Permission required', 'Camera permission is required to scan receipts.');
+        showToast('Camera permission is required to scan receipts.', 'warning');
         return;
       }
       result = await ImagePicker.launchCameraAsync({
@@ -66,12 +95,21 @@ export default function ScannerScreen() {
 
       setAmount(res.data.totalAmount?.toString() || '');
       setDescription(`${res.data.merchant ? res.data.merchant + ' - ' : ''}Receipt`);
-      await triggerSuccessHaptic();
-      Alert.alert('Scan Complete', 'AI has automatically filled in the details from your receipt!');
+
+      // If AI suggested a category and it matches one of our org categories, auto-select it
+      if (res.data.category) {
+        const matched = categories.find(
+          (c) => c.name.toLowerCase() === res.data.category.toLowerCase()
+        );
+        if (matched) {
+          setSelectedCategory(matched.name);
+        }
+      }
+
+      showToast('AI scanned receipt details successfully!', 'success');
     } catch (err: any) {
-      await triggerErrorHaptic();
       console.error("AI Scan Error:", err);
-      Alert.alert('Scan Failed', err.response?.data?.error || 'Failed to scan receipt. Please enter details manually.');
+      showToast(err.response?.data?.error || 'Failed to scan receipt. Please enter manually.', 'error');
     } finally {
       setIsScanning(false);
     }
@@ -79,41 +117,37 @@ export default function ScannerScreen() {
 
   const submitRequest = async () => {
     if (!amount || !description) {
-      await triggerErrorHaptic();
-      Alert.alert('Error', 'Please fill in the amount and description.');
+      showToast('Please fill in amount and description.', 'warning');
+      return;
+    }
+
+    if (!currentOrgId) {
+      showToast('No organization selected.', 'warning');
       return;
     }
 
     setIsSubmitting(true);
     try {
-      // Use active org from route params if available, otherwise fall back to API
-      let activeOrgId = route.params?.orgId;
-      if (!activeOrgId) {
-        const orgRes = await api.get('/organizations');
-        if (!orgRes.data || orgRes.data.length === 0) throw new Error("No organization found");
-        activeOrgId = orgRes.data[0]._id;
-      }
-
       await api.post(`/transactions`, {
-        organizationId: activeOrgId,
+        organizationId: currentOrgId,
         type: 'expense',
         amount: Number(amount),
         description,
-        category: 'Operations & Supplies',
+        category: selectedCategory || 'General',
       });
 
-      await triggerSuccessHaptic();
-      Alert.alert('Success', 'Fund request submitted successfully!');
+      showToast('Fund request submitted successfully!', 'success');
       setImage(null);
       setAmount('');
       setDescription('');
     } catch (err: any) {
-      await triggerErrorHaptic();
-      Alert.alert('Error', err.response?.data?.error || err.message || 'Failed to submit request');
+      showToast(err.response?.data?.error || err.message || 'Failed to submit request', 'error');
     } finally {
       setIsSubmitting(false);
     }
   };
+
+
 
   return (
     <KeyboardAwareScrollView 
@@ -215,7 +249,7 @@ export default function ScannerScreen() {
           />
         </View>
 
-        <View>
+        <View className="mb-4">
           <Text style={{ color: colors.textSecondary }} className="text-xs uppercase tracking-widest font-bold mb-2">
             Description
           </Text>
@@ -233,7 +267,73 @@ export default function ScannerScreen() {
             multiline
           />
         </View>
+
+        <View>
+          <Text style={{ color: colors.textSecondary }} className="text-xs uppercase tracking-widest font-bold mb-2">
+            Budget Category
+          </Text>
+          {categories.length > 0 ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row py-1">
+              {categories.map((cat) => {
+                const isSelected = selectedCategory === cat.name;
+                return (
+                  <TouchableOpacity
+                    key={cat._id}
+                    onPress={() => {
+                      triggerLightHaptic();
+                      setSelectedCategory(cat.name);
+                    }}
+                    style={{
+                      backgroundColor: isSelected ? colors.primaryMuted : colors.cardGlass,
+                      borderColor: isSelected ? colors.primary : colors.border,
+                      borderWidth: 1.5,
+                      borderRadius: 14,
+                      paddingHorizontal: 14,
+                      paddingVertical: 8,
+                      marginRight: 8,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: 4,
+                        backgroundColor: cat.color || colors.primary,
+                        marginRight: 6,
+                      }}
+                    />
+                    <Text
+                      style={{
+                        color: isSelected ? colors.primary : colors.textSecondary,
+                        fontWeight: isSelected ? '700' : '500',
+                        fontSize: 13,
+                      }}
+                    >
+                      {cat.name}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          ) : (
+            <TextInput
+              value={selectedCategory}
+              onChangeText={setSelectedCategory}
+              placeholder="e.g. Operations, Supplies, Travel"
+              placeholderTextColor={colors.inputPlaceholder}
+              style={{
+                backgroundColor: isDark ? 'rgba(0,0,0,0.45)' : colors.backgroundSecondary,
+                borderColor: colors.border,
+                color: colors.textPrimary,
+              }}
+              className="border p-4 rounded-2xl"
+            />
+          )}
+        </View>
       </View>
+
 
       <TouchableOpacity 
         onPress={submitRequest}

@@ -6,7 +6,9 @@ const Approval = require("../models/Approval");
 const Transaction = require("../models/Transaction");
 const Organization = require("../models/Organization");
 const AuditLog = require("../models/AuditLog");
+const User = require("../models/User");
 const { authenticate, requireRole } = require("../middleware/auth");
+const { sendPushNotifications } = require("./users");
 
 /// POST /api/approvals/:txId — Submit approval/rejection (Level 1 and 2)
 router.post("/:txId", authenticate, requireRole(2), async (req, res) => {
@@ -218,6 +220,20 @@ router.post("/:txId", authenticate, requireRole(2), async (req, res) => {
         type: "system",
         timestamp: new Date().toISOString()
       });
+    }
+
+    // ── Push Notifications ────────────────────────────────────────────────────
+    // Notify the transaction submitter when threshold is reached (approved/rejected).
+    // Fire-and-forget: failures are logged in sendPushNotifications, never block response.
+    if (txn.submittedBy && (txn.status === "approved" || txn.status === "rejected")) {
+      const notifTitle = txn.status === "approved" ? "✅ Transaction Approved" : "❌ Transaction Rejected";
+      const notifBody = `Your ₱${txn.amount} request for "${txn.description.slice(0, 40)}" was ${txn.status}.`;
+      sendPushNotifications(
+        [txn.submittedBy.toString()],
+        notifTitle,
+        notifBody,
+        { txId: txn._id.toString(), screen: "TransactionDetail", channelId: "chainbudget-approvals" }
+      );
     }
 
     res.json({ approval: approval[0], transaction: txn });

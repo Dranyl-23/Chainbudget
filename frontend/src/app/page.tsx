@@ -79,6 +79,8 @@ export default function LandingPage() {
           <span onClick={() => setInfoModal(modalData.whyUs)} className="hover:text-white cursor-pointer transition-colors">Why us</span>
           <span onClick={() => setInfoModal(modalData.features)} className="hover:text-white cursor-pointer transition-colors">Features</span>
           <span onClick={() => setInfoModal(modalData.security)} className="hover:text-white cursor-pointer transition-colors">Security</span>
+          <Link href="/help" className="hover:text-white transition-colors">Help & FAQ</Link>
+          <Link href="/privacy" className="hover:text-white transition-colors">Privacy Notice</Link>
           <Link href="/tutorials" className="hover:text-white transition-colors">Tutorials</Link>
         </div>
         <div className="hidden sm:flex items-center gap-2 text-xs text-white/50 bg-white/5 px-4 py-2 rounded-full border border-white/10 backdrop-blur-md">
@@ -108,12 +110,19 @@ export default function LandingPage() {
             <span onClick={() => { setInfoModal(modalData.security); setIsMobileMenuOpen(false); }} className="hover:text-white cursor-pointer transition-colors flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span> Security
             </span>
+            <Link href="/help" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-white transition-colors flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-pink-400"></span> Help & FAQ
+            </Link>
+            <Link href="/privacy" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-white transition-colors flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-teal-400"></span> Data Privacy (RA 10173)
+            </Link>
             <Link href="/tutorials" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-white transition-colors flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span> Tutorials
             </Link>
           </div>
         </div>
       )}
+
 
       {/* ── Hero ── */}
       <section className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-4 xl:gap-12 items-center px-6 md:px-16 pt-16 md:pt-20 pb-20 md:pb-32 max-w-7xl mx-auto w-full">
@@ -326,9 +335,19 @@ export default function LandingPage() {
       </section>
 
       {/* ── Footer ── */}
-      <footer className="relative z-10 text-center py-6 md:py-8 text-[10px] md:text-xs text-white/30 border-t border-white/5 mt-auto bg-[#05010B]/50 backdrop-blur-md">
-        ChainBudget · Cor Jesu College Capstone 2025–2026 · Powered by Polygon
+      <footer className="relative z-10 text-center py-6 md:py-8 text-[10px] md:text-xs text-white/40 border-t border-white/5 mt-auto bg-[#05010B]/50 backdrop-blur-md flex flex-col items-center justify-center gap-2">
+        <div className="flex items-center justify-center gap-4 text-white/60">
+          <Link href="/help" className="hover:text-white transition-colors">Help & FAQ</Link>
+          <span>·</span>
+          <Link href="/privacy" className="hover:text-white transition-colors">Data Privacy (RA 10173)</Link>
+          <span>·</span>
+          <Link href="/tutorials" className="hover:text-white transition-colors">Tutorials</Link>
+        </div>
+        <p className="text-white/30">
+          ChainBudget · Cor Jesu College Capstone 2025–2026 · Powered by Polygon · Aligned with RA 10175 & RA 10173
+        </p>
       </footer>
+
       {/* ── Info Modal ── */}
       {infoModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">

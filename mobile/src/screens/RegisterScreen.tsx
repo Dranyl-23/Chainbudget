@@ -29,6 +29,7 @@ export default function RegisterScreen({ navigation }: any) {
   const { login } = useAuth();
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
+  const [agreePrivacy, setAgreePrivacy] = useState(false);
   const [step, setStep] = useState<Step>('form');
 
   const handleRegister = async () => {
@@ -39,6 +40,10 @@ export default function RegisterScreen({ navigation }: any) {
     }
     if (!email.trim() || !email.includes('@')) {
       Alert.alert('Email Required', 'Please enter a valid email address to continue.');
+      return;
+    }
+    if (!agreePrivacy) {
+      Alert.alert('Privacy Consent Required', 'Please read and accept the Data Privacy Notice (RA 10173) to proceed.');
       return;
     }
 
@@ -64,6 +69,7 @@ export default function RegisterScreen({ navigation }: any) {
       Alert.alert('Registration Failed', err.response?.data?.error || err.message || 'Something went wrong.');
     }
   };
+
 
   if (step === 'generating') {
     return (
@@ -142,13 +148,37 @@ export default function RegisterScreen({ navigation }: any) {
                 Used to link your account if your organization invited you by email.
               </Text>
             </View>
+
+            {/* RA 10173 Data Privacy Act Consent Checkbox */}
+            <TouchableOpacity
+              style={styles.consentRow}
+              onPress={() => setAgreePrivacy(!agreePrivacy)}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.checkbox, agreePrivacy && styles.checkboxChecked]}>
+                {agreePrivacy && <Ionicons name="checkmark" size={14} color="#fff" />}
+              </View>
+              <Text style={styles.consentText}>
+                I acknowledge the{' '}
+                <Text
+                  style={styles.consentLink}
+                  onPress={() => navigation.navigate('DataPrivacy')}
+                >
+                  Data Privacy Notice (RA 10173)
+                </Text>{' '}
+                and understand my private keys are stored non-custodially on this device.
+              </Text>
+            </TouchableOpacity>
           </View>
 
           {/* Create button */}
           <TouchableOpacity
-            style={[styles.createBtn, (!displayName.trim() || !email.trim()) && styles.createBtnDisabled]}
+            style={[
+              styles.createBtn,
+              (!displayName.trim() || !email.trim() || !agreePrivacy) && styles.createBtnDisabled,
+            ]}
             onPress={handleRegister}
-            disabled={!displayName.trim() || !email.trim()}
+            disabled={!displayName.trim() || !email.trim() || !agreePrivacy}
             activeOpacity={0.85}
           >
             <Ionicons name="cube" size={20} color="#fff" />
@@ -166,6 +196,7 @@ export default function RegisterScreen({ navigation }: any) {
     </KeyboardAvoidingView>
   );
 }
+
 
 const styles = StyleSheet.create({
   scroll: { flexGrow: 1, paddingHorizontal: 28, paddingTop: 60, paddingBottom: 40 },
@@ -209,4 +240,14 @@ const styles = StyleSheet.create({
   generatingCard: { alignItems: 'center', gap: 16 },
   generatingTitle: { fontSize: 18, fontWeight: '700', color: '#fff', textAlign: 'center' },
   generatingSubtitle: { fontSize: 14, color: 'rgba(255,255,255,0.5)', textAlign: 'center', lineHeight: 22 },
+  consentRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginTop: 4 },
+  checkbox: {
+    width: 20, height: 20, borderRadius: 6,
+    borderWidth: 2, borderColor: 'rgba(255,255,255,0.3)',
+    alignItems: 'center', justifyContent: 'center', marginTop: 2,
+  },
+  checkboxChecked: { backgroundColor: '#a855f7', borderColor: '#a855f7' },
+  consentText: { flex: 1, color: 'rgba(255,255,255,0.7)', fontSize: 12, lineHeight: 18 },
+  consentLink: { color: '#e879f9', fontWeight: '700', textDecorationLine: 'underline' },
 });
+

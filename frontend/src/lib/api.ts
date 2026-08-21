@@ -42,20 +42,28 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Handle 401 globally — clear token and redirect to login
+// Handle 401 globally — clear token and redirect to login,
+// UNLESS a critical user action (e.g. MetaMask signing flow) is in progress,
+// in which case surface the 401 back to the caller so it can handle it.
 api.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err.response?.status === 401 && typeof window !== "undefined") {
-      // Prevent multiple alerts if multiple concurrent requests fail
-      if (!sessionStorage.getItem("session_expired_alert")) {
-        sessionStorage.setItem("session_expired_alert", "true");
-        
-        setTimeout(() => {
-          localStorage.removeItem("cb_token");
-          localStorage.removeItem("cb_user");
-          window.dispatchEvent(new CustomEvent("cb_session_expired"));
-        }, 100); // Small delay to let React finish rendering current state
+      // If a critical action is in progress (e.g. handleApprove / handleReject),
+      // do NOT trigger the session-expired modal. Let the caller handle the 401
+      // so it can attempt a token refresh and retry.
+      const actionInProgress = sessionStorage.getItem("cb_action_in_progress");
+      if (!actionInProgress) {
+        // Prevent multiple alerts if multiple concurrent background requests fail
+        if (!sessionStorage.getItem("session_expired_alert")) {
+          sessionStorage.setItem("session_expired_alert", "true");
+
+          setTimeout(() => {
+            localStorage.removeItem("cb_token");
+            localStorage.removeItem("cb_user");
+            window.dispatchEvent(new CustomEvent("cb_session_expired"));
+          }, 100); // Small delay to let React finish rendering current state
+        }
       }
     }
 

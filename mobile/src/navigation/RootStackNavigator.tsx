@@ -1,6 +1,7 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useTheme } from '../context/ThemeContext';
+import CustomHeader from '../components/CustomHeader';
 
 import MainTabNavigator from './MainTabNavigator';
 import HistoryScreen from '../screens/HistoryScreen';
@@ -14,6 +15,8 @@ import BudgetScreen from '../screens/BudgetScreen';
 import AuditScreen from '../screens/AuditScreen';
 import ReportsScreen from '../screens/ReportsScreen';
 import TreasuryScreen from '../screens/TreasuryScreen';
+import HelpFaqScreen from '../screens/HelpFaqScreen';
+import DataPrivacyScreen from '../screens/DataPrivacyScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -23,14 +26,9 @@ export default function RootStackNavigator() {
   return (
     <Stack.Navigator
       screenOptions={{
-        headerStyle: {
-          backgroundColor: colors.headerBackground,
-        },
-        headerTintColor: colors.headerText,
-        headerTitleStyle: {
-          fontWeight: '700',
-        },
+        header: (props) => <CustomHeader {...props} />,
         contentStyle: { backgroundColor: colors.background },
+        animation: 'slide_from_right',
       }}
     >
       {/* The main tab interface is the root screen */}
@@ -49,12 +47,12 @@ export default function RootStackNavigator() {
       <Stack.Screen
         name="TransactionDetail"
         component={TransactionDetailScreen}
-        options={{ title: 'Receipt Details' }}
+        options={{ title: 'Transaction Details' }}
       />
       <Stack.Screen
         name="Transfer"
         component={TransferScreen}
-        options={{ title: 'Send / Transfer' }}
+        options={{ title: 'Fund Request' }}
       />
       <Stack.Screen
         name="Receive"
@@ -96,6 +94,18 @@ export default function RootStackNavigator() {
         component={TreasuryScreen}
         options={{ title: 'Treasury Settings' }}
       />
+      <Stack.Screen
+        name="HelpFaq"
+        component={HelpFaqScreen}
+        options={{ title: 'Help & FAQs' }}
+      />
+      <Stack.Screen
+        name="DataPrivacy"
+        component={DataPrivacyScreen}
+        options={{ title: 'Data Privacy & Security' }}
+      />
     </Stack.Navigator>
   );
 }
+
+

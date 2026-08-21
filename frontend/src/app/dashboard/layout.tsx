@@ -8,8 +8,9 @@ import Image from "next/image";
 import {
   LayoutDashboard, ArrowLeftRight, PiggyBank,
   ClipboardCheck, FileText, BookOpen, Settings,
-  LogOut, Users, Menu, X, AlertTriangle, Copy, Vote, ChevronLeft, ChevronRight, UserCircle, ShieldCheck, Box, Crown, CheckCircle2, User as UserIcon, Eye, HelpCircle
+  LogOut, Users, Menu, X, AlertTriangle, Copy, Vote, ChevronLeft, ChevronRight, UserCircle, ShieldCheck, Box, Crown, CheckCircle2, User as UserIcon, Eye, HelpCircle, LifeBuoy, Shield
 } from "lucide-react";
+
 import toast from "react-hot-toast";
 import OrgSelector from "@/components/OrgSelector";
 import Onboarding from "@/components/Onboarding";
@@ -400,6 +401,30 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
 
           <Link
+            href="/help"
+            onClick={handleNavClick}
+            title={isCollapsed ? "Help & FAQs" : ""}
+            className={`nav-item flex items-center gap-3 w-full transition-all duration-300 text-gray-500 hover:text-primary ${isCollapsed ? "justify-center px-0" : ""}`}
+          >
+            <div className="shrink-0"><LifeBuoy className="w-4 h-4" /></div>
+            <span className={`transition-all duration-300 whitespace-nowrap ${isCollapsed ? "max-w-0 opacity-0" : "max-w-37.5 opacity-100"}`}>
+              Help & FAQs
+            </span>
+          </Link>
+
+          <Link
+            href="/privacy"
+            onClick={handleNavClick}
+            title={isCollapsed ? "Data Privacy (RA 10173)" : ""}
+            className={`nav-item flex items-center gap-3 w-full transition-all duration-300 text-gray-500 hover:text-primary ${isCollapsed ? "justify-center px-0" : ""}`}
+          >
+            <div className="shrink-0"><Shield className="w-4 h-4" /></div>
+            <span className={`transition-all duration-300 whitespace-nowrap ${isCollapsed ? "max-w-0 opacity-0" : "max-w-37.5 opacity-100"}`}>
+              Privacy & DPA
+            </span>
+          </Link>
+
+          <Link
             href="/tutorials"
             onClick={handleNavClick}
             title={isCollapsed ? "Tutorials" : ""}
@@ -410,6 +435,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               Tutorials
             </span>
           </Link>
+
 
           <button
             title={isCollapsed ? "Disconnect" : ""}

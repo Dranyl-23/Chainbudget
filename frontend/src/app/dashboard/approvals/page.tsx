@@ -95,7 +95,7 @@ function getRpcErrorCode(err: unknown): number | undefined {
 }
 
 export default function ApprovalsPage() {
-  const { activeOrgId } = useAuth();
+  const { activeOrgId, refreshToken } = useAuth();
   const [pendingApprovals, setPendingApprovals] = useState<Approval[]>(() => {
     if (typeof window !== "undefined") {
       const cached = sessionStorage.getItem("cb_cache_approvals");
@@ -249,14 +249,24 @@ export default function ApprovalsPage() {
   const handleApprove = async (req: Approval) => {
     if (!activeOrgId) return;
     setActionLoading(req._id);
+
+    // ── Guard: tell the global 401 interceptor not to trigger session-expired ──
+    // while this action is in flight. The flag is always cleared in finally.
+    sessionStorage.setItem("cb_action_in_progress", "true");
+
     try {
-      // 1. Request Web3 Signature (EIP-712)
+      // 1. Proactively refresh the Asgardeo token BEFORE opening MetaMask so that
+      //    the token stored in localStorage is as fresh as possible when the backend
+      //    POST fires after the user signs.
+      await refreshToken();
+
+      // 2. Request EIP-712 Web3 Signature (opens MetaMask)
       const signature = await requestSignature("approved", req);
 
-      // 2. Do MetaMask on-chain signing FIRST (if on-chain tx ID exists)
+      // 3. Optional on-chain smart-contract approval (only when tx has an onChainTxId)
       if (req.onChainTxId && typeof window !== "undefined" && window.ethereum) {
         toast.loading("Connecting to Network...", { id: "txToast" });
-        
+
         try {
           await window.ethereum.request({
             method: "wallet_switchEthereumChain",
@@ -288,7 +298,7 @@ export default function ApprovalsPage() {
           const provider = new ethers.BrowserProvider(window.ethereum as ethers.Eip1193Provider);
           const signer = await provider.getSigner();
           const contractAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
-          
+
           if (contractAddress) {
             const contract = new ethers.Contract(contractAddress, ChainBudgetABI.abi, signer);
             const tx = await contract.submitApproval(req.onChainTxId);
@@ -301,20 +311,55 @@ export default function ApprovalsPage() {
           console.error("On-chain approval failed:", errMsg);
           toast.error("MetaMask approval failed or was cancelled.", { id: "txToast" });
           setActionLoading(null);
-          return; // STOP execution here, do NOT update backend!
+          return; // STOP — do NOT call backend if MetaMask was cancelled
         }
       }
 
-      // 3. Call backend to record the vote with the digital signature
-      toast.loading("Recording approval...", { id: "txToast" });
-      await api.post(`/approvals/${req._id}`, {
+      // 4. Refresh the token again right before the backend POST — the MetaMask
+      //    popup may have been open for several minutes, the token could have expired.
+      await refreshToken();
+
+      // 5. Helper to build the backend POST payload
+      const approvalPayload = {
         action: "approved",
         comment: "Approved via dashboard",
         organizationId: activeOrgId,
         signature,
         to: req.to || req.submittedBy?.walletAddress || ethers.ZeroAddress,
-        amountWei: req.amount.toString()
-      });
+        amountWei: req.amount.toString(),
+      };
+
+      // 6. Call backend — retry once on 401 after a final token refresh attempt
+      toast.loading("Recording approval...", { id: "txToast" });
+      try {
+        await api.post(`/approvals/${req._id}`, approvalPayload);
+      } catch (postErr: unknown) {
+        // On a 401, attempt one token refresh and retry before giving up
+        if (
+          postErr &&
+          typeof postErr === "object" &&
+          "response" in postErr &&
+          (postErr as { response?: { status?: number } }).response?.status === 401
+        ) {
+          console.warn("[Approvals] 401 on first attempt — refreshing token and retrying...");
+          const newToken = await refreshToken();
+          if (!newToken) {
+            // Genuinely cannot renew the session — show session expired and bail
+            sessionStorage.removeItem("cb_action_in_progress");
+            if (!sessionStorage.getItem("session_expired_alert")) {
+              sessionStorage.setItem("session_expired_alert", "true");
+              localStorage.removeItem("cb_token");
+              localStorage.removeItem("cb_user");
+              window.dispatchEvent(new CustomEvent("cb_session_expired"));
+            }
+            return;
+          }
+          // Retry with fresh token (interceptor will attach it from localStorage)
+          await api.post(`/approvals/${req._id}`, approvalPayload);
+        } else {
+          throw postErr; // Not a 401 — re-throw for the outer catch
+        }
+      }
 
       toast.success("Approval recorded successfully!", { id: "txToast" });
       confetti({
@@ -329,6 +374,8 @@ export default function ApprovalsPage() {
       console.error("Approval failed:", err);
       toast.error(getErrorMessage(err, "Failed to approve transaction"), { id: "txToast" });
     } finally {
+      // Always clear the action guard so the global 401 interceptor works normally again
+      sessionStorage.removeItem("cb_action_in_progress");
       setActionLoading(null);
     }
   };
@@ -336,25 +383,66 @@ export default function ApprovalsPage() {
   const handleReject = async (req: Approval) => {
     if (!activeOrgId) return;
     setActionLoading(req._id);
+
+    // ── Guard: tell the global 401 interceptor not to trigger session-expired ──
+    sessionStorage.setItem("cb_action_in_progress", "true");
+
     try {
-      // 1. Request Web3 Signature (EIP-712)
+      // 1. Proactively refresh token before opening MetaMask
+      await refreshToken();
+
+      // 2. Request EIP-712 Web3 Signature (opens MetaMask)
       const signature = await requestSignature("rejected", req);
 
-      toast.loading("Recording rejection...", { id: "txToast" });
-      await api.post(`/approvals/${req._id}`, {
+      // 3. Refresh token again right before the backend POST
+      await refreshToken();
+
+      const rejectionPayload = {
         action: "rejected",
         comment: "Rejected via dashboard",
         organizationId: activeOrgId,
         signature,
         to: req.to || req.submittedBy?.walletAddress || ethers.ZeroAddress,
-        amountWei: req.amount.toString()
-      });
+        amountWei: req.amount.toString(),
+      };
+
+      // 4. Call backend — retry once on 401
+      toast.loading("Recording rejection...", { id: "txToast" });
+      try {
+        await api.post(`/approvals/${req._id}`, rejectionPayload);
+      } catch (postErr: unknown) {
+        if (
+          postErr &&
+          typeof postErr === "object" &&
+          "response" in postErr &&
+          (postErr as { response?: { status?: number } }).response?.status === 401
+        ) {
+          console.warn("[Approvals] 401 on reject — refreshing token and retrying...");
+          const newToken = await refreshToken();
+          if (!newToken) {
+            sessionStorage.removeItem("cb_action_in_progress");
+            if (!sessionStorage.getItem("session_expired_alert")) {
+              sessionStorage.setItem("session_expired_alert", "true");
+              localStorage.removeItem("cb_token");
+              localStorage.removeItem("cb_user");
+              window.dispatchEvent(new CustomEvent("cb_session_expired"));
+            }
+            return;
+          }
+          await api.post(`/approvals/${req._id}`, rejectionPayload);
+        } else {
+          throw postErr;
+        }
+      }
+
       await refreshApprovals();
       toast.success("Rejection vote recorded", { id: "txToast" });
     } catch (err: unknown) {
       console.error("Rejection failed:", err);
       toast.error(getErrorMessage(err, "Failed to reject transaction"), { id: "txToast" });
     } finally {
+      // Always clear the action guard
+      sessionStorage.removeItem("cb_action_in_progress");
       setActionLoading(null);
     }
   };

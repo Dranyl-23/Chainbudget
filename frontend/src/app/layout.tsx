@@ -3,8 +3,10 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/Providers";
 import InstallPrompt from "@/components/InstallPrompt";
+import CookiePrivacyBanner from "@/components/CookiePrivacyBanner";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
+
 
 export const metadata: Metadata = {
   title: "ChainBudget — Blockchain Budget Management",
@@ -42,8 +44,10 @@ export default function RootLayout({
         <Providers>
           {children}
           <InstallPrompt />
+          <CookiePrivacyBanner />
         </Providers>
       </body>
+
     </html>
   );
 }
