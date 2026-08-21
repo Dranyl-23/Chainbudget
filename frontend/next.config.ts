@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 import path from "path";
-// @ts-expect-error
+// @ts-expect-error next-pwa lacks official TypeScript type definitions
 import withPWAInit from "next-pwa";
 
 const withPWA = withPWAInit({
