@@ -48,6 +48,7 @@ const nextConfig: NextConfig = {
               "img-src 'self' data: blob: https:",
               "font-src 'self' data:",
               "connect-src 'self' https://chainbudget-api.fly.dev wss://chainbudget-api.fly.dev https://api.asgardeo.io https://gateway.pinata.cloud",
+              "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com",
               "frame-ancestors 'none'",
             ].join("; "),
           },
