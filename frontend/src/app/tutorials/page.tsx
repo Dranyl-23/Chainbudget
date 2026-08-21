@@ -1,10 +1,32 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { BookOpen, Video, ChevronRight, UserPlus, Building2, Users, LogIn, Wallet, CheckCircle2, ArrowRight, ExternalLink } from "lucide-react";
+import Image from "next/image";
+import { useState, type ReactNode } from "react";
+import { BookOpen, Video, Building2, Users, LogIn, CheckCircle2, ArrowRight, ExternalLink } from "lucide-react";
 
-const tutorials = [
+interface TutorialStep {
+  title: string;
+  desc: string;
+  icon: ReactNode;
+  link?: {
+    label: string;
+    href: string;
+  };
+}
+
+interface TutorialItem {
+  id: string;
+  icon: ReactNode;
+  color: string;
+  badge: string;
+  badgeColor: string;
+  title: string;
+  subtitle: string;
+  steps: TutorialStep[];
+}
+
+const tutorials: TutorialItem[] = [
   {
     id: "register-login",
     icon: <LogIn className="w-6 h-6 text-cyan-400" />,
@@ -127,7 +149,7 @@ const tutorials = [
   },
 ];
 
-const TutorialSection = ({ tutorial }: { tutorial: any }) => {
+const TutorialSection = ({ tutorial }: { tutorial: TutorialItem }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
   return (
@@ -153,7 +175,7 @@ const TutorialSection = ({ tutorial }: { tutorial: any }) => {
 
       {/* Steps (Hidden on mobile by default) */}
       <div className={`px-6 py-5 space-y-5 ${isExpanded ? 'block' : 'hidden sm:block'}`}>
-        {tutorial.steps.map((step: any, stepIdx: number) => (
+        {tutorial.steps.map((step: TutorialStep, stepIdx: number) => (
           <div key={stepIdx} className="flex gap-4">
             <div className="flex flex-col items-center gap-1 shrink-0">
               <div className="w-7 h-7 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-xs font-bold text-white/70 shrink-0">
@@ -207,7 +229,7 @@ export default function TutorialsPage() {
       {/* Nav */}
       <nav className="relative z-20 flex items-center justify-between px-4 md:px-12 py-4 border-b border-white/5 backdrop-blur-md bg-black/20">
         <Link href="/" className="flex items-center gap-2.5">
-          <img src="/3D-Chainbudget.png" alt="ChainBudget" className="w-9 h-9 md:w-10 md:h-10 object-contain drop-shadow-md shrink-0" />
+          <Image src="/3D-Chainbudget.png" alt="ChainBudget" width={40} height={40} className="object-contain drop-shadow-md shrink-0" />
           <span className="text-lg md:text-xl font-bold tracking-tight hidden sm:block text-white">
             CHAIN<span className="text-fuchsia-400">BUDGET</span>
           </span>
@@ -252,8 +274,8 @@ export default function TutorialsPage() {
           <div className="aspect-video">
             <iframe
               className="w-full h-full"
-              src="https://www.youtube.com/embed/9Nyc9pwVXkE"
-              title="Tutorial for ChainBudget"
+              src="https://www.youtube.com/embed/dS-3-ZqTkdA"
+              title="ChainBudget Video Tutorial Walkthrough"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
             />
