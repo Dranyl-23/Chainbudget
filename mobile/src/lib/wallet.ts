@@ -54,12 +54,13 @@ export async function generateAndStoreWallet(): Promise<GeneratedWallet> {
   // 2. Derive HD wallet from BIP-44 path
   const hdWallet = ethers.HDNodeWallet.fromPhrase(mnemonic, undefined, DERIVATION_PATH);
 
-  // 3. Persist sensitive material to hardware-backed storage BEFORE returning
-  await Promise.all([
-    storePrivateKey(hdWallet.privateKey),
-    storeMnemonic(mnemonic),
-    storeWalletAddress(hdWallet.address),
-  ]);
+  // 3. Persist sensitive material to hardware-backed storage BEFORE returning.
+  //    IMPORTANT: Store sequentially, NOT with Promise.all — Android's BiometricPrompt
+  //    only allows one authentication at a time. Concurrent prompts cause
+  //    "Authentication is already in progress" rejection on physical devices.
+  await storeWalletAddress(hdWallet.address);       // no biometric gate
+  await storePrivateKey(hdWallet.privateKey);        // biometric prompt #1
+  await storeMnemonic(mnemonic);                     // biometric prompt #2
 
   // 4. Return only public values — private key + mnemonic NEVER leave this function
   return {

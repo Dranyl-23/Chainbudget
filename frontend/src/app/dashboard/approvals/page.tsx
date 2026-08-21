@@ -37,6 +37,7 @@ interface TransactionApiItem {
   type?: string;
   urgency?: "normal" | "urgent";
   documentUrl?: string;
+  to?: string;
 }
 
 interface TransactionsResponse {
@@ -147,6 +148,7 @@ export default function ApprovalsPage() {
           type: tx.type,
           urgency: tx.urgency || "normal",
           documentUrl: tx.documentUrl,
+          to: tx.to,
         }));
 
         if (!isCancelled) {
@@ -204,6 +206,7 @@ export default function ApprovalsPage() {
         type: tx.type,
         urgency: tx.urgency || "normal",
         documentUrl: tx.documentUrl,
+        to: tx.to,
       }));
       setPendingApprovals(approvals);
     } catch (err: unknown) {
@@ -234,7 +237,7 @@ export default function ApprovalsPage() {
       txId: req._id,
       amount: req.amount.toString(),
       description: req.description,
-      to: req.to || req.submittedBy || "",
+      to: req.to || req.submittedBy?.walletAddress || ethers.ZeroAddress,
       amountWei: req.amount.toString()
     };
     
@@ -309,7 +312,7 @@ export default function ApprovalsPage() {
         comment: "Approved via dashboard",
         organizationId: activeOrgId,
         signature,
-        to: req.to || req.submittedBy || "",
+        to: req.to || req.submittedBy?.walletAddress || ethers.ZeroAddress,
         amountWei: req.amount.toString()
       });
 
@@ -343,7 +346,7 @@ export default function ApprovalsPage() {
         comment: "Rejected via dashboard",
         organizationId: activeOrgId,
         signature,
-        to: req.to || req.submittedBy || "",
+        to: req.to || req.submittedBy?.walletAddress || ethers.ZeroAddress,
         amountWei: req.amount.toString()
       });
       await refreshApprovals();

@@ -249,7 +249,9 @@ export default function DAOGovernancePage() {
       setAiInsight(res.data);
     } catch (err: unknown) {
       console.error("AI Insight error:", err);
-      toast.error("Failed to generate AI insights");
+      const axiosErr = err as { response?: { status?: number; data?: { error?: string } } };
+      const errMsg = axiosErr.response?.data?.error || "Failed to generate AI insights";
+      toast.error(errMsg);
       setShowAiModal(null);
     } finally {
       setIsAnalyzing(false);

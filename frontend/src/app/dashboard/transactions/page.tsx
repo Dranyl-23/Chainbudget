@@ -356,7 +356,8 @@ export default function TransactionsPage() {
       toast.success("AI successfully extracted details!");
     } catch (err: unknown) {
       console.error("AI scan failed:", err);
-      toast.error("Failed to scan receipt with AI");
+      const axiosErr = err as { response?: { data?: { error?: string } } };
+      toast.error(axiosErr.response?.data?.error || "Failed to scan receipt with AI");
     } finally {
       setIsAiScanning(false);
     }
