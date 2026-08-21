@@ -86,3 +86,21 @@ jobs:
       - run: npm ci
       - name: TypeScript type-check
         run: npx tsc --noEmit || true
+
+  # ─── Static Application Security Testing (SAST) ─────────────────────
+  sast:
+    name: CodeQL Security Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript
+          queries: security-extended
+      - name: Run CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:javascript"

@@ -23,10 +23,10 @@ const TransactionSchema = new mongoose.Schema(
     payeeApproved: { type: Boolean, default: false },
     approvals: [{ type: String, trim: true }],
     amount: { type: Number, required: true, min: 0 },
-    currency: { type: String, default: "PHP" },
-    description: { type: String, required: true, trim: true },
-    category: { type: String, trim: true },
-    referenceNumber: { type: String, trim: true },
+    currency: { type: String, default: "PHP", maxlength: 10 },
+    description: { type: String, required: true, trim: true, maxlength: 2000 },
+    category: { type: String, trim: true, maxlength: 200 },
+    referenceNumber: { type: String, trim: true, maxlength: 200 },
     // Document / receipt metadata
     documentUrl: { type: String },
     documentHash: { type: String }, // Hash of uploaded document
@@ -50,8 +50,8 @@ const TransactionSchema = new mongoose.Schema(
     isRecordedOnChain: { type: Boolean, default: false },
 
     // Budget period / allocation link
-    budgetCategory: { type: String, trim: true },
-    notes: { type: String, trim: true },
+    budgetCategory: { type: String, trim: true, maxlength: 200 },
+    notes: { type: String, trim: true, maxlength: 2000 },
   },
   { timestamps: true }
 );

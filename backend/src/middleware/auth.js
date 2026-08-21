@@ -3,6 +3,7 @@ const { ethers } = require("ethers");
 const { encrypt } = require("../utils/crypto");
 const jwt = require("jsonwebtoken");
 const jwksClient = require("jwks-rsa");
+const { securityEvent } = require("./securityLogger");
 
 // ── JWKS Client (RS256 signature verification) ────────────────────────────────
 // Initialised lazily so the module can still be loaded even if ASGARDEO_BASE_URL
@@ -151,9 +152,11 @@ const checkJwt = async (req, res, next) => {
     }
 
     console.warn("[auth] All token strategies failed — rejecting");
+    securityEvent("AUTH_FAILURE", req, { reason: "all_strategies_failed" });
     return res.status(401).json({ error: "Invalid or unverifiable token" });
   } catch (err) {
     console.error("[auth] Unexpected token validation error:", err.message);
+    securityEvent("AUTH_FAILURE", req, { reason: "unexpected_error" });
     return res.status(401).json({ error: "Token validation error" });
   }
 };
@@ -319,6 +322,11 @@ const requireRole = (maxLevel) => async (req, res, next) => {
   }
 
   if (roleLevel > maxLevel) {
+    securityEvent("PRIVILEGE_ESCALATION", req, {
+      requiredLevel: maxLevel,
+      actualLevel: roleLevel,
+      orgId,
+    });
     return res.status(403).json({
       error: `Access denied. Requires role level ${maxLevel} or above.`,
     });

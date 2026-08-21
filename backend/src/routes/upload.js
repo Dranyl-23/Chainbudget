@@ -86,7 +86,8 @@ router.post("/", authenticate, upload.single("file"), async (req, res) => {
       console.warn("Pinata IPFS upload failed, falling back to local storage:", err?.response?.data || err.message);
       
       // Only write to local disk as a last-resort fallback
-      const localFilename = `${Date.now()}_${req.file.originalname.replace(/\s+/g, '_')}`;
+      const safeName = path.basename(req.file.originalname).replace(/[^a-zA-Z0-9._-]/g, '_');
+      const localFilename = `${Date.now()}_${crypto.randomBytes(4).toString('hex')}_${safeName}`;
       const localFilePath = path.join(UPLOADS_DIR, localFilename);
       fs.writeFileSync(localFilePath, req.file.buffer);
       const localUrl = `${req.protocol}://${req.get("host")}/uploads/${localFilename}`;

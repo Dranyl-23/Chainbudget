@@ -413,4 +413,23 @@ describe("ChainBudget System Suite", function () {
       ).to.be.revertedWith("ChainBudget: cannot remove, would drop below required approvals");
     });
   });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // GAP-12: Zero-address & zero-amount input validation
+  // ═══════════════════════════════════════════════════════════════════════════
+  describe("Input Validation (GAP-12)", function () {
+    it("should reject recordTransaction with zero address recipient", async function () {
+      const dataHash = ethers.keccak256(ethers.toUtf8Bytes("zero-addr-test"));
+      await expect(
+        chainBudget.recordTransaction(dataHash, 1000, ethers.ZeroAddress, false, false)
+      ).to.be.revertedWith("ChainBudget: zero address recipient");
+    });
+
+    it("should reject recordTransaction with zero amount", async function () {
+      const dataHash = ethers.keccak256(ethers.toUtf8Bytes("zero-amount-test"));
+      await expect(
+        chainBudget.recordTransaction(dataHash, 0, supplier.address, false, false)
+      ).to.be.revertedWith("ChainBudget: amount must be > 0");
+    });
+  });
 });

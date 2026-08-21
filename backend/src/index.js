@@ -13,6 +13,7 @@ const mongoose = require("mongoose");
 const path = require("path");
 const http = require("http");
 const { Server } = require("socket.io");
+const mongoSanitize = require("express-mongo-sanitize");
 
 const authRoutes = require("./routes/auth");
 const orgRoutes = require("./routes/organizations");
@@ -38,10 +39,29 @@ const PORT = process.env.PORT || 5001;
 
 // ── WebSocket Server ──────────────────────────────────────────────────────────
 const server = http.createServer(app);
+const socketAllowedOrigins = [
+  process.env.FRONTEND_URL || "http://localhost:3000",
+  "https://chainbudget-dranyl-23s-projects.vercel.app",
+  "https://chainbudget.vercel.app",
+  "http://localhost:3000",
+  "http://localhost:8081",
+];
 const io = new Server(server, {
   cors: {
-    origin: "*",
-    methods: ["GET", "POST", "PUT", "DELETE"]
+    origin: (origin, callback) => {
+      // Allow mobile apps and server-to-server (no origin header)
+      if (!origin) return callback(null, true);
+      if (
+        socketAllowedOrigins.includes(origin) ||
+        origin.endsWith('.vercel.app') ||
+        origin.endsWith('.ngrok-free.app') ||
+        process.env.NODE_ENV !== 'production'
+      ) {
+        return callback(null, true);
+      }
+      return callback(new Error("Origin not allowed"));
+    },
+    methods: ["GET", "POST"]
   }
 });
 app.set("io", io);
@@ -143,11 +163,13 @@ app.use(cors({
     ) {
       return callback(null, true);
     }
-    return callback(null, true);
+    console.warn(`[CORS] Blocked request from origin: ${origin}`);
+    return callback(new Error("Origin not allowed by CORS"));
   },
   credentials: true,
 }));
 app.use(express.json({ limit: '1mb' })); // H-8 Fix: Prevent large payload DoS
+app.use(mongoSanitize()); // GAP-18: Strip MongoDB operators ($, .) from req.body/query/params
 app.use(morgan("dev"));
 
 // ── Static file serving for uploaded receipts ─────────────────────────────────

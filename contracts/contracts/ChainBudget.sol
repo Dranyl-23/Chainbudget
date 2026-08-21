@@ -7,8 +7,9 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 
-/// @title ChainBudget (Tokenized Treasury Vault)
-/// @notice Records budget transactions on-chain, holds organization funds, enforces 2-of-N 
+/// @title 
+/// @notice 
+
 contract ChainBudget is Ownable2Step, Pausable, ReentrancyGuard {
 
     struct Transaction {
@@ -116,6 +117,8 @@ contract ChainBudget is Ownable2Step, Pausable, ReentrancyGuard {
         bool isHighValue,
         bool isEscrow
     ) external onlyOwner whenNotPaused returns (uint256 txId) {
+        require(to != address(0), "ChainBudget: zero address recipient");
+        require(amount > 0, "ChainBudget: amount must be > 0");
         txCounter++;
         txId = txCounter;
 
@@ -126,7 +129,7 @@ contract ChainBudget is Ownable2Step, Pausable, ReentrancyGuard {
             to: to,
             isHighValue: isHighValue,
             isEscrow: isEscrow,
-            isApproved: !isHighValue,   // Low-value → auto-approved
+            isApproved: !isHighValue,   
             executed: false,
             exists: true,
             approvalCount: 0,
@@ -226,8 +229,8 @@ contract ChainBudget is Ownable2Step, Pausable, ReentrancyGuard {
         _finalizeEscrowIfApproved(txId);
     }
 
-    /// @notice Releases escrow using a cryptographic signature from the payee (supplier)
-    /// @dev Allows relayer/backend to submit on behalf of payee with cryptographically verifiable consent
+    /// @notice 
+    /// @dev 
     function releaseEscrowWithPayeeSignature(uint256 txId, bytes calldata payeeSig)
         external
         nonReentrant
@@ -255,8 +258,8 @@ contract ChainBudget is Ownable2Step, Pausable, ReentrancyGuard {
         _finalizeEscrowIfApproved(txId);
     }
 
-    /// @notice Records an off-chain confirmation with mandatory evidence URI (e.g. IPFS delivery proof)
-    /// @dev Explicit auditable operational override path
+    /// @notice 
+    /// @dev 
     function recordOffchainPayeeConfirmation(uint256 txId, string calldata evidenceURI)
         external
         nonReentrant

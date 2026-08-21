@@ -1,5 +1,6 @@
 const rateLimit = require("express-rate-limit");
 const crypto = require("crypto");
+const { securityEvent } = require("./securityLogger");
 
 /**
  * ── Rate Limiting Middlewares ──
@@ -181,6 +182,7 @@ function csrfProtection(req, res, next) {
   const token = req.headers["x-csrf-token"] || req.body?.csrfToken;
 
   if (!token) {
+    securityEvent("CSRF_REJECTED", req, { reason: "missing_token" });
     return res.status(403).json({
       error: "CSRF token missing",
       message: "Please include X-CSRF-Token header or csrfToken in request body",
@@ -188,6 +190,7 @@ function csrfProtection(req, res, next) {
   }
 
   if (!validateCSRFToken(token)) {
+    securityEvent("CSRF_REJECTED", req, { reason: "invalid_or_expired" });
     return res.status(403).json({
       error: "Invalid or expired CSRF token",
     });

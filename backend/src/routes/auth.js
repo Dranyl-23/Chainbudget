@@ -116,7 +116,7 @@ router.post("/register", verifyRateLimiter, async (req, res) => {
       return res.status(409).json({ error: "Wallet address or email already registered" });
     }
     console.error("[auth/register]", err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal Server Error" : err.message });
   }
 });
 
@@ -156,7 +156,7 @@ router.get("/nonce/:walletAddress", optionalAuthenticate, nonceRateLimiter, asyn
 
     res.json({ nonce, expiresAt });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal Server Error" : err.message });
   }
 });
 
@@ -248,7 +248,7 @@ router.post("/verify-signature", verifyRateLimiter, async (req, res) => {
     });
   } catch (err) {
     console.error("[auth/verify-signature]", err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal Server Error" : err.message });
   }
 });
 
@@ -297,7 +297,7 @@ router.get("/me", authenticate, async (req, res) => {
     };
     res.json({ user: formatted, ...formatted });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal Server Error" : err.message });
   }
 });
 
@@ -362,11 +362,13 @@ router.get("/keys", authenticate, keyExportRateLimiter, async (req, res) => {
     try {
       await AuditLog.create({
         organization: user.memberships?.[0]?.organization || null,
-        performedBy: user._id,
+        actor: user._id,
+        actorWallet: user.walletAddress,
         action: "RECOVERY_KEYS_EXPORTED",
-        details: `User exported wallet recovery keys for wallet ${user.walletAddress || "unknown"}`,
+        targetType: "User",
+        targetId: user._id,
+        details: { walletAddress: user.walletAddress || "unknown" },
         ipAddress: req.ip || req.connection?.remoteAddress,
-        userAgent: req.headers["user-agent"],
       });
     } catch (auditErr) {
       console.warn("Failed to log key export audit event:", auditErr.message);
@@ -391,7 +393,7 @@ router.post("/confirm-backup", authenticate, async (req, res) => {
     await req.user.updateOne({ hasBackedUpPhrase: true });
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal Server Error" : err.message });
   }
 });
 
@@ -476,7 +478,7 @@ router.post("/link-wallet", authenticate, verifyRateLimiter, async (req, res) =>
       }
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal Server Error" : err.message });
   }
 });
 
@@ -511,7 +513,7 @@ router.post("/mint-sbt", authenticate, async (req, res) => {
       memberships: req.user.memberships
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal Server Error" : err.message });
   }
 });
 

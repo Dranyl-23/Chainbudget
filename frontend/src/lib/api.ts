@@ -33,7 +33,7 @@ api.interceptors.request.use((config) => {
     if (token) config.headers.Authorization = `Bearer ${token}`;
 
     // Attach CSRF token for POST/PUT/DELETE requests
-    if (["post", "put", "delete"].includes(config.method?.toLowerCase() || "")) {
+    if (["post", "put", "patch", "delete"].includes(config.method?.toLowerCase() || "")) {
       if (csrfToken) {
         config.headers["X-CSRF-Token"] = csrfToken;
       }
