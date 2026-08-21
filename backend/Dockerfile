@@ -15,4 +15,7 @@ ENV NODE_ENV=production
 
 EXPOSE 5001
 
+# Run as non-root user for security hardening
+USER node
+
 CMD ["npm", "start"]

@@ -94,6 +94,7 @@ contract ChainBudgetTreasury is Ownable2Step, Pausable, EIP712, ReentrancyGuard 
         bytes[] calldata signatures
     ) external nonReentrant whenNotPaused {
         require(!executedTransactions[txId], "Treasury: Transaction already executed");
+        require(to != address(0), "Treasury: zero address recipient");
         require(signatures.length >= requiredApprovals, "Treasury: Not enough signatures provided");
         require(address(this).balance >= amountWei, "Treasury: Insufficient vault balance");
 

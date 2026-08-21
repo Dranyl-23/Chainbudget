@@ -4,10 +4,14 @@ const proposalSchema = new mongoose.Schema({
   title: {
     type: String,
     required: true,
+    trim: true,
+    maxlength: 500,
   },
   description: {
     type: String,
     required: true,
+    trim: true,
+    maxlength: 5000,
   },
   amount: {
     type: Number,

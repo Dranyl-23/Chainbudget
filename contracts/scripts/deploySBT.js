@@ -9,7 +9,7 @@ async function main() {
   console.log("Account balance:", ethers.formatEther(balance), "MATIC");
 
   const MembershipSBT = await ethers.getContractFactory("MembershipSBT");
-  const sbt = await MembershipSBT.deploy();
+  const sbt = await MembershipSBT.deploy(deployer.address);
   await sbt.waitForDeployment();
   const address = await sbt.getAddress();
 
