@@ -10,15 +10,19 @@ import {
   Modal,
   TextInput,
   ActivityIndicator,
+  BackHandler,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import api from '../lib/api';
 import { useRoute } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
+import { useOrg } from '../context/OrgContext';
+import { useToast } from '../context/ToastContext';
 import { useTheme } from '../context/ThemeContext';
 import { SkeletonTransactionList } from '../components/SkeletonLoader';
 import { triggerSuccessHaptic, triggerErrorHaptic } from '../lib/biometrics';
+import { getCachedMembers, setCachedMembers } from '../lib/cache';
 
 const ROLE_OPTIONS = [
   { level: 1, label: 'Executive Approver', desc: 'Full admin access' },
@@ -30,8 +34,10 @@ const ROLE_OPTIONS = [
 export default function MembersScreen() {
   const route = useRoute<any>();
   const { user } = useAuth();
+  const { activeOrgId } = useOrg();
+  const { showToast } = useToast();
   const { colors, isDark } = useTheme();
-  const { orgId } = route.params || {};
+  const orgId = route.params?.orgId || activeOrgId;
 
   const [members, setMembers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,6 +54,19 @@ export default function MembersScreen() {
 
   const lookupTimer = useRef<any>(null);
 
+  // Android BackHandler for modal
+  useEffect(() => {
+    const onBackPress = () => {
+      if (inviteVisible) {
+        setInviteVisible(false);
+        return true;
+      }
+      return false;
+    };
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => sub.remove();
+  }, [inviteVisible]);
+
   // Get current user's role in this org
   const myMembership = user?.memberships?.find(
     (m: any) => (m.organization?._id || m.organization) === orgId
@@ -56,8 +75,18 @@ export default function MembersScreen() {
   const canManage = myRole <= 1 || (user as any)?.isSuperAdmin;
 
   useEffect(() => {
-    if (orgId) fetchMembers();
-    else setLoading(false);
+    if (orgId) {
+      // Instant cache snapshot
+      getCachedMembers(orgId).then((cached) => {
+        if (cached && cached.length > 0) {
+          setMembers(cached);
+          setLoading(false);
+        }
+      });
+      fetchMembers();
+    } else {
+      setLoading(false);
+    }
   }, [orgId]);
 
   const fetchMembers = async () => {
@@ -65,12 +94,14 @@ export default function MembersScreen() {
       const res = await api.get(`/users/${orgId}/members`);
       const data = Array.isArray(res.data) ? res.data : res.data.members || [];
       setMembers(data);
+      setCachedMembers(orgId, data);
     } catch (err) {
       console.error('Failed to fetch members:', err);
     } finally {
       setLoading(false);
     }
   };
+
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -80,8 +111,7 @@ export default function MembersScreen() {
   const copyAddress = async (addr: string) => {
     if (!addr) return;
     await Clipboard.setStringAsync(addr);
-    await triggerSuccessHaptic();
-    Alert.alert('Copied!', 'Member wallet address copied to clipboard.');
+    showToast('Member wallet address copied', 'info');
   };
 
   const handleIdentifierChange = (val: string) => {
@@ -109,7 +139,7 @@ export default function MembersScreen() {
 
   const handleInvite = async () => {
     if (!identifier.trim()) {
-      Alert.alert('Required', 'Enter an email or wallet address.');
+      showToast('Enter an email or wallet address.', 'warning');
       return;
     }
     setInviting(true);
@@ -119,14 +149,12 @@ export default function MembersScreen() {
         roleLevel: selectedRole,
         roleLabel: roleLabel.trim() || undefined,
       });
-      await triggerSuccessHaptic();
-      Alert.alert('Success', 'Member invited successfully!');
+      showToast('Member invited successfully!', 'success');
       setInviteVisible(false);
       setIdentifier(''); setFoundUser(null); setSelectedRole(3); setRoleLabel('');
       fetchMembers();
     } catch (err: any) {
-      await triggerErrorHaptic();
-      Alert.alert('Error', err.response?.data?.error || 'Failed to invite member.');
+      showToast(err.response?.data?.error || 'Failed to invite member.', 'error');
     } finally {
       setInviting(false);
     }
@@ -138,7 +166,7 @@ export default function MembersScreen() {
     const name = userObj.displayName || userObj.email || 'this member';
 
     if (memberId === (user as any)?._id || memberId === (user as any)?.id) {
-      Alert.alert('Cannot Remove', 'You cannot remove yourself from the organization.');
+      showToast('You cannot remove yourself from the organization.', 'warning');
       return;
     }
 
@@ -149,11 +177,10 @@ export default function MembersScreen() {
         onPress: async () => {
           try {
             await api.delete(`/users/${orgId}/members/${memberId}`);
-            await triggerSuccessHaptic();
+            showToast(`${name} removed from organization`, 'info');
             fetchMembers();
           } catch (err: any) {
-            await triggerErrorHaptic();
-            Alert.alert('Error', err.response?.data?.error || 'Failed to remove member.');
+            showToast(err.response?.data?.error || 'Failed to remove member.', 'error');
           }
         },
       },

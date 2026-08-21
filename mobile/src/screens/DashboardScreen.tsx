@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,7 +6,8 @@ import {
   RefreshControl,
   TouchableOpacity,
   Image,
-  Alert,
+  Animated,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -14,6 +15,8 @@ import * as Clipboard from 'expo-clipboard';
 import { triggerLightHaptic, triggerSuccessHaptic } from '../lib/biometrics';
 import api from '../lib/api';
 import { useAuth } from '../context/AuthContext';
+import { useOrg } from '../context/OrgContext';
+import { useToast } from '../context/ToastContext';
 import { useSocket } from '../context/SocketContext';
 import { useTheme } from '../context/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
@@ -25,17 +28,27 @@ import {
 } from '../components/SkeletonLoader';
 import BudgetChart from '../components/BudgetChart';
 import OrgBottomSheet from '../components/OrgBottomSheet';
+import AnimatedCounter from '../components/AnimatedCounter';
+import ScaleButton from '../components/ScaleButton';
 import { getCachedDashboard, setCachedDashboard } from '../lib/cache';
+import { registerForPushNotifications } from '../lib/notifications';
 
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
   const { user } = useAuth();
+  const { organizations, activeOrgId, setActiveOrgId } = useOrg();
+  const { showToast } = useToast();
   const { on } = useSocket();
   const { colors, isDark } = useTheme();
   const navigation = useNavigation<any>();
 
-  const [organizations, setOrganizations] = useState<any[]>([]);
-  const [activeOrgId, setActiveOrgId] = useState<string | null>(null);
+  // Dynamic layout calculations for responsive grid sizing across devices
+  const numColumns = screenWidth >= 600 ? 4 : 3;
+  const gridGap = 10;
+  const totalPadding = 32; // px-4 (16 left + 16 right)
+  const itemWidth = Math.floor((screenWidth - totalPadding - (numColumns - 1) * gridGap) / numColumns);
+
 
   const [budgets, setBudgets] = useState<any[]>([]);
   const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
@@ -48,21 +61,27 @@ export default function DashboardScreen() {
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
   const [showOrgSheet, setShowOrgSheet] = useState(false);
 
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
   // Load cached snapshot instantly on mount (cold-start optimization)
   useEffect(() => {
     async function loadCache() {
       const cached = await getCachedDashboard();
       if (cached) {
-        if (cached.organizations) setOrganizations(cached.organizations);
-        if (cached.activeOrgId) setActiveOrgId(cached.activeOrgId);
         if (cached.personalBalance) setPersonalBalance(cached.personalBalance);
         if (cached.budgets) setBudgets(cached.budgets);
         if (cached.recentTransactions) setRecentTransactions(cached.recentTransactions);
         setLoadingInitial(false);
+        Animated.timing(fadeAnim, { toValue: 1, duration: 350, useNativeDriver: true }).start();
       }
     }
     loadCache();
-    fetchInitialData();
+    fetchPersonalBalance();
+
+    // Register push token on first dashboard load (after successful login)
+    registerForPushNotifications().catch(() => {
+      // Silently ignore — push is optional, not critical
+    });
   }, []);
 
   // Fetch content whenever activeOrgId changes
@@ -96,25 +115,7 @@ export default function DashboardScreen() {
     };
   }, [activeOrgId, on]);
 
-  const fetchInitialData = async () => {
-    // 1. Immediately seed from user.memberships from session
-    if (user?.memberships && user.memberships.length > 0) {
-      const initialOrgs = user.memberships
-        .filter((m: any) => m.isActive)
-        .map((m: any) => ({
-          _id: m.organization?._id || m.organization,
-          name: m.organization?.name || m.organizationName || 'Organization',
-          subsidyAmount: m.organization?.subsidyAmount || 0,
-          ...m.organization,
-        }));
-      if (initialOrgs.length > 0) {
-        setOrganizations(initialOrgs);
-        if (!activeOrgId) {
-          setActiveOrgId(initialOrgs[0]._id);
-        }
-      }
-    }
-
+  const fetchPersonalBalance = async () => {
     try {
       api
         .get('/users/me/balance')
@@ -124,35 +125,9 @@ export default function DashboardScreen() {
           setCachedDashboard({ personalBalance: bal });
         })
         .catch(() => {});
-
-      const orgRes = await api.get('/organizations');
-      let orgs = orgRes.data || [];
-
-      // If orgs is empty from /organizations, fall back to user.memberships
-      if (orgs.length === 0 && user?.memberships && user.memberships.length > 0) {
-        orgs = user.memberships
-          .filter((m: any) => m.isActive)
-          .map((m: any) => ({
-            _id: m.organization?._id || m.organization,
-            name: m.organization?.name || m.organizationName || 'Organization',
-            subsidyAmount: m.organization?.subsidyAmount || 0,
-            ...m.organization,
-          }));
-      }
-
-      if (orgs.length > 0) {
-        setOrganizations(orgs);
-        let targetOrgId = activeOrgId;
-        if (!targetOrgId || !orgs.some((o: any) => o._id === targetOrgId)) {
-          targetOrgId = orgs[0]._id;
-          setActiveOrgId(targetOrgId);
-        }
-        setCachedDashboard({ organizations: orgs, activeOrgId: targetOrgId || undefined });
-      }
-    } catch (err: any) {
-      console.warn('Failed to fetch initial dashboard data:', err?.message || err);
     } finally {
       setLoadingInitial(false);
+      Animated.timing(fadeAnim, { toValue: 1, duration: 350, useNativeDriver: true }).start();
     }
   };
 
@@ -189,13 +164,14 @@ export default function DashboardScreen() {
       console.warn('Failed to fetch org content:', err?.message || err);
     } finally {
       setLoadingContent(false);
+      Animated.timing(fadeAnim, { toValue: 1, duration: 350, useNativeDriver: true }).start();
     }
   };
 
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
     triggerLightHaptic();
-    fetchInitialData().then(() => {
+    fetchPersonalBalance().then(() => {
       if (activeOrgId) fetchOrgContent(activeOrgId);
       setRefreshing(false);
     });
@@ -205,56 +181,53 @@ export default function DashboardScreen() {
 
   return (
     <View style={{ backgroundColor: colors.background }} className="flex-1">
-      {/* Header & Org Switcher (Fixed at top) */}
-      <View
-        style={{
+      {/* Top App Bar */}
+      <View 
+        style={{ 
           paddingTop: (insets.top || 0) + 16,
           backgroundColor: colors.background,
+          borderBottomColor: colors.borderSubtle,
         }}
-        className="pb-2 px-4 z-10"
+        className="pb-4 px-4 border-b z-10"
       >
-        <View className="flex-row justify-between items-start mb-4">
-          <View>
-            <Text style={{ color: colors.textSecondary }} className="text-sm mb-1">Welcome back,</Text>
-            <Text style={{ color: colors.textPrimary }} className="text-2xl font-bold">{user?.displayName}</Text>
+        <View className="flex-row justify-between items-center mb-3">
+          <View className="flex-row items-center">
+            {user?.avatarUrl ? (
+              <Image source={{ uri: user.avatarUrl }} className="w-10 h-10 rounded-full mr-3 border" style={{ borderColor: colors.primary }} />
+            ) : (
+              <View 
+                style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                className="w-10 h-10 rounded-full border items-center justify-center mr-3 shadow-sm"
+              >
+                <Text style={{ color: colors.primary }} className="font-extrabold text-base">
+                  {user?.displayName?.slice(0, 2).toUpperCase() || 'CB'}
+                </Text>
+              </View>
+            )}
+            <View>
+              <Text style={{ color: colors.textMuted }} className="text-xs font-semibold uppercase tracking-wider">Welcome back,</Text>
+              <Text style={{ color: colors.textPrimary }} className="text-base font-bold">{user?.displayName || 'User'}</Text>
+            </View>
           </View>
-          <View className="flex-row items-center gap-4">
-            <TouchableOpacity
-              className="relative"
-              onPress={() => navigation.navigate('Notifications')}
+
+          <View className="flex-row items-center gap-2">
+            <TouchableOpacity 
+              onPress={() => {
+                triggerLightHaptic();
+                navigation.navigate('Notifications');
+              }}
+              style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+              className="w-10 h-10 rounded-full border items-center justify-center shadow-sm relative"
+              accessible={true}
+              accessibilityRole="button"
+              accessibilityLabel="View notifications"
             >
-              <Ionicons name="notifications-outline" size={24} color={colors.textPrimary} />
+              <Ionicons name="notifications-outline" size={20} color={colors.textPrimary} />
               {unreadNotifCount > 0 && (
                 <View 
-                  style={{ backgroundColor: colors.primary, borderColor: colors.background }}
-                  className="absolute -top-1 -right-1 rounded-full w-4 h-4 items-center justify-center border"
-                >
-                  <Text className="text-[9px] text-white font-bold">{unreadNotifCount}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => navigation.navigate('Profile')}
-              style={{ backgroundColor: colors.primaryMuted, borderColor: colors.primary }}
-              className="w-10 h-10 rounded-full border items-center justify-center overflow-hidden"
-            >
-              {user?.avatarUrl ? (
-                <Image
-                  source={{ uri: user.avatarUrl }}
-                  style={{ width: '100%', height: '100%' }}
-                  resizeMode="cover"
+                  style={{ backgroundColor: colors.error }}
+                  className="w-2.5 h-2.5 rounded-full absolute top-2 right-2 border-2 border-slate-900" 
                 />
-              ) : (
-                <Text style={{ color: colors.primary }} className="font-bold text-sm">
-                  {user?.displayName
-                    ? user.displayName
-                        .split(' ')
-                        .map((n: string) => n[0])
-                        .join('')
-                        .substring(0, 2)
-                        .toUpperCase()
-                    : 'U'}
-                </Text>
               )}
             </TouchableOpacity>
           </View>
@@ -268,6 +241,9 @@ export default function DashboardScreen() {
             }}
             style={{ backgroundColor: colors.cardGlass, borderColor: colors.border }}
             className="flex-row items-center border rounded-full px-3 py-1.5 self-start shadow-sm"
+            accessible={true}
+            accessibilityRole="button"
+            accessibilityLabel={`Switch organization. Current organization: ${activeOrg?.name || 'Select Org'}`}
           >
             <View style={{ backgroundColor: colors.primary }} className="w-2.5 h-2.5 rounded-full mr-2" />
             <Text style={{ color: colors.textPrimary }} className="font-medium mr-2">{activeOrg?.name || 'Select Org'}</Text>
@@ -302,7 +278,7 @@ export default function DashboardScreen() {
             <SkeletonTransactionList count={4} />
           </View>
         ) : activeOrg ? (
-          <>
+          <Animated.View style={{ opacity: fadeAnim }}>
             {/* Balance Card Container */}
             {viewMode === 'treasury' ? (
               <LinearGradient
@@ -348,9 +324,11 @@ export default function DashboardScreen() {
                   {activeOrg.name} Balance (PHP)
                 </Text>
 
-                <Text className="text-[42px] font-extrabold text-white mb-6 relative">
-                  ₱{activeOrg.subsidyAmount?.toLocaleString() || '0'}
-                </Text>
+                <AnimatedCounter
+                  value={Number(activeOrg.subsidyAmount) || 0}
+                  prefix="₱"
+                  className="text-[42px] font-extrabold text-white mb-6 relative"
+                />
 
                 <View className="flex-row items-center bg-black/30 self-start px-3 py-1.5 rounded-full border border-white/20 relative">
                   <Ionicons
@@ -406,9 +384,11 @@ export default function DashboardScreen() {
                   YOUR BALANCE (MATIC)
                 </Text>
 
-                <Text className="text-[42px] font-extrabold text-white leading-none relative">
-                  {personalBalance || '0.0'}
-                </Text>
+                <AnimatedCounter
+                  value={Number(personalBalance) || 0}
+                  prefix=""
+                  className="text-[42px] font-extrabold text-white leading-none relative"
+                />
                 <Text className="text-[32px] font-extrabold text-[#c084fc] mb-4 relative">
                   MATIC
                 </Text>
@@ -439,11 +419,7 @@ export default function DashboardScreen() {
                     onPress={async () => {
                       if (user?.walletAddress) {
                         await Clipboard.setStringAsync(user.walletAddress);
-                        await triggerSuccessHaptic();
-                        Alert.alert(
-                          'Copied!',
-                          'Your wallet address has been copied to clipboard.'
-                        );
+                        showToast('Wallet address copied to clipboard!', 'info');
                       }
                     }}
                   >
@@ -470,54 +446,71 @@ export default function DashboardScreen() {
             )}
 
             {/* Quick Actions Grid */}
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 28, gap: 8 }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: gridGap, marginBottom: 24 }}>
               {[
-                { icon: 'add', label: 'Request', color: colors.primary, route: 'Scanner' },
-                { icon: 'send-outline', label: 'Send', color: colors.accentBlue, route: 'Transfer' },
+                { icon: 'scan-outline', label: 'Scan', color: colors.primary, route: 'Scanner' },
+                { icon: 'send-outline', label: 'Request', color: colors.accentBlue, route: 'Transfer' },
                 { icon: 'qr-code-outline', label: 'Receive', color: colors.accentPurple, route: 'Receive' },
                 { icon: 'people-outline', label: 'Members', color: colors.success, route: 'Members' },
                 { icon: 'time-outline', label: 'History', color: colors.warning, route: 'History' },
-                { icon: 'wallet-outline', label: 'Budget', color: '#10B981', route: 'Budget' },
-                { icon: 'analytics-outline', label: 'Reports', color: '#3B82F6', route: 'Reports' },
+                { icon: 'pie-chart-outline', label: 'Budget', color: '#10B981', route: 'Budget' },
+                { icon: 'bar-chart-outline', label: 'Reports', color: '#3B82F6', route: 'Reports' },
                 { icon: 'shield-checkmark-outline', label: 'Audit', color: '#8B5CF6', route: 'Audit' },
                 { icon: 'business-outline', label: 'Treasury', color: '#F59E0B', route: 'Treasury' },
               ].map((action, idx) => (
-                <TouchableOpacity
+                <ScaleButton
                   key={idx}
+                  containerStyle={{ width: itemWidth, marginBottom: 2 }}
                   style={{
+                    width: '100%',
                     backgroundColor: colors.surface,
                     borderColor: colors.border,
-                    width: '30%',
-                    alignItems: 'center',
-                    borderRadius: 18,
                     borderWidth: 1,
+                    borderRadius: 20,
                     paddingVertical: 14,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 1 },
+                    shadowOpacity: isDark ? 0.2 : 0.05,
+                    shadowRadius: 3,
+                    elevation: 1,
                   }}
-                  activeOpacity={0.7}
                   onPress={() => {
-                    triggerLightHaptic();
                     if (action.route === 'Scanner') {
-                      navigation.navigate('MainTabs', { screen: 'Scanner' });
+                      navigation.navigate('MainTabs', { screen: 'Scanner', params: { orgId: activeOrgId } });
                     } else {
-                      navigation.navigate(action.route, {
-                        orgId: activeOrgId,
-                        initialOrgId: activeOrgId,
-                      });
+                      navigation.navigate(action.route, { orgId: activeOrgId });
                     }
                   }}
+                  accessible={true}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Quick action: ${action.label}`}
                 >
-                  <Ionicons
-                    name={action.icon as any}
-                    size={22}
-                    color={action.color}
-                    style={{ marginBottom: 6 }}
-                  />
-                  <Text style={{ color: colors.textPrimary, fontSize: 10, fontWeight: '600' }} numberOfLines={1}>
+                  <View
+                    style={{
+                      backgroundColor: action.color + '15',
+                      borderColor: action.color + '30',
+                      width: 44,
+                      height: 44,
+                      borderRadius: 14,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginBottom: 8,
+                      borderWidth: 1,
+                    }}
+                  >
+                    <Ionicons name={action.icon as any} size={22} color={action.color} />
+                  </View>
+                  <Text style={{ color: colors.textPrimary, fontSize: 11, fontWeight: '700' }} numberOfLines={1}>
                     {action.label}
                   </Text>
-                </TouchableOpacity>
+                </ScaleButton>
               ))}
             </View>
+
+
+
 
             {/* Visual Budget Utilization Chart */}
             {budgets.length > 0 && <BudgetChart budgets={budgets} currency="₱" />}
@@ -649,8 +642,9 @@ export default function DashboardScreen() {
                 </View>
               )}
             </View>
-          </>
+          </Animated.View>
         ) : (
+
           <View 
             style={{ backgroundColor: colors.surface, borderColor: colors.border }}
             className="p-6 rounded-3xl border items-center justify-center mt-10 shadow-sm"

@@ -16,6 +16,9 @@ import * as Clipboard from 'expo-clipboard';
 import api from '../lib/api';
 import { useRoute } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
+import { useOrg } from '../context/OrgContext';
+import { useToast } from '../context/ToastContext';
+import { useSocket } from '../context/SocketContext';
 import { useTheme } from '../context/ThemeContext';
 import {
   authenticateWithBiometrics,
@@ -24,18 +27,22 @@ import {
   triggerLightHaptic,
 } from '../lib/biometrics';
 import { signEscrowRelease } from '../lib/wallet';
+import { RefreshControl } from 'react-native';
 
 const DEFAULT_CHAIN_ID = 80002; // Polygon Amoy testnet
 
 export default function TransactionDetailScreen() {
   const route = useRoute<any>();
   const { user } = useAuth();
+  const { showToast } = useToast();
+  const { on } = useSocket();
   const { colors, isDark } = useTheme();
   const { txId } = route.params || {};
 
   const [tx, setTx] = useState<any>(null);
   const [approvals, setApprovals] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [releasing, setReleasing] = useState(false);
   const [attachingReceipt, setAttachingReceipt] = useState(false);
 
@@ -45,7 +52,30 @@ export default function TransactionDetailScreen() {
     }
   }, [txId]);
 
-  const fetchDetails = async () => {
+  // Real-time WebSocket updates
+  useEffect(() => {
+    if (!txId) return;
+
+    const unsub = on('transaction_updated', (data: any) => {
+      fetchDetails(false);
+    });
+
+    return () => unsub();
+  }, [txId, on]);
+
+  // Auto-polling for pending/in-progress transactions
+  useEffect(() => {
+    if (!tx || (tx.status !== 'pending_approval' && tx.status !== 'requested')) return;
+
+    const interval = setInterval(() => {
+      fetchDetails(false);
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [tx?.status, txId]);
+
+  const fetchDetails = async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     try {
       const [txRes, approvalsRes] = await Promise.all([
         api.get(`/transactions/${txId}`),
@@ -57,13 +87,19 @@ export default function TransactionDetailScreen() {
       console.error(err);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  };
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    triggerLightHaptic();
+    fetchDetails(false);
   };
 
   const copyToClipboard = async (text: string) => {
     await Clipboard.setStringAsync(text);
-    await triggerSuccessHaptic();
-    Alert.alert('Copied!', 'Address copied to clipboard.');
+    showToast('Copied to clipboard!', 'info');
   };
 
   const openExplorer = (hash: string) => {
@@ -85,7 +121,7 @@ export default function TransactionDetailScreen() {
       if (useCamera) {
         const perm = await ImagePicker.requestCameraPermissionsAsync();
         if (!perm.granted) {
-          Alert.alert('Permission Denied', 'Camera access is required to take photo receipts.');
+          showToast('Camera access is required to take photo receipts.', 'warning');
           return;
         }
         result = await ImagePicker.launchCameraAsync({ allowsEditing: true, quality: 0.7 });
@@ -118,16 +154,15 @@ export default function TransactionDetailScreen() {
         documentHash,
       });
 
-      await triggerSuccessHaptic();
-      Alert.alert('Success', 'Receipt attached and anchored successfully!');
-      fetchDetails();
+      showToast('Receipt attached successfully!', 'success');
+      fetchDetails(false);
     } catch (err: any) {
-      await triggerErrorHaptic();
-      Alert.alert('Attachment Failed', err.response?.data?.error || err.message || 'Failed to attach receipt.');
+      showToast(err.response?.data?.error || err.message || 'Failed to attach receipt.', 'error');
     } finally {
       setAttachingReceipt(false);
     }
   };
+
 
   // Determine user roles in relation to this transaction
   const userWallet = user?.walletAddress?.toLowerCase();
@@ -229,8 +264,20 @@ export default function TransactionDetailScreen() {
   const isEscrowTx = Boolean(tx.isEscrow || tx.escrowStatus);
 
   return (
-    <ScrollView style={{ backgroundColor: colors.background }} className="flex-1">
+    <ScrollView 
+      style={{ backgroundColor: colors.background }} 
+      className="flex-1"
+      refreshControl={
+        <RefreshControl 
+          refreshing={refreshing} 
+          onRefresh={onRefresh} 
+          tintColor={colors.primary} 
+          colors={[colors.primary]} 
+        />
+      }
+    >
       {/* Top Banner */}
+
       <LinearGradient
         colors={
           isExpense 

@@ -71,6 +71,16 @@ const UserSchema = new mongoose.Schema(
     // Whether the user has viewed and acknowledged their recovery phrase.
     // Used to show the backup reminder banner on mobile until confirmed.
     hasBackedUpPhrase: { type: Boolean, default: false },
+    // ── Push Notifications ────────────────────────────────────────────────────
+    // Stores Expo push tokens per device. Each entry represents one physical
+    // device. Tokens are deduplicated on write (POST /api/users/push-token).
+    pushTokens: [
+      {
+        token: { type: String, required: true },
+        platform: { type: String, enum: ['ios', 'android'], required: true },
+        updatedAt: { type: Date, default: Date.now },
+      },
+    ],
   },
   { timestamps: true }
 );

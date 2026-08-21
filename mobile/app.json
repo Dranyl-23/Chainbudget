@@ -1,8 +1,8 @@
 {
   "expo": {
     "name": "ChainBudget",
-    "slug": "chainbudget",
-    "version": "1.0.0",
+    "slug": "lynard",
+    "version": "1.1.2",
     "scheme": "chainbudget",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -14,17 +14,21 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.chainbudget.app"
+      "bundleIdentifier": "com.chainbudget.app",
+      "buildNumber": "4"
     },
     "android": {
       "package": "com.chainbudget.app",
+      "versionCode": 4,
       "adaptiveIcon": {
         "backgroundColor": "#05040F",
         "foregroundImage": "./assets/adaptive-icon.png"
       },
-      "predictiveBackGestureEnabled": false,
       "permissions": [
-        "android.permission.CAMERA"
+        "android.permission.CAMERA",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -37,13 +41,16 @@
         {
           "cameraPermission": "Chainbudget needs access to your camera to scan transaction receipts."
         }
-      ]
+      ],
+      "expo-font",
+      "expo-notifications"
     ],
     "extra": {
       "apiUrl": "https://chainbudget-api.fly.dev/api",
       "eas": {
-        "projectId": "66cf1759-d813-4685-be36-c5ae002b87bc"
+        "projectId": "85dd7732-5fd7-438e-8e34-6d2246d7426a"
       }
-    }
+    },
+    "owner": "askyyys-team"
   }
 }

@@ -2,9 +2,12 @@ const { getDefaultConfig } = require('expo/metro-config');
 
 const config = getDefaultConfig(__dirname);
 
-// Enable Package Exports for ethers v6 and socket.io compatibility
-config.resolver.unstable_enablePackageExports = true;
-config.resolver.unstable_conditionNames = ['browser', 'require', 'react-native', 'default'];
-config.resolver.sourceExts.push('mjs', 'cjs');
+// Support mjs and cjs extensions
+if (!config.resolver.sourceExts.includes('mjs')) {
+  config.resolver.sourceExts.push('mjs');
+}
+if (!config.resolver.sourceExts.includes('cjs')) {
+  config.resolver.sourceExts.push('cjs');
+}
 
 module.exports = config;

@@ -120,7 +120,7 @@ export default function WelcomeLandingScreen() {
           </View>
 
           {/* Footer */}
-          <View className="flex-row items-center justify-center mt-auto pb-4">
+          <View className="flex-row items-center justify-center mt-auto pb-2">
             <Text className="text-white/40 text-[11px] uppercase tracking-wide mr-2">Secured by Polygon</Text>
             <Ionicons name="cube-outline" size={14} color="#9333ea" />
             
@@ -129,8 +129,20 @@ export default function WelcomeLandingScreen() {
             <Ionicons name="sparkles" size={12} color="#60a5fa" style={{ marginRight: 4 }} />
             <Text className="text-white/40 text-[11px] uppercase tracking-wide">AI-Powered Insights</Text>
           </View>
+
+          {/* Legal & Help Quick Links */}
+          <View className="flex-row items-center justify-center gap-4 pb-2">
+            <TouchableOpacity onPress={() => navigation.navigate('HelpFaq')}>
+              <Text className="text-white/50 text-[11px] font-medium">Help & FAQs</Text>
+            </TouchableOpacity>
+            <Text className="text-white/20 text-[11px]">·</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('DataPrivacy')}>
+              <Text className="text-white/50 text-[11px] font-medium">Data Privacy (RA 10173)</Text>
+            </TouchableOpacity>
+          </View>
           
         </LinearGradient>
+
       </ImageBackground>
     </View>
   );

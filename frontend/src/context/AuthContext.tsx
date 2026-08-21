@@ -60,6 +60,9 @@ interface AuthContextType {
   isAsgardeoAuthenticated: boolean;
   linkMetaMask: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  /** Fetches a fresh Asgardeo access token and stores it in localStorage.
+   *  Returns the new token, or null if the session cannot be refreshed. */
+  refreshToken: () => Promise<string | null>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -291,12 +294,35 @@ export function ChainBudgetAuthProvider({ children, asgardeoAuth }: { children: 
     }
   }, []);
 
+  /**
+   * Proactively fetch a fresh Asgardeo access token and write it to localStorage
+   * so subsequent api.ts calls send a valid Bearer token.
+   * Returns the fresh token string, or null when the session cannot be renewed.
+   */
+  const refreshToken = useCallback(async (): Promise<string | null> => {
+    try {
+      if (!getAccessToken) return null;
+      const freshToken = await getAccessToken();
+      if (freshToken) {
+        if (typeof window !== "undefined") {
+          localStorage.setItem("cb_token", freshToken);
+        }
+        return freshToken;
+      }
+      return null;
+    } catch (err: unknown) {
+      console.warn("Failed to refresh Asgardeo token:", err);
+      return null;
+    }
+  }, [getAccessToken]);
+
   return (
     <AuthContext.Provider
       value={{ 
         user, walletAddress, isLoading: isLoading || (asgardeoState?.isLoading ?? true), 
         isConnected, login, register, logout, error, activeOrgId, setActiveOrgId,
-        isAsgardeoAuthenticated: asgardeoState?.isAuthenticated || false, linkMetaMask, refreshUser
+        isAsgardeoAuthenticated: asgardeoState?.isAuthenticated || false, linkMetaMask, refreshUser,
+        refreshToken
       }}
     >
       {children}

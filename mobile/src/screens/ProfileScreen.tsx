@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, Alert, Modal, ScrollView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, ActivityIndicator, Alert, Modal, ScrollView, BackHandler } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
+import * as ScreenCapture from 'expo-screen-capture';
 import { Image } from 'react-native';
 import { getPrivateKey, getMnemonic } from '../lib/secureStorage';
 import { useNavigation } from '@react-navigation/native';
@@ -19,7 +20,8 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { user, logout, refreshUser } = useAuth();
   const { colors, isDark, themeMode } = useTheme();
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
+
 
   const [showSecurityModal, setShowSecurityModal] = useState(false);
   const [showNetworkModal, setShowNetworkModal] = useState(false);
@@ -32,6 +34,16 @@ export default function ProfileScreen() {
   const [activeTab, setActiveTab] = useState<'menu' | 'phrase' | 'privateKey'>('menu');
   const [keys, setKeys] = useState<{privateKey: string, mnemonic: string} | null>(null);
   const [isLoadingKeys, setIsLoadingKeys] = useState(false);
+
+  // Prevent screenshots when viewing private keys/phrase
+  useEffect(() => {
+    if (showSecurityModal && (activeTab === 'phrase' || activeTab === 'privateKey')) {
+      ScreenCapture.preventScreenCaptureAsync();
+    } else {
+      ScreenCapture.allowScreenCaptureAsync();
+    }
+  }, [showSecurityModal, activeTab]);
+
 
   const fetchKeys = async (target: 'phrase' | 'privateKey') => {
     setIsLoadingKeys(true);
@@ -57,8 +69,22 @@ export default function ProfileScreen() {
 
   const copyToClipboard = async (text: string, label: string) => {
     await Clipboard.setStringAsync(text);
-    Alert.alert('Copied!', `${label} copied to clipboard.`);
+    const isSensitive = label.toLowerCase().includes('private') || label.toLowerCase().includes('phrase');
+
+    if (isSensitive) {
+      // Auto-clear clipboard in 60 seconds
+      setTimeout(async () => {
+        try {
+          await Clipboard.setStringAsync('');
+        } catch {}
+      }, 60000);
+
+      Alert.alert('🔒 Copied to Clipboard', `${label} copied. For your security, the clipboard will automatically be wiped in 60 seconds.`);
+    } else {
+      Alert.alert('Copied!', `${label} copied to clipboard.`);
+    }
   };
+
 
   const [isUploading, setIsUploading] = useState(false);
 
@@ -437,6 +463,53 @@ export default function ProfileScreen() {
           <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
         </TouchableOpacity>
 
+        {/* Help & FAQs */}
+        <TouchableOpacity 
+          onPress={() => {
+            triggerLightHaptic();
+            navigation.navigate('HelpFaq');
+          }}
+          activeOpacity={0.7}
+          style={{ borderBottomColor: colors.borderSubtle }}
+          className="flex-row items-center justify-between p-4 border-b"
+        >
+          <View className="flex-row items-center gap-3">
+            <View 
+              style={{ backgroundColor: colors.primaryMuted, borderColor: colors.primary + '40' }}
+              className="w-9 h-9 rounded-xl items-center justify-center border"
+            >
+              <Ionicons name="help-buoy-outline" size={20} color={colors.primary} />
+            </View>
+            <View>
+              <Text style={{ color: colors.textPrimary }} className="font-bold text-sm">Help & Knowledge Base</Text>
+              <Text style={{ color: colors.textSecondary }} className="text-xs">FAQs, guides, and support channels</Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+        </TouchableOpacity>
+
+        {/* Data Privacy Notice (RA 10173) */}
+        <TouchableOpacity 
+          onPress={() => {
+            triggerLightHaptic();
+            navigation.navigate('DataPrivacy');
+          }}
+          activeOpacity={0.7}
+          style={{ borderBottomColor: colors.borderSubtle }}
+          className="flex-row items-center justify-between p-4 border-b"
+        >
+          <View className="flex-row items-center gap-3">
+            <View className="w-9 h-9 rounded-xl bg-emerald-500/20 items-center justify-center border border-emerald-500/30">
+              <Ionicons name="shield-checkmark-outline" size={20} color="#10b981" />
+            </View>
+            <View>
+              <Text style={{ color: colors.textPrimary }} className="font-bold text-sm">Data Privacy & Security</Text>
+              <Text style={{ color: colors.textSecondary }} className="text-xs">RA 10173 compliance & DPO contact</Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+        </TouchableOpacity>
+
         {/* About Item */}
         <TouchableOpacity 
           onPress={() => setShowAboutModal(true)}
@@ -452,12 +525,15 @@ export default function ProfileScreen() {
             </View>
             <View>
               <Text style={{ color: colors.textPrimary }} className="font-bold text-sm">About ChainBudget</Text>
-              <Text style={{ color: colors.textSecondary }} className="text-xs">v1.0.0 Capstone Edition</Text>
+              <Text style={{ color: colors.textSecondary }} className="text-xs">v1.1.2 Capstone Edition</Text>
             </View>
+
+
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
         </TouchableOpacity>
       </View>
+
 
       {/* Logout Button */}
       <TouchableOpacity

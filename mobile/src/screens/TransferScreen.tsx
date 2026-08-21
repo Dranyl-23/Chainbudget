@@ -1,34 +1,71 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TextInput, TouchableOpacity, Alert, ActivityIndicator, ScrollView } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import api from '../lib/api';
+import { useOrg } from '../context/OrgContext';
+import { useToast } from '../context/ToastContext';
 import { useTheme } from '../context/ThemeContext';
-import { authenticateWithBiometrics, triggerSuccessHaptic, triggerErrorHaptic } from '../lib/biometrics';
+import { authenticateWithBiometrics, triggerSuccessHaptic, triggerErrorHaptic, triggerLightHaptic } from '../lib/biometrics';
+import ScaleButton from '../components/ScaleButton';
+import SuccessCelebrationModal from '../components/SuccessCelebrationModal';
 
 export default function TransferScreen() {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
   const { colors, isDark } = useTheme();
-  const { orgId } = route.params || {};
+  const { activeOrgId } = useOrg();
+  const { showToast } = useToast();
+  const orgId = route.params?.orgId || activeOrgId;
 
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('');
+  const [categories, setCategories] = useState<any[]>([]);
   const [destination, setDestination] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleTransfer = async () => {
+  // Celebration state
+  const [celebration, setCelebration] = useState<{ visible: boolean; title: string; subtitle?: string }>({
+    visible: false,
+    title: '',
+  });
+
+  useEffect(() => {
+    if (orgId) {
+      fetchCategories(orgId);
+    }
+  }, [orgId]);
+
+  const fetchCategories = async (targetOrgId: string) => {
+    try {
+      const res = await api.get(`/budget?orgId=${targetOrgId}`);
+      const cats = res.data || [];
+      setCategories(cats);
+      if (cats.length > 0 && !category) {
+        setCategory(cats[0].name);
+      }
+    } catch {
+      // Fallback
+    }
+  };
+
+  const handleRequest = async () => {
     if (!amount || !description || !orgId) {
-      await triggerErrorHaptic();
-      Alert.alert("Error", "Please fill in amount, description, and ensure an organization is selected.");
+      showToast("Please fill in amount and description.", 'warning');
       return;
     }
 
-    // Require biometric confirmation before executing the transfer
+    const numAmount = Number(amount);
+    if (isNaN(numAmount) || numAmount <= 0) {
+      showToast("Please enter a valid positive amount.", 'warning');
+      return;
+    }
+
+    // Require biometric confirmation before submitting the fund request
     const authResult = await authenticateWithBiometrics(
-      `Confirm transfer of ₱${amount} to ${destination ? destination.slice(0, 8) + '...' : 'destination'}`
+      `Confirm fund request for ₱${numAmount.toLocaleString()}`
     );
 
     if (!authResult.success) {
@@ -40,25 +77,28 @@ export default function TransferScreen() {
       await api.post('/transactions', {
         organizationId: orgId,
         type: 'expense',
-        amount: Number(amount),
-        description: description,
+        amount: numAmount,
+        description: description.trim(),
         category: category || 'General',
-        notes: destination ? `Destination: ${destination}` : undefined,
+        notes: destination ? `Destination Address: ${destination}` : undefined,
       });
 
-      await triggerSuccessHaptic();
-      Alert.alert("Success", "Transfer requested successfully!");
-      navigation.goBack();
+      setCelebration({
+        visible: true,
+        title: 'Request Submitted!',
+        subtitle: `Expense request for ₱${numAmount.toLocaleString()} sent for executive approval`,
+      });
     } catch (err: any) {
-      await triggerErrorHaptic();
       console.error(err);
-      Alert.alert("Error", err.response?.data?.error || err.message);
+      showToast(err.response?.data?.error || err.message || "Failed to submit request.", 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  const isFormValid = Boolean(amount && description);
+
+
+  const isFormValid = Boolean(amount && description && orgId);
 
   return (
     <KeyboardAwareScrollView 
@@ -70,20 +110,22 @@ export default function TransferScreen() {
     >
       <View className="items-center mb-8">
         <View 
-          style={{ backgroundColor: colors.infoBg, borderColor: colors.accentBlue }}
+          style={{ backgroundColor: colors.primaryMuted, borderColor: colors.primary + '40' }}
           className="w-16 h-16 rounded-full items-center justify-center border mb-4 shadow-sm"
         >
-          <Ionicons name="send" size={28} color={colors.accentBlue} />
+          <Ionicons name="document-text" size={28} color={colors.primary} />
         </View>
-        <Text style={{ color: colors.textPrimary }} className="text-xl font-bold">Send / Transfer Funds</Text>
-        <Text style={{ color: colors.textSecondary }} className="text-center mt-2 text-sm">Request a transfer from the DAO treasury.</Text>
+        <Text style={{ color: colors.textPrimary }} className="text-2xl font-extrabold">Request Funds</Text>
+        <Text style={{ color: colors.textSecondary }} className="text-center mt-1 text-sm">
+          Submit an expense request to the DAO for executive review & approval.
+        </Text>
       </View>
 
       <View 
         style={{ backgroundColor: colors.surface, borderColor: colors.border }}
         className="p-5 rounded-3xl border mb-6 shadow-sm"
       >
-        <Text style={{ color: colors.textSecondary }} className="text-xs font-bold uppercase mb-2">Amount (PHP)</Text>
+        <Text style={{ color: colors.textSecondary }} className="text-xs font-bold uppercase mb-2">Requested Amount (PHP)</Text>
         <TextInput
           style={{ 
             color: colors.textPrimary, 
@@ -97,26 +139,6 @@ export default function TransferScreen() {
           onChangeText={setAmount}
         />
 
-        <Text style={{ color: colors.textSecondary }} className="text-xs font-bold uppercase mb-2">Destination Address (Optional)</Text>
-        <View 
-          style={{ 
-            backgroundColor: isDark ? 'rgba(0,0,0,0.45)' : colors.backgroundSecondary,
-            borderColor: colors.border,
-          }}
-          className="flex-row items-center rounded-xl px-4 py-3 mb-4 border"
-        >
-          <Ionicons name="wallet-outline" size={20} color={colors.textMuted} style={{ marginRight: 10 }} />
-          <TextInput
-            style={{ color: colors.textPrimary }}
-            className="flex-1 text-sm font-mono"
-            placeholder="0x..."
-            placeholderTextColor={colors.inputPlaceholder}
-            value={destination}
-            onChangeText={setDestination}
-            autoCapitalize="none"
-          />
-        </View>
-
         <Text style={{ color: colors.textSecondary }} className="text-xs font-bold uppercase mb-2">Description</Text>
         <View 
           style={{ 
@@ -128,7 +150,7 @@ export default function TransferScreen() {
           <TextInput
             style={{ color: colors.textPrimary }}
             className="flex-1 text-sm"
-            placeholder="What is this for?"
+            placeholder="e.g. Project Supplies, Catering, Travel"
             placeholderTextColor={colors.inputPlaceholder}
             value={description}
             onChangeText={setDescription}
@@ -136,6 +158,71 @@ export default function TransferScreen() {
         </View>
 
         <Text style={{ color: colors.textSecondary }} className="text-xs font-bold uppercase mb-2">Budget Category</Text>
+        {categories.length > 0 ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row py-1 mb-4">
+            {categories.map((cat) => {
+              const isSelected = category === cat.name;
+              return (
+                <TouchableOpacity
+                  key={cat._id}
+                  onPress={() => {
+                    triggerLightHaptic();
+                    setCategory(cat.name);
+                  }}
+                  style={{
+                    backgroundColor: isSelected ? colors.primaryMuted : colors.cardGlass,
+                    borderColor: isSelected ? colors.primary : colors.border,
+                    borderWidth: 1.5,
+                    borderRadius: 14,
+                    paddingHorizontal: 14,
+                    paddingVertical: 8,
+                    marginRight: 8,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: 4,
+                      backgroundColor: cat.color || colors.primary,
+                      marginRight: 6,
+                    }}
+                  />
+                  <Text
+                    style={{
+                      color: isSelected ? colors.primary : colors.textSecondary,
+                      fontWeight: isSelected ? '700' : '500',
+                      fontSize: 13,
+                    }}
+                  >
+                    {cat.name}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        ) : (
+          <View 
+            style={{ 
+              backgroundColor: isDark ? 'rgba(0,0,0,0.45)' : colors.backgroundSecondary,
+              borderColor: colors.border,
+            }}
+            className="flex-row items-center rounded-xl px-4 py-3 mb-4 border"
+          >
+            <TextInput
+              style={{ color: colors.textPrimary }}
+              className="flex-1 text-sm"
+              placeholder="e.g. Marketing, Operations"
+              placeholderTextColor={colors.inputPlaceholder}
+              value={category}
+              onChangeText={setCategory}
+            />
+          </View>
+        )}
+
+        <Text style={{ color: colors.textSecondary }} className="text-xs font-bold uppercase mb-2">Destination Address (Optional)</Text>
         <View 
           style={{ 
             backgroundColor: isDark ? 'rgba(0,0,0,0.45)' : colors.backgroundSecondary,
@@ -143,32 +230,50 @@ export default function TransferScreen() {
           }}
           className="flex-row items-center rounded-xl px-4 py-3 border"
         >
+          <Ionicons name="wallet-outline" size={20} color={colors.textMuted} style={{ marginRight: 10 }} />
           <TextInput
             style={{ color: colors.textPrimary }}
-            className="flex-1 text-sm"
-            placeholder="e.g. Marketing, Operations"
+            className="flex-1 text-sm font-mono"
+            placeholder="0x... (leave empty for personal wallet)"
             placeholderTextColor={colors.inputPlaceholder}
-            value={category}
-            onChangeText={setCategory}
+            value={destination}
+            onChangeText={setDestination}
+            autoCapitalize="none"
           />
         </View>
       </View>
 
-      <TouchableOpacity 
+      <ScaleButton 
         style={{
-          backgroundColor: isFormValid ? colors.accentBlue : colors.borderStrong,
+          backgroundColor: isFormValid ? colors.primary : colors.borderStrong,
           opacity: loading ? 0.7 : 1,
         }}
         className="py-4 rounded-2xl items-center mb-10 shadow-lg"
-        onPress={handleTransfer}
+        onPress={handleRequest}
         disabled={loading || !isFormValid}
+        accessible={true}
+        accessibilityRole="button"
+        accessibilityLabel="Submit fund request for review"
       >
         {loading ? (
           <ActivityIndicator color="#fff" />
         ) : (
-          <Text className="text-white font-extrabold text-base">Confirm Transfer Request</Text>
+          <Text className="text-white font-extrabold text-base">Submit Fund Request</Text>
         )}
-      </TouchableOpacity>
+      </ScaleButton>
+
+      {/* Celebration Modal */}
+      <SuccessCelebrationModal
+        visible={celebration.visible}
+        title={celebration.title}
+        subtitle={celebration.subtitle}
+        onDismiss={() => {
+          setCelebration({ visible: false, title: '' });
+          navigation.goBack();
+        }}
+      />
     </KeyboardAwareScrollView>
   );
 }
+
+

@@ -11,6 +11,7 @@ const { recordTransactionOnChain } = require("../services/blockchain");
 const { authenticate, requireRole } = require("../middleware/auth");
 const { sendEmail } = require("../services/email");
 const { ethers } = require("ethers");
+const { sendPushNotifications } = require("./users");
 
 /// POST /api/transactions — Create a new transaction (Level 2+) or Request (Level 3)
 router.post("/", authenticate, requireRole(3), async (req, res) => {
@@ -231,6 +232,31 @@ router.post("/", authenticate, requireRole(3), async (req, res) => {
         type: notifType,
         timestamp: newNotif.createdAt
       });
+    }
+
+    // ── Push Notification to Approvers ────────────────────────────────────────
+    // Find all active Level 1 & 2 members in this org who can approve, then
+    // push a notification so they act immediately without opening the app.
+    // Fire-and-forget — never delays the HTTP response.
+    if (txn.status === "pending_approval") {
+      try {
+        const org = await Organization.findById(organizationId).select("members").lean();
+        const approverIds = (org?.members || [])
+          .filter((m) => m.isActive && m.roleLevel <= 2)
+          .map((m) => m.user?.toString() || m.user)
+          .filter(Boolean);
+
+        if (approverIds.length > 0) {
+          sendPushNotifications(
+            approverIds,
+            "🔔 New Approval Request",
+            `${req.user.displayName || "A member"} submitted a ₱${txn.amount} request: "${txn.description.slice(0, 40)}"`,
+            { txId: txn._id.toString(), screen: "Approvals", channelId: "chainbudget-approvals" }
+          );
+        }
+      } catch (pushErr) {
+        console.warn("[Push] Could not notify approvers:", pushErr.message);
+      }
     }
 
     res.status(201).json({ transaction: txn, blockchain: blockchainResult });

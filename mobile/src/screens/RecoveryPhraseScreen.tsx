@@ -4,24 +4,25 @@
  * Displays the 12-word BIP-39 recovery phrase after account creation.
  * Reads the mnemonic from SecureStore (biometric-gated).
  *
- * The user can choose to back up now or skip (phrase can be viewed later
- * from Profile → Web3 Security & Keys).
- *
- * If autoLogin=true (passed from RegisterScreen), triggers a wallet login
- * after the user dismisses this screen.
+ * Security Features:
+ * - Hardware screenshot prevention (ScreenCapture.preventScreenCaptureAsync)
+ * - 60-second automated clipboard memory wipe
+ * - AppState background veil / privacy blur preventing OS switcher leaks
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, Alert, ScrollView,
-  ActivityIndicator, StyleSheet,
+  ActivityIndicator, StyleSheet, AppState, AppStateStatus,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
+import * as ScreenCapture from 'expo-screen-capture';
 import { getMnemonic } from '../lib/secureStorage';
 import { useAuth } from '../context/AuthContext';
 import api from '../lib/api';
+import ScaleButton from '../components/ScaleButton';
 
 type Props = {
   route?: { params?: { walletAddress?: string; autoLogin?: boolean } };
@@ -37,15 +38,41 @@ export default function RecoveryPhraseScreen({ route, navigation }: Props) {
   const [isLoading, setIsLoading] = useState(true);
   const [isCopied, setIsCopied] = useState(false);
   const [isConfirmed, setIsConfirmed] = useState(false);
+  const [clearTimerSeconds, setClearTimerSeconds] = useState<number | null>(null);
+  const [isBackgroundShieldActive, setIsBackgroundShieldActive] = useState(false);
+
+  const clipboardTimeoutRef = useRef<any>(null);
+  const countdownIntervalRef = useRef<any>(null);
 
   useEffect(() => {
+    // 1. Prevent hardware screenshots
+    ScreenCapture.preventScreenCaptureAsync();
     loadPhrase();
+
+    // 2. Listen to AppState to shield sensitive view during OS multitasking / background
+    const appStateSub = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'inactive' || nextAppState === 'background') {
+        setIsBackgroundShieldActive(true);
+      } else if (nextAppState === 'active') {
+        setIsBackgroundShieldActive(false);
+      }
+    });
+
+    return () => {
+      ScreenCapture.allowScreenCaptureAsync();
+      appStateSub.remove();
+      // Wipe clipboard if copied on screen exit for security
+      if (clipboardTimeoutRef.current) {
+        clearTimeout(clipboardTimeoutRef.current);
+        clearInterval(countdownIntervalRef.current);
+        Clipboard.setStringAsync('');
+      }
+    };
   }, []);
 
   const loadPhrase = async () => {
     setIsLoading(true);
     try {
-      // getMnemonic() triggers biometric authentication via SecureStore
       const mnemonic = await getMnemonic();
       if (!mnemonic) {
         Alert.alert('Error', 'Could not load recovery phrase. Please try again.');
@@ -53,7 +80,7 @@ export default function RecoveryPhraseScreen({ route, navigation }: Props) {
         return;
       }
       setWords(mnemonic.split(' '));
-    } catch (err: any) {
+    } catch {
       Alert.alert('Authentication Required', 'Please authenticate to view your recovery phrase.');
       navigation.goBack();
     } finally {
@@ -65,20 +92,47 @@ export default function RecoveryPhraseScreen({ route, navigation }: Props) {
     if (words.length === 0) return;
     await Clipboard.setStringAsync(words.join(' '));
     setIsCopied(true);
-    setTimeout(() => setIsCopied(false), 3000);
+
+    // Clear existing timer if any
+    if (clipboardTimeoutRef.current) clearTimeout(clipboardTimeoutRef.current);
+    if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+
+    // Start 60-second automated clipboard wipe
+    setClearTimerSeconds(60);
+    countdownIntervalRef.current = setInterval(() => {
+      setClearTimerSeconds((prev) => {
+        if (prev !== null && prev <= 1) {
+          clearInterval(countdownIntervalRef.current);
+          return null;
+        }
+        return prev !== null ? prev - 1 : null;
+      });
+    }, 1000);
+
+    clipboardTimeoutRef.current = setTimeout(async () => {
+      await Clipboard.setStringAsync('');
+      setIsCopied(false);
+      setClearTimerSeconds(null);
+    }, 60000);
+
     Alert.alert(
-      '⚠️ Copied to Clipboard',
-      'Make sure to paste this somewhere safe and then clear your clipboard. Never share this phrase.',
+      '🔒 Copied (Auto-Clears in 60s)',
+      'Your recovery phrase was copied. For your security, the clipboard will automatically be wiped in 60 seconds.',
       [{ text: 'Understood' }]
     );
   };
 
   const handleDone = useCallback(async () => {
-    // Mark phrase as backed up in the backend (dismisses reminder banner)
+    if (clipboardTimeoutRef.current) {
+      clearTimeout(clipboardTimeoutRef.current);
+      clearInterval(countdownIntervalRef.current);
+      await Clipboard.setStringAsync('');
+    }
+
     try {
       await api.post('/auth/confirm-backup');
     } catch {
-      // Non-fatal — banner will show again next session if this fails
+      // Non-fatal
     }
 
     if (autoLogin && walletAddress) {
@@ -96,15 +150,23 @@ export default function RecoveryPhraseScreen({ route, navigation }: Props) {
     return (
       <LinearGradient colors={['#09090b', '#0d0d12']} style={styles.center}>
         <ActivityIndicator size="large" color="#e879f9" />
-        <Text style={styles.loadingText}>Authenticating…</Text>
+        <Text style={styles.loadingText}>Authenticating with secure enclave…</Text>
       </LinearGradient>
     );
   }
 
   return (
     <LinearGradient colors={['#09090b', '#0d0d12']} style={{ flex: 1 }}>
-      <ScrollView contentContainerStyle={styles.scroll}>
+      {/* Background Multitasking Privacy Shield */}
+      {isBackgroundShieldActive && (
+        <View style={styles.privacyShield}>
+          <Ionicons name="shield-checkmark" size={64} color="#e879f9" />
+          <Text style={styles.privacyShieldTitle}>ChainBudget Security Shield</Text>
+          <Text style={styles.privacyShieldText}>Sensitive key material protected</Text>
+        </View>
+      )}
 
+      <ScrollView contentContainerStyle={styles.scroll}>
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.iconWrap}>
@@ -136,10 +198,26 @@ export default function RecoveryPhraseScreen({ route, navigation }: Props) {
         </View>
 
         {/* Copy button */}
-        <TouchableOpacity onPress={copyPhrase} style={styles.copyBtn} activeOpacity={0.7}>
+        <ScaleButton onPress={copyPhrase} style={styles.copyBtn}>
           <Ionicons name={isCopied ? 'checkmark' : 'copy-outline'} size={18} color="#f97316" />
-          <Text style={styles.copyBtnText}>{isCopied ? 'Copied!' : 'Copy Phrase'}</Text>
-        </TouchableOpacity>
+          <Text style={styles.copyBtnText}>
+            {isCopied
+              ? clearTimerSeconds !== null
+                ? `Copied (Wipes in ${clearTimerSeconds}s)`
+                : 'Copied!'
+              : 'Copy Phrase'}
+          </Text>
+        </ScaleButton>
+
+        {/* 60s Clipboard Notification */}
+        {clearTimerSeconds !== null && (
+          <View style={styles.timerBadge}>
+            <Ionicons name="timer-outline" size={14} color="#38bdf8" />
+            <Text style={styles.timerBadgeText}>
+              Clipboard auto-clear active: {clearTimerSeconds} seconds remaining
+            </Text>
+          </View>
+        )}
 
         {/* Confirmation checkbox */}
         <TouchableOpacity
@@ -156,23 +234,21 @@ export default function RecoveryPhraseScreen({ route, navigation }: Props) {
         </TouchableOpacity>
 
         {/* Done / Skip */}
-        <TouchableOpacity
+        <ScaleButton
           style={[styles.doneBtn, !isConfirmed && styles.doneBtnDisabled]}
           onPress={handleDone}
           disabled={!isConfirmed}
-          activeOpacity={0.85}
         >
           <Text style={styles.doneBtnText}>
             {autoLogin ? 'Done — Enter App' : 'Done'}
           </Text>
-        </TouchableOpacity>
+        </ScaleButton>
 
         {!autoLogin && (
           <TouchableOpacity onPress={handleDone} style={styles.skipBtn}>
             <Text style={styles.skipBtnText}>Remind me later</Text>
           </TouchableOpacity>
         )}
-
       </ScrollView>
     </LinearGradient>
   );
@@ -214,9 +290,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     backgroundColor: 'rgba(249,115,22,0.1)',
     borderWidth: 1.5, borderColor: 'rgba(249,115,22,0.4)',
-    borderRadius: 14, paddingVertical: 14, marginBottom: 24,
+    borderRadius: 14, paddingVertical: 14, marginBottom: 12,
   },
   copyBtnText: { color: '#f97316', fontWeight: '700', fontSize: 14 },
+  timerBadge: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    backgroundColor: 'rgba(56,189,248,0.1)',
+    borderWidth: 1, borderColor: 'rgba(56,189,248,0.3)',
+    borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12, marginBottom: 20,
+  },
+  timerBadgeText: { color: '#38bdf8', fontSize: 12, fontWeight: '600' },
   confirmRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 24 },
   checkbox: {
     width: 22, height: 22, borderRadius: 6,
@@ -233,4 +316,24 @@ const styles = StyleSheet.create({
   doneBtnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
   skipBtn: { alignItems: 'center', paddingVertical: 8 },
   skipBtnText: { color: 'rgba(255,255,255,0.35)', fontSize: 14 },
+  privacyShield: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#09090b',
+    zIndex: 9999,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  privacyShieldTitle: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: '800',
+    marginTop: 20,
+    marginBottom: 8,
+  },
+  privacyShieldText: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 14,
+    textAlign: 'center',
+  },
 });

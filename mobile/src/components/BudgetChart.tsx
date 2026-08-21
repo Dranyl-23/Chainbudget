@@ -29,7 +29,7 @@ type BudgetChartProps = {
   currency?: string;
 };
 
-export default function BudgetChart({ budgets, currency = '₱' }: BudgetChartProps) {
+function BudgetChart({ budgets, currency = '₱' }: BudgetChartProps) {
   const { colors } = useTheme();
 
   if (!budgets || budgets.length === 0) {
@@ -134,3 +134,6 @@ export default function BudgetChart({ budgets, currency = '₱' }: BudgetChartPr
     </View>
   );
 }
+
+export default React.memo(BudgetChart);
+
