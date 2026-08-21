@@ -7,7 +7,9 @@ import {
   TouchableOpacity,
   Linking,
   Alert,
+  Image,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Clipboard from 'expo-clipboard';
@@ -35,6 +37,7 @@ export default function TransactionDetailScreen() {
   const [approvals, setApprovals] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [releasing, setReleasing] = useState(false);
+  const [attachingReceipt, setAttachingReceipt] = useState(false);
 
   useEffect(() => {
     if (txId) {
@@ -65,6 +68,65 @@ export default function TransactionDetailScreen() {
 
   const openExplorer = (hash: string) => {
     Linking.openURL(`https://amoy.polygonscan.com/tx/${hash}`);
+  };
+
+  const promptReceiptPicker = () => {
+    Alert.alert('Attach Receipt', 'Choose a source for your invoice/receipt', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Camera', onPress: () => handlePickAndUploadReceipt(true) },
+      { text: 'Photo Gallery', onPress: () => handlePickAndUploadReceipt(false) },
+    ]);
+  };
+
+  const handlePickAndUploadReceipt = async (useCamera: boolean) => {
+    await triggerLightHaptic();
+    try {
+      let result;
+      if (useCamera) {
+        const perm = await ImagePicker.requestCameraPermissionsAsync();
+        if (!perm.granted) {
+          Alert.alert('Permission Denied', 'Camera access is required to take photo receipts.');
+          return;
+        }
+        result = await ImagePicker.launchCameraAsync({ allowsEditing: true, quality: 0.7 });
+      } else {
+        result = await ImagePicker.launchImageLibraryAsync({ allowsEditing: true, quality: 0.7 });
+      }
+
+      if (result.canceled || !result.assets?.[0]?.uri) return;
+
+      const uri = result.assets[0].uri;
+      const filename = uri.split('/').pop() || 'receipt.jpg';
+      const match = /\.(\w+)$/.exec(filename);
+      const type = match ? `image/${match[1]}` : `image/jpeg`;
+
+      setAttachingReceipt(true);
+      const formData = new FormData();
+      formData.append('file', { uri, name: filename, type } as any);
+
+      // Upload to IPFS/server
+      const uploadRes = await api.post('/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      const { documentUrl, documentHash } = uploadRes.data;
+      if (!documentUrl) throw new Error('Upload succeeded but no documentUrl returned.');
+
+      // Patch transaction with receipt
+      await api.patch(`/transactions/${txId}/receipt`, {
+        documentUrl,
+        documentHash,
+      });
+
+      await triggerSuccessHaptic();
+      Alert.alert('Success', 'Receipt attached and anchored successfully!');
+      fetchDetails();
+    } catch (err: any) {
+      await triggerErrorHaptic();
+      Alert.alert('Attachment Failed', err.response?.data?.error || err.message || 'Failed to attach receipt.');
+    } finally {
+      setAttachingReceipt(false);
+    }
   };
 
   // Determine user roles in relation to this transaction
@@ -257,7 +319,7 @@ export default function TransactionDetailScreen() {
           </View>
 
           {tx.blockchainTxHash && (
-            <View className="py-3">
+            <View className="py-3 border-b" style={{ borderBottomColor: colors.borderSubtle }}>
               <Text style={{ color: colors.textSecondary }} className="mb-1">Blockchain Receipt (Tx Hash)</Text>
               <TouchableOpacity
                 onPress={() => openExplorer(tx.blockchainTxHash)}
@@ -271,6 +333,63 @@ export default function TransactionDetailScreen() {
               </TouchableOpacity>
             </View>
           )}
+
+          {/* Attached Receipt / Invoice (FP-12) */}
+          <View className="pt-3">
+            <Text style={{ color: colors.textSecondary }} className="mb-2">Invoice / Receipt Document</Text>
+            {tx.documentUrl ? (
+              <TouchableOpacity
+                onPress={() => {
+                  const url = tx.documentUrl.startsWith('http')
+                    ? tx.documentUrl
+                    : `https://gateway.pinata.cloud/ipfs/${tx.documentUrl}`;
+                  Linking.openURL(url);
+                }}
+                style={{ backgroundColor: colors.cardGlass, borderColor: colors.borderSubtle }}
+                className="rounded-2xl p-3 border flex-row items-center justify-between"
+              >
+                <View className="flex-row items-center flex-1 mr-2">
+                  <Ionicons name="document-text" size={20} color={colors.primary} style={{ marginRight: 8 }} />
+                  <View className="flex-1">
+                    <Text style={{ color: colors.textPrimary }} className="font-semibold text-xs" numberOfLines={1}>
+                      View Document / Receipt
+                    </Text>
+                    {tx.documentHash && (
+                      <Text style={{ color: colors.textMuted }} className="font-mono text-[10px]" numberOfLines={1}>
+                        SHA-256: {tx.documentHash.slice(0, 16)}...
+                      </Text>
+                    )}
+                  </View>
+                </View>
+                <Ionicons name="open-outline" size={16} color={colors.primary} />
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                onPress={promptReceiptPicker}
+                disabled={attachingReceipt}
+                style={{
+                  backgroundColor: colors.primaryMuted,
+                  borderColor: colors.primary + '60',
+                  borderWidth: 1,
+                  borderRadius: 14,
+                  padding: 12,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                }}
+              >
+                {attachingReceipt ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : (
+                  <>
+                    <Ionicons name="cloud-upload-outline" size={18} color={colors.primary} />
+                    <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 13 }}>Attach Receipt</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       </View>
 

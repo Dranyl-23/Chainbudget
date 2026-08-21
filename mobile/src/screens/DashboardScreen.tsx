@@ -470,21 +470,29 @@ export default function DashboardScreen() {
             )}
 
             {/* Quick Actions Grid */}
-            <View className="flex-row justify-between mb-8">
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 28, gap: 8 }}>
               {[
                 { icon: 'add', label: 'Request', color: colors.primary, route: 'Scanner' },
                 { icon: 'send-outline', label: 'Send', color: colors.accentBlue, route: 'Transfer' },
                 { icon: 'qr-code-outline', label: 'Receive', color: colors.accentPurple, route: 'Receive' },
                 { icon: 'people-outline', label: 'Members', color: colors.success, route: 'Members' },
                 { icon: 'time-outline', label: 'History', color: colors.warning, route: 'History' },
+                { icon: 'wallet-outline', label: 'Budget', color: '#10B981', route: 'Budget' },
+                { icon: 'analytics-outline', label: 'Reports', color: '#3B82F6', route: 'Reports' },
+                { icon: 'shield-checkmark-outline', label: 'Audit', color: '#8B5CF6', route: 'Audit' },
+                { icon: 'business-outline', label: 'Treasury', color: '#F59E0B', route: 'Treasury' },
               ].map((action, idx) => (
                 <TouchableOpacity
                   key={idx}
                   style={{
                     backgroundColor: colors.surface,
                     borderColor: colors.border,
+                    width: '30%',
+                    alignItems: 'center',
+                    borderRadius: 18,
+                    borderWidth: 1,
+                    paddingVertical: 14,
                   }}
-                  className="items-center rounded-[18px] border flex-1 mx-1 py-3.5 shadow-sm"
                   activeOpacity={0.7}
                   onPress={() => {
                     triggerLightHaptic();
@@ -504,7 +512,7 @@ export default function DashboardScreen() {
                     color={action.color}
                     style={{ marginBottom: 6 }}
                   />
-                  <Text style={{ color: colors.textPrimary }} className="text-[10px] font-semibold" numberOfLines={1}>
+                  <Text style={{ color: colors.textPrimary, fontSize: 10, fontWeight: '600' }} numberOfLines={1}>
                     {action.label}
                   </Text>
                 </TouchableOpacity>

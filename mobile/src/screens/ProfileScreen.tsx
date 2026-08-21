@@ -12,7 +12,7 @@ import { Image } from 'react-native';
 import { getPrivateKey, getMnemonic } from '../lib/secureStorage';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { triggerLightHaptic, triggerErrorHaptic } from '../lib/biometrics';
+import { triggerLightHaptic, triggerErrorHaptic, triggerSuccessHaptic, authenticateWithBiometrics } from '../lib/biometrics';
 import ThemeSelectorModal from '../components/ThemeSelectorModal';
 
 export default function ProfileScreen() {
@@ -26,6 +26,7 @@ export default function ProfileScreen() {
   const [showAboutModal, setShowAboutModal] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showThemeModal, setShowThemeModal] = useState(false);
+  const [mintingSbt, setMintingSbt] = useState(false);
   
   // Vault state
   const [activeTab, setActiveTab] = useState<'menu' | 'phrase' | 'privateKey'>('menu');
@@ -107,6 +108,25 @@ export default function ProfileScreen() {
       Alert.alert('Upload Failed', 'There was an error uploading your profile picture.');
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const handleMintSbt = async () => {
+    await triggerLightHaptic();
+    const auth = await authenticateWithBiometrics('Authorize Soulbound ID (SBT) Minting on Polygon Amoy');
+    if (!auth.success) return;
+
+    setMintingSbt(true);
+    try {
+      const res = await api.post('/auth/mint-sbt');
+      await triggerSuccessHaptic();
+      Alert.alert('SBT Minted!', 'Your non-transferable Soulbound Member ID has been verified and recorded on Polygon Amoy testnet.');
+      if (refreshUser) await refreshUser();
+    } catch (err: any) {
+      await triggerErrorHaptic();
+      Alert.alert('Minting Failed', err.response?.data?.error || 'Failed to mint Soulbound Token.');
+    } finally {
+      setMintingSbt(false);
     }
   };
 
@@ -282,14 +302,32 @@ export default function ProfileScreen() {
                     </View>
                   </View>
 
-                  {/* Right: SBT Verified Pill */}
-                  <View 
-                    style={{ backgroundColor: colors.successBg, borderColor: colors.successBorder }}
-                    className="flex-row items-center px-2 py-1.5 rounded-lg border"
-                  >
-                    <Ionicons name="shield-checkmark" size={12} color={colors.success} />
-                    <Text style={{ color: colors.success }} className="text-[9px] font-bold ml-1 uppercase tracking-widest">SBT Verified</Text>
-                  </View>
+                  {/* Right: SBT Verified Pill or Mint Button */}
+                  {m.hasSBT ? (
+                    <View 
+                      style={{ backgroundColor: colors.successBg, borderColor: colors.successBorder }}
+                      className="flex-row items-center px-2 py-1.5 rounded-lg border"
+                    >
+                      <Ionicons name="shield-checkmark" size={12} color={colors.success} />
+                      <Text style={{ color: colors.success }} className="text-[9px] font-bold ml-1 uppercase tracking-widest">SBT Verified</Text>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      onPress={handleMintSbt}
+                      disabled={mintingSbt}
+                      style={{ backgroundColor: colors.primaryMuted, borderColor: colors.primary }}
+                      className="flex-row items-center px-2.5 py-1.5 rounded-lg border"
+                    >
+                      {mintingSbt ? (
+                        <ActivityIndicator size="small" color={colors.primary} />
+                      ) : (
+                        <>
+                          <Ionicons name="sparkles-outline" size={12} color={colors.primary} />
+                          <Text style={{ color: colors.primary }} className="text-[9px] font-bold ml-1 uppercase tracking-wider">Mint ID</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  )}
                 </View>
 
                 {/* Role Badge (Bottom Full Width) */}
