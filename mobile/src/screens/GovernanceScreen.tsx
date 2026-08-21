@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Alert, TextInput, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../lib/api';
 import { useAuth } from '../context/AuthContext';
@@ -20,6 +20,18 @@ export default function GovernanceScreen() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [votingOn, setVotingOn] = useState<string | null>(null);
+
+  // Proposal Creation State
+  const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [newProposalTitle, setNewProposalTitle] = useState('');
+  const [newProposalAmount, setNewProposalAmount] = useState('');
+  const [newProposalDescription, setNewProposalDescription] = useState('');
+  const [creatingProposal, setCreatingProposal] = useState(false);
+
+  // AI Analysis State
+  const [aiModalVisible, setAiModalVisible] = useState(false);
+  const [analyzingProposal, setAnalyzingProposal] = useState(false);
+  const [aiAnalysisResult, setAiAnalysisResult] = useState<any>(null);
 
   useEffect(() => {
     fetchOrgs();
@@ -100,6 +112,57 @@ export default function GovernanceScreen() {
       Alert.alert('Error', err.response?.data?.error || 'Failed to cast vote');
     } finally {
       setVotingOn(null);
+    }
+  };
+
+  const handleCreateProposal = async () => {
+    if (!newProposalTitle || !newProposalAmount || !newProposalDescription) {
+      Alert.alert('Error', 'Please fill in all fields');
+      return;
+    }
+
+    setCreatingProposal(true);
+    try {
+      await api.post('/dao/proposals', {
+        title: newProposalTitle,
+        amount: Number(newProposalAmount),
+        description: newProposalDescription,
+        organizationId: activeOrgId,
+      });
+      await triggerSuccessHaptic();
+      Alert.alert('Success', 'Proposal created successfully!');
+      setCreateModalVisible(false);
+      setNewProposalTitle('');
+      setNewProposalAmount('');
+      setNewProposalDescription('');
+      if (activeOrgId) fetchProposals(activeOrgId);
+    } catch (err: any) {
+      await triggerErrorHaptic();
+      console.error(err);
+      Alert.alert('Error', err.response?.data?.error || 'Failed to create proposal');
+    } finally {
+      setCreatingProposal(false);
+    }
+  };
+
+  const handleAnalyzeProposal = async (proposal: any) => {
+    setAiModalVisible(true);
+    setAnalyzingProposal(true);
+    setAiAnalysisResult(null);
+    
+    try {
+      const res = await api.post('/ai/analyze-proposal', {
+        title: proposal.title,
+        description: proposal.description,
+        amount: proposal.amount,
+      });
+      setAiAnalysisResult(res.data);
+    } catch (err: any) {
+      console.error(err);
+      Alert.alert('Analysis Failed', 'Could not complete AI analysis at this time.');
+      setAiModalVisible(false);
+    } finally {
+      setAnalyzingProposal(false);
     }
   };
 
@@ -184,9 +247,16 @@ export default function GovernanceScreen() {
                 <View className="flex-row justify-between items-start mb-3">
                   <View className="flex-1 mr-3">
                     <Text style={{ color: colors.textPrimary }} className="font-bold text-lg mb-1">{proposal.title}</Text>
-                    <Text style={{ color: colors.textMuted }} className="text-xs">
+                    <Text style={{ color: colors.textMuted }} className="text-xs mb-2">
                       Proposed by {proposal.creator?.displayName || 'DAO Member'}
                     </Text>
+                    <TouchableOpacity
+                      onPress={() => handleAnalyzeProposal(proposal)}
+                      style={{ backgroundColor: colors.primaryMuted, borderColor: colors.primary + '40', alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, borderWidth: 1 }}
+                    >
+                      <Ionicons name="sparkles" size={12} color={colors.primary} style={{ marginRight: 4 }} />
+                      <Text style={{ color: colors.primary, fontSize: 10, fontWeight: 'bold' }}>AI Analysis</Text>
+                    </TouchableOpacity>
                   </View>
                   <View 
                     style={{
@@ -286,6 +356,154 @@ export default function GovernanceScreen() {
         )}
         <View style={{ height: 100 }} />
       </ScrollView>
+
+      {/* Create Proposal FAB */}
+      {activeOrgId && (
+        <TouchableOpacity
+          onPress={() => setCreateModalVisible(true)}
+          style={{
+            position: 'absolute',
+            bottom: 24,
+            right: 24,
+            width: 56,
+            height: 56,
+            borderRadius: 28,
+            backgroundColor: colors.primary,
+            justifyContent: 'center',
+            alignItems: 'center',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.3,
+            shadowRadius: 4,
+            elevation: 5,
+            zIndex: 100,
+          }}
+        >
+          <Ionicons name="add" size={32} color="#fff" />
+        </TouchableOpacity>
+      )}
+
+      {/* Create Proposal Modal */}
+      <Modal
+        visible={createModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setCreateModalVisible(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <Text style={{ color: colors.textPrimary, fontSize: 20, fontWeight: 'bold' }}>Create DAO Proposal</Text>
+              <TouchableOpacity onPress={() => setCreateModalVisible(false)}>
+                <Ionicons name="close" size={24} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={{ color: colors.textSecondary, marginBottom: 8 }}>Title</Text>
+            <TextInput
+              style={{ backgroundColor: colors.background, color: colors.textPrimary, borderColor: colors.border, borderWidth: 1, borderRadius: 8, padding: 12, marginBottom: 16 }}
+              placeholder="e.g. Funding for Q3 Marketing"
+              placeholderTextColor={colors.textMuted}
+              value={newProposalTitle}
+              onChangeText={setNewProposalTitle}
+            />
+
+            <Text style={{ color: colors.textSecondary, marginBottom: 8 }}>Amount (PHP)</Text>
+            <TextInput
+              style={{ backgroundColor: colors.background, color: colors.textPrimary, borderColor: colors.border, borderWidth: 1, borderRadius: 8, padding: 12, marginBottom: 16 }}
+              placeholder="e.g. 50000"
+              placeholderTextColor={colors.textMuted}
+              keyboardType="numeric"
+              value={newProposalAmount}
+              onChangeText={setNewProposalAmount}
+            />
+
+            <Text style={{ color: colors.textSecondary, marginBottom: 8 }}>Description</Text>
+            <TextInput
+              style={{ backgroundColor: colors.background, color: colors.textPrimary, borderColor: colors.border, borderWidth: 1, borderRadius: 8, padding: 12, marginBottom: 24, height: 100 }}
+              placeholder="Detailed description of the proposal..."
+              placeholderTextColor={colors.textMuted}
+              multiline
+              textAlignVertical="top"
+              value={newProposalDescription}
+              onChangeText={setNewProposalDescription}
+            />
+
+            <TouchableOpacity
+              style={{ backgroundColor: colors.primary, padding: 16, borderRadius: 12, alignItems: 'center' }}
+              onPress={handleCreateProposal}
+              disabled={creatingProposal}
+            >
+              {creatingProposal ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Submit Proposal</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* AI Analysis Modal */}
+      <Modal
+        visible={aiModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setAiModalVisible(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '80%' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="sparkles" size={24} color={colors.primary} style={{ marginRight: 8 }} />
+                <Text style={{ color: colors.textPrimary, fontSize: 20, fontWeight: 'bold' }}>AI Risk Analysis</Text>
+              </View>
+              <TouchableOpacity onPress={() => setAiModalVisible(false)}>
+                <Ionicons name="close" size={24} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {analyzingProposal ? (
+                <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                  <ActivityIndicator size="large" color={colors.primary} />
+                  <Text style={{ color: colors.textSecondary, marginTop: 16 }}>Analyzing proposal...</Text>
+                </View>
+              ) : aiAnalysisResult ? (
+                <View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+                    <Text style={{ color: colors.textPrimary, fontSize: 16, fontWeight: 'bold', marginRight: 8 }}>Risk Score:</Text>
+                    <View style={{ backgroundColor: aiAnalysisResult.riskScore > 7 ? colors.errorBg : aiAnalysisResult.riskScore > 4 ? colors.warningBg : colors.successBg, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: aiAnalysisResult.riskScore > 7 ? colors.errorBorder : aiAnalysisResult.riskScore > 4 ? colors.warningBorder : colors.successBorder }}>
+                      <Text style={{ color: aiAnalysisResult.riskScore > 7 ? colors.error : aiAnalysisResult.riskScore > 4 ? colors.warning : colors.success, fontWeight: 'bold' }}>{aiAnalysisResult.riskScore} / 10</Text>
+                    </View>
+                  </View>
+
+                  <Text style={{ color: colors.textPrimary, fontSize: 16, fontWeight: 'bold', marginBottom: 8 }}>Summary</Text>
+                  <Text style={{ color: colors.textSecondary, marginBottom: 16 }}>{aiAnalysisResult.summary}</Text>
+
+                  <Text style={{ color: colors.success, fontSize: 16, fontWeight: 'bold', marginBottom: 8 }}>Pros</Text>
+                  {aiAnalysisResult.pros?.map((pro: string, i: number) => (
+                    <View key={`pro-${i}`} style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 4 }}>
+                      <Ionicons name="checkmark-circle" size={16} color={colors.success} style={{ marginRight: 8, marginTop: 2 }} />
+                      <Text style={{ color: colors.textSecondary, flex: 1 }}>{pro}</Text>
+                    </View>
+                  ))}
+
+                  <Text style={{ color: colors.error, fontSize: 16, fontWeight: 'bold', marginTop: 16, marginBottom: 8 }}>Cons & Risks</Text>
+                  {aiAnalysisResult.cons?.map((con: string, i: number) => (
+                    <View key={`con-${i}`} style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 4 }}>
+                      <Ionicons name="warning" size={16} color={colors.error} style={{ marginRight: 8, marginTop: 2 }} />
+                      <Text style={{ color: colors.textSecondary, flex: 1 }}>{con}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <Text style={{ color: colors.textSecondary, textAlign: 'center', paddingVertical: 20 }}>No analysis available.</Text>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }

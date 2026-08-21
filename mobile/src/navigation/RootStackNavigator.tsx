@@ -10,6 +10,10 @@ import MembersScreen from '../screens/MembersScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
 import RecoveryPhraseScreen from '../screens/RecoveryPhraseScreen';
 import ReceiveScreen from '../screens/ReceiveScreen';
+import BudgetScreen from '../screens/BudgetScreen';
+import AuditScreen from '../screens/AuditScreen';
+import ReportsScreen from '../screens/ReportsScreen';
+import TreasuryScreen from '../screens/TreasuryScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -71,6 +75,26 @@ export default function RootStackNavigator() {
         name="RecoveryPhrase"
         component={RecoveryPhraseScreen}
         options={{ title: 'Recovery Phrase' }}
+      />
+      <Stack.Screen
+        name="Budget"
+        component={BudgetScreen}
+        options={{ title: 'Budget Management' }}
+      />
+      <Stack.Screen
+        name="Audit"
+        component={AuditScreen}
+        options={{ title: 'Audit Trail' }}
+      />
+      <Stack.Screen
+        name="Reports"
+        component={ReportsScreen}
+        options={{ title: 'Reports & Analytics' }}
+      />
+      <Stack.Screen
+        name="Treasury"
+        component={TreasuryScreen}
+        options={{ title: 'Treasury Settings' }}
       />
     </Stack.Navigator>
   );
