@@ -106,9 +106,11 @@ export default function ApprovalsScreen() {
         amountWei
       );
 
-      await api.post(`/transactions/${tx._id}/approve`, {
+      await api.post(`/approvals/${tx._id}`, {
         action,
         signature,
+        organizationId: activeOrgId,
+        comment: `${action === 'approved' ? 'Approved' : 'Rejected'} via mobile`,
         to: toAddress,
         amountWei,
       });

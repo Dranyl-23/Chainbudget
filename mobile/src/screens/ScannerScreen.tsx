@@ -61,6 +61,7 @@ export default function ScannerScreen() {
 
       const res = await api.post('/ai/scan-receipt', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 30000, // AI multimodal processing can take 15-30s
       });
 
       setAmount(res.data.totalAmount?.toString() || '');

@@ -88,10 +88,8 @@ export default function GovernanceScreen() {
 
     setVotingOn(proposalId);
     try {
-      await api.post(`/dao/vote`, {
-        proposalId,
+      await api.post(`/dao/proposals/${proposalId}/vote`, {
         support,
-        reason: ""
       });
       await triggerSuccessHaptic();
       Alert.alert('Success', `You successfully voted ${support ? 'Yes' : 'No'}!`);

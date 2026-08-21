@@ -9,22 +9,17 @@ import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 
 /// @title ChainBudget (Tokenized Treasury Vault)
 /// @notice Records budget transactions on-chain, holds organization funds, enforces 2-of-N 
-///         multi-signature approval, provides Smart Contract Escrow for suppliers, and supports
-///         emergency pause controls and two-step ownership management.
 contract ChainBudget is Ownable2Step, Pausable, ReentrancyGuard {
-    // ────────────────────────────────────────────────────────────────────────
-    // Types
-    // ────────────────────────────────────────────────────────────────────────
 
     struct Transaction {
         uint256 id;
-        bytes32 dataHash;       // keccak256 of off-chain payload (amount, desc, etc.)
-        uint256 amount;         // Amount in WEI to be transferred
-        address payable to;     // Recipient address of the funds
-        bool    isHighValue;    // True → requires 2-of-N approval
-        bool    isEscrow;       // True → funds locked until supplier & org approve
-        bool    isApproved;     // True once threshold is met
-        bool    executed;       // True once funds are transferred (or locked in escrow)
+        bytes32 dataHash;       
+        uint256 amount;        
+        address payable to;    
+        bool    isHighValue;   
+        bool    isEscrow;       
+        bool    isApproved;     
+        bool    executed;       
         bool    exists;
         uint256 approvalCount;
         uint256 timestamp;
@@ -32,17 +27,13 @@ contract ChainBudget is Ownable2Step, Pausable, ReentrancyGuard {
     }
 
     struct EscrowDetails {
-        bool isFunded;          // True when executed from main treasury
-        bool payerApproved;     // Org Admin/Approver approved
-        bool payeeApproved;     // Supplier approved
-        bool isReleased;        // Funds actually sent to supplier
+        bool isFunded;         
+        bool payerApproved;    
+        bool payeeApproved;    
+        bool isReleased;       
     }
 
-    // ────────────────────────────────────────────────────────────────────────
-    // State
-    // ────────────────────────────────────────────────────────────────────────
-
-    uint256 public requiredApprovals = 2;   // 2-of-N threshold
+    uint256 public requiredApprovals = 2;   
     uint256 public txCounter;
 
     mapping(uint256 => Transaction) private transactions;
@@ -50,12 +41,9 @@ contract ChainBudget is Ownable2Step, Pausable, ReentrancyGuard {
     mapping(uint256 => mapping(address => bool)) private hasApproved;
     mapping(address => bool) public isApprover;
     address[] public approvers;
-    uint256 public totalLockedEscrow;    // Total MATIC locked in funded but unreleased escrows
+    uint256 public totalLockedEscrow;    
 
-    // ────────────────────────────────────────────────────────────────────────
-    // Events
-    // ────────────────────────────────────────────────────────────────────────
-
+   
     event VaultDeposited(address indexed sender, uint256 amount);
     event TransactionRecorded(uint256 indexed txId, bytes32 dataHash, uint256 amount, address to, bool isHighValue, bool isEscrow, address submittedBy);
     event ApprovalSubmitted(uint256 indexed txId, address indexed approver, uint256 approvalCount);
@@ -71,10 +59,7 @@ contract ChainBudget is Ownable2Step, Pausable, ReentrancyGuard {
     event ApproverRemoved(address indexed approver);
     event RequiredApprovalsUpdated(uint256 newRequired);
 
-    // ────────────────────────────────────────────────────────────────────────
-    // Modifiers
-    // ────────────────────────────────────────────────────────────────────────
-
+    
     modifier onlyApprover() {
         require(isApprover[msg.sender], "ChainBudget: caller is not an approver");
         _;
@@ -85,10 +70,7 @@ contract ChainBudget is Ownable2Step, Pausable, ReentrancyGuard {
         _;
     }
 
-    // ────────────────────────────────────────────────────────────────────────
-    // Constructor & Treasury
-    // ────────────────────────────────────────────────────────────────────────
-
+   
     constructor(address[] memory _initialApprovers, uint256 _requiredApprovals)
         Ownable(msg.sender)
     {
@@ -101,7 +83,7 @@ contract ChainBudget is Ownable2Step, Pausable, ReentrancyGuard {
         }
     }
 
-    // Accept MATIC deposits into the Treasury Vault
+   
     receive() external payable whenNotPaused {
         emit VaultDeposited(msg.sender, msg.value);
     }
@@ -115,9 +97,6 @@ contract ChainBudget is Ownable2Step, Pausable, ReentrancyGuard {
         return address(this).balance - totalLockedEscrow;
     }
 
-    // ────────────────────────────────────────────────────────────────────────
-    // Emergency Controls (Pausable)
-    // ────────────────────────────────────────────────────────────────────────
 
     /// @notice Pauses contract state modifications in case of emergency
     function pause() external onlyOwner {
@@ -129,9 +108,6 @@ contract ChainBudget is Ownable2Step, Pausable, ReentrancyGuard {
         _unpause();
     }
 
-    // ────────────────────────────────────────────────────────────────────────
-    // Owner-only management
-    // ────────────────────────────────────────────────────────────────────────
 
     function recordTransaction(
         bytes32 dataHash,
@@ -186,9 +162,6 @@ contract ChainBudget is Ownable2Step, Pausable, ReentrancyGuard {
         emit RequiredApprovalsUpdated(_required);
     }
 
-    // ────────────────────────────────────────────────────────────────────────
-    // Approver actions & Execution
-    // ────────────────────────────────────────────────────────────────────────
 
     function submitApproval(uint256 txId) external onlyApprover txExists(txId) whenNotPaused {
         Transaction storage txn = transactions[txId];
@@ -225,16 +198,12 @@ contract ChainBudget is Ownable2Step, Pausable, ReentrancyGuard {
             totalLockedEscrow += txn.amount;
             emit EscrowFunded(txId, txn.amount);
         } else {
-            // Transfer actual funds to the recipient
             (bool success, ) = txn.to.call{value: txn.amount}("");
             require(success, "ChainBudget: MATIC transfer failed");
             emit TransactionExecuted(txId, txn.to, txn.amount);
         }
     }
 
-    // ────────────────────────────────────────────────────────────────────────
-    // Escrow Management
-    // ────────────────────────────────────────────────────────────────────────
 
     function releaseEscrow(uint256 txId) external nonReentrant txExists(txId) whenNotPaused {
         Transaction storage txn = transactions[txId];
@@ -244,7 +213,6 @@ contract ChainBudget is Ownable2Step, Pausable, ReentrancyGuard {
         require(esc.isFunded, "ChainBudget: escrow not funded yet");
         require(!esc.isReleased, "ChainBudget: escrow already released");
 
-        // Allow direct payee/supplier or org approver/owner
         if (msg.sender == txn.to) {
             esc.payeeApproved = true;
             emit EscrowApproved(txId, msg.sender, false);
@@ -323,9 +291,6 @@ contract ChainBudget is Ownable2Step, Pausable, ReentrancyGuard {
         }
     }
 
-    // ────────────────────────────────────────────────────────────────────────
-    // Read functions
-    // ────────────────────────────────────────────────────────────────────────
 
     function getTransaction(uint256 txId) external view txExists(txId) returns (Transaction memory) {
         return transactions[txId];
