@@ -22,13 +22,15 @@ import { triggerSuccessHaptic, triggerErrorHaptic, triggerLightHaptic } from '..
 
 const ORG_TYPES = [
   { value: 'student_org', label: 'Student Organization', icon: 'school-outline' },
-  { value: 'ngo', label: 'NGO / Non-Profit', icon: 'heart-outline' },
-  { value: 'startup', label: 'Startup / Company', icon: 'rocket-outline' },
-  { value: 'cooperative', label: 'Cooperative', icon: 'people-outline' },
   { value: 'barangay', label: 'Barangay / Local Gov', icon: 'business-outline' },
+  { value: 'homeowners_association', label: 'Homeowners Assoc (HOA)', icon: 'key-outline' },
+  { value: 'ngo', label: 'NGO / Non-Profit', icon: 'heart-outline' },
+  { value: 'cooperative', label: 'Cooperative', icon: 'people-outline' },
   { value: 'church', label: 'Church / Religious', icon: 'home-outline' },
   { value: 'sports_club', label: 'Sports / Club', icon: 'trophy-outline' },
-  { value: 'homeowners_association', label: 'Homeowners Assoc', icon: 'key-outline' },
+  { value: 'startup', label: 'Startup / Company', icon: 'rocket-outline' },
+  { value: 'family', label: 'Family / Estate', icon: 'people-circle-outline' },
+  { value: 'fundraising', label: 'Fundraising / Charity', icon: 'gift-outline' },
 ];
 
 export default function NoOrganizationScreen() {

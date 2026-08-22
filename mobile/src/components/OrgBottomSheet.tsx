@@ -28,11 +28,15 @@ import ScaleButton from './ScaleButton';
 
 const ORG_TYPES = [
   { value: 'student_org', label: 'Student Org', icon: 'school-outline' },
+  { value: 'barangay', label: 'Barangay / LGU', icon: 'business-outline' },
+  { value: 'homeowners_association', label: 'Homeowners (HOA)', icon: 'key-outline' },
   { value: 'ngo', label: 'NGO / Non-Profit', icon: 'heart-outline' },
-  { value: 'startup', label: 'Startup', icon: 'rocket-outline' },
   { value: 'cooperative', label: 'Cooperative', icon: 'people-outline' },
-  { value: 'barangay', label: 'Barangay', icon: 'business-outline' },
-  { value: 'church', label: 'Religious', icon: 'home-outline' },
+  { value: 'church', label: 'Church / Religious', icon: 'home-outline' },
+  { value: 'sports_club', label: 'Sports / Club', icon: 'trophy-outline' },
+  { value: 'startup', label: 'Startup / Company', icon: 'rocket-outline' },
+  { value: 'family', label: 'Family / Estate', icon: 'people-circle-outline' },
+  { value: 'fundraising', label: 'Fundraising / Charity', icon: 'gift-outline' },
 ];
 
 type OrgBottomSheetProps = {
