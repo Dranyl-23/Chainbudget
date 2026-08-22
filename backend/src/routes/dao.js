@@ -68,14 +68,15 @@ router.get("/proposals", authenticate, async (req, res) => {
  */
 router.post("/proposals", authenticate, async (req, res) => {
   try {
-    const { orgId, title, description, amount, durationSeconds } = req.body;
+    const { orgId, organizationId, title, description, amount, durationSeconds } = req.body;
+    const targetOrgId = orgId || organizationId;
     
-    if (!orgId || !title || !description || !amount) {
+    if (!targetOrgId || !title || !description || !amount) {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
     // Must be member
-    const membership = req.user.memberships.find(m => m.organization.toString() === orgId);
+    const membership = req.user.memberships.find(m => m.organization.toString() === targetOrgId.toString());
     if (!membership) {
       return res.status(403).json({ error: "Not a member" });
     }
@@ -85,7 +86,7 @@ router.post("/proposals", authenticate, async (req, res) => {
       return res.status(403).json({ error: "Only admins can create proposals" });
     }
 
-    const dataString = JSON.stringify({ title, description, amount, orgId });
+    const dataString = JSON.stringify({ title, description, amount, orgId: targetOrgId });
     const dataHash = "0x" + crypto.createHash("sha256").update(dataString).digest("hex");
 
     const duration = durationSeconds || 604800; // default 7 days
@@ -95,7 +96,7 @@ router.post("/proposals", authenticate, async (req, res) => {
       title,
       description,
       amount,
-      organization: orgId,
+      organization: targetOrgId,
       creator: req.user._id,
       dataHash,
       durationSeconds: duration,
