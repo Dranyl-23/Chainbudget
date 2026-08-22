@@ -267,6 +267,7 @@ export default function TransactionDetailScreen() {
     <ScrollView 
       style={{ backgroundColor: colors.background }} 
       className="flex-1"
+      showsVerticalScrollIndicator={false}
       refreshControl={
         <RefreshControl 
           refreshing={refreshing} 
@@ -429,10 +430,10 @@ export default function TransactionDetailScreen() {
                 {attachingReceipt ? (
                   <ActivityIndicator size="small" color={colors.primary} />
                 ) : (
-                  <>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                     <Ionicons name="cloud-upload-outline" size={18} color={colors.primary} />
                     <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 13 }}>Attach Receipt</Text>
-                  </>
+                  </View>
                 )}
               </TouchableOpacity>
             )}
@@ -469,7 +470,23 @@ export default function TransactionDetailScreen() {
                 style={{ backgroundColor: colors.cardGlass, borderColor: colors.borderSubtle }}
                 className="flex-row items-center justify-between p-3 rounded-xl border mb-2"
               >
-                <Text style={{ color: colors.textSecondary }} className="text-xs">🏢 Payer (Organization Admin)</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <View
+                    style={{
+                      width: 26,
+                      height: 26,
+                      borderRadius: 8,
+                      backgroundColor: colors.primaryMuted,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Ionicons name="business" size={14} color={colors.primary} />
+                  </View>
+                  <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: '600' }}>
+                    Payer (Organization Admin)
+                  </Text>
+                </View>
                 <View className="flex-row items-center gap-1">
                   <Ionicons
                     name={tx.payerApproved ? 'checkmark-circle' : 'time-outline'}
@@ -486,7 +503,23 @@ export default function TransactionDetailScreen() {
                 style={{ backgroundColor: colors.cardGlass, borderColor: colors.borderSubtle }}
                 className="flex-row items-center justify-between p-3 rounded-xl border"
               >
-                <Text style={{ color: colors.textSecondary }} className="text-xs">👤 Payee (Supplier Signature)</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <View
+                    style={{
+                      width: 26,
+                      height: 26,
+                      borderRadius: 8,
+                      backgroundColor: isDark ? 'rgba(56, 189, 248, 0.15)' : '#e0f2fe',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Ionicons name="person" size={14} color={colors.accentCyan} />
+                  </View>
+                  <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: '600' }}>
+                    Payee (Supplier Signature)
+                  </Text>
+                </View>
                 <View className="flex-row items-center gap-1">
                   <Ionicons
                     name={tx.payeeApproved ? 'checkmark-circle' : 'time-outline'}
@@ -502,7 +535,7 @@ export default function TransactionDetailScreen() {
 
             {/* Escrow Release Button */}
             {tx.escrowStatus !== 'released' && (
-              <>
+              <View>
                 {isSupplier && !tx.payeeApproved && (
                   <TouchableOpacity
                     onPress={handleEscrowRelease}
@@ -513,12 +546,12 @@ export default function TransactionDetailScreen() {
                     {releasing ? (
                       <ActivityIndicator color="#ffffff" size="small" />
                     ) : (
-                      <>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                         <Ionicons name="finger-print" size={18} color="#ffffff" />
                         <Text className="text-white font-bold text-sm">
                           Sign & Release Escrow (Gasless)
                         </Text>
-                      </>
+                      </View>
                     )}
                   </TouchableOpacity>
                 )}
@@ -533,16 +566,16 @@ export default function TransactionDetailScreen() {
                     {releasing ? (
                       <ActivityIndicator color="#ffffff" size="small" />
                     ) : (
-                      <>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                         <Ionicons name="checkmark-done" size={18} color="#ffffff" />
                         <Text className="text-white font-bold text-sm">
                           Approve Release as Payer
                         </Text>
-                      </>
+                      </View>
                     )}
                   </TouchableOpacity>
                 )}
-              </>
+              </View>
             )}
           </View>
         </View>

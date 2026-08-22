@@ -17,6 +17,9 @@ import ReportsScreen from '../screens/ReportsScreen';
 import TreasuryScreen from '../screens/TreasuryScreen';
 import HelpFaqScreen from '../screens/HelpFaqScreen';
 import DataPrivacyScreen from '../screens/DataPrivacyScreen';
+import NotificationDetailScreen from '../screens/NotificationDetailScreen';
+import PublicOrgDetailScreen from '../screens/PublicOrgDetailScreen';
+import PublicLedgerScreen from '../screens/PublicLedgerScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -70,6 +73,11 @@ export default function RootStackNavigator() {
         options={{ title: 'Notifications' }}
       />
       <Stack.Screen
+        name="NotificationDetail"
+        component={NotificationDetailScreen}
+        options={{ title: 'Notification Details' }}
+      />
+      <Stack.Screen
         name="RecoveryPhrase"
         component={RecoveryPhraseScreen}
         options={{ title: 'Recovery Phrase' }}
@@ -103,6 +111,16 @@ export default function RootStackNavigator() {
         name="DataPrivacy"
         component={DataPrivacyScreen}
         options={{ title: 'Data Privacy & Security' }}
+      />
+      <Stack.Screen
+        name="PublicLedger"
+        component={PublicLedgerScreen}
+        options={{ title: 'Public Ledger' }}
+      />
+      <Stack.Screen
+        name="PublicOrgDetail"
+        component={PublicOrgDetailScreen}
+        options={{ title: 'Organization Ledger' }}
       />
     </Stack.Navigator>
   );

@@ -1,0 +1,253 @@
+/**
+ * NotificationDetailScreen.tsx
+ *
+ * Dedicated Full Screen view for inspecting complete notification payloads.
+ * Features categorized badge headers, full timestamps, rich message containers,
+ * clipboard copy, and smart deep linking to DAO proposals, transactions, and approvals.
+ */
+
+import React from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+} from 'react-native';
+import { useRoute, useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
+import { useTheme } from '../context/ThemeContext';
+import { triggerLightHaptic, triggerSuccessHaptic } from '../lib/biometrics';
+import ScaleButton from '../components/ScaleButton';
+
+function formatFullDate(dateString?: string) {
+  if (!dateString) return 'Just now';
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return dateString;
+
+  return date.toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
+export default function NotificationDetailScreen() {
+  const { colors, isDark } = useTheme();
+  const route = useRoute<any>();
+  const navigation = useNavigation<any>();
+
+  const notif = route.params?.notif || {};
+  const title = notif.title || 'Notification';
+  const message = notif.message || 'No message details available.';
+  const timestamp = notif.timestamp || notif.createdAt;
+
+  // Smart Category Detection
+  const lowerTitle = title.toLowerCase();
+  const lowerMsg = message.toLowerCase();
+
+  let categoryName = 'SYSTEM ANNOUNCEMENT';
+  let categoryIcon: any = 'information-circle';
+  let categoryColor = '#38BDF8';
+  let categoryBg = 'rgba(56, 189, 248, 0.15)';
+  let actionType: 'dao' | 'approvals' | 'history' | null = null;
+  let actionLabel = 'Back to Notifications';
+
+  if (lowerTitle.includes('proposal') || lowerMsg.includes('proposal') || lowerMsg.includes('proposed')) {
+    categoryName = 'DAO GOVERNANCE';
+    categoryIcon = 'library';
+    categoryColor = '#C084FC';
+    categoryBg = 'rgba(192, 132, 252, 0.15)';
+    actionType = 'dao';
+    actionLabel = 'Go to DAO Proposals';
+  } else if (lowerTitle.includes('approval') || lowerMsg.includes('approval') || notif.type === 'urgent') {
+    categoryName = 'APPROVAL REQUIRED';
+    categoryIcon = 'shield-checkmark';
+    categoryColor = '#F59E0B';
+    categoryBg = 'rgba(245, 158, 11, 0.15)';
+    actionType = 'approvals';
+    actionLabel = 'Open Approvals Queue';
+  } else if (lowerTitle.includes('transaction') || lowerMsg.includes('transaction') || lowerMsg.includes('₱') || notif.type === 'blockchain') {
+    categoryName = 'TRANSACTION & LEDGER';
+    categoryIcon = 'swap-horizontal';
+    categoryColor = '#10B981';
+    categoryBg = 'rgba(16, 185, 129, 0.15)';
+    actionType = 'history';
+    actionLabel = 'View Transaction History';
+  }
+
+  const handleCopyMessage = async () => {
+    await Clipboard.setStringAsync(message);
+    await triggerSuccessHaptic();
+    Alert.alert('Copied', 'Notification message copied to clipboard.');
+  };
+
+  const handleAction = () => {
+    triggerLightHaptic();
+    if (actionType === 'dao') {
+      navigation.navigate('MainTabs', { screen: 'DAO' });
+    } else if (actionType === 'approvals') {
+      navigation.navigate('MainTabs', { screen: 'Inbox' });
+    } else if (actionType === 'history') {
+      navigation.navigate('History');
+    } else {
+      navigation.goBack();
+    }
+  };
+
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <ScrollView
+        contentContainerStyle={{ padding: 20, paddingBottom: 60 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Category Header Badge */}
+        <View
+          style={{
+            alignSelf: 'flex-start',
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: categoryBg,
+            borderColor: categoryColor + '40',
+            borderWidth: 1,
+            borderRadius: 20,
+            paddingHorizontal: 12,
+            paddingVertical: 6,
+            marginBottom: 16,
+            gap: 6,
+          }}
+        >
+          <Ionicons name={categoryIcon} size={15} color={categoryColor} />
+          <Text style={{ color: categoryColor, fontSize: 11, fontWeight: '800', letterSpacing: 0.8 }}>
+            {categoryName}
+          </Text>
+        </View>
+
+        {/* Title */}
+        <Text
+          style={{
+            color: colors.textPrimary,
+            fontSize: 22,
+            fontWeight: '800',
+            lineHeight: 28,
+            marginBottom: 10,
+          }}
+        >
+          {title}
+        </Text>
+
+        {/* Timestamp */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20, gap: 6 }}>
+          <Ionicons name="time-outline" size={14} color={colors.textMuted} />
+          <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: '600' }}>
+            {formatFullDate(timestamp)}
+          </Text>
+        </View>
+
+        {/* Full Message Container */}
+        <View
+          style={{
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+            borderWidth: 1,
+            borderRadius: 24,
+            padding: 20,
+            marginBottom: 24,
+            shadowColor: '#000000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: isDark ? 0.3 : 0.08,
+            shadowRadius: 10,
+            elevation: 4,
+          }}
+        >
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              Message Details
+            </Text>
+            <TouchableOpacity
+              onPress={handleCopyMessage}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: colors.cardGlass,
+                borderColor: colors.borderSubtle,
+                borderWidth: 1,
+                borderRadius: 12,
+                paddingHorizontal: 10,
+                paddingVertical: 5,
+                gap: 4,
+              }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="copy-outline" size={13} color={colors.primary} />
+              <Text style={{ color: colors.primary, fontSize: 11, fontWeight: '700' }}>Copy</Text>
+            </TouchableOpacity>
+          </View>
+
+          <Text
+            style={{
+              color: colors.textPrimary,
+              fontSize: 15,
+              lineHeight: 24,
+              fontWeight: '500',
+            }}
+          >
+            {message}
+          </Text>
+        </View>
+
+        {/* Action Button */}
+        <ScaleButton
+          onPress={handleAction}
+          style={{
+            backgroundColor: colors.primary,
+            paddingVertical: 16,
+            borderRadius: 16,
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexDirection: 'row',
+            gap: 8,
+            shadowColor: colors.primary,
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.3,
+            shadowRadius: 8,
+            elevation: 6,
+            marginBottom: 12,
+          }}
+        >
+          <Ionicons
+            name={actionType ? 'arrow-forward' : 'checkmark-circle'}
+            size={18}
+            color="#FFFFFF"
+          />
+          <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '800' }}>
+            {actionLabel}
+          </Text>
+        </ScaleButton>
+
+        <TouchableOpacity
+          onPress={() => {
+            triggerLightHaptic();
+            navigation.goBack();
+          }}
+          style={{
+            paddingVertical: 14,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+          activeOpacity={0.7}
+        >
+          <Text style={{ color: colors.textSecondary, fontSize: 14, fontWeight: '600' }}>
+            Dismiss
+          </Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </View>
+  );
+}

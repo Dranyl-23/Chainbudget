@@ -49,6 +49,18 @@ export default function ProfileScreen() {
 
 
   const fetchKeys = async (target: 'phrase' | 'privateKey') => {
+    await triggerLightHaptic();
+    const promptMessage = target === 'privateKey'
+      ? 'Authenticate with Biometrics / PIN to Export Private Key'
+      : 'Authenticate with Biometrics / PIN to View Recovery Phrase';
+
+    const auth = await authenticateWithBiometrics(promptMessage);
+    if (!auth.success) {
+      await triggerErrorHaptic();
+      return;
+    }
+
+    await triggerSuccessHaptic();
     setIsLoadingKeys(true);
     try {
       if (!keys) {
@@ -180,6 +192,7 @@ export default function ProfileScreen() {
         keyboardShouldPersistTaps="handled"
         enableOnAndroid={true}
         extraScrollHeight={20}
+        showsVerticalScrollIndicator={false}
       >
       {/* Header */}
       <View className="mb-6">
@@ -921,17 +934,35 @@ export default function ProfileScreen() {
             )}
 
             {/* Action Buttons: Cancel vs Sign Out */}
-            <View className="w-full flex-row gap-3">
+            <View style={{ flexDirection: 'row', width: '100%', gap: 12 }}>
               <TouchableOpacity
                 onPress={() => {
                   triggerLightHaptic();
                   setShowLogoutModal(false);
                 }}
                 activeOpacity={0.7}
-                style={{ backgroundColor: colors.cardGlass, borderColor: colors.border }}
-                className="flex-1 py-3.5 rounded-2xl border items-center justify-center"
+                style={{
+                  flex: 1,
+                  height: 48,
+                  backgroundColor: colors.cardGlass,
+                  borderColor: colors.border,
+                  borderWidth: 1,
+                  borderRadius: 16,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
               >
-                <Text style={{ color: colors.textPrimary }} className="font-bold text-sm">Cancel</Text>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontWeight: '700',
+                    fontSize: 14,
+                    textAlign: 'center',
+                    includeFontPadding: false,
+                  }}
+                >
+                  Cancel
+                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -941,10 +972,36 @@ export default function ProfileScreen() {
                   logout();
                 }}
                 activeOpacity={0.8}
-                className="flex-1 py-3.5 rounded-2xl bg-red-600 active:bg-red-700 items-center justify-center flex-row gap-2 shadow-lg shadow-red-900/50"
+                style={{
+                  flex: 1,
+                  height: 48,
+                  backgroundColor: '#DC2626',
+                  borderColor: '#DC2626',
+                  borderWidth: 1,
+                  borderRadius: 16,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                  shadowColor: '#DC2626',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 6,
+                  elevation: 4,
+                }}
               >
-                <Ionicons name="log-out" size={16} color="#ffffff" />
-                <Text className="text-white font-extrabold text-sm">Sign Out</Text>
+                <Ionicons name="log-out-outline" size={18} color="#ffffff" />
+                <Text
+                  style={{
+                    color: '#ffffff',
+                    fontWeight: '800',
+                    fontSize: 14,
+                    textAlign: 'center',
+                    includeFontPadding: false,
+                  }}
+                >
+                  Sign Out
+                </Text>
               </TouchableOpacity>
             </View>
           </View>

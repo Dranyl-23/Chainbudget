@@ -88,6 +88,7 @@ export default function ReceiveScreen() {
     <ScrollView
       style={{ backgroundColor: colors.background }}
       className="flex-1"
+      showsVerticalScrollIndicator={false}
       contentContainerStyle={{
         paddingTop: 16,
         paddingBottom: Math.max(insets.bottom, 24) + 48,

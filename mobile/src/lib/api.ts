@@ -123,11 +123,12 @@ api.interceptors.response.use(
     }
 
     // ── 401: Session expired ─────────────────────────────────────────────────
-    // Emit a global event that AuthContext listens for to clear session + navigate to login.
-    // Uses an EventEmitter pattern via a global flag so AuthContext can react.
+    // Only trigger session logout if the 401 is an authentic token failure,
+    // not a business logic / signature error.
     if (status === 401) {
-      // Signal the AuthContext (via a module-level emitter set by setSessionExpiredHandler)
-      if (sessionExpiredHandler) {
+      const errorMsg = String(err.response?.data?.error || '').toLowerCase();
+      const isSignatureError = errorMsg.includes('signature') || errorMsg.includes('mismatch') || errorMsg.includes('wallet');
+      if (!isSignatureError && sessionExpiredHandler) {
         sessionExpiredHandler();
       }
     }

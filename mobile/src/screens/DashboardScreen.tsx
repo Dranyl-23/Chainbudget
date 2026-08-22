@@ -140,11 +140,10 @@ export default function DashboardScreen() {
       setBudgets(budgetData);
 
       const txRes = await api.get(`/transactions?orgId=${orgId}&limit=5`);
-      const txData = txRes.data.data
-        ? txRes.data.data
-        : Array.isArray(txRes.data)
-        ? txRes.data
-        : [];
+      const txData =
+        txRes.data.transactions ||
+        txRes.data.data ||
+        (Array.isArray(txRes.data) ? txRes.data : []);
       setRecentTransactions(txData);
 
       setCachedDashboard({
@@ -263,6 +262,7 @@ export default function DashboardScreen() {
       {/* Main Content Area */}
       <ScrollView
         className="flex-1 px-4 mt-2"
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -287,6 +287,7 @@ export default function DashboardScreen() {
                   borderRadius: 26,
                   overflow: 'hidden',
                   marginBottom: 24,
+                  backgroundColor: '#2A0845',
                   borderWidth: 1,
                   borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(147, 51, 234, 0.25)',
                   shadowColor: '#8B5CF6',
@@ -450,6 +451,7 @@ export default function DashboardScreen() {
                   borderRadius: 26,
                   overflow: 'hidden',
                   marginBottom: 24,
+                  backgroundColor: '#1E1B4B',
                   borderWidth: 1,
                   borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(147, 51, 234, 0.25)',
                   shadowColor: '#8B5CF6',

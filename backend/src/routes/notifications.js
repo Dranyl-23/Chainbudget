@@ -1,26 +1,41 @@
 const express = require("express");
 const router = express.Router();
 const Notification = require("../models/Notification");
+const User = require("../models/User");
 const { authenticate } = require("../middleware/auth");
 
-// Get all notifications for an org (limit to latest 50)
+// Get all notifications for an org or across all user's orgs (limit to latest 50)
 router.get("/", authenticate, async (req, res) => {
   try {
     const { orgId } = req.query;
-    if (!orgId) return res.status(400).json({ error: "Missing orgId" });
+    let filter = {};
 
-    const notifications = await Notification.find({ organization: orgId })
+    if (orgId && orgId !== "all") {
+      filter.organization = orgId;
+    } else {
+      const user = await User.findById(req.user.id).select("memberships").lean();
+      const activeOrgIds = (user?.memberships || [])
+        .filter((m) => m.isActive !== false)
+        .map((m) => m.organization);
+
+      filter.organization = { $in: activeOrgIds };
+    }
+
+    const notifications = await Notification.find(filter)
+      .populate("organization", "name logo")
       .sort({ createdAt: -1 })
       .limit(50);
 
     // Format for frontend (checking if the calling user has read it)
-    const formatted = notifications.map(n => ({
+    const formatted = notifications.map((n) => ({
       id: n._id.toString(),
       title: n.title,
       message: n.message,
       type: n.type,
       timestamp: n.createdAt,
-      isRead: n.readBy.includes(req.user.id)
+      isRead: n.readBy && n.readBy.some((uid) => uid.toString() === req.user.id.toString()),
+      orgId: n.organization?._id?.toString() || (n.organization ? n.organization.toString() : null),
+      orgName: n.organization?.name || "Organization",
     }));
 
     res.json({ notifications: formatted });
@@ -36,7 +51,8 @@ router.post("/:id/read", authenticate, async (req, res) => {
     const notif = await Notification.findById(req.params.id);
     if (!notif) return res.status(404).json({ error: "Not found" });
 
-    if (!notif.readBy.includes(req.user.id)) {
+    const alreadyRead = notif.readBy.some((uid) => uid.toString() === req.user.id.toString());
+    if (!alreadyRead) {
       notif.readBy.push(req.user.id);
       await notif.save();
     }
@@ -47,15 +63,26 @@ router.post("/:id/read", authenticate, async (req, res) => {
   }
 });
 
-// Mark all as read for an org
+// Mark all as read for an org or across user's orgs
 router.post("/read-all", authenticate, async (req, res) => {
   try {
     const { orgId } = req.body;
-    if (!orgId) return res.status(400).json({ error: "Missing orgId" });
+    let filter = {};
 
-    // Update all notifications in this org where readBy doesn't include the user
+    if (orgId && orgId !== "all") {
+      filter.organization = orgId;
+    } else {
+      const user = await User.findById(req.user.id).select("memberships").lean();
+      const activeOrgIds = (user?.memberships || [])
+        .filter((m) => m.isActive !== false)
+        .map((m) => m.organization);
+
+      filter.organization = { $in: activeOrgIds };
+    }
+
+    // Update all notifications where readBy doesn't include the user
     await Notification.updateMany(
-      { organization: orgId, readBy: { $ne: req.user.id } },
+      { ...filter, readBy: { $ne: req.user.id } },
       { $addToSet: { readBy: req.user.id } }
     );
     

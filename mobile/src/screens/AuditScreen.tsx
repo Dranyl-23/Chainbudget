@@ -100,6 +100,48 @@ function renderDetailPill(key: string, value: any, colors: any) {
     displayVal = value ? 'Yes' : 'No';
   } else if (typeof value === 'string' && value.startsWith('0x') && value.length > 12) {
     displayVal = `${value.slice(0, 6)}...${value.slice(-4)}`;
+  } else if (typeof value === 'string') {
+    // If the string contains an embedded 0x address (42 chars), abbreviate the address
+    displayVal = displayVal.replace(/0x[a-fA-F0-9]{40}/g, (addr) => `${addr.slice(0, 6)}...${addr.slice(-4)}`);
+  }
+
+  const isLong = displayVal.length > 25 || key.toLowerCase() === 'note' || key.toLowerCase() === 'description';
+
+  if (isLong) {
+    return (
+      <View
+        key={key}
+        style={{
+          backgroundColor: colors.cardGlass,
+          borderColor: colors.borderSubtle,
+          borderWidth: 1,
+          borderRadius: 10,
+          paddingHorizontal: 10,
+          paddingVertical: 7,
+          width: '100%',
+          marginBottom: 6,
+          flexDirection: 'row',
+          flexWrap: 'wrap',
+          alignItems: 'flex-start',
+        }}
+      >
+        <Text style={{ color: colors.textMuted, fontSize: 11, fontWeight: '600', marginRight: 4 }}>
+          {label}:
+        </Text>
+        <Text
+          style={{
+            color: colors.textPrimary,
+            fontSize: 11,
+            fontWeight: '600',
+            flex: 1,
+            flexWrap: 'wrap',
+            lineHeight: 16,
+          }}
+        >
+          {displayVal}
+        </Text>
+      </View>
+    );
   }
 
   return (
@@ -116,6 +158,7 @@ function renderDetailPill(key: string, value: any, colors: any) {
         marginBottom: 6,
         flexDirection: 'row',
         alignItems: 'center',
+        maxWidth: '100%',
       }}
     >
       <Text style={{ color: colors.textMuted, fontSize: 11, fontWeight: '600', marginRight: 4 }}>
@@ -205,6 +248,7 @@ export default function AuditScreen() {
           borderRadius: 22,
           padding: 16,
           marginBottom: 12,
+          overflow: 'hidden',
           shadowColor: '#000',
           shadowOffset: { width: 0, height: 2 },
           shadowOpacity: isDark ? 0.2 : 0.05,
@@ -292,6 +336,8 @@ export default function AuditScreen() {
               paddingBottom: 4,
               flexDirection: 'row',
               flexWrap: 'wrap',
+              width: '100%',
+              overflow: 'hidden',
               marginBottom: hasHash ? 10 : 0,
             }}
           >
@@ -341,6 +387,7 @@ export default function AuditScreen() {
           data={events}
           keyExtractor={(item, i) => item._id || String(i)}
           renderItem={renderItem}
+          showsVerticalScrollIndicator={false}
           contentContainerStyle={{ padding: 16, paddingBottom: 60 }}
           refreshControl={
             <RefreshControl

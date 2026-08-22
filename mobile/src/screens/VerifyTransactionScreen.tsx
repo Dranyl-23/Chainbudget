@@ -66,6 +66,7 @@ export default function VerifyTransactionScreen() {
             keyboardShouldPersistTaps="handled"
             enableOnAndroid={true}
             extraScrollHeight={20}
+            showsVerticalScrollIndicator={false}
           >
             {/* Header */}
             <View style={{ paddingTop: insets.top }} className="flex-row items-center p-4">
@@ -80,25 +81,16 @@ export default function VerifyTransactionScreen() {
 
             <View className="flex-1 p-6 justify-center">
               
-              {/* Icon & Hero */}
-              <View className="items-center mb-10">
-                <View className="items-center justify-center mb-6 relative">
-                  {/* Glow */}
-                  <View className="absolute w-[80px] h-[80px] bg-emerald-500/20 rounded-full" />
-                  <View className="absolute w-[100px] h-[100px] bg-emerald-500/10 rounded-full" />
-                  {/* Icon Box */}
-                  <View className="w-20 h-20 rounded-[24px] border-[1.5px] border-emerald-500/50 items-center justify-center bg-[#022c22]/80 z-10">
-                    <Ionicons name="shield-checkmark" size={36} color="#34d399" />
-                  </View>
-                </View>
+              {/* Hero Header */}
+              <View className="items-center mb-8">
                 <Text 
-                  className="text-2xl font-bold text-white mb-3 text-center tracking-tight"
+                  className="text-2xl font-bold text-white mb-2 text-center tracking-tight"
                   numberOfLines={1}
                   adjustsFontSizeToFit
                 >
                   Audit a Receipt
                 </Text>
-                <Text className="text-emerald-400/80 text-[15px] text-center leading-relaxed">
+                <Text className="text-emerald-400/80 text-sm text-center leading-relaxed">
                   Enter a Polygon hash (0x...) or internal ID{'\n'}to cryptographically verify authenticity.
                 </Text>
               </View>
