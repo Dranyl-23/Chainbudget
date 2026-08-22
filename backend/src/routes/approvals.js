@@ -88,20 +88,24 @@ router.post("/:txId", authenticate, requireRole(2), async (req, res) => {
       // Never trust the client-supplied `to` field for signature verification.
       let canonicalTo = "0x0000000000000000000000000000000000000000";
       if (txn.submittedBy) {
-        const submitter = await User.findById(txn.submittedBy).select("walletAddress").lean();
-        if (submitter?.walletAddress) canonicalTo = submitter.walletAddress;
+        const submitterId = txn.submittedBy._id || txn.submittedBy;
+        const submitter = await User.findById(submitterId).select("walletAddress").lean();
+        if (submitter?.walletAddress && ethers.isAddress(submitter.walletAddress)) {
+          canonicalTo = ethers.getAddress(submitter.walletAddress);
+        }
       }
 
       const message = {
         action,
         txId: txn._id.toString(),
         amount: txn.amount.toString(),
-        description: txn.description,
+        description: txn.description || "",
         to: canonicalTo,
         amountWei: txn.amount.toString(), // Server-sourced only — never from client
       };
       
       const recoveredAddress = ethers.verifyTypedData(domain, types, message, signature);
+      console.log(`[Approval] Verification: Recovered=${recoveredAddress}, UserWallet=${req.user.walletAddress}`);
       if (recoveredAddress.toLowerCase() !== req.user.walletAddress.toLowerCase()) {
         await session.abortTransaction();
         return res.status(401).json({ error: "Cryptographic signature verification failed. Wallet mismatch." });
