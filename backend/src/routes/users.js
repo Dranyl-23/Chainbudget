@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const User = require("../models/User");
 const Organization = require("../models/Organization");
+const Notification = require("../models/Notification");
 const { authenticate, requireRole, requireSuperAdmin } = require("../middleware/auth");
 const { ethers } = require("ethers");
 const { sendEmail } = require("../services/email");
@@ -162,6 +163,36 @@ router.post("/:orgId/invite", authenticate, requireRole(1), async (req, res) => 
     }
 
     await user.save();
+
+    // Create in-app Notification and emit real-time WebSocket events
+    try {
+      const org = await Organization.findById(req.params.orgId).select("name").lean();
+      const orgName = org ? org.name : "Organization";
+      const roleName = roleLabel || `Level ${roleLevel} Member`;
+      const inviterName = req.user.displayName || "An administrator";
+
+      const notif = new Notification({
+        organization: req.params.orgId,
+        title: `Welcome to ${orgName}! 🎉`,
+        message: `${inviterName} has added you to ${orgName} as ${roleName}. You can now view and participate in this organization.`,
+        type: "system",
+        readBy: [],
+      });
+      await notif.save();
+
+      const io = req.app.get("io");
+      if (io) {
+        io.to(req.params.orgId).emit("notification", notif);
+        io.to(req.params.orgId).emit("org_membership_updated", { orgId: req.params.orgId });
+        if (user._id) {
+          io.to(user._id.toString()).emit("notification", notif);
+          io.to(user._id.toString()).emit("user_updated", { userId: user._id.toString(), orgId: req.params.orgId });
+        }
+        io.emit("org_membership_updated", { userId: user._id.toString(), orgId: req.params.orgId });
+      }
+    } catch (notifErr) {
+      console.warn("[invite] In-app notification creation failed (non-fatal):", notifErr.message);
+    }
 
     // Send invite email notification (non-fatal — invite succeeds even if email fails)
     const recipientEmail = isWallet ? null : idLower;
