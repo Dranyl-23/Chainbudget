@@ -108,7 +108,7 @@ export default function VerificationReportScreen() {
         <Text style={{ color: colors.textPrimary }} className="font-bold text-lg">Audit Report</Text>
       </View>
 
-      <ScrollView className="flex-1 p-4">
+      <ScrollView className="flex-1 p-4" showsVerticalScrollIndicator={false}>
         {/* Status Badge */}
         <View className="items-center py-6">
           <View 

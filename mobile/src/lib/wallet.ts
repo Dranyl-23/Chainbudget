@@ -151,7 +151,16 @@ export async function signApprovalAction(
       { name: 'amountWei',   type: 'uint256' },
     ],
   };
-  const message = { action, txId, amount, description, to, amountWei };
+
+  const safeTo = ethers.isAddress(to) ? ethers.getAddress(to) : ethers.ZeroAddress;
+  const message = {
+    action,
+    txId: String(txId),
+    amount: String(amount),
+    description: String(description || ''),
+    to: safeTo,
+    amountWei: String(amountWei),
+  };
 
   const signature = await wallet.signTypedData(domain, types, message);
   return signature;

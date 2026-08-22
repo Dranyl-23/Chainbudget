@@ -156,6 +156,7 @@ export default function ScannerScreen() {
       keyboardShouldPersistTaps="handled"
       enableOnAndroid={true}
       extraScrollHeight={20}
+      showsVerticalScrollIndicator={false}
     >
       <View className="mb-6">
         <Text style={{ color: colors.textPrimary }} className="text-2xl font-bold mb-1">Request Funds</Text>

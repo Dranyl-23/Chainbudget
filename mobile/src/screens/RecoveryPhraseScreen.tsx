@@ -166,7 +166,10 @@ export default function RecoveryPhraseScreen({ route, navigation }: Props) {
         </View>
       )}
 
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.iconWrap}>

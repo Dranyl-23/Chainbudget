@@ -35,6 +35,7 @@ import RootStackNavigator from './src/navigation/RootStackNavigator';
 // Unauthenticated screens
 import WelcomeLandingScreen from './src/screens/WelcomeLandingScreen';
 import PublicLedgerScreen from './src/screens/PublicLedgerScreen';
+import PublicOrgDetailScreen from './src/screens/PublicOrgDetailScreen';
 import VerifyTransactionScreen from './src/screens/VerifyTransactionScreen';
 import VerificationReportScreen from './src/screens/VerificationReportScreen';
 import LoginScreen from './src/screens/LoginScreen';
@@ -60,11 +61,12 @@ function AuthNavigator() {
           screenOptions={{
             headerShown: false,
             contentStyle: { backgroundColor: '#090616' },
-            animation: 'fade',
+            animation: 'slide_from_right',
           }}
         >
           <AuthStack.Screen name="WelcomeLanding" component={WelcomeLandingScreen} />
           <AuthStack.Screen name="PublicLedger" component={PublicLedgerScreen} />
+          <AuthStack.Screen name="PublicOrgDetail" component={PublicOrgDetailScreen} />
           <AuthStack.Screen name="VerifyTransaction" component={VerifyTransactionScreen} />
           <AuthStack.Screen name="VerificationReport" component={VerificationReportScreen} />
           <AuthStack.Screen name="Login" component={LoginScreen} />

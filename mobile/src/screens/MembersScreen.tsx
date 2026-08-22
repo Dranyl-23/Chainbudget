@@ -11,7 +11,10 @@ import {
   TextInput,
   ActivityIndicator,
   BackHandler,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import api from '../lib/api';
@@ -279,15 +282,22 @@ export default function MembersScreen() {
           data={members}
           keyExtractor={(item, index) => item._id || item.user?._id || index.toString()}
           renderItem={renderItem}
+          showsVerticalScrollIndicator={false}
           contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh}
               tintColor={colors.primary} colors={[colors.primary]} />
           }
           ListHeaderComponent={canManage ? (
-            <Text style={{ color: colors.textMuted, fontSize: 12, marginBottom: 12 }}>
-              Long-press or tap 🗑 to remove a member.
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+              <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+                Long-press or tap{' '}
+              </Text>
+              <Ionicons name="trash-outline" size={13} color={colors.error} style={{ marginHorizontal: 2 }} />
+              <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+                {' '}to remove a member.
+              </Text>
+            </View>
           ) : null}
           ListEmptyComponent={
             <View className="items-center justify-center py-12">
@@ -318,94 +328,180 @@ export default function MembersScreen() {
       )}
 
       {/* Invite Modal */}
-      <Modal visible={inviteVisible} animationType="slide" transparent onRequestClose={() => setInviteVisible(false)}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-          <View style={{ backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <Text style={{ color: colors.textPrimary, fontSize: 20, fontWeight: '800' }}>Invite Member</Text>
-              <TouchableOpacity onPress={() => setInviteVisible(false)}>
-                <Ionicons name="close" size={24} color={colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={{ color: colors.textSecondary, fontWeight: '600', marginBottom: 6 }}>Email or Wallet Address</Text>
-            <View style={{ position: 'relative', marginBottom: 8 }}>
-              <TextInput
-                style={{
-                  backgroundColor: colors.background, color: colors.textPrimary,
-                  borderColor: colors.border, borderWidth: 1, borderRadius: 10, padding: 12, paddingRight: 40,
-                }}
-                placeholder="user@email.com or 0x..."
-                placeholderTextColor={colors.textMuted}
-                autoCapitalize="none"
-                value={identifier}
-                onChangeText={handleIdentifierChange}
-              />
-              {lookingUp && <ActivityIndicator size="small" color={colors.primary} style={{ position: 'absolute', right: 12, top: 14 }} />}
-            </View>
-            {foundUser && (
-              <View style={{
-                backgroundColor: colors.successBg, borderColor: colors.successBorder, borderWidth: 1,
-                borderRadius: 10, padding: 10, marginBottom: 12, flexDirection: 'row', alignItems: 'center',
-              }}>
-                <Ionicons name="checkmark-circle" size={16} color={colors.success} style={{ marginRight: 6 }} />
-                <Text style={{ color: colors.success, fontWeight: '600', fontSize: 13 }}>
-                  {foundUser.displayName || foundUser.email}
-                </Text>
-              </View>
-            )}
-
-            <Text style={{ color: colors.textSecondary, fontWeight: '600', marginBottom: 8 }}>Access Level</Text>
-            <View style={{ gap: 6, marginBottom: 16 }}>
-              {ROLE_OPTIONS.map((r) => (
+      <Modal
+        visible={inviteVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setInviteVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={() => setInviteVisible(false)}
+            style={{ flex: 1 }}
+          />
+          <View
+            style={{
+              backgroundColor: colors.surface,
+              borderTopLeftRadius: 28,
+              borderTopRightRadius: 28,
+              maxHeight: '85%',
+              borderWidth: 1,
+              borderColor: colors.border,
+              overflow: 'hidden',
+            }}
+          >
+            <KeyboardAwareScrollView
+              enableOnAndroid
+              extraScrollHeight={Platform.OS === 'android' ? 30 : 20}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ padding: 24, paddingBottom: 40 }}
+            >
+              {/* Header */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                <View>
+                  <Text style={{ color: colors.textPrimary, fontSize: 20, fontWeight: '800' }}>Invite Member</Text>
+                  <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>Add team member to organization</Text>
+                </View>
                 <TouchableOpacity
-                  key={r.level}
-                  onPress={() => setSelectedRole(r.level)}
+                  onPress={() => setInviteVisible(false)}
                   style={{
-                    flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 10, borderWidth: 1,
-                    backgroundColor: selectedRole === r.level ? colors.primaryMuted : colors.background,
-                    borderColor: selectedRole === r.level ? colors.primary : colors.border,
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    backgroundColor: colors.cardGlass,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderWidth: 1,
+                    borderColor: colors.border,
                   }}
                 >
-                  <Ionicons
-                    name={selectedRole === r.level ? 'radio-button-on' : 'radio-button-off'}
-                    size={18} color={selectedRole === r.level ? colors.primary : colors.textMuted}
-                    style={{ marginRight: 10 }}
-                  />
-                  <View>
-                    <Text style={{ color: colors.textPrimary, fontWeight: '700', fontSize: 13 }}>
-                      Level {r.level} — {r.label}
-                    </Text>
-                    <Text style={{ color: colors.textMuted, fontSize: 11 }}>{r.desc}</Text>
-                  </View>
+                  <Ionicons name="close" size={20} color={colors.textSecondary} />
                 </TouchableOpacity>
-              ))}
-            </View>
+              </View>
 
-            <Text style={{ color: colors.textSecondary, fontWeight: '600', marginBottom: 6 }}>Position Title (optional)</Text>
-            <TextInput
-              style={{
-                backgroundColor: colors.background, color: colors.textPrimary,
-                borderColor: colors.border, borderWidth: 1, borderRadius: 10, padding: 12, marginBottom: 20,
-              }}
-              placeholder="e.g. Treasurer, Auditor"
-              placeholderTextColor={colors.textMuted}
-              value={roleLabel}
-              onChangeText={setRoleLabel}
-            />
+              {/* Email / Wallet Input */}
+              <Text style={{ color: colors.textSecondary, fontWeight: '600', marginBottom: 6 }}>Email or Wallet Address</Text>
+              <View style={{ position: 'relative', marginBottom: 8 }}>
+                <TextInput
+                  style={{
+                    backgroundColor: colors.background,
+                    color: colors.textPrimary,
+                    borderColor: colors.border,
+                    borderWidth: 1,
+                    borderRadius: 12,
+                    padding: 14,
+                    paddingRight: 40,
+                    fontSize: 14,
+                  }}
+                  placeholder="user@email.com or 0x..."
+                  placeholderTextColor={colors.textMuted}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  value={identifier}
+                  onChangeText={handleIdentifierChange}
+                />
+                {lookingUp && <ActivityIndicator size="small" color={colors.primary} style={{ position: 'absolute', right: 12, top: 16 }} />}
+              </View>
+              {foundUser && (
+                <View style={{
+                  backgroundColor: colors.successBg, borderColor: colors.successBorder, borderWidth: 1,
+                  borderRadius: 12, padding: 12, marginBottom: 16, flexDirection: 'row', alignItems: 'center',
+                }}>
+                  <Ionicons name="checkmark-circle" size={18} color={colors.success} style={{ marginRight: 8 }} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: colors.success, fontWeight: '700', fontSize: 13 }}>
+                      {foundUser.displayName || 'Found User'}
+                    </Text>
+                    {foundUser.email ? (
+                      <Text style={{ color: colors.textSecondary, fontSize: 11 }}>{foundUser.email}</Text>
+                    ) : null}
+                  </View>
+                </View>
+              )}
 
-            <TouchableOpacity
-              onPress={handleInvite}
-              disabled={inviting}
-              style={{ backgroundColor: colors.primary, padding: 16, borderRadius: 14, alignItems: 'center' }}
-            >
-              {inviting
-                ? <ActivityIndicator color="#fff" />
-                : <Text style={{ color: '#fff', fontWeight: '800', fontSize: 16 }}>Invite Member</Text>
-              }
-            </TouchableOpacity>
+              {/* Role Selection */}
+              <Text style={{ color: colors.textSecondary, fontWeight: '600', marginBottom: 8, marginTop: 4 }}>Access Level</Text>
+              <View style={{ gap: 8, marginBottom: 16 }}>
+                {ROLE_OPTIONS.map((r) => (
+                  <TouchableOpacity
+                    key={r.level}
+                    onPress={() => setSelectedRole(r.level)}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      padding: 12,
+                      borderRadius: 12,
+                      borderWidth: 1.5,
+                      backgroundColor: selectedRole === r.level ? colors.primaryMuted : colors.background,
+                      borderColor: selectedRole === r.level ? colors.primary : colors.border,
+                    }}
+                  >
+                    <Ionicons
+                      name={selectedRole === r.level ? 'radio-button-on' : 'radio-button-off'}
+                      size={20}
+                      color={selectedRole === r.level ? colors.primary : colors.textMuted}
+                      style={{ marginRight: 10 }}
+                    />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: colors.textPrimary, fontWeight: '700', fontSize: 13 }}>
+                        Level {r.level} — {r.label}
+                      </Text>
+                      <Text style={{ color: colors.textMuted, fontSize: 11, marginTop: 1 }}>{r.desc}</Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Position Title (optional) */}
+              <Text style={{ color: colors.textSecondary, fontWeight: '600', marginBottom: 6 }}>Position Title (optional)</Text>
+              <TextInput
+                style={{
+                  backgroundColor: colors.background,
+                  color: colors.textPrimary,
+                  borderColor: colors.border,
+                  borderWidth: 1,
+                  borderRadius: 12,
+                  padding: 14,
+                  marginBottom: 24,
+                  fontSize: 14,
+                }}
+                placeholder="e.g. Treasurer, Auditor, Officer"
+                placeholderTextColor={colors.textMuted}
+                value={roleLabel}
+                onChangeText={setRoleLabel}
+              />
+
+              {/* Submit Button */}
+              <TouchableOpacity
+                onPress={handleInvite}
+                disabled={inviting || !identifier.trim()}
+                activeOpacity={0.8}
+                style={{
+                  backgroundColor: colors.primary,
+                  padding: 16,
+                  borderRadius: 16,
+                  alignItems: 'center',
+                  opacity: (!identifier.trim() || inviting) ? 0.6 : 1,
+                  shadowColor: colors.primary,
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 8,
+                  elevation: 4,
+                }}
+              >
+                {inviting
+                  ? <ActivityIndicator color="#fff" />
+                  : <Text style={{ color: '#fff', fontWeight: '800', fontSize: 16 }}>Invite Member</Text>
+                }
+              </TouchableOpacity>
+            </KeyboardAwareScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );

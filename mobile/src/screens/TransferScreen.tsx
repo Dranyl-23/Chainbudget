@@ -107,16 +107,11 @@ export default function TransferScreen() {
       keyboardShouldPersistTaps="handled"
       enableOnAndroid={true}
       extraScrollHeight={20}
+      showsVerticalScrollIndicator={false}
     >
-      <View className="items-center mb-8">
-        <View 
-          style={{ backgroundColor: colors.primaryMuted, borderColor: colors.primary + '40' }}
-          className="w-16 h-16 rounded-full items-center justify-center border mb-4 shadow-sm"
-        >
-          <Ionicons name="document-text" size={28} color={colors.primary} />
-        </View>
+      <View className="mb-6 pt-1">
         <Text style={{ color: colors.textPrimary }} className="text-2xl font-extrabold">Request Funds</Text>
-        <Text style={{ color: colors.textSecondary }} className="text-center mt-1 text-sm">
+        <Text style={{ color: colors.textSecondary }} className="mt-1 text-sm">
           Submit an expense request to the DAO for executive review & approval.
         </Text>
       </View>

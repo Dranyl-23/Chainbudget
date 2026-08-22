@@ -9,6 +9,7 @@ import { useOrg } from '../context/OrgContext';
 import { useToast } from '../context/ToastContext';
 import { useSocket } from '../context/SocketContext';
 import { useTheme } from '../context/ThemeContext';
+import { ethers } from 'ethers';
 import { signApprovalAction } from '../lib/wallet';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { triggerSuccessHaptic, triggerErrorHaptic, triggerLightHaptic } from '../lib/biometrics';
@@ -17,6 +18,7 @@ import ApprovalConfirmModal from '../components/ApprovalConfirmModal';
 import SwipeableApprovalCard from '../components/SwipeableApprovalCard';
 import ScaleButton from '../components/ScaleButton';
 import SuccessCelebrationModal from '../components/SuccessCelebrationModal';
+import OrgBottomSheet from '../components/OrgBottomSheet';
 import { getCachedApprovals, setCachedApprovals } from '../lib/cache';
 
 export default function ApprovalsScreen() {
@@ -32,6 +34,9 @@ export default function ApprovalsScreen() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [signingTxId, setSigningTxId] = useState<string | null>(null);
+
+  // Org Selector Bottom Sheet State
+  const [showOrgSheet, setShowOrgSheet] = useState(false);
 
   // Modal State
   const [confirmModalVisible, setConfirmModalVisible] = useState(false);
@@ -76,9 +81,11 @@ export default function ApprovalsScreen() {
   const fetchPending = async (orgId: string) => {
     if (pendingTx.length === 0) setLoading(true);
     try {
-      const res = await api.get(`/transactions?orgId=${orgId}&status=pending_approval`);
-      const data = res.data.data || res.data;
-      const list = Array.isArray(data) ? data : [];
+      const res = await api.get(`/transactions?orgId=${orgId}&status=pending_approval&limit=100`);
+      const list =
+        res.data.transactions ||
+        res.data.data ||
+        (Array.isArray(res.data) ? res.data : []);
       setPendingTx(list);
       setCachedApprovals(orgId, list);
       Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
@@ -122,7 +129,11 @@ export default function ApprovalsScreen() {
     try {
       setSigningTxId(tx._id);
 
-      const toAddress = tx.to || tx.submittedBy?.walletAddress || tx.submittedBy || '';
+      let candidateTo = tx.to || tx.submittedBy?.walletAddress || '';
+      if (!candidateTo && typeof tx.submittedBy === 'string' && tx.submittedBy.startsWith('0x')) {
+        candidateTo = tx.submittedBy;
+      }
+      const toAddress = ethers.isAddress(candidateTo) ? ethers.getAddress(candidateTo) : '0x0000000000000000000000000000000000000000';
       const amountWei = (tx.amount || 0).toString();
 
       const signature = await signApprovalAction(
@@ -175,155 +186,156 @@ export default function ApprovalsScreen() {
         onSwipeReject={() => promptConfirmation(tx, 'rejected')}
         disabled={Boolean(userVote) || signingTxId === tx._id}
       >
-        <TouchableOpacity 
-          onPress={() => navigation.navigate('TransactionDetail', { txId: tx._id })}
-          activeOpacity={0.85}
-          accessible={true}
-          accessibilityRole="button"
-          accessibilityLabel={`Transaction: ${tx.description}, Amount: ${tx.amount} PHP. Swipe right to approve, swipe left to reject.`}
+        <LinearGradient
+          colors={isDark ? ['#1a1a24', '#0d0d12'] : ['#ffffff', '#f1f5f9']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{
+            borderRadius: 16,
+            padding: 16,
+            borderWidth: 1,
+            borderColor: colors.border,
+          }}
         >
-          <LinearGradient
-            colors={isDark ? ['#1a1a24', '#0d0d12'] : ['#ffffff', '#f1f5f9']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={{
-              borderRadius: 16,
-              padding: 16,
-              borderWidth: 1,
-              borderColor: colors.border,
-            }}
+          {/* Top Row: Description & Amount — Tap to view details */}
+          <TouchableOpacity
+            onPress={() => navigation.navigate('TransactionDetail', { txId: tx._id })}
+            activeOpacity={0.7}
+            className="flex-row justify-between items-start mb-2"
+            accessible={true}
+            accessibilityRole="button"
+            accessibilityLabel={`Transaction: ${tx.description}, Amount: ${tx.amount} PHP`}
           >
-            {/* Top Row: Description & Amount */}
-            <View className="flex-row justify-between items-start mb-2">
-              <View className="flex-1 mr-2">
-                <Text style={{ color: colors.textPrimary }} className="font-bold text-lg mb-1">{tx.description}</Text>
-                <Text style={{ color: colors.textMuted }} className="text-xs">
-                  Requested by: {tx.submittedBy?.displayName || 'Unknown'}
-                </Text>
-              </View>
-              <Text style={{ color: colors.primary }} className="font-extrabold text-xl">₱{tx.amount?.toLocaleString()}</Text>
+            <View className="flex-1 mr-2">
+              <Text style={{ color: colors.textPrimary }} className="font-bold text-lg mb-1">{tx.description}</Text>
+              <Text style={{ color: colors.textMuted }} className="text-xs">
+                Requested by: {tx.submittedBy?.displayName || 'Unknown'}
+              </Text>
             </View>
+            <Text style={{ color: colors.primary }} className="font-extrabold text-xl">₱{tx.amount?.toLocaleString()}</Text>
+          </TouchableOpacity>
 
-            {/* Badges: Category, Urgency */}
-            <View className="flex-row items-center gap-2 mb-3 flex-wrap">
-              {tx.category && (
-                <View style={{ backgroundColor: colors.cardGlass, borderColor: colors.borderSubtle }} className="px-2.5 py-0.5 rounded-full border">
-                  <Text style={{ color: colors.textSecondary }} className="text-[10px] font-semibold">{tx.category}</Text>
-                </View>
-              )}
-              {tx.urgency && tx.urgency !== 'low' && (
-                <View
-                  style={{
-                    backgroundColor: tx.urgency === 'high' || tx.urgency === 'critical' ? colors.errorBg : colors.warningBg,
-                    borderColor: tx.urgency === 'high' || tx.urgency === 'critical' ? colors.errorBorder : colors.warningBorder,
-                  }}
-                  className="px-2.5 py-0.5 rounded-full border"
-                >
-                  <Text
-                    style={{
-                      color: tx.urgency === 'high' || tx.urgency === 'critical' ? colors.error : colors.warning,
-                    }}
-                    className="text-[10px] font-extrabold uppercase"
-                  >
-                    {tx.urgency}
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            {/* Approval Threshold Progress Bar */}
-            <View style={{ backgroundColor: colors.cardGlass, borderColor: colors.borderSubtle }} className="p-3 rounded-xl border mb-3">
-              <View className="flex-row justify-between items-center mb-1.5">
-                <View className="flex-row items-center gap-1.5">
-                  <Ionicons name="shield-checkmark-outline" size={14} color={colors.primary} />
-                  <Text style={{ color: colors.textSecondary }} className="text-xs font-semibold">Approval Progress</Text>
-                </View>
-                <Text style={{ color: colors.primary }} className="text-xs font-bold">
-                  {currentApprovals} of {requiredApprovals} Signed
-                </Text>
-              </View>
-              <View style={{ height: 6, backgroundColor: isDark ? 'rgba(0,0,0,0.5)' : colors.backgroundSecondary, borderRadius: 3, overflow: 'hidden' }}>
-                <View style={{ width: `${pct}%`, height: '100%', backgroundColor: pct >= 100 ? colors.success : colors.primary, borderRadius: 3 }} />
-              </View>
-            </View>
-
-            {/* Already voted banner or Action Buttons */}
-            {userVote ? (
-              <View
-                style={{
-                  backgroundColor: userVote.action === 'approved' ? colors.successBg : colors.errorBg,
-                  borderColor: userVote.action === 'approved' ? colors.successBorder : colors.errorBorder,
-                }}
-                className="flex-row items-center justify-center p-2.5 rounded-xl border"
-              >
-                <Ionicons
-                  name={userVote.action === 'approved' ? 'checkmark-circle' : 'close-circle'}
-                  size={16}
-                  color={userVote.action === 'approved' ? colors.success : colors.error}
-                  style={{ marginRight: 6 }}
-                />
-                <Text
-                  style={{ color: userVote.action === 'approved' ? colors.success : colors.error }}
-                  className="font-bold text-xs"
-                >
-                  You already voted ({userVote.action})
-                </Text>
-              </View>
-            ) : (
-              <View className="flex-row gap-3">
-                <ScaleButton 
-                  style={{
-                    backgroundColor: colors.errorBg,
-                    borderColor: colors.errorBorder,
-                    flex: 1,
-                    borderWidth: 1,
-                    paddingVertical: 12,
-                    borderRadius: 12,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexDirection: 'row',
-                  }}
-                  onPress={() => promptConfirmation(tx, 'rejected')}
-                  disabled={signingTxId === tx._id}
-                  accessible={true}
-                  accessibilityRole="button"
-                  accessibilityLabel="Reject transaction"
-                >
-                  <Ionicons name="close-circle" size={18} color={colors.error} style={{ marginRight: 6 }} />
-                  <Text style={{ color: colors.error }} className="font-bold">Reject</Text>
-                </ScaleButton>
-
-                <ScaleButton 
-                  style={{
-                    backgroundColor: colors.successBg,
-                    borderColor: colors.successBorder,
-                    flex: 1,
-                    borderWidth: 1,
-                    paddingVertical: 12,
-                    borderRadius: 12,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexDirection: 'row',
-                  }}
-                  onPress={() => promptConfirmation(tx, 'approved')}
-                  disabled={signingTxId === tx._id}
-                  accessible={true}
-                  accessibilityRole="button"
-                  accessibilityLabel="Approve transaction"
-                >
-                  {signingTxId === tx._id ? (
-                    <ActivityIndicator size="small" color={colors.success} />
-                  ) : (
-                    <>
-                      <Ionicons name="checkmark-circle" size={18} color={colors.success} style={{ marginRight: 6 }} />
-                      <Text style={{ color: colors.success }} className="font-bold">Approve</Text>
-                    </>
-                  )}
-                </ScaleButton>
+          {/* Badges: Category, Urgency */}
+          <View className="flex-row items-center gap-2 mb-3 flex-wrap">
+            {tx.category && (
+              <View style={{ backgroundColor: colors.cardGlass, borderColor: colors.borderSubtle }} className="px-2.5 py-0.5 rounded-full border">
+                <Text style={{ color: colors.textSecondary }} className="text-[10px] font-semibold">{tx.category}</Text>
               </View>
             )}
-          </LinearGradient>
-        </TouchableOpacity>
+            {tx.urgency && tx.urgency !== 'low' && (
+              <View
+                style={{
+                  backgroundColor: tx.urgency === 'high' || tx.urgency === 'critical' ? colors.errorBg : colors.warningBg,
+                  borderColor: tx.urgency === 'high' || tx.urgency === 'critical' ? colors.errorBorder : colors.warningBorder,
+                }}
+                className="px-2.5 py-0.5 rounded-full border"
+              >
+                <Text
+                  style={{
+                    color: tx.urgency === 'high' || tx.urgency === 'critical' ? colors.error : colors.warning,
+                  }}
+                  className="text-[10px] font-extrabold uppercase"
+                >
+                  {tx.urgency}
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {/* Approval Threshold Progress Bar */}
+          <View style={{ backgroundColor: colors.cardGlass, borderColor: colors.borderSubtle }} className="p-3 rounded-xl border mb-3">
+            <View className="flex-row justify-between items-center mb-1.5">
+              <View className="flex-row items-center gap-1.5">
+                <Ionicons name="shield-checkmark-outline" size={14} color={colors.primary} />
+                <Text style={{ color: colors.textSecondary }} className="text-xs font-semibold">Approval Progress</Text>
+              </View>
+              <Text style={{ color: colors.primary }} className="text-xs font-bold">
+                {currentApprovals} of {requiredApprovals} Signed
+              </Text>
+            </View>
+            <View style={{ height: 6, backgroundColor: isDark ? 'rgba(0,0,0,0.5)' : colors.backgroundSecondary, borderRadius: 3, overflow: 'hidden' }}>
+              <View style={{ width: `${pct}%`, height: '100%', backgroundColor: pct >= 100 ? colors.success : colors.primary, borderRadius: 3 }} />
+            </View>
+          </View>
+
+          {/* Already voted banner or Action Buttons */}
+          {userVote ? (
+            <View
+              style={{
+                backgroundColor: userVote.action === 'approved' ? colors.successBg : colors.errorBg,
+                borderColor: userVote.action === 'approved' ? colors.successBorder : colors.errorBorder,
+              }}
+              className="flex-row items-center justify-center p-2.5 rounded-xl border"
+            >
+              <Ionicons
+                name={userVote.action === 'approved' ? 'checkmark-circle' : 'close-circle'}
+                size={16}
+                color={userVote.action === 'approved' ? colors.success : colors.error}
+                style={{ marginRight: 6 }}
+              />
+              <Text
+                style={{ color: userVote.action === 'approved' ? colors.success : colors.error }}
+                className="font-bold text-xs"
+              >
+                You already voted ({userVote.action})
+              </Text>
+            </View>
+          ) : (
+            <View className="flex-row gap-3">
+              <TouchableOpacity 
+                style={{
+                  backgroundColor: colors.errorBg,
+                  borderColor: colors.errorBorder,
+                  flex: 1,
+                  borderWidth: 1,
+                  paddingVertical: 12,
+                  borderRadius: 12,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexDirection: 'row',
+                }}
+                activeOpacity={0.7}
+                onPress={() => promptConfirmation(tx, 'rejected')}
+                disabled={signingTxId === tx._id}
+                accessible={true}
+                accessibilityRole="button"
+                accessibilityLabel="Reject transaction"
+              >
+                <Ionicons name="close-circle" size={18} color={colors.error} style={{ marginRight: 6 }} />
+                <Text style={{ color: colors.error }} className="font-bold">Reject</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={{
+                  backgroundColor: colors.successBg,
+                  borderColor: colors.successBorder,
+                  flex: 1,
+                  borderWidth: 1,
+                  paddingVertical: 12,
+                  borderRadius: 12,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexDirection: 'row',
+                }}
+                activeOpacity={0.7}
+                onPress={() => promptConfirmation(tx, 'approved')}
+                disabled={signingTxId === tx._id}
+                accessible={true}
+                accessibilityRole="button"
+                accessibilityLabel="Approve transaction"
+              >
+                {signingTxId === tx._id ? (
+                  <ActivityIndicator size="small" color={colors.success} />
+                ) : (
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Ionicons name="checkmark-circle" size={18} color={colors.success} style={{ marginRight: 6 }} />
+                    <Text style={{ color: colors.success }} className="font-bold">Approve</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
+        </LinearGradient>
       </SwipeableApprovalCard>
     );
   };
@@ -333,42 +345,97 @@ export default function ApprovalsScreen() {
       {/* Header & Org Switcher */}
       <View 
         style={{ 
-          paddingTop: (insets.top || 0) + 16,
+          paddingTop: (insets.top || 0) + 12,
           backgroundColor: colors.background,
           borderBottomColor: colors.borderSubtle,
         }}
-        className="pb-2 px-4 border-b z-10"
+        className="pb-3 px-4 border-b z-10"
       >
-        <Text style={{ color: colors.textPrimary }} className="text-2xl font-bold mb-4">Inbox & Approvals</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <View>
+            <Text style={{ color: colors.textPrimary }} className="text-2xl font-bold">
+              Inbox & Approvals
+            </Text>
+            <Text style={{ color: colors.textMuted }} className="text-xs mt-0.5">
+              Review and sign multi-sig requests
+            </Text>
+          </View>
+        </View>
         
         {organizations.length > 0 && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row">
-            {organizations.map(org => {
-              const isActive = org._id === activeOrgId;
-              return (
-                <TouchableOpacity
-                  key={org._id}
-                  onPress={() => {
-                    triggerLightHaptic();
-                    setActiveOrgId(org._id);
-                  }}
-                  style={{
-                    backgroundColor: isActive ? colors.primaryMuted : colors.surface,
-                    borderColor: isActive ? colors.primary : colors.border,
-                  }}
-                  className="mr-3 px-4 py-2 rounded-full border flex-row items-center shadow-sm"
-                  accessible={true}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Switch to organization ${org.name}`}
+          <TouchableOpacity
+            onPress={() => {
+              triggerLightHaptic();
+              setShowOrgSheet(true);
+            }}
+            activeOpacity={0.75}
+            style={{
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+              borderWidth: 1,
+              borderRadius: 14,
+              paddingHorizontal: 14,
+              paddingVertical: 10,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.05,
+              shadowRadius: 3,
+              elevation: 2,
+            }}
+            accessible={true}
+            accessibilityRole="button"
+            accessibilityLabel="Select organization"
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 10 }}>
+              <View
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 10,
+                  backgroundColor: colors.primaryMuted,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginRight: 10,
+                  borderWidth: 1,
+                  borderColor: colors.primary + '25',
+                }}
+              >
+                <Ionicons name="business" size={16} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  Selected Organization
+                </Text>
+                <Text
+                  style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '700' }}
+                  numberOfLines={1}
                 >
-                  {isActive && <Ionicons name="radio-button-on" size={14} color={colors.primary} style={{ marginRight: 6 }} />}
-                  <Text style={{ color: isActive ? colors.primary : colors.textSecondary }} className="font-semibold text-xs">
-                    {org.name}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+                  {organizations.find((o) => o._id === activeOrgId)?.name || 'Select Organization'}
+                </Text>
+              </View>
+            </View>
+
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: colors.primaryMuted,
+                paddingHorizontal: 8,
+                paddingVertical: 4,
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: colors.primary + '25',
+              }}
+            >
+              <Text style={{ color: colors.primary, fontSize: 11, fontWeight: '700', marginRight: 4 }}>
+                Switch
+              </Text>
+              <Ionicons name="chevron-down" size={14} color={colors.primary} />
+            </View>
+          </TouchableOpacity>
         )}
       </View>
 
@@ -393,6 +460,7 @@ export default function ApprovalsScreen() {
             data={pendingTx}
             keyExtractor={(item) => item._id}
             renderItem={renderTransactionCard}
+            showsVerticalScrollIndicator={false}
             contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
             refreshControl={
               <RefreshControl 
@@ -434,6 +502,18 @@ export default function ApprovalsScreen() {
         title={celebration.title}
         subtitle={celebration.subtitle}
         onDismiss={() => setCelebration({ visible: false, title: '' })}
+      />
+
+      {/* Organization Selection Drawer */}
+      <OrgBottomSheet
+        visible={showOrgSheet}
+        onClose={() => setShowOrgSheet(false)}
+        organizations={organizations}
+        activeOrgId={activeOrgId}
+        onSelectOrg={(orgId) => {
+          setActiveOrgId(orgId);
+          setShowOrgSheet(false);
+        }}
       />
     </View>
   );

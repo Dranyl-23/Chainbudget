@@ -15,7 +15,6 @@ import {
   TouchableWithoutFeedback,
   TextInput,
   ActivityIndicator,
-  StyleSheet,
   BackHandler,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -78,28 +77,48 @@ function ApprovalConfirmModal({
       onRequestClose={onClose}
     >
       <TouchableWithoutFeedback onPress={onClose}>
-        <View style={{ backgroundColor: colors.modalBackdrop }} className="flex-1 justify-end">
+        <View style={{ backgroundColor: colors.modalBackdrop, flex: 1, justifyContent: 'flex-end' }}>
           <TouchableWithoutFeedback>
             <View
               style={{
                 backgroundColor: colors.surface,
-                borderTopColor: colors.border,
-                paddingBottom: Math.max(insets.bottom, 20) + 16,
-                maxHeight: '85%',
+                borderTopColor: colors.borderSubtle,
+                borderTopWidth: 1,
+                borderTopLeftRadius: 32,
+                borderTopRightRadius: 32,
+                paddingHorizontal: 20,
+                paddingTop: 12,
+                paddingBottom: Math.max(insets.bottom || 0, 24) + 12,
+                maxHeight: '88%',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: -4 },
+                shadowOpacity: 0.15,
+                shadowRadius: 12,
+                elevation: 10,
               }}
-              className="rounded-t-[32px] border-t px-6 pt-4 shadow-2xl"
             >
-              {/* Drag Pill */}
+              {/* Drag Indicator Bar */}
               <View className="items-center mb-3">
-                <View style={{ backgroundColor: colors.borderStrong }} className="w-12 h-1.5 rounded-full" />
+                <View
+                  style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.2)' : colors.borderStrong }}
+                  className="w-12 h-1 rounded-full"
+                />
               </View>
 
               {/* Title Header */}
               <View className="flex-row items-center justify-between mb-4">
-                <View className="flex-row items-center gap-2.5">
+                <View className="flex-row items-center gap-3">
                   <View
-                    style={{ backgroundColor: actionBg, borderColor: actionBorder }}
-                    className="w-10 h-10 rounded-2xl items-center justify-center border"
+                    style={{
+                      backgroundColor: actionBg,
+                      borderColor: actionBorder,
+                      borderWidth: 1.5,
+                      width: 44,
+                      height: 44,
+                      borderRadius: 14,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
                   >
                     <Ionicons
                       name={isApprove ? 'checkmark-circle' : 'close-circle'}
@@ -108,53 +127,86 @@ function ApprovalConfirmModal({
                     />
                   </View>
                   <View>
-                    <Text style={{ color: colors.textPrimary }} className="text-lg font-extrabold">
+                    <Text style={{ color: colors.textPrimary }} className="text-lg font-black tracking-tight">
                       Confirm {isApprove ? 'Approval' : 'Rejection'}
                     </Text>
-                    <Text style={{ color: colors.textMuted }} className="text-xs">
+                    <Text style={{ color: colors.textMuted, fontSize: 11.5, marginTop: 1 }}>
                       Sign transaction with on-device wallet
                     </Text>
                   </View>
                 </View>
                 <TouchableOpacity
-                  onPress={onClose}
-                  style={{ backgroundColor: colors.cardGlass, borderColor: colors.border }}
-                  className="w-8 h-8 rounded-full items-center justify-center border"
+                  onPress={() => {
+                    triggerLightHaptic();
+                    onClose();
+                  }}
+                  style={{
+                    backgroundColor: colors.cardGlass,
+                    borderColor: colors.borderSubtle,
+                    borderWidth: 1,
+                    width: 34,
+                    height: 34,
+                    borderRadius: 17,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                  activeOpacity={0.7}
                 >
-                  <Ionicons name="close" size={16} color={colors.textSecondary} />
+                  <Ionicons name="close" size={18} color={colors.textSecondary} />
                 </TouchableOpacity>
               </View>
 
               {/* Transaction Summary Card */}
               <View
-                style={{ backgroundColor: isDark ? 'rgba(0,0,0,0.4)' : colors.backgroundSecondary, borderColor: colors.border }}
-                className="p-4 rounded-2xl border mb-4"
+                style={{
+                  backgroundColor: isDark ? 'rgba(0,0,0,0.35)' : colors.backgroundSecondary,
+                  borderColor: colors.border,
+                  borderWidth: 1,
+                  borderRadius: 20,
+                  padding: 16,
+                  marginBottom: 14,
+                }}
               >
-                <View className="flex-row justify-between items-start mb-2">
-                  <View className="flex-1 mr-2">
-                    <Text style={{ color: colors.textPrimary }} className="font-bold text-base mb-0.5">
+                <View className="flex-row justify-between items-start mb-2.5">
+                  <View className="flex-1 mr-3">
+                    <Text
+                      style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '800', lineHeight: 20 }}
+                      numberOfLines={2}
+                    >
                       {tx.description}
                     </Text>
-                    <Text style={{ color: colors.textMuted }} className="text-xs">
-                      Initiator: {tx.submittedBy?.displayName || 'Unknown'}
+                    <Text style={{ color: colors.textMuted, fontSize: 11.5, marginTop: 2 }}>
+                      Initiator: {tx.submittedBy?.displayName || 'Unknown Member'}
                     </Text>
                   </View>
-                  <Text style={{ color: actionColor }} className="font-extrabold text-xl">
-                    ₱{tx.amount?.toLocaleString()}
+                  <Text style={{ color: actionColor, fontSize: 20, fontWeight: '900' }}>
+                    ₱{Number(tx.amount || 0).toLocaleString()}
                   </Text>
                 </View>
 
-                {tx.category && (
-                  <View className="flex-row items-center gap-1.5 mt-1">
-                    <Text style={{ color: colors.textMuted }} className="text-xs">Category:</Text>
-                    <Text style={{ color: colors.textSecondary }} className="text-xs font-semibold">{tx.category}</Text>
+                {tx.category ? (
+                  <View className="flex-row items-center gap-1.5 pt-2 border-t" style={{ borderTopColor: colors.borderSubtle }}>
+                    <Text style={{ color: colors.textMuted, fontSize: 11, fontWeight: '600' }}>Category:</Text>
+                    <Text style={{ color: colors.textPrimary, fontSize: 11.5, fontWeight: '700' }}>
+                      {tx.category}
+                    </Text>
                   </View>
-                )}
+                ) : null}
               </View>
 
               {/* Comment / Reason Input */}
-              <Text style={{ color: colors.textSecondary }} className="text-xs font-bold uppercase mb-2">
-                Approval Comment (Optional)
+              <Text
+                style={{
+                  color: colors.textMuted,
+                  fontSize: 10.5,
+                  fontWeight: '800',
+                  letterSpacing: 0.5,
+                  textTransform: 'uppercase',
+                  marginBottom: 6,
+                  paddingLeft: 2,
+                }}
+              >
+                APPROVAL COMMENT (OPTIONAL)
               </Text>
               <TextInput
                 value={comment}
@@ -162,50 +214,119 @@ function ApprovalConfirmModal({
                 placeholder="Add an audit trail comment..."
                 placeholderTextColor={colors.inputPlaceholder}
                 style={{
-                  backgroundColor: isDark ? 'rgba(0,0,0,0.45)' : colors.backgroundSecondary,
+                  backgroundColor: isDark ? 'rgba(0,0,0,0.35)' : colors.backgroundSecondary,
                   borderColor: colors.border,
+                  borderWidth: 1,
                   color: colors.textPrimary,
+                  fontSize: 13,
+                  paddingHorizontal: 14,
+                  height: 46,
+                  borderRadius: 14,
+                  marginBottom: 12,
                 }}
-                className="border p-3.5 rounded-2xl mb-4 text-sm"
               />
 
               {/* Cryptographic Security Note */}
               <View
-                style={{ backgroundColor: colors.primaryMuted, borderColor: colors.primary + '30' }}
-                className="flex-row items-center p-3 rounded-xl border mb-5 gap-2.5"
+                style={{
+                  backgroundColor: colors.primaryMuted,
+                  borderColor: colors.primary + '35',
+                  borderWidth: 1,
+                  padding: 12,
+                  borderRadius: 16,
+                  marginBottom: 18,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 10,
+                }}
               >
-                <Ionicons name="shield-checkmark" size={18} color={colors.primary} />
-                <Text style={{ color: colors.primary }} className="text-xs flex-1 font-medium leading-4">
+                <View
+                  style={{
+                    backgroundColor: colors.primary + '20',
+                    width: 28,
+                    height: 28,
+                    borderRadius: 9,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Ionicons name="shield-checkmark" size={16} color={colors.primary} />
+                </View>
+                <Text style={{ color: colors.primary, fontSize: 11, flex: 1, fontWeight: '600', lineHeight: 15 }}>
                   EIP-712 typed signature will be verified cryptographically by the DAO treasury smart contract.
                 </Text>
               </View>
 
-              {/* Action Buttons */}
-              <View className="flex-row gap-3">
+              {/* Action Buttons Row */}
+              <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+                {/* Cancel Button */}
                 <TouchableOpacity
-                  onPress={onClose}
+                  onPress={() => {
+                    triggerLightHaptic();
+                    onClose();
+                  }}
                   disabled={isSigning}
-                  style={{ backgroundColor: colors.cardGlass, borderColor: colors.border }}
-                  className="flex-1 py-4 rounded-2xl items-center border"
+                  style={{
+                    backgroundColor: colors.cardGlass,
+                    borderColor: colors.border,
+                    borderWidth: 1.5,
+                    height: 50,
+                    borderRadius: 16,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flex: 1,
+                  }}
+                  activeOpacity={0.7}
                 >
-                  <Text style={{ color: colors.textSecondary }} className="font-bold text-sm">Cancel</Text>
+                  <Text
+                    style={{
+                      color: colors.textSecondary,
+                      fontSize: 13.5,
+                      fontWeight: '800',
+                      includeFontPadding: false,
+                    }}
+                  >
+                    Cancel
+                  </Text>
                 </TouchableOpacity>
 
+                {/* Sign & Approve Button */}
                 <TouchableOpacity
                   onPress={() => onConfirm(comment)}
                   disabled={isSigning}
-                  style={{ backgroundColor: actionColor }}
-                  className="flex-[2] py-4 rounded-2xl items-center justify-center flex-row shadow-lg"
+                  style={{
+                    backgroundColor: actionColor,
+                    height: 50,
+                    borderRadius: 16,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexDirection: 'row',
+                    gap: 6,
+                    flex: 1.6,
+                    shadowColor: actionColor,
+                    shadowOffset: { width: 0, height: 3 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 6,
+                    elevation: 3,
+                  }}
+                  activeOpacity={0.8}
                 >
                   {isSigning ? (
-                    <ActivityIndicator color="#ffffff" />
+                    <ActivityIndicator color="#ffffff" size="small" />
                   ) : (
-                    <>
-                      <Ionicons name="finger-print" size={20} color="#ffffff" style={{ marginRight: 6 }} />
-                      <Text className="text-white font-extrabold text-sm">
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Ionicons name="finger-print" size={19} color="#ffffff" />
+                      <Text
+                        style={{
+                          color: '#ffffff',
+                          fontSize: 13.5,
+                          fontWeight: '900',
+                          includeFontPadding: false,
+                        }}
+                      >
                         {isApprove ? 'Sign & Approve' : 'Sign & Reject'}
                       </Text>
-                    </>
+                    </View>
                   )}
                 </TouchableOpacity>
               </View>
@@ -218,4 +339,3 @@ function ApprovalConfirmModal({
 }
 
 export default React.memo(ApprovalConfirmModal);
-

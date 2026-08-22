@@ -19,6 +19,7 @@ import api from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { triggerSuccessHaptic, triggerErrorHaptic, triggerLightHaptic } from '../lib/biometrics';
+import AnimatedToggleSwitch from '../components/AnimatedToggleSwitch';
 
 const ORG_TYPES = [
   { value: 'student_org', label: 'Student Organization', icon: 'school-outline' },
@@ -118,6 +119,7 @@ export default function NoOrganizationScreen() {
           paddingBottom: 48,
           paddingHorizontal: 24,
         }}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
@@ -403,32 +405,41 @@ export default function NoOrganizationScreen() {
               {/* Privacy Toggle */}
               <TouchableOpacity
                 onPress={() => setIsPrivate(!isPrivate)}
+                activeOpacity={0.8}
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   backgroundColor: colors.background,
-                  borderColor: colors.border,
+                  borderColor: isPrivate ? colors.border : '#10B98135',
                   borderWidth: 1,
-                  borderRadius: 14,
+                  borderRadius: 16,
                   padding: 14,
                   marginBottom: 24,
                 }}
               >
-                <View style={{ flex: 1, marginRight: 12 }}>
-                  <Text style={{ color: colors.textPrimary, fontWeight: '700', fontSize: 14 }}>
-                    {isPrivate ? '🔒 Private Organization' : '🌐 Public Transparency'}
-                  </Text>
-                  <Text style={{ color: colors.textMuted, fontSize: 11, marginTop: 2 }}>
+                <View style={{ flex: 1, marginRight: 14 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Ionicons
+                      name={isPrivate ? 'lock-closed' : 'globe-outline'}
+                      size={16}
+                      color={isPrivate ? '#F59E0B' : '#10B981'}
+                    />
+                    <Text style={{ color: colors.textPrimary, fontWeight: '700', fontSize: 14 }}>
+                      {isPrivate ? 'Private Organization' : 'Public Transparency'}
+                    </Text>
+                  </View>
+                  <Text style={{ color: colors.textMuted, fontSize: 11, marginTop: 3, lineHeight: 16 }}>
                     {isPrivate
                       ? 'Transactions and budgets will be hidden from the public explorer.'
                       : 'Transactions will be visible on the public transparency portal.'}
                   </Text>
                 </View>
-                <Ionicons
-                  name={isPrivate ? 'toggle' : 'toggle-outline'}
-                  size={32}
-                  color={isPrivate ? colors.primary : colors.textMuted}
+                <AnimatedToggleSwitch
+                  value={!isPrivate}
+                  onValueChange={(val) => setIsPrivate(!val)}
+                  activeColor="#10B981"
+                  inactiveColor={isDark ? '#334155' : '#CBD5E1'}
                 />
               </TouchableOpacity>
 

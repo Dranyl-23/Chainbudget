@@ -70,6 +70,7 @@ export default function LoginScreen({ navigation }: any) {
       keyboardShouldPersistTaps="handled"
       enableOnAndroid={true}
       extraScrollHeight={20}
+      showsVerticalScrollIndicator={false}
     >
       <ImageBackground 
         source={require('../../assets/login_bg.jpg')} 

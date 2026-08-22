@@ -132,6 +132,7 @@ export default function TreasuryScreen() {
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
       contentContainerStyle={{ padding: 16, paddingBottom: 60 }}
+      showsVerticalScrollIndicator={false}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh}
           tintColor={colors.primary} colors={[colors.primary]} />

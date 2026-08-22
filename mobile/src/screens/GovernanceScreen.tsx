@@ -295,10 +295,10 @@ export default function GovernanceScreen() {
               {votingOn === proposal._id ? (
                 <ActivityIndicator size="small" color={colors.success} />
               ) : (
-                <>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <Ionicons name="checkmark" size={18} color={colors.success} style={{ marginRight: 4 }} />
                   <Text style={{ color: colors.success, fontWeight: 'bold' }}>Vote Yes</Text>
-                </>
+                </View>
               )}
             </ScaleButton>
           </View>
@@ -339,6 +339,7 @@ export default function GovernanceScreen() {
           data={proposals}
           keyExtractor={(item) => item._id}
           renderItem={renderProposal}
+          showsVerticalScrollIndicator={false}
           contentContainerStyle={{ padding: 16 }}
           ListHeaderComponent={activeOrg ? (
             <View 

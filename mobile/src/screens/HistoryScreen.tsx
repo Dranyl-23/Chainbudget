@@ -43,8 +43,11 @@ export default function HistoryScreen() {
   const fetchHistory = async () => {
     try {
       const res = await api.get(`/transactions?orgId=${orgId}&limit=100`);
-      const data = res.data.data || res.data;
-      setTransactions(Array.isArray(data) ? data : []);
+      const list =
+        res.data.transactions ||
+        res.data.data ||
+        (Array.isArray(res.data) ? res.data : []);
+      setTransactions(list);
     } catch (err) {
       console.error(err);
     } finally {
@@ -133,17 +136,17 @@ export default function HistoryScreen() {
           <Text style={{ color: colors.textPrimary }} className="font-bold text-base mb-1" numberOfLines={1}>
             {item.description || 'Transaction'}
           </Text>
-          <View className="flex-row items-center gap-1.5 flex-wrap">
-            <Text style={{ color: colors.textMuted }} className="text-xs">
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+            <Text style={{ color: colors.textMuted, fontSize: 12 }}>
               {new Date(item.createdAt).toLocaleDateString()}
             </Text>
-            {item.category && (
-              <>
-                <Text style={{ color: colors.textMuted }} className="text-xs">•</Text>
-                <Text style={{ color: colors.textSecondary }} className="text-xs font-semibold">{item.category}</Text>
-              </>
-            )}
-            <Text style={{ color: colors.textMuted }} className="text-xs">•</Text>
+            {item.category ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={{ color: colors.textMuted, fontSize: 12, marginHorizontal: 4 }}>•</Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: '600' }}>{item.category}</Text>
+              </View>
+            ) : null}
+            <Text style={{ color: colors.textMuted, fontSize: 12, marginHorizontal: 4 }}>•</Text>
             <Text
               style={{
                 color: isPending ? colors.warning : isApproved ? colors.success : colors.error,
@@ -249,6 +252,7 @@ export default function HistoryScreen() {
           data={filteredTransactions}
           keyExtractor={(item) => item._id}
           renderItem={renderItem}
+          showsVerticalScrollIndicator={false}
           contentContainerStyle={{ padding: 16, paddingTop: 4, paddingBottom: 40 }}
           refreshControl={
             <RefreshControl 
