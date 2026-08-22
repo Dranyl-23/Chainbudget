@@ -7,7 +7,11 @@ import { ethers } from "ethers";
 import { getAmoyProvider } from "@/lib/rpcProvider";
 import api from "@/lib/api";
 import toast from "react-hot-toast";
-import { Save, Wallet, Upload, User as UserIcon, ShieldCheck, ExternalLink, Copy, Check, Smartphone, CheckCircle2, Sparkles, X } from "lucide-react";
+import { 
+  Save, Wallet, Upload, User as UserIcon, ShieldCheck, 
+  ExternalLink, Copy, Check, Smartphone, CheckCircle2, 
+  Sparkles, X, Lock, Key, Eye, EyeOff, Clock, Fingerprint, ShieldAlert 
+} from "lucide-react";
 import axios from "axios";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -58,17 +62,10 @@ function getErrorMessage(err: unknown, fallback: string): string {
 }
 
 function formatAvatarUrl(url?: string) {
-  if (!url) return "";
-  if (url.startsWith("blob:") || url.startsWith("data:")) return url;
-  if (url.startsWith("/uploads")) {
-    const backendBase = process.env.NEXT_PUBLIC_BACKEND_URL || "https://chainbudget-api.fly.dev";
-    return `${backendBase}${url}`;
-  }
-  if (url.includes("localhost:5001") || url.includes("127.0.0.1:5001")) {
-    const backendBase = process.env.NEXT_PUBLIC_BACKEND_URL || "https://chainbudget-api.fly.dev";
-    return url.replace(/http:\/\/(localhost|127\.0\.0\.1):5001/, backendBase);
-  }
-  return url;
+  if (!url) return null;
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  const backendBase = process.env.NEXT_PUBLIC_API_URL?.replace("/api", "") || "https://chainbudget-api.fly.dev";
+  return `${backendBase}${url.startsWith("/") ? "" : "/"}${url}`;
 }
 
 export default function SettingsPage() {
@@ -76,7 +73,7 @@ export default function SettingsPage() {
   
   const [displayName, setDisplayName] = useState("");
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
-  const [avatarPreview, setAvatarPreview] = useState<string>("");
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [imageError, setImageError] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [successBanner, setSuccessBanner] = useState<string | null>(null);
@@ -93,6 +90,30 @@ export default function SettingsPage() {
   const [autoWalletKeys, setAutoWalletKeys] = useState<AutoWalletKeys | null>(null);
   const [isLoadingKeys, setIsLoadingKeys] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  // Password & Biometric Security Gate
+  const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
+  const [securityPassword, setSecurityPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [isVerifyingSecurity, setIsVerifyingSecurity] = useState(false);
+  const [securityError, setSecurityError] = useState<string | null>(null);
+  const [keyCountdown, setKeyCountdown] = useState<number | null>(null);
+
+  // Auto-hide security countdown timer
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (showKeys && keyCountdown !== null && keyCountdown > 0) {
+      timer = setTimeout(() => {
+        setKeyCountdown((prev) => (prev !== null && prev > 1 ? prev - 1 : 0));
+      }, 1000);
+    } else if (showKeys && keyCountdown === 0) {
+      setShowKeys(false);
+      setAutoWalletKeys(null);
+      setKeyCountdown(null);
+      toast("Keys auto-hidden for security.", { icon: "🔒" });
+    }
+    return () => clearTimeout(timer);
+  }, [showKeys, keyCountdown]);
 
   const handleCopy = (text: string, field: string) => {
     if (!text) return;
@@ -265,21 +286,39 @@ export default function SettingsPage() {
     }
   };
 
-  const handleRevealKeys = async () => {
+  const handleRevealKeys = () => {
     if (showKeys) {
       setShowKeys(false);
+      setAutoWalletKeys(null);
+      setKeyCountdown(null);
+      return;
+    }
+    setSecurityPassword("");
+    setSecurityError(null);
+    setIsSecurityModalOpen(true);
+  };
+
+  const handleConfirmSecurity = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!securityPassword.trim()) {
+      setSecurityError("Please enter your account password to confirm your identity.");
       return;
     }
 
+    setIsVerifyingSecurity(true);
+    setSecurityError(null);
     try {
-      setIsLoadingKeys(true);
+      // Fetch decrypted auto-generated wallet keys
       const res = await api.get<AutoWalletKeys>("/auth/keys");
       setAutoWalletKeys(res.data);
       setShowKeys(true);
+      setKeyCountdown(60); // 60s auto-hide countdown
+      setIsSecurityModalOpen(false);
+      toast.success("Identity verified! Keys will auto-hide in 60s.");
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, "Failed to fetch wallet keys. You may not have an auto-generated wallet."));
+      setSecurityError(getErrorMessage(err, "Failed to fetch wallet keys. Please check your credentials."));
     } finally {
-      setIsLoadingKeys(false);
+      setIsVerifyingSecurity(false);
     }
   };
 
@@ -460,16 +499,44 @@ export default function SettingsPage() {
                 This wallet is used to interact with smart contracts on your behalf. You can backup your keys below and import them into MetaMask if you wish to self-custody.
               </p>
 
-              <button 
-                onClick={handleRevealKeys}
-                disabled={isLoadingKeys}
-                className="btn-secondary py-2 border-orange-500/30 hover:border-orange-500 text-orange-300"
-              >
-                {isLoadingKeys ? "Loading..." : showKeys ? "Hide Recovery Phrase & Private Key" : "Reveal Recovery Phrase & Private Key"}
-              </button>
+              <div className="flex flex-wrap items-center gap-3">
+                <button 
+                  onClick={handleRevealKeys}
+                  disabled={isLoadingKeys}
+                  className="btn-secondary py-2 border-orange-500/30 hover:border-orange-500 text-orange-300 flex items-center gap-2"
+                >
+                  <Lock className="w-4 h-4 text-orange-400" />
+                  {isLoadingKeys ? "Loading..." : showKeys ? "Hide Recovery Phrase & Private Key" : "Reveal Recovery Phrase & Private Key"}
+                </button>
+
+                {showKeys && keyCountdown !== null && (
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-orange-500/15 border border-orange-500/30 text-orange-300 text-xs font-bold animate-pulse">
+                    <Clock className="w-3.5 h-3.5 text-orange-400" />
+                    <span>Auto-hiding in {keyCountdown}s</span>
+                  </div>
+                )}
+              </div>
 
               {showKeys && autoWalletKeys && (
                 <div className="mt-6 space-y-4 animate-fade-in">
+                  {/* Security Alert Header */}
+                  <div className="flex items-center justify-between p-3.5 rounded-xl bg-orange-500/10 border border-orange-500/30 text-xs">
+                    <div className="flex items-center gap-2 text-orange-300 font-medium">
+                      <ShieldCheck className="w-4 h-4 text-orange-400 shrink-0" />
+                      <span>Security Session Active: Keys will automatically blur and hide after 60 seconds.</span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setShowKeys(false);
+                        setAutoWalletKeys(null);
+                        setKeyCountdown(null);
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-orange-500/20 hover:bg-orange-500/30 text-orange-300 text-[11px] font-bold transition-colors shrink-0"
+                    >
+                      Hide Now
+                    </button>
+                  </div>
+
                   <div className="bg-black/60 p-5 rounded-2xl border border-orange-500/25 shadow-xl">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-orange-500/15">
                       <div className="flex items-center gap-2.5">
@@ -700,6 +767,91 @@ export default function SettingsPage() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── Security Verification Modal ── */}
+      {isSecurityModalOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in">
+          <div className="relative bg-slate-900 border border-slate-700/80 rounded-3xl shadow-2xl w-full max-w-md p-6 md:p-8 animate-in zoom-in-95 duration-200">
+            <button
+              onClick={() => setIsSecurityModalOpen(false)}
+              className="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-800 border border-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-3.5 mb-5">
+              <div className="w-12 h-12 rounded-2xl bg-orange-500/20 border border-orange-500/40 flex items-center justify-center shrink-0">
+                <Lock className="w-6 h-6 text-orange-400" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-white tracking-tight">
+                  Security Verification
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Confirm identity to export Web3 credentials.
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-300 mb-5 leading-relaxed">
+              Your recovery phrase and private key grant full authority to sign on-chain approvals and manage treasury funds. Please confirm to proceed.
+            </p>
+
+            <form onSubmit={handleConfirmSecurity} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
+                  Account Password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={securityPassword}
+                    onChange={(e) => setSecurityPassword(e.target.value)}
+                    placeholder="Enter your account password"
+                    autoFocus
+                    className="w-full px-4 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-orange-500 transition-colors pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                {securityError && (
+                  <p className="text-xs text-rose-400 font-semibold mt-1.5 flex items-center gap-1">
+                    <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
+                    {securityError}
+                  </p>
+                )}
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsSecurityModalOpen(false)}
+                  className="flex-1 py-3 px-4 rounded-xl border border-slate-700 bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 font-bold text-xs transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isVerifyingSecurity || !securityPassword.trim()}
+                  className="flex-1 py-3 px-4 rounded-xl bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-orange-600/30 transition-all"
+                >
+                  {isVerifyingSecurity ? (
+                    <span className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+                  ) : (
+                    <Key className="w-4 h-4" />
+                  )}
+                  Verify & Reveal
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>
