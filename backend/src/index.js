@@ -13,7 +13,6 @@ const mongoose = require("mongoose");
 const path = require("path");
 const http = require("http");
 const { Server } = require("socket.io");
-const mongoSanitize = require("express-mongo-sanitize");
 
 const authRoutes = require("./routes/auth");
 const orgRoutes = require("./routes/organizations");
@@ -169,8 +168,29 @@ app.use(cors({
   credentials: true,
 }));
 app.use(express.json({ limit: '1mb' })); // H-8 Fix: Prevent large payload DoS
-app.use(mongoSanitize()); // GAP-18: Strip MongoDB operators ($, .) from req.body/query/params
-app.use(morgan("dev"));
+
+// GAP-18: Safe MongoDB operator ($ and .) sanitizer that does not reassign req.query getter
+function sanitizeMongoObject(obj) {
+  if (!obj || typeof obj !== "object") return;
+  for (const key of Object.keys(obj)) {
+    if (key.startsWith("$") || key.includes(".")) {
+      delete obj[key];
+    } else if (typeof obj[key] === "object") {
+      sanitizeMongoObject(obj[key]);
+    }
+  }
+}
+
+app.use((req, res, next) => {
+  if (req.body && typeof req.body === "object") sanitizeMongoObject(req.body);
+  if (req.params && typeof req.params === "object") sanitizeMongoObject(req.params);
+  if (req.query && typeof req.query === "object") {
+    try {
+      sanitizeMongoObject(req.query);
+    } catch (_) {}
+  }
+  next();
+});
 
 // ── Static file serving for uploaded receipts ─────────────────────────────────
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
