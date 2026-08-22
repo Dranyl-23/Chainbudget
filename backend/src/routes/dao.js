@@ -106,40 +106,45 @@ router.post("/proposals", authenticate, async (req, res) => {
     await newProposal.save();
     await newProposal.populate("creator", "displayName walletAddress");
     
-    // Emit real-time socket event and create notification
-    const notifTitle = "New DAO Proposal";
-    const notifMessage = `${req.user.displayName || 'A member'} proposed to allocate ₱${amount.toLocaleString()} for ${title}`;
-    const newNotif = await Notification.create({
-      organization: orgId,
-      title: notifTitle,
-      message: notifMessage,
-      type: "info",
-      readBy: []
-    });
-
-    const io = req.app.get("io");
-    if (io) {
-      // Scope DAO events to the org room — only members of this org should receive them
-      io.to(`org:${orgId}`).emit("dao_vote_updated", { orgId });
-      io.to(`org:${orgId}`).emit("new_notification", {
-        orgId,
-        id: newNotif._id,
+    // Emit real-time socket event and create notification (non-fatal)
+    let newNotif = null;
+    try {
+      const notifTitle = "New DAO Proposal";
+      const notifMessage = `${req.user.displayName || 'A member'} proposed to allocate ₱${amount.toLocaleString()} for ${title}`;
+      newNotif = await Notification.create({
+        organization: targetOrgId,
         title: notifTitle,
         message: notifMessage,
         type: "info",
-        timestamp: newNotif.createdAt
+        readBy: []
       });
+
+      const io = req.app.get("io");
+      if (io) {
+        // Scope DAO events to the org room — only members of this org should receive them
+        io.to(`org:${targetOrgId}`).emit("dao_vote_updated", { orgId: targetOrgId });
+        io.to(`org:${targetOrgId}`).emit("new_notification", {
+          orgId: targetOrgId,
+          id: newNotif._id,
+          title: notifTitle,
+          message: notifMessage,
+          type: "info",
+          timestamp: newNotif.createdAt
+        });
+      }
+    } catch (notifErr) {
+      console.error("[dao] Notification creation warning:", notifErr.message);
     }
     
-    // Send Email to all members of the organization
+    // Send Email to all members of the organization (non-fatal)
     try {
       const orgUsers = await User.find({
         "memberships": {
-          $elemMatch: { organization: orgId, isActive: true }
+          $elemMatch: { organization: targetOrgId, isActive: true }
         },
         email: { $exists: true, $ne: "" }
       });
-      const emails = orgUsers.map(u => u.email);
+      const emails = orgUsers.map(u => u.email).filter(Boolean);
       if (emails.length > 0) {
         sendEmail(
           emails.join(","),
@@ -160,7 +165,7 @@ router.post("/proposals", authenticate, async (req, res) => {
         ).catch(console.error);
       }
     } catch (emailErr) {
-      console.error("Email sending error:", emailErr);
+      console.error("[dao] Email sending warning:", emailErr.message);
     }
     
     res.status(201).json({ proposal: newProposal });
