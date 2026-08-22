@@ -431,6 +431,8 @@ router.get("/", authenticate, async (req, res) => {
               },
               {
                 $project: {
+                  _id: "$approver",
+                  walletAddress: { $arrayElemAt: ["$approverUser.walletAddress", 0] },
                   displayName: { $arrayElemAt: ["$approverUser.displayName", 0] },
                   memberships: { $arrayElemAt: ["$approverUser.memberships", 0] }
                 }
@@ -442,6 +444,12 @@ router.get("/", authenticate, async (req, res) => {
         {
           $addFields: {
             approvalCount: { $size: "$approvedBy" },
+            hasVoted: {
+              $in: [
+                new mongoose.Types.ObjectId(req.user._id),
+                "$approvedBy._id"
+              ]
+            }
           },
         },
       ]),

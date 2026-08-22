@@ -20,6 +20,13 @@ interface SubmittedByUser {
   _id?: string;
 }
 
+interface ApproverItem {
+  _id?: string;
+  walletAddress?: string;
+  displayName?: string;
+  action?: string;
+}
+
 interface TransactionApiItem {
   _id: string;
   description: string;
@@ -28,6 +35,8 @@ interface TransactionApiItem {
   createdAt: string;
   status: string;
   approvalCount?: number;
+  hasVoted?: boolean;
+  approvedBy?: ApproverItem[];
   organization?: {
     requiredApprovals?: number;
     highValueThreshold?: number;
@@ -55,6 +64,8 @@ interface Approval {
   status: string;
   votes: number;
   required: number;
+  hasVoted: boolean;
+  approvedBy?: ApproverItem[];
   organization: { highValueThreshold: number };
   onChainTxId?: string | number;
   category?: string;
@@ -146,23 +157,39 @@ export default function ApprovalsPage() {
         const txList: TransactionApiItem[] = res.data.transactions || [];
 
         // Map transactions to approval display format
-        const approvals: Approval[] = txList.map((tx) => ({
-          _id: tx._id,
-          description: tx.description,
-          amount: tx.amount,
-          submittedBy: tx.submittedBy,
-          createdAt: tx.createdAt,
-          status: tx.status,
-          votes: tx.approvalCount || 0,
-          required: tx.organization?.requiredApprovals || 2,
-          organization: { highValueThreshold: tx.organization?.highValueThreshold || 10000 },
-          onChainTxId: tx.onChainTxId,
-          category: tx.category || tx.budgetCategory || "",
-          type: tx.type,
-          urgency: tx.urgency || "normal",
-          documentUrl: tx.documentUrl,
-          to: tx.to,
-        }));
+        const approvals: Approval[] = txList.map((tx) => {
+          const userVoted =
+            Boolean(tx.hasVoted) ||
+            Boolean(
+              tx.approvedBy?.some(
+                (a) =>
+                  (a._id && a._id === user?.id) ||
+                  (a.walletAddress &&
+                    user?.walletAddress &&
+                    a.walletAddress.toLowerCase() === user.walletAddress.toLowerCase())
+              )
+            );
+
+          return {
+            _id: tx._id,
+            description: tx.description,
+            amount: tx.amount,
+            submittedBy: tx.submittedBy,
+            createdAt: tx.createdAt,
+            status: tx.status,
+            votes: tx.approvalCount || 0,
+            required: tx.organization?.requiredApprovals || 2,
+            hasVoted: userVoted,
+            approvedBy: tx.approvedBy,
+            organization: { highValueThreshold: tx.organization?.highValueThreshold || 10000 },
+            onChainTxId: tx.onChainTxId,
+            category: tx.category || tx.budgetCategory || "",
+            type: tx.type,
+            urgency: tx.urgency || "normal",
+            documentUrl: tx.documentUrl,
+            to: tx.to,
+          };
+        });
 
         if (!isCancelled) {
           setPendingApprovals(approvals);
@@ -195,7 +222,7 @@ export default function ApprovalsPage() {
     return () => {
       isCancelled = true;
     };
-  }, [activeOrgId]);
+  }, [activeOrgId, user?.id, user?.walletAddress]);
 
   const refreshApprovals = async () => {
     if (!activeOrgId) return;
@@ -204,23 +231,39 @@ export default function ApprovalsPage() {
         params: { orgId: activeOrgId, status: "pending_approval", limit: 100 },
       });
       const txList: TransactionApiItem[] = res.data.transactions || [];
-      const approvals: Approval[] = txList.map((tx) => ({
-        _id: tx._id,
-        description: tx.description,
-        amount: tx.amount,
-        submittedBy: tx.submittedBy,
-        createdAt: tx.createdAt,
-        status: tx.status,
-        votes: tx.approvalCount || 0,
-        required: tx.organization?.requiredApprovals || 2,
-        organization: { highValueThreshold: tx.organization?.highValueThreshold || 10000 },
-        onChainTxId: tx.onChainTxId,
-        category: tx.category || tx.budgetCategory || "",
-        type: tx.type,
-        urgency: tx.urgency || "normal",
-        documentUrl: tx.documentUrl,
-        to: tx.to,
-      }));
+      const approvals: Approval[] = txList.map((tx) => {
+        const userVoted =
+          Boolean(tx.hasVoted) ||
+          Boolean(
+            tx.approvedBy?.some(
+              (a) =>
+                (a._id && a._id === user?.id) ||
+                (a.walletAddress &&
+                  user?.walletAddress &&
+                  a.walletAddress.toLowerCase() === user.walletAddress.toLowerCase())
+            )
+          );
+
+        return {
+          _id: tx._id,
+          description: tx.description,
+          amount: tx.amount,
+          submittedBy: tx.submittedBy,
+          createdAt: tx.createdAt,
+          status: tx.status,
+          votes: tx.approvalCount || 0,
+          required: tx.organization?.requiredApprovals || 2,
+          hasVoted: userVoted,
+          approvedBy: tx.approvedBy,
+          organization: { highValueThreshold: tx.organization?.highValueThreshold || 10000 },
+          onChainTxId: tx.onChainTxId,
+          category: tx.category || tx.budgetCategory || "",
+          type: tx.type,
+          urgency: tx.urgency || "normal",
+          documentUrl: tx.documentUrl,
+          to: tx.to,
+        };
+      });
       setPendingApprovals(approvals);
     } catch (err: unknown) {
       console.error("Failed to refresh approvals:", err);
@@ -500,7 +543,13 @@ export default function ApprovalsPage() {
               <div key={req._id} className="glass p-6 rounded-xl flex flex-col md:flex-row gap-6 items-start md:items-center justify-between">
                 <div className="flex-1">
                   <div className="flex flex-wrap items-center gap-2 mb-2">
-                    <span className="badge badge-pending whitespace-nowrap"><Clock className="w-3 h-3" /> Action Required</span>
+                    {req.hasVoted ? (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 border border-emerald-500/30 text-emerald-400">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Approved by You ({req.votes} of {req.required} Signed)
+                      </span>
+                    ) : (
+                      <span className="badge badge-pending whitespace-nowrap"><Clock className="w-3 h-3" /> Action Required</span>
+                    )}
                     {req.urgency === "urgent" && (
                       <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-red-100 text-red-700 animate-pulse">
                         Urgent
@@ -604,28 +653,42 @@ export default function ApprovalsPage() {
 
                 <div className="flex flex-col items-end gap-3 w-full md:w-auto">
                   <div className="text-2xl font-bold text-gray-800">₱{Math.round(req.amount).toLocaleString()}</div>
-                  <div className="flex w-full gap-2">
-                    <button
-                      onClick={() => handleReject(req)}
-                      disabled={actionLoading === req._id}
-                      className="flex-1 md:flex-none btn-danger py-2 px-4 whitespace-nowrap disabled:opacity-50"
-                    >
-                      {actionLoading === req._id ? "Processing..." : (
-                        <span className="flex items-center gap-2"><XCircle className="w-4 h-4" /> Reject</span>
+                  {req.hasVoted ? (
+                    <div className="flex flex-col items-end gap-1.5 w-full md:w-auto">
+                      <div className="px-4 py-2.5 rounded-xl bg-purple-500/15 border border-purple-500/35 text-purple-400 font-bold text-xs flex items-center gap-2 shadow-sm">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                        Signed by You ({req.votes} of {req.required})
+                      </div>
+                      <p className="text-[11px] text-gray-400 text-right">
+                        Awaiting 2nd officer signature to execute.
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex w-full gap-2">
+                        <button
+                          onClick={() => handleReject(req)}
+                          disabled={actionLoading === req._id}
+                          className="flex-1 md:flex-none btn-danger py-2 px-4 whitespace-nowrap disabled:opacity-50"
+                        >
+                          {actionLoading === req._id ? "Processing..." : (
+                            <span className="flex items-center gap-2"><XCircle className="w-4 h-4" /> Reject</span>
+                          )}
+                        </button>
+                        <button
+                          onClick={() => handleApprove(req)}
+                          disabled={actionLoading === req._id || !verifiedReceipts[req._id]}
+                          className="flex-1 md:flex-none btn-primary py-2 px-4 whitespace-nowrap disabled:opacity-50"
+                        >
+                          {actionLoading === req._id ? "Processing..." : (
+                            <span className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4" /> Approve</span>
+                          )}
+                        </button>
+                      </div>
+                      {!verifiedReceipts[req._id] && (
+                        <p className="text-[10px] text-amber-600 w-full text-center mt-1">✓ Verify receipt first</p>
                       )}
-                    </button>
-                    <button
-                      onClick={() => handleApprove(req)}
-                      disabled={actionLoading === req._id || !verifiedReceipts[req._id]}
-                      className="flex-1 md:flex-none btn-primary py-2 px-4 whitespace-nowrap disabled:opacity-50"
-                    >
-                      {actionLoading === req._id ? "Processing..." : (
-                        <span className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4" /> Approve</span>
-                      )}
-                    </button>
-                  </div>
-                  {!verifiedReceipts[req._id] && (
-                    <p className="text-[10px] text-amber-600 w-full text-center mt-1">✓ Verify receipt first</p>
+                    </>
                   )}
                 </div>
               </div>
