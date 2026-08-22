@@ -5,6 +5,22 @@ let provider = null;
 let contract = null;
 let signer = null;
 
+// ── CRIT-5 FIX: PHP-to-on-chain unit convention ───────────────────────────────
+// The ChainBudget.sol `recordTransaction` function stores an `amount` field
+// for audit/display purposes only. It does NOT transfer ETH — it only records
+// a keccak256 hash + metadata. The `amount` stored on-chain is therefore kept
+// as the raw PHP integer (e.g., ₱5000 → stored as 5000).
+//
+// The ChainBudgetTreasury.sol `executeWithSignatures` function DOES transfer
+// real MATIC (amountWei). Any integration with Treasury MUST apply a proper
+// PHP→Wei conversion rate before calling executeWithSignatures. That conversion
+// should use a rate oracle or a pre-agreed fixed rate, and is out of scope for
+// this service (which only wraps ChainBudget.sol recordTransaction).
+//
+// ⚠️  PRODUCTION WARNING: Never call executeWithSignatures with a raw PHP integer
+// as amountWei. Always convert: amountWei = phpAmount * conversionRate.
+// ─────────────────────────────────────────────────────────────────────────────
+
 /// Initialize the provider, signer, and contract instance
 const initBlockchain = () => {
   if (contract) return; // Already initialized

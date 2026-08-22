@@ -6,10 +6,11 @@ import {
   RefreshControl,
   TouchableOpacity,
   Image,
+  ImageBackground,
   Animated,
   useWindowDimensions,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Clipboard from 'expo-clipboard';
 import { triggerLightHaptic, triggerSuccessHaptic } from '../lib/biometrics';
@@ -281,200 +282,476 @@ export default function DashboardScreen() {
           <Animated.View style={{ opacity: fadeAnim }}>
             {/* Balance Card Container */}
             {viewMode === 'treasury' ? (
-              <LinearGradient
-                colors={isDark ? ['#4a154b', '#1a092b', '#09090b'] : ['#86198f', '#a21caf', '#701a75']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={{ borderRadius: 24, padding: 24, marginBottom: 24 }}
+              <View
+                style={{
+                  borderRadius: 26,
+                  overflow: 'hidden',
+                  marginBottom: 24,
+                  borderWidth: 1,
+                  borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(147, 51, 234, 0.25)',
+                  shadowColor: '#8B5CF6',
+                  shadowOffset: { width: 0, height: 6 },
+                  shadowOpacity: isDark ? 0.45 : 0.18,
+                  shadowRadius: 16,
+                  elevation: 6,
+                }}
               >
-                <Image
-                  source={require('../../assets/Dashboard-Wallet.png')}
+                <ImageBackground
+                  source={require('../../assets/treasury-card-clean.png')}
+                  resizeMode="cover"
                   style={{
-                    position: 'absolute',
-                    right: 5,
-                    top: 50,
-                    width: 170,
-                    height: 170,
-                    opacity: 0.95,
+                    padding: 22,
+                    minHeight: 215,
+                    justifyContent: 'space-between',
                   }}
-                  resizeMode="contain"
-                />
-
-                <View className="flex-row justify-between items-center mb-6">
-                  <View className="flex-row bg-black/40 p-1 rounded-xl">
-                    <TouchableOpacity
-                      onPress={() => setViewMode('treasury')}
-                      className="px-4 py-1.5 rounded-lg bg-fuchsia-600"
+                >
+                  {/* Top Bar: Segmented Pill Toggle + Org Icon Button */}
+                  <View className="flex-row justify-between items-center mb-3">
+                    <View
+                      style={{
+                        backgroundColor: 'rgba(15, 6, 32, 0.75)',
+                        borderColor: 'rgba(255, 255, 255, 0.12)',
+                        borderWidth: 1,
+                        borderRadius: 24,
+                        padding: 3,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                      }}
                     >
-                      <Text className="text-xs font-bold text-white">Treasury</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => setViewMode('personal')}
-                      className="px-4 py-1.5 rounded-lg"
-                    >
-                      <Text className="text-xs font-bold text-white/50">Personal</Text>
-                    </TouchableOpacity>
-                  </View>
-                  <View className="bg-white/10 w-8 h-8 rounded-lg items-center justify-center border border-white/10">
-                    <Ionicons name="business" size={16} color="#e879f9" />
-                  </View>
-                </View>
-
-                <Text className="text-white/70 text-[10px] mb-1 font-medium uppercase tracking-widest relative">
-                  {activeOrg.name} Balance (PHP)
-                </Text>
-
-                <AnimatedCounter
-                  value={Number(activeOrg.subsidyAmount) || 0}
-                  prefix="₱"
-                  className="text-[42px] font-extrabold text-white mb-6 relative"
-                />
-
-                <View className="flex-row items-center bg-black/30 self-start px-3 py-1.5 rounded-full border border-white/20 relative">
-                  <Ionicons
-                    name="shield-checkmark"
-                    size={14}
-                    color="#4ade80"
-                    style={{ marginRight: 6 }}
-                  />
-                  <Text className="text-green-200 text-[10px] font-bold">Secured Vault</Text>
-                </View>
-              </LinearGradient>
-            ) : (
-              <LinearGradient
-                colors={isDark ? ['#1a0b2e', '#0f0f1c'] : ['#4338ca', '#3730a3', '#1e1b4b']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={{ borderRadius: 24, padding: 24, marginBottom: 24 }}
-              >
-                <Image
-                  source={require('../../assets/Matic-logo.png')}
-                  style={{
-                    position: 'absolute',
-                    right: 5,
-                    top: 45,
-                    width: 205,
-                    height: 205,
-                    opacity: 0.95,
-                  }}
-                  resizeMode="contain"
-                />
-
-                <View className="flex-row justify-between items-center mb-6">
-                  <View className="flex-row bg-black/40 p-1 rounded-xl relative z-20">
-                    <TouchableOpacity
-                      onPress={() => setViewMode('treasury')}
-                      className="px-4 py-1.5 rounded-lg"
-                    >
-                      <Text className="text-xs font-bold text-white/50">Treasury</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => setViewMode('personal')}
-                      className="px-4 py-1.5 rounded-lg bg-[#8b5cf6]"
-                    >
-                      <Text className="text-xs font-bold text-white">Personal</Text>
-                    </TouchableOpacity>
-                  </View>
-                  <View className="bg-white/10 w-8 h-8 rounded-lg items-center justify-center border border-white/10 relative z-20">
-                    <Ionicons name="wallet" size={16} color="#fff" />
-                  </View>
-                </View>
-
-                <Text className="text-white/70 text-[10px] mb-1 font-medium uppercase tracking-widest relative">
-                  YOUR BALANCE (MATIC)
-                </Text>
-
-                <AnimatedCounter
-                  value={Number(personalBalance) || 0}
-                  prefix=""
-                  className="text-[42px] font-extrabold text-white leading-none relative"
-                />
-                <Text className="text-[32px] font-extrabold text-[#c084fc] mb-4 relative">
-                  MATIC
-                </Text>
-
-                {/* Bottom Panels */}
-                <View className="flex-row justify-between border-t border-white/15 pt-4 mt-2 relative">
-                  <View className="flex-row items-center flex-1 pr-2">
-                    <View className="bg-white/10 w-9 h-9 rounded-xl items-center justify-center mr-2.5">
-                      <Ionicons name="cube-outline" size={18} color="#c084fc" />
-                    </View>
-                    <View className="flex-shrink">
-                      <Text className="text-white/60 text-[9px] uppercase tracking-widest mb-0.5">
-                        NETWORK
-                      </Text>
-                      <Text
-                        className="text-fuchsia-300 text-[11px] font-bold"
-                        numberOfLines={1}
-                        adjustsFontSizeToFit
+                      <TouchableOpacity
+                        onPress={() => setViewMode('treasury')}
+                        style={{
+                          backgroundColor: '#9333EA',
+                          borderRadius: 20,
+                          paddingHorizontal: 16,
+                          paddingVertical: 7,
+                        }}
+                        activeOpacity={0.8}
                       >
-                        Polygon Amoy
+                        <Text style={{ color: '#FFFFFF', fontSize: 12.5, fontWeight: '700' }}>Treasury</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => setViewMode('personal')}
+                        style={{
+                          paddingHorizontal: 14,
+                          paddingVertical: 7,
+                          borderRadius: 20,
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: 12.5, fontWeight: '600' }}>Personal</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    <TouchableOpacity
+                      onPress={() => setShowOrgSheet(true)}
+                      style={{
+                        backgroundColor: 'rgba(255, 255, 255, 0.12)',
+                        borderColor: 'rgba(255, 255, 255, 0.18)',
+                        borderWidth: 1,
+                        borderRadius: 14,
+                        width: 42,
+                        height: 42,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="business" size={18} color="#FFFFFF" />
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Middle: Organization Balance Display */}
+                  <View style={{ marginVertical: 4 }}>
+                    <Text
+                      style={{
+                        color: 'rgba(216, 180, 254, 0.9)',
+                        fontSize: 11,
+                        fontWeight: '700',
+                        letterSpacing: 1.5,
+                        textTransform: 'uppercase',
+                        marginBottom: 4,
+                      }}
+                    >
+                      {activeOrg.name} Balance (PHP)
+                    </Text>
+
+                    <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+                      <Text
+                        style={{
+                          fontSize: 32,
+                          fontWeight: '800',
+                          color: '#FFFFFF',
+                          marginTop: 6,
+                          marginRight: 4,
+                        }}
+                      >
+                        ₱
                       </Text>
+                      <AnimatedCounter
+                        value={Number(activeOrg.subsidyAmount) || 0}
+                        prefix=""
+                        style={{
+                          fontSize: 52,
+                          fontWeight: '900',
+                          color: '#FFFFFF',
+                          letterSpacing: -1.5,
+                          fontVariant: ['tabular-nums'],
+                        }}
+                      />
                     </View>
                   </View>
 
-                  <TouchableOpacity
-                    className="flex-row items-center flex-1 border-l border-white/15 pl-3"
-                    activeOpacity={0.7}
-                    onPress={async () => {
-                      if (user?.walletAddress) {
-                        await Clipboard.setStringAsync(user.walletAddress);
-                        showToast('Wallet address copied to clipboard!', 'info');
-                      }
+                  {/* Bottom: Secured Vault Pill Badge */}
+                  <View
+                    style={{
+                      backgroundColor: 'rgba(15, 6, 32, 0.75)',
+                      borderColor: 'rgba(168, 85, 247, 0.3)',
+                      borderWidth: 1,
+                      borderRadius: 22,
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      alignSelf: 'flex-start',
+                      marginTop: 8,
                     }}
                   >
-                    <View className="bg-white/10 w-9 h-9 rounded-xl items-center justify-center mr-2.5">
-                      <Ionicons name="copy-outline" size={16} color="#fff" />
-                    </View>
-                    <View className="flex-shrink">
-                      <Text className="text-white/60 text-[9px] uppercase tracking-widest mb-0.5">
-                        ADDRESS
-                      </Text>
-                      <Text
-                        className="text-purple-200 text-[11px] font-mono"
-                        numberOfLines={1}
-                        adjustsFontSizeToFit
+                    <Ionicons
+                      name="shield-checkmark"
+                      size={15}
+                      color="#10B981"
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }}>Secured Vault</Text>
+                  </View>
+                </ImageBackground>
+              </View>
+            ) : (
+              <View
+                style={{
+                  borderRadius: 26,
+                  overflow: 'hidden',
+                  marginBottom: 24,
+                  borderWidth: 1,
+                  borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(147, 51, 234, 0.25)',
+                  shadowColor: '#8B5CF6',
+                  shadowOffset: { width: 0, height: 6 },
+                  shadowOpacity: isDark ? 0.45 : 0.18,
+                  shadowRadius: 16,
+                  elevation: 6,
+                }}
+              >
+                <ImageBackground
+                  source={require('../../assets/personal-card-clean.png')}
+                  resizeMode="cover"
+                  style={{
+                    padding: 20,
+                    minHeight: 225,
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  {/* Top Bar: Segmented Pill Toggle + Wallet Icon Button */}
+                  <View className="flex-row justify-between items-center mb-3">
+                    <View
+                      style={{
+                        backgroundColor: 'rgba(15, 6, 32, 0.75)',
+                        borderColor: 'rgba(255, 255, 255, 0.12)',
+                        borderWidth: 1,
+                        borderRadius: 24,
+                        padding: 3,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <TouchableOpacity
+                        onPress={() => setViewMode('treasury')}
+                        style={{
+                          paddingHorizontal: 14,
+                          paddingVertical: 7,
+                          borderRadius: 20,
+                        }}
+                        activeOpacity={0.8}
                       >
-                        {user?.walletAddress
-                          ? `${user.walletAddress.slice(0, 6)}...${user.walletAddress.slice(-4)}`
-                          : '0x00...000'}
-                      </Text>
+                        <Text style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: 12.5, fontWeight: '600' }}>Treasury</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => setViewMode('personal')}
+                        style={{
+                          backgroundColor: '#9333EA',
+                          borderRadius: 20,
+                          paddingHorizontal: 16,
+                          paddingVertical: 7,
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={{ color: '#FFFFFF', fontSize: 12.5, fontWeight: '700' }}>Personal</Text>
+                      </TouchableOpacity>
                     </View>
-                  </TouchableOpacity>
-                </View>
-              </LinearGradient>
+
+                    <View
+                      style={{
+                        backgroundColor: 'rgba(255, 255, 255, 0.12)',
+                        borderColor: 'rgba(255, 255, 255, 0.18)',
+                        borderWidth: 1,
+                        borderRadius: 14,
+                        width: 42,
+                        height: 42,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Ionicons name="wallet" size={18} color="#FFFFFF" />
+                    </View>
+                  </View>
+
+                  {/* Middle: MATIC Balance Display */}
+                  <View style={{ marginVertical: 2 }}>
+                    <Text
+                      style={{
+                        color: 'rgba(216, 180, 254, 0.9)',
+                        fontSize: 11,
+                        fontWeight: '700',
+                        letterSpacing: 1.5,
+                        textTransform: 'uppercase',
+                        marginBottom: 2,
+                      }}
+                    >
+                      YOUR BALANCE (MATIC)
+                    </Text>
+
+                    <AnimatedCounter
+                      value={Number(personalBalance) || 0}
+                      prefix=""
+                      style={{
+                        fontSize: 52,
+                        fontWeight: '900',
+                        color: '#FFFFFF',
+                        letterSpacing: -1.5,
+                        fontVariant: ['tabular-nums'],
+                      }}
+                    />
+                    <Text
+                      style={{
+                        color: '#C084FC',
+                        fontSize: 26,
+                        fontWeight: '900',
+                        letterSpacing: 0.5,
+                        marginTop: 2,
+                      }}
+                    >
+                      MATIC
+                    </Text>
+                  </View>
+
+                  {/* Bottom Panels (Network & Copy Address) */}
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      marginTop: 10,
+                      gap: 8,
+                    }}
+                  >
+                    {/* Left: Network pill */}
+                    <View
+                      style={{
+                        flex: 1,
+                        backgroundColor: 'rgba(15, 6, 32, 0.75)',
+                        borderColor: 'rgba(168, 85, 247, 0.25)',
+                        borderWidth: 1,
+                        borderRadius: 16,
+                        paddingVertical: 8,
+                        paddingHorizontal: 10,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <View
+                        style={{
+                          backgroundColor: 'rgba(147, 51, 234, 0.25)',
+                          borderRadius: 10,
+                          width: 32,
+                          height: 32,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          marginRight: 8,
+                        }}
+                      >
+                        <Ionicons name="cube-outline" size={17} color="#C084FC" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: 8.5, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase' }}>
+                          NETWORK
+                        </Text>
+                        <Text style={{ color: '#FFFFFF', fontSize: 11.5, fontWeight: '700' }} numberOfLines={1}>
+                          Polygon Amoy
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Right: Address pill with copy */}
+                    <TouchableOpacity
+                      style={{
+                        flex: 1.3,
+                        backgroundColor: 'rgba(15, 6, 32, 0.75)',
+                        borderColor: 'rgba(168, 85, 247, 0.25)',
+                        borderWidth: 1,
+                        borderRadius: 16,
+                        paddingVertical: 8,
+                        paddingHorizontal: 10,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                      }}
+                      activeOpacity={0.7}
+                      onPress={async () => {
+                        if (user?.walletAddress) {
+                          await Clipboard.setStringAsync(user.walletAddress);
+                          showToast('Wallet address copied to clipboard!', 'info');
+                        }
+                      }}
+                    >
+                      <View
+                        style={{
+                          backgroundColor: 'rgba(147, 51, 234, 0.25)',
+                          borderRadius: 10,
+                          width: 32,
+                          height: 32,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          marginRight: 8,
+                        }}
+                      >
+                        <Ionicons name="document-text-outline" size={17} color="#C084FC" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: 8.5, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase' }}>
+                          ADDRESS
+                        </Text>
+                        <Text style={{ color: '#FFFFFF', fontSize: 11.5, fontWeight: '700', fontFamily: 'monospace' }} numberOfLines={1}>
+                          {user?.walletAddress
+                            ? `${user.walletAddress.slice(0, 6)}...${user.walletAddress.slice(-4)}`
+                            : '0x00...000'}
+                        </Text>
+                      </View>
+                      <Ionicons name="copy-outline" size={15} color="rgba(255, 255, 255, 0.6)" style={{ marginLeft: 4 }} />
+                    </TouchableOpacity>
+                  </View>
+                </ImageBackground>
+              </View>
             )}
 
             {/* Quick Actions Grid */}
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: gridGap, marginBottom: 24 }}>
               {[
-                { icon: 'scan-outline', label: 'Scan', color: colors.primary, route: 'Scanner' },
-                { icon: 'send-outline', label: 'Request', color: colors.accentBlue, route: 'Transfer' },
-                { icon: 'qr-code-outline', label: 'Receive', color: colors.accentPurple, route: 'Receive' },
-                { icon: 'people-outline', label: 'Members', color: colors.success, route: 'Members' },
-                { icon: 'time-outline', label: 'History', color: colors.warning, route: 'History' },
-                { icon: 'pie-chart-outline', label: 'Budget', color: '#10B981', route: 'Budget' },
-                { icon: 'bar-chart-outline', label: 'Reports', color: '#3B82F6', route: 'Reports' },
-                { icon: 'shield-checkmark-outline', label: 'Audit', color: '#8B5CF6', route: 'Audit' },
-                { icon: 'business-outline', label: 'Treasury', color: '#F59E0B', route: 'Treasury' },
+                {
+                  id: 'scan',
+                  label: 'Scan',
+                  subtitle: 'Scan QR or code',
+                  icon: (color: string) => <Ionicons name="scan" size={26} color={color} />,
+                  color: '#9333EA',
+                  bgColor: isDark ? 'rgba(147, 51, 234, 0.15)' : '#F5EEFC',
+                  route: 'Scanner',
+                },
+                {
+                  id: 'request',
+                  label: 'Request',
+                  subtitle: 'Send a request',
+                  icon: (color: string) => (
+                    <Ionicons
+                      name="paper-plane-outline"
+                      size={25}
+                      color={color}
+                      style={{ transform: [{ rotate: '0deg' }, { translateX: -1 }] }}
+                    />
+                  ),
+                  color: '#0284C7',
+                  bgColor: isDark ? 'rgba(2, 132, 199, 0.15)' : '#E0F2FE',
+                  route: 'Transfer',
+                },
+                {
+                  id: 'receive',
+                  label: 'Receive',
+                  subtitle: 'Receive payment',
+                  icon: (color: string) => <Ionicons name="qr-code-outline" size={25} color={color} />,
+                  color: '#7C3AED',
+                  bgColor: isDark ? 'rgba(124, 58, 237, 0.15)' : '#EDE9FE',
+                  route: 'Receive',
+                },
+                {
+                  id: 'members',
+                  label: 'Members',
+                  subtitle: 'Manage members',
+                  icon: (color: string) => <Ionicons name="people" size={26} color={color} />,
+                  color: '#10B981',
+                  bgColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#DCFCE7',
+                  route: 'Members',
+                },
+                {
+                  id: 'history',
+                  label: 'History',
+                  subtitle: 'View transactions',
+                  icon: (color: string) => <Ionicons name="time-outline" size={26} color={color} />,
+                  color: '#F59E0B',
+                  bgColor: isDark ? 'rgba(245, 158, 11, 0.15)' : '#FEF3C7',
+                  route: 'History',
+                },
+                {
+                  id: 'budget',
+                  label: 'Budget',
+                  subtitle: 'Track your budget',
+                  icon: (color: string) => <Ionicons name="pie-chart-outline" size={26} color={color} />,
+                  color: '#0D9488',
+                  bgColor: isDark ? 'rgba(13, 148, 136, 0.15)' : '#CCFBF1',
+                  route: 'Budget',
+                },
+                {
+                  id: 'reports',
+                  label: 'Reports',
+                  subtitle: 'Analytics & reports',
+                  icon: (color: string) => <Ionicons name="bar-chart" size={25} color={color} />,
+                  color: '#2563EB',
+                  bgColor: isDark ? 'rgba(37, 99, 235, 0.15)' : '#DBEAFE',
+                  route: 'Reports',
+                },
+                {
+                  id: 'audit',
+                  label: 'Audit',
+                  subtitle: 'Security & logs',
+                  icon: (color: string) => <Ionicons name="shield-checkmark" size={25} color={color} />,
+                  color: '#7C3AED',
+                  bgColor: isDark ? 'rgba(124, 58, 237, 0.15)' : '#F3E8FF',
+                  route: 'Audit',
+                },
+                {
+                  id: 'treasury',
+                  label: 'Treasury',
+                  subtitle: 'Treasury overview',
+                  icon: (color: string) => <MaterialCommunityIcons name="office-building" size={26} color={color} />,
+                  color: '#EA580C',
+                  bgColor: isDark ? 'rgba(234, 88, 12, 0.15)' : '#FFEDD5',
+                  route: 'Treasury',
+                },
               ].map((action, idx) => (
                 <ScaleButton
-                  key={idx}
+                  key={action.id || idx}
                   containerStyle={{ width: itemWidth, marginBottom: 2 }}
                   style={{
                     width: '100%',
-                    backgroundColor: colors.surface,
-                    borderColor: colors.border,
+                    backgroundColor: isDark ? colors.surface : '#FFFFFF',
+                    borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#F1F5F9',
                     borderWidth: 1,
-                    borderRadius: 20,
-                    paddingVertical: 14,
+                    borderRadius: 24,
+                    paddingVertical: 16,
+                    paddingHorizontal: 4,
                     alignItems: 'center',
                     justifyContent: 'center',
                     shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 1 },
-                    shadowOpacity: isDark ? 0.2 : 0.05,
-                    shadowRadius: 3,
-                    elevation: 1,
+                    shadowOffset: { width: 0, height: 3 },
+                    shadowOpacity: isDark ? 0.25 : 0.04,
+                    shadowRadius: 8,
+                    elevation: 2,
                   }}
                   onPress={() => {
                     if (action.route === 'Scanner') {
@@ -489,21 +766,39 @@ export default function DashboardScreen() {
                 >
                   <View
                     style={{
-                      backgroundColor: action.color + '15',
-                      borderColor: action.color + '30',
-                      width: 44,
-                      height: 44,
-                      borderRadius: 14,
+                      backgroundColor: action.bgColor,
+                      width: 52,
+                      height: 52,
+                      borderRadius: 18,
                       alignItems: 'center',
                       justifyContent: 'center',
                       marginBottom: 8,
-                      borderWidth: 1,
                     }}
                   >
-                    <Ionicons name={action.icon as any} size={22} color={action.color} />
+                    {action.icon(action.color)}
                   </View>
-                  <Text style={{ color: colors.textPrimary, fontSize: 11, fontWeight: '700' }} numberOfLines={1}>
+                  <Text
+                    style={{
+                      color: colors.textPrimary,
+                      fontSize: 13,
+                      fontWeight: '700',
+                      textAlign: 'center',
+                    }}
+                    numberOfLines={1}
+                  >
                     {action.label}
+                  </Text>
+                  <Text
+                    style={{
+                      color: colors.textMuted,
+                      fontSize: 9.5,
+                      fontWeight: '400',
+                      marginTop: 2,
+                      textAlign: 'center',
+                    }}
+                    numberOfLines={1}
+                  >
+                    {action.subtitle}
                   </Text>
                 </ScaleButton>
               ))}

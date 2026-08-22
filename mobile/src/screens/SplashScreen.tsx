@@ -33,6 +33,7 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
   const completeFade = useRef(new Animated.Value(0)).current;
   const completeScale = useRef(new Animated.Value(0.8)).current;
   const progressAnim = useRef(new Animated.Value(0.15)).current;
+  const containerFade = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     // --- Step 1 & 2: App Launch & Brand introduction ---
@@ -124,8 +125,14 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
 
     // --- Transition to Step 5: Landing Page ---
     const t6 = setTimeout(() => {
-      onFinish();
-    }, 4500);
+      Animated.timing(containerFade, {
+        toValue: 0,
+        duration: 350,
+        useNativeDriver: true,
+      }).start(() => {
+        onFinish();
+      });
+    }, 4200);
 
     return () => {
       clearTimeout(t1);
@@ -138,7 +145,7 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
   }, []);
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+    <Animated.View style={[styles.container, { opacity: containerFade, paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       {/* Background Decorators */}
       <View style={StyleSheet.absoluteFillObject}>
         <LinearGradient 
@@ -307,7 +314,7 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
           <Text style={styles.footerText}>Secured by Polygon</Text>
         </View>
       </View>
-    </View>
+    </Animated.View>
   );
 }
 

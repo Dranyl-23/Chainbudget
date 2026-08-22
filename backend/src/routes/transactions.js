@@ -53,10 +53,13 @@ router.post("/", authenticate, requireRole(3), async (req, res) => {
 
     // Budget Dissemination Validation
     if (type === "expense" && category) {
-      const escapedCategory = category.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const budget = await Budget.findOne({ 
-        organization: organizationId, 
-        name: { $regex: new RegExp(`^${escapedCategory}$`, "i") } 
+      // MED-2 FIX: $regex with case-insensitive flag requires a full collection scan and
+      // cannot use an index. Normalize the category to lowercase for an exact $eq lookup,
+      // which is fast, deterministic, and index-friendly.
+      const normalizedCategory = category.trim().toLowerCase();
+      const budget = await Budget.findOne({
+        organization: organizationId,
+        name: normalizedCategory,
       });
 
       if (!budget) {
@@ -69,7 +72,7 @@ router.post("/", authenticate, requireRole(3), async (req, res) => {
             organization: new mongoose.Types.ObjectId(organizationId),
             type: "expense",
             status: { $in: ["approved", "pending_approval", "requested"] },
-            category: { $regex: new RegExp(`^${escapedCategory}$`, "i") } 
+            category: normalizedCategory,
           }
         },
         {
@@ -240,11 +243,16 @@ router.post("/", authenticate, requireRole(3), async (req, res) => {
     // Fire-and-forget — never delays the HTTP response.
     if (txn.status === "pending_approval") {
       try {
-        const org = await Organization.findById(organizationId).select("members").lean();
-        const approverIds = (org?.members || [])
-          .filter((m) => m.isActive && m.roleLevel <= 2)
-          .map((m) => m.user?.toString() || m.user)
-          .filter(Boolean);
+        // HIGH-2 FIX: Organization schema has no `members` field — memberships live
+        // in User.memberships[]. The previous code always resolved to an empty array
+        // so approvers never received push notifications for new transactions.
+        // Query Users directly using $elemMatch, same pattern as the email block above.
+        const approvers = await User.find({
+          memberships: {
+            $elemMatch: { organization: organizationId, roleLevel: { $lte: 2 }, isActive: true },
+          },
+        }).select("_id").lean();
+        const approverIds = approvers.map((u) => u._id.toString());
 
         if (approverIds.length > 0) {
           sendPushNotifications(
@@ -309,6 +317,10 @@ router.get("/", authenticate, async (req, res) => {
       return res.status(400).json({ error: "Invalid orgId" });
     }
 
+    // MED-3 FIX: Cap limit to prevent a client from passing ?limit=999999 and
+    // dumping the entire transaction table in one request (memory/DoS risk).
+    const safeLimit = Math.min(Math.max(1, Number(limit) || 20), 100);
+
     const orgObjectId = new mongoose.Types.ObjectId(orgId);
     const filter = { organization: orgObjectId };
     if (type) filter.type = type;
@@ -339,7 +351,7 @@ router.get("/", authenticate, async (req, res) => {
       if (status) filter.status = status;
     }
 
-    const skip = (Number(page) - 1) * Number(limit);
+    const skip = (Number(page) - 1) * safeLimit;
 
     // Aggregate to include approvalCount and organization data in one query
     const [transactions, total] = await Promise.all([
@@ -347,7 +359,7 @@ router.get("/", authenticate, async (req, res) => {
         { $match: filter },
         { $sort: { createdAt: -1 } },
         { $skip: skip },
-        { $limit: Number(limit) },
+        { $limit: safeLimit },
         // Join submittedBy user
         {
           $lookup: {
@@ -436,7 +448,7 @@ router.get("/", authenticate, async (req, res) => {
       Transaction.countDocuments(filter),
     ]);
 
-    res.json({ transactions, total, page: Number(page), limit: Number(limit) });
+    res.json({ transactions, total, page: Number(page), limit: safeLimit });
   } catch (err) {
     console.error("GET /transactions error:", err.message);
     res.status(500).json({ error: err.message });
@@ -638,6 +650,14 @@ router.patch("/:id/execute", authenticate, requireRole(2), async (req, res) => {
     const txn = await Transaction.findById(req.params.id);
     if (!txn) return res.status(404).json({ error: "Transaction not found" });
 
+    // CRIT-3 FIX: requireRole(2) only proves the user has Level 2 in *some* org.
+    // Explicitly verify they belong to the *same* org as this transaction.
+    const txnOrgId = txn.organization.toString();
+    const roleLevel = req.user.getRoleInOrg(txnOrgId);
+    if (!req.user.isSuperAdmin && (roleLevel === null || roleLevel > 2)) {
+      return res.status(403).json({ error: "Access denied. You are not an admin of this organization." });
+    }
+
     txn.executed = true;
     if (txn.isEscrow) {
       txn.escrowStatus = "locked";
@@ -665,15 +685,28 @@ router.post("/:id/release-escrow", authenticate, async (req, res) => {
     const currentUserId = req.user._id.toString();
     const currentUserWallet = req.user.walletAddress ? req.user.walletAddress.toLowerCase() : null;
 
-    // A supplier is either the user who submitted the request or whose wallet matches the payee
-    const isSupplier = Boolean(
+    // HIGH-5 FIX: Before checking supplier/admin roles, verify the user is associated
+    // with this transaction's organization at all. Without this guard, a user from
+    // a different org who coincidentally matches the submittedBy ID (or wallet) could
+    // interact with another org's escrow.
+    const roleLevel = req.user.getRoleInOrg(txn.organization.toString());
+    const isOrgMember = req.user.isSuperAdmin || roleLevel !== null;
+
+    // A supplier is either the user who submitted the request or whose wallet matches the payee.
+    // They must also be an org member (or the designated payee of this specific transaction).
+    const isSupplier = isOrgMember && Boolean(
       (requesterId && requesterId === currentUserId) ||
       (requesterWallet && currentUserWallet && requesterWallet === currentUserWallet)
     );
 
     // An org admin is a level 1 or 2 member of this transaction's organization
-    const roleLevel = req.user.getRoleInOrg(txn.organization);
     const isOrgAdmin = req.user.isSuperAdmin || (roleLevel !== null && roleLevel <= 2);
+
+    if (!isOrgMember) {
+      return res.status(403).json({
+        error: "Access denied. You are not a member of this organization.",
+      });
+    }
 
     if (!isSupplier && !isOrgAdmin) {
       return res.status(403).json({
@@ -700,9 +733,18 @@ router.post("/:id/release-escrow", authenticate, async (req, res) => {
         const ChainBudgetABI = require("../lib/ChainBudget.json");
         const contract = new ethers.Contract(process.env.CONTRACT_ADDRESS, ChainBudgetABI.abi, signer);
 
+        // MED-4 FIX: Wrap tx.wait() in a 60-second timeout to prevent requests from hanging indefinitely
+        const waitWithTimeout = (txPromise, timeoutMs = 60000) =>
+          Promise.race([
+            txPromise.wait(),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error(`Blockchain transaction timeout (${timeoutMs / 1000}s)`)), timeoutMs)
+            ),
+          ]);
+
         if (isOrgAdmin && !isSupplier) {
           const tx = await contract.releaseEscrow(txn.onChainTxId);
-          const receipt = await tx.wait();
+          const receipt = await waitWithTimeout(tx);
           blockchainTxHash = receipt.hash;
         } else if (isSupplier && !isOrgAdmin) {
           let tx;
@@ -712,14 +754,14 @@ router.post("/:id/release-escrow", authenticate, async (req, res) => {
             const evidenceURI = req.body?.evidenceURI || `chainbudget://escrow/release/${txn._id}`;
             tx = await contract.recordOffchainPayeeConfirmation(txn.onChainTxId, evidenceURI);
           }
-          const receipt = await tx.wait();
+          const receipt = await waitWithTimeout(tx);
           blockchainTxHash = receipt.hash;
         } else {
           // Admin is acting as both payer and payee (e.g. supplier account is
           // the same as the org admin). Call payer release first, then record
-          // payee confirmation on-chain. Use tx2 — not the undefined outer `tx`.
+          // payee confirmation on-chain.
           const tx1 = await contract.releaseEscrow(txn.onChainTxId);
-          await tx1.wait();
+          await waitWithTimeout(tx1);
           let tx2;
           if (req.body?.payeeSig) {
             tx2 = await contract.releaseEscrowWithPayeeSignature(txn.onChainTxId, req.body.payeeSig);
@@ -727,7 +769,7 @@ router.post("/:id/release-escrow", authenticate, async (req, res) => {
             const evidenceURI = req.body?.evidenceURI || `chainbudget://escrow/release/${txn._id}`;
             tx2 = await contract.recordOffchainPayeeConfirmation(txn.onChainTxId, evidenceURI);
           }
-          const receipt = await tx2.wait();
+          const receipt = await waitWithTimeout(tx2);
           blockchainTxHash = receipt.hash;
         }
       } catch (chainErr) {
@@ -788,6 +830,18 @@ router.patch("/:id/receipt", authenticate, async (req, res) => {
   try {
     const { documentUrl, documentHash } = req.body;
     if (!documentUrl) return res.status(400).json({ error: "documentUrl is required" });
+
+    // CRIT-4 FIX: Validate documentUrl is a safe https:// URL to prevent SSRF and
+    // javascript: / data: URI injection. Only allow https:// scheme.
+    let parsedUrl;
+    try {
+      parsedUrl = new URL(documentUrl);
+    } catch {
+      return res.status(400).json({ error: "documentUrl must be a valid URL" });
+    }
+    if (parsedUrl.protocol !== "https:") {
+      return res.status(400).json({ error: "documentUrl must use the https:// scheme" });
+    }
 
     const txn = await Transaction.findById(req.params.id);
     if (!txn) return res.status(404).json({ error: "Transaction not found" });
@@ -891,8 +945,27 @@ router.get("/:id", authenticate, async (req, res) => {
   try {
     const txn = await Transaction.findById(req.params.id)
       .populate("submittedBy", "walletAddress displayName")
-      .populate("organization", "name type");
+      .populate("organization", "name type highValueThreshold requiredApprovals");
     if (!txn) return res.status(404).json({ error: "Transaction not found" });
+
+    // CRIT-2 FIX: Verify the requesting user is a member of this transaction's org.
+    // Without this check, any authenticated user from any org could read any transaction by ID.
+    const orgId = txn.organization?._id?.toString() || txn.organization?.toString();
+    const roleLevel = req.user.getRoleInOrg(orgId);
+    if (!req.user.isSuperAdmin && roleLevel === null) {
+      return res.status(403).json({ error: "Access denied. You are not a member of this organization." });
+    }
+
+    // LOW-4 & LOW-7 FIX: Apply role-based visibility rules consistent with GET /api/transactions list
+    if (!req.user.isSuperAdmin) {
+      if (roleLevel === 4 && txn.status !== "approved") {
+        return res.status(403).json({ error: "Access denied. Public viewers can only access approved transactions." });
+      }
+      if (roleLevel === 3 && !["approved", "requested"].includes(txn.status)) {
+        return res.status(403).json({ error: "Access denied. You do not have permission to view this transaction." });
+      }
+    }
+
     res.json(txn);
   } catch (err) {
     res.status(500).json({ error: err.message });

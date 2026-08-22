@@ -15,6 +15,9 @@ import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { triggerLightHaptic, triggerErrorHaptic, triggerSuccessHaptic, authenticateWithBiometrics } from '../lib/biometrics';
 import ThemeSelectorModal from '../components/ThemeSelectorModal';
+import appConfig from '../../app.json';
+
+const APP_VERSION = appConfig?.expo?.version || '1.1.3';
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
@@ -170,13 +173,14 @@ export default function ProfileScreen() {
   };
 
   return (
-    <KeyboardAwareScrollView 
-      style={{ backgroundColor: colors.background }}
-      contentContainerStyle={{ padding: 16, paddingTop: (insets.top || 0) + 16, paddingBottom: 100 }}
-      keyboardShouldPersistTaps="handled"
-      enableOnAndroid={true}
-      extraScrollHeight={20}
-    >
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <KeyboardAwareScrollView 
+        style={{ flex: 1, backgroundColor: colors.background }}
+        contentContainerStyle={{ padding: 16, paddingTop: (insets.top || 0) + 16, paddingBottom: 100 }}
+        keyboardShouldPersistTaps="handled"
+        enableOnAndroid={true}
+        extraScrollHeight={20}
+      >
       {/* Header */}
       <View className="mb-6">
         <Text style={{ color: colors.textPrimary }} className="text-2xl font-bold mb-1">My Account</Text>
@@ -377,161 +381,181 @@ export default function ProfileScreen() {
       </View>
 
       {/* Settings Menu List */}
-      <View 
-        style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-        className="border rounded-3xl p-2 mb-6 shadow-sm"
-      >
-        <Text style={{ color: colors.textMuted }} className="text-xs font-bold uppercase tracking-widest px-4 pt-3 pb-2">
-          Settings & Preferences
+      {/* ── SECTION 1: PREFERENCES & NETWORK ── */}
+      <View className="mb-5">
+        <Text style={{ color: colors.textMuted }} className="text-xs font-bold uppercase tracking-widest px-2 mb-2">
+          Preferences & Network
         </Text>
-
-        {/* Appearance & Theme Item */}
-        <TouchableOpacity 
-          onPress={() => {
-            triggerLightHaptic();
-            setShowThemeModal(true);
-          }}
-          activeOpacity={0.7}
-          style={{ borderBottomColor: colors.borderSubtle }}
-          className="flex-row items-center justify-between p-4 border-b"
+        <View 
+          style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+          className="border rounded-2xl p-1 shadow-sm overflow-hidden"
         >
-          <View className="flex-row items-center gap-3">
-            <View 
-              style={{ backgroundColor: colors.primaryMuted, borderColor: colors.primary + '40' }}
-              className="w-9 h-9 rounded-xl items-center justify-center border"
-            >
-              <Ionicons name="color-palette-outline" size={20} color={colors.primary} />
+          {/* Appearance & Theme Item */}
+          <TouchableOpacity 
+            onPress={() => {
+              triggerLightHaptic();
+              setShowThemeModal(true);
+            }}
+            activeOpacity={0.7}
+            style={{ borderBottomColor: colors.borderSubtle }}
+            className="flex-row items-center justify-between p-3.5 border-b"
+          >
+            <View className="flex-row items-center gap-3">
+              <View 
+                style={{ backgroundColor: colors.primaryMuted, borderColor: colors.primary + '40' }}
+                className="w-9 h-9 rounded-xl items-center justify-center border"
+              >
+                <Ionicons name="color-palette-outline" size={20} color={colors.primary} />
+              </View>
+              <View>
+                <Text style={{ color: colors.textPrimary }} className="font-bold text-sm">Appearance & Theme</Text>
+                <Text style={{ color: colors.textSecondary }} className="text-xs">
+                  {themeMode === 'system' ? `System (${isDark ? 'Dark' : 'Light'})` : themeMode === 'dark' ? 'Dark Mode' : 'Light Mode'}
+                </Text>
+              </View>
             </View>
-            <View>
-              <Text style={{ color: colors.textPrimary }} className="font-bold text-sm">Appearance & Theme</Text>
-              <Text style={{ color: colors.textSecondary }} className="text-xs">
-                {themeMode === 'system' ? `System (${isDark ? 'Dark' : 'Light'})` : themeMode === 'dark' ? 'Dark Mode' : 'Light Mode'}
-              </Text>
+            <View className="flex-row items-center gap-1.5">
+              <View 
+                style={{ backgroundColor: colors.cardGlass, borderColor: colors.border }}
+                className="px-2.5 py-1 rounded-full border"
+              >
+                <Text style={{ color: colors.primary }} className="text-[11px] font-extrabold uppercase">
+                  {themeMode}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
             </View>
-          </View>
-          <View className="flex-row items-center gap-1.5">
-            <View 
-              style={{ backgroundColor: colors.cardGlass, borderColor: colors.border }}
-              className="px-2.5 py-1 rounded-full border"
-            >
-              <Text style={{ color: colors.primary }} className="text-[11px] font-extrabold uppercase">
-                {themeMode}
-              </Text>
+          </TouchableOpacity>
+
+          {/* Network Status Item */}
+          <TouchableOpacity 
+            onPress={() => setShowNetworkModal(true)}
+            activeOpacity={0.7}
+            className="flex-row items-center justify-between p-3.5"
+          >
+            <View className="flex-row items-center gap-3">
+              <View className="w-9 h-9 rounded-xl bg-cyan-500/20 items-center justify-center border border-cyan-500/30">
+                <Ionicons name="hardware-chip-outline" size={20} color="#22d3ee" />
+              </View>
+              <View>
+                <Text style={{ color: colors.textPrimary }} className="font-bold text-sm">Network Status</Text>
+                <Text style={{ color: colors.textSecondary }} className="text-xs">Polygon Amoy & Relayer details</Text>
+              </View>
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-          </View>
-        </TouchableOpacity>
+          </TouchableOpacity>
+        </View>
+      </View>
 
-        {/* Security & Web3 Vault Item */}
-        <TouchableOpacity 
-          onPress={() => {
-            setActiveTab('menu');
-            setShowSecurityModal(true);
-          }}
-          activeOpacity={0.7}
-          style={{ borderBottomColor: colors.borderSubtle }}
-          className="flex-row items-center justify-between p-4 border-b"
+      {/* ── SECTION 2: SECURITY & PRIVACY ── */}
+      <View className="mb-5">
+        <Text style={{ color: colors.textMuted }} className="text-xs font-bold uppercase tracking-widest px-2 mb-2">
+          Security & Privacy
+        </Text>
+        <View 
+          style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+          className="border rounded-2xl p-1 shadow-sm overflow-hidden"
         >
-          <View className="flex-row items-center gap-3">
-            <View className="w-9 h-9 rounded-xl bg-orange-500/20 items-center justify-center border border-orange-500/30">
-              <Ionicons name="shield-checkmark-outline" size={20} color="#f97316" />
+          {/* Security & Web3 Vault Item */}
+          <TouchableOpacity 
+            onPress={() => {
+              setActiveTab('menu');
+              setShowSecurityModal(true);
+            }}
+            activeOpacity={0.7}
+            style={{ borderBottomColor: colors.borderSubtle }}
+            className="flex-row items-center justify-between p-3.5 border-b"
+          >
+            <View className="flex-row items-center gap-3">
+              <View className="w-9 h-9 rounded-xl bg-orange-500/20 items-center justify-center border border-orange-500/30">
+                <Ionicons name="shield-checkmark-outline" size={20} color="#f97316" />
+              </View>
+              <View>
+                <Text style={{ color: colors.textPrimary }} className="font-bold text-sm">Web3 Security & Keys</Text>
+                <Text style={{ color: colors.textSecondary }} className="text-xs">Backup seed phrase & private key</Text>
+              </View>
             </View>
-            <View>
-              <Text style={{ color: colors.textPrimary }} className="font-bold text-sm">Web3 Security & Keys</Text>
-              <Text style={{ color: colors.textSecondary }} className="text-xs">Backup seed phrase & private key</Text>
-            </View>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-        </TouchableOpacity>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </TouchableOpacity>
 
-        {/* Network Status Item */}
-        <TouchableOpacity 
-          onPress={() => setShowNetworkModal(true)}
-          activeOpacity={0.7}
-          style={{ borderBottomColor: colors.borderSubtle }}
-          className="flex-row items-center justify-between p-4 border-b"
+          {/* Data Privacy Notice (RA 10173) */}
+          <TouchableOpacity 
+            onPress={() => {
+              triggerLightHaptic();
+              navigation.navigate('DataPrivacy');
+            }}
+            activeOpacity={0.7}
+            className="flex-row items-center justify-between p-3.5"
+          >
+            <View className="flex-row items-center gap-3">
+              <View className="w-9 h-9 rounded-xl bg-emerald-500/20 items-center justify-center border border-emerald-500/30">
+                <Ionicons name="lock-closed-outline" size={20} color="#10b981" />
+              </View>
+              <View>
+                <Text style={{ color: colors.textPrimary }} className="font-bold text-sm">Data Privacy & Security</Text>
+                <Text style={{ color: colors.textSecondary }} className="text-xs">RA 10173 compliance & DPO contact</Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* ── SECTION 3: SUPPORT & ABOUT ── */}
+      <View className="mb-6">
+        <Text style={{ color: colors.textMuted }} className="text-xs font-bold uppercase tracking-widest px-2 mb-2">
+          Support & About
+        </Text>
+        <View 
+          style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+          className="border rounded-2xl p-1 shadow-sm overflow-hidden"
         >
-          <View className="flex-row items-center gap-3">
-            <View className="w-9 h-9 rounded-xl bg-cyan-500/20 items-center justify-center border border-cyan-500/30">
-              <Ionicons name="hardware-chip-outline" size={20} color="#22d3ee" />
+          {/* Help & FAQs */}
+          <TouchableOpacity 
+            onPress={() => {
+              triggerLightHaptic();
+              navigation.navigate('HelpFaq');
+            }}
+            activeOpacity={0.7}
+            style={{ borderBottomColor: colors.borderSubtle }}
+            className="flex-row items-center justify-between p-3.5 border-b"
+          >
+            <View className="flex-row items-center gap-3">
+              <View 
+                style={{ backgroundColor: colors.primaryMuted, borderColor: colors.primary + '40' }}
+                className="w-9 h-9 rounded-xl items-center justify-center border"
+              >
+                <Ionicons name="help-circle-outline" size={20} color={colors.primary} />
+              </View>
+              <View>
+                <Text style={{ color: colors.textPrimary }} className="font-bold text-sm">Help & Knowledge Base</Text>
+                <Text style={{ color: colors.textSecondary }} className="text-xs">FAQs, guides, and support channels</Text>
+              </View>
             </View>
-            <View>
-              <Text style={{ color: colors.textPrimary }} className="font-bold text-sm">Network Status</Text>
-              <Text style={{ color: colors.textSecondary }} className="text-xs">Polygon Amoy & Relayer details</Text>
-            </View>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-        </TouchableOpacity>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </TouchableOpacity>
 
-        {/* Help & FAQs */}
-        <TouchableOpacity 
-          onPress={() => {
-            triggerLightHaptic();
-            navigation.navigate('HelpFaq');
-          }}
-          activeOpacity={0.7}
-          style={{ borderBottomColor: colors.borderSubtle }}
-          className="flex-row items-center justify-between p-4 border-b"
-        >
-          <View className="flex-row items-center gap-3">
-            <View 
-              style={{ backgroundColor: colors.primaryMuted, borderColor: colors.primary + '40' }}
-              className="w-9 h-9 rounded-xl items-center justify-center border"
-            >
-              <Ionicons name="help-buoy-outline" size={20} color={colors.primary} />
+          {/* About Item */}
+          <TouchableOpacity 
+            onPress={() => setShowAboutModal(true)}
+            activeOpacity={0.7}
+            className="flex-row items-center justify-between p-3.5"
+          >
+            <View className="flex-row items-center gap-3">
+              <View 
+                style={{ backgroundColor: colors.primaryMuted, borderColor: colors.primary + '40' }}
+                className="w-9 h-9 rounded-xl items-center justify-center border"
+              >
+                <Ionicons name="information-circle-outline" size={20} color={colors.primary} />
+              </View>
+              <View>
+                <Text style={{ color: colors.textPrimary }} className="font-bold text-sm">About ChainBudget</Text>
+                <Text style={{ color: colors.textSecondary }} className="text-xs">v{APP_VERSION} Capstone Edition</Text>
+              </View>
             </View>
-            <View>
-              <Text style={{ color: colors.textPrimary }} className="font-bold text-sm">Help & Knowledge Base</Text>
-              <Text style={{ color: colors.textSecondary }} className="text-xs">FAQs, guides, and support channels</Text>
-            </View>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-        </TouchableOpacity>
-
-        {/* Data Privacy Notice (RA 10173) */}
-        <TouchableOpacity 
-          onPress={() => {
-            triggerLightHaptic();
-            navigation.navigate('DataPrivacy');
-          }}
-          activeOpacity={0.7}
-          style={{ borderBottomColor: colors.borderSubtle }}
-          className="flex-row items-center justify-between p-4 border-b"
-        >
-          <View className="flex-row items-center gap-3">
-            <View className="w-9 h-9 rounded-xl bg-emerald-500/20 items-center justify-center border border-emerald-500/30">
-              <Ionicons name="shield-checkmark-outline" size={20} color="#10b981" />
-            </View>
-            <View>
-              <Text style={{ color: colors.textPrimary }} className="font-bold text-sm">Data Privacy & Security</Text>
-              <Text style={{ color: colors.textSecondary }} className="text-xs">RA 10173 compliance & DPO contact</Text>
-            </View>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-        </TouchableOpacity>
-
-        {/* About Item */}
-        <TouchableOpacity 
-          onPress={() => setShowAboutModal(true)}
-          activeOpacity={0.7}
-          className="flex-row items-center justify-between p-4"
-        >
-          <View className="flex-row items-center gap-3">
-            <View 
-              style={{ backgroundColor: colors.primaryMuted, borderColor: colors.primary + '40' }}
-              className="w-9 h-9 rounded-xl items-center justify-center border"
-            >
-              <Ionicons name="information-circle-outline" size={20} color={colors.primary} />
-            </View>
-            <View>
-              <Text style={{ color: colors.textPrimary }} className="font-bold text-sm">About ChainBudget</Text>
-              <Text style={{ color: colors.textSecondary }} className="text-xs">v1.1.2 Capstone Edition</Text>
-            </View>
-
-
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-        </TouchableOpacity>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </TouchableOpacity>
+        </View>
       </View>
 
 
@@ -842,7 +866,7 @@ export default function ProfileScreen() {
                 />
               </View>
               <Text style={{ color: colors.textPrimary }} className="text-2xl font-bold mb-2">ChainBudget Mobile</Text>
-              <Text style={{ color: colors.primary }} className="font-bold mb-6">Version 1.0.0 (Capstone Edition)</Text>
+              <Text style={{ color: colors.primary }} className="font-bold mb-6">Version {APP_VERSION} (Capstone Edition)</Text>
             </View>
             <Text style={{ color: colors.textSecondary }} className="text-xs text-center leading-relaxed mb-6">
               A Transparent & Accountable On-Chain Budget Dissemination System powered by Polygon Blockchain, Asgardeo SSO, and AI Receipt Processing.
@@ -933,5 +957,6 @@ export default function ProfileScreen() {
         onClose={() => setShowThemeModal(false)}
       />
     </KeyboardAwareScrollView>
+  </View>
   );
 }

@@ -38,17 +38,11 @@ export default function DataPrivacyScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Hero Header */}
-        <View className="items-center mb-6 pt-2">
-          <View
-            style={{ backgroundColor: colors.primaryMuted, borderColor: colors.primary + '40' }}
-            className="w-16 h-16 rounded-3xl border items-center justify-center mb-3 shadow-sm"
-          >
-            <Ionicons name="shield-half" size={32} color={colors.primary} />
-          </View>
-          <Text style={{ color: colors.textPrimary }} className="text-2xl font-extrabold text-center">
+        <View className="mb-5 pt-2">
+          <Text style={{ color: colors.textPrimary }} className="text-2xl font-extrabold">
             Data Privacy & Security Notice
           </Text>
-          <Text style={{ color: colors.textSecondary }} className="text-xs text-center mt-1 px-2">
+          <Text style={{ color: colors.textSecondary }} className="text-xs mt-1">
             In compliance with the Data Privacy Act of 2012 (Republic Act No. 10173) & Cybercrime Prevention Act of 2012 (Republic Act No. 10175).
           </Text>
         </View>

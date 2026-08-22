@@ -50,10 +50,20 @@ const upload = multer({
 // gemini-2.0-flash was removed by Google on 2026-08-21; gemini-1.5-flash is the current stable model
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-1.5-flash";
 
+// MED-5 FIX: Instantiate GoogleGenAI singleton at module load to avoid per-request instantiation overhead
+const getAiClient = () => {
+  if (!process.env.GEMINI_API_KEY) return null;
+  if (!global._geminiAiClient) {
+    global._geminiAiClient = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  }
+  return global._geminiAiClient;
+};
+
 // ── 1. AI Proposal Analyzer ───────────────────────────────────────────────────
 router.post("/analyze-proposal", authenticate, async (req, res) => {
   try {
-    if (!process.env.GEMINI_API_KEY) {
+    const ai = getAiClient();
+    if (!ai) {
       return res.status(503).json({ error: "AI service is not configured" });
     }
 
@@ -71,8 +81,6 @@ router.post("/analyze-proposal", authenticate, async (req, res) => {
     if (isNaN(numAmount) || numAmount < 0) {
       return res.status(400).json({ error: "Invalid amount" });
     }
-
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
     const prompt = `
       You are an expert financial and risk analyst for a DAO (Decentralized Autonomous Organization).
       Analyze the following proposal:
@@ -116,7 +124,8 @@ router.post("/analyze-proposal", authenticate, async (req, res) => {
 // ── 2. AI Smart Receipt Scanner ───────────────────────────────────────────────
 router.post("/scan-receipt", authenticate, upload.single("receipt"), async (req, res) => {
   try {
-    if (!process.env.GEMINI_API_KEY) {
+    const ai = getAiClient();
+    if (!ai) {
       return res.status(503).json({ error: "AI service is not configured" });
     }
 
@@ -146,7 +155,6 @@ router.post("/scan-receipt", authenticate, upload.single("receipt"), async (req,
       }
     `;
 
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
     const response = await ai.models.generateContent({
       model: GEMINI_MODEL,
       contents: [prompt, ...imageParts],
@@ -199,7 +207,8 @@ router.get("/forecast", authenticate, async (req, res) => {
       : "warning";
 
     // 1. Try Gemini AI if API key is present
-    if (process.env.GEMINI_API_KEY) {
+    const ai = getAiClient();
+    if (ai) {
       try {
         const txSummary = txs.slice(0, 20).map(t => 
           `${t.createdAt ? t.createdAt.toISOString().split('T')[0] : 'N/A'}: ₱${t.amount} (${t.type}) for ${sanitizePromptInput(t.category || t.budgetCategory || 'General', 50)} - ${sanitizePromptInput(t.description, 100)}`
@@ -230,7 +239,6 @@ router.get("/forecast", authenticate, async (req, res) => {
           }
         `;
 
-        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
         const response = await ai.models.generateContent({
           model: GEMINI_MODEL,
           contents: prompt,
