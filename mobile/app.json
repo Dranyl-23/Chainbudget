@@ -2,7 +2,7 @@
   "expo": {
     "name": "ChainBudget",
     "slug": "lynard",
-    "version": "1.1.4",
+    "version": "1.1.5",
     "scheme": "chainbudget",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -16,11 +16,11 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.chainbudget.app",
-      "buildNumber": "6"
+      "buildNumber": "7"
     },
     "android": {
       "package": "com.chainbudget.app",
-      "versionCode": 6,
+      "versionCode": 7,
       "adaptiveIcon": {
         "backgroundColor": "#05040F",
         "foregroundImage": "./assets/adaptive-icon.png"
