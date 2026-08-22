@@ -301,8 +301,6 @@ router.post("/push-token", authenticate, async (req, res) => {
   }
 });
 
-module.exports = router;
-
 /**
  * sendPushNotifications
  *
@@ -315,6 +313,11 @@ module.exports = router;
  * @param {object}   data          - Extra data payload (e.g. { txId, screen })
  */
 async function sendPushNotifications(userIds, title, body, data = {}) {
+  // MED-1 FIX: The Expo Push API enforces a maximum of 100 messages per request.
+  // Sending more than 100 in a single call causes partial or full rejection.
+  // Chunk all messages into batches of 100 and send each batch sequentially.
+  const EXPO_CHUNK_SIZE = 100;
+
   try {
     // Fetch push tokens for all target users
     const users = await User.find({ _id: { $in: userIds }, "pushTokens.0": { $exists: true } })
@@ -333,24 +336,36 @@ async function sendPushNotifications(userIds, title, body, data = {}) {
       channelId: data.channelId || "chainbudget-default",
     }));
 
-    // Send via Expo Push API (https://exp.host/--/api/v2/push/send)
-    const response = await fetch("https://exp.host/--/api/v2/push/send", {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Accept-Encoding": "gzip, deflate",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(messages),
-    });
+    // Chunk into batches of EXPO_CHUNK_SIZE and send each batch
+    for (let i = 0; i < messages.length; i += EXPO_CHUNK_SIZE) {
+      const chunk = messages.slice(i, i + EXPO_CHUNK_SIZE);
+      try {
+        // Send via Expo Push API (https://exp.host/--/api/v2/push/send)
+        const response = await fetch("https://exp.host/--/api/v2/push/send", {
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            "Accept-Encoding": "gzip, deflate",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(chunk),
+        });
 
-    const result = await response.json();
-    if (result.errors) {
-      console.warn("[Push] Expo push API errors:", result.errors);
+        const result = await response.json();
+        if (result.errors) {
+          console.warn(`[Push] Expo push API errors (chunk ${i / EXPO_CHUNK_SIZE + 1}):`, result.errors);
+        }
+      } catch (chunkErr) {
+        console.error(`[Push] Failed to send chunk ${i / EXPO_CHUNK_SIZE + 1}:`, chunkErr.message || chunkErr);
+      }
     }
   } catch (err) {
     console.error("[Push] Failed to send push notifications:", err.message || err);
   }
 }
 
+// LOW-1 FIX: Define sendPushNotifications before module.exports so the attachment
+// is explicit and the function can safely be moved or renamed without breaking imports.
+module.exports = router;
 module.exports.sendPushNotifications = sendPushNotifications;
+

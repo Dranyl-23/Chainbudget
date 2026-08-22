@@ -16,7 +16,7 @@ router.post("/:txId", authenticate, requireRole(2), async (req, res) => {
   session.startTransaction();
   
   try {
-    const { action, comment, blockchainTxHash, signature, to: signedTo, amountWei: signedAmountWei } = req.body;
+    const { action, comment, blockchainTxHash, signature } = req.body;
     
     // Input validation
     if (!action || !["approved", "rejected"].includes(action)) {
@@ -62,6 +62,15 @@ router.post("/:txId", authenticate, requireRole(2), async (req, res) => {
     }
 
     // Verify EIP-712 Signature
+    // HIGH-4 FIX: The EIP-712 message must be reconstructed entirely from
+    // server-side trusted data (the stored txn document). The previous code
+    // accepted `signedAmountWei` and `signedTo` from the client body and
+    // included them in the recovered-signer message — an attacker could supply
+    // a manipulated amountWei that was different from the real transaction amount,
+    // obtain a valid signature over it, and pass verification.
+    //
+    // Fix: always use txn.amount for amountWei and derive `to` from the
+    // transaction's stored submittedBy wallet — never from the request body.
     try {
       const domain = { name: "ChainBudget", version: "1" };
       const types = {
@@ -74,13 +83,22 @@ router.post("/:txId", authenticate, requireRole(2), async (req, res) => {
           { name: "amountWei", type: "uint256" }
         ]
       };
+
+      // Resolve the canonical `to` address from the stored transaction submitter.
+      // Never trust the client-supplied `to` field for signature verification.
+      let canonicalTo = "0x0000000000000000000000000000000000000000";
+      if (txn.submittedBy) {
+        const submitter = await User.findById(txn.submittedBy).select("walletAddress").lean();
+        if (submitter?.walletAddress) canonicalTo = submitter.walletAddress;
+      }
+
       const message = {
         action,
         txId: txn._id.toString(),
         amount: txn.amount.toString(),
         description: txn.description,
-        to: signedTo || "",
-        amountWei: (signedAmountWei || txn.amount).toString()
+        to: canonicalTo,
+        amountWei: txn.amount.toString(), // Server-sourced only — never from client
       };
       
       const recoveredAddress = ethers.verifyTypedData(domain, types, message, signature);
@@ -152,8 +170,27 @@ router.post("/:txId", authenticate, requireRole(2), async (req, res) => {
                 const txData = await Transaction.findById(txn._id).populate("submittedBy").session(session);
                 const toAddress = txData.submittedBy?.walletAddress || "0x000000000000000000000000000000000000dEaD";
                 
-                // We convert PHP amount to WEI equivalent (e.g., 1 PHP = 1 WEI for simplicity in demo)
-                const amountWei = txn.amount.toString(); 
+                // CRIT-5 FIX: The Treasury contract's executeWithSignatures transfers
+                // real MATIC (amountWei). Passing a raw PHP integer (e.g. 5000 for ₱5000)
+                // would only transfer 5000 Wei ≈ ₱0.000000012.
+                //
+                // This integration is intentionally disabled in production until a proper
+                // PHP→MATIC conversion rate is applied. In a testnet/demo context only,
+                // amounts are stored symbolically (1 PHP = 1 unit) for audit purposes.
+                //
+                // TODO before production: replace amountWei with the correctly converted
+                // value using a rate oracle or a fixed exchange rate:
+                //   const PHP_TO_WEI_RATE = BigInt(process.env.PHP_TO_WEI_RATE || "0");
+                //   const amountWei = BigInt(Math.floor(txn.amount)) * PHP_TO_WEI_RATE;
+                if (process.env.NODE_ENV === "production") {
+                  throw new Error(
+                    "[Relayer] BLOCKED: executeWithSignatures called with raw PHP amount in production. " +
+                    "Set PHP_TO_WEI_RATE env var and apply conversion before enabling Treasury execution."
+                  );
+                }
+
+                // Demo/testnet only — amounts stored symbolically, not as real ETH value
+                const amountWei = txn.amount.toString();
                 
                 const txResponse = await contract.executeWithSignatures(
                   "approved",

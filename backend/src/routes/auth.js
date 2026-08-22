@@ -264,23 +264,15 @@ router.get("/validate", authenticate, (req, res) => {
 /// GET /api/auth/me — Get authenticated user details
 router.get("/me", authenticate, async (req, res) => {
   try {
-    // Sync avatar from Asgardeo ID token if available and not yet set
-    const idToken = req.headers["x-id-token"];
-    if (idToken && (!req.user.avatarUrl || req.user.avatarUrl.includes("googleusercontent"))) {
-      try {
-        const payloadBase64 = idToken.split(".")[1];
-        const payloadJson = Buffer.from(payloadBase64, "base64").toString("utf-8");
-        const decoded = JSON.parse(payloadJson);
-        const picture = decoded.picture || decoded.profileUrl;
-        
-        if (picture && req.user.avatarUrl !== picture) {
-          req.user.avatarUrl = picture;
-          await req.user.save();
-        }
-      } catch (err) {
-        console.warn("Failed to decode X-ID-Token for picture:", err.message);
-      }
-    }
+    // HIGH-3 FIX: The previous implementation decoded the X-ID-Token header
+    // using plain base64 without any cryptographic signature verification.
+    // Any authenticated user could forge this header to set an arbitrary
+    // avatarUrl (stored SSRF vector). The block is removed entirely.
+    //
+    // avatarUrl is already synced safely during the attachUser middleware:
+    // it reads the verified Asgardeo JWT payload (RS256, JWKS-verified) and
+    // updates avatarUrl only when the source is trusted. No additional sync
+    // needed here.
 
     await req.user.populate("memberships.organization", "name type logoUrl");
     const formatted = {
@@ -311,6 +303,9 @@ router.get("/keys", authenticate, keyExportRateLimiter, async (req, res) => {
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
+    if (!user.isActive) {
+      return res.status(401).json({ error: "Account is inactive" });
+    }
 
     let privateKey = null;
     let mnemonic = "";
@@ -327,12 +322,38 @@ router.get("/keys", authenticate, keyExportRateLimiter, async (req, res) => {
           mnemonic = decryptedMnem;
         }
       } catch (decryptErr) {
-        console.warn("[auth/keys] Decryption of legacy record failed, will regenerate:", decryptErr.message);
+        // HIGH-1 FIX: Decryption failure (e.g. rotated ENCRYPTION_SECRET) must NEVER
+        // silently overwrite the user's existing walletAddress with a brand-new wallet.
+        // That would orphan all their on-chain SBTs, transaction records, and EIP-712
+        // signatures — permanently breaking their blockchain identity.
+        //
+        // Instead, return a clear error instructing the user to restore from their
+        // saved recovery phrase. An admin can then re-encrypt and repair the record
+        // using the correct ENCRYPTION_SECRET.
+        console.error("[auth/keys] Decryption failed for user", user._id, "— refusing to overwrite wallet:", decryptErr.message);
+        return res.status(503).json({
+          error: "Unable to decrypt your wallet keys. This may be caused by a server configuration change.",
+          hint: "Please restore your wallet using your 12-word recovery phrase. If you never saved it, contact your administrator.",
+        });
       }
     }
 
-    // ── Attempt 2: Auto-generate a valid BIP-39 wallet if missing or legacy ──
+    // ── Attempt 2: First-time setup — generate a wallet ONLY if none exists ──
+    // HIGH-1 FIX: Only generate a fresh wallet when walletAddress is genuinely null
+    // (true first-time Asgardeo user who has never had a wallet assigned).
+    // Never overwrite an existing walletAddress.
     if (!privateKey || !mnemonic || mnemonic.trim().split(/\s+/).length !== 12) {
+      if (user.walletAddress) {
+        // The user already has a wallet on-chain but the keys are unreadable.
+        // Do NOT generate a replacement — see the error path above.
+        console.error("[auth/keys] Mnemonic invalid/missing but walletAddress exists — refusing to overwrite:", user._id);
+        return res.status(503).json({
+          error: "Wallet key data is incomplete or corrupt.",
+          hint: "Please restore your wallet using your 12-word recovery phrase.",
+        });
+      }
+
+      // Genuine first-time: no walletAddress and no keys → create new BIP-39 wallet
       const wallet = ethers.Wallet.createRandom();
       privateKey = wallet.privateKey;
       mnemonic = wallet.mnemonic.phrase;

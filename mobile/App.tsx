@@ -54,27 +54,29 @@ function AuthNavigator() {
   const { colors, navigationTheme } = useTheme();
 
   return (
-    <NavigationContainer theme={navigationTheme}>
-      <AuthStack.Navigator
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: colors.background },
-          animation: 'fade_from_bottom',
-        }}
-      >
-        <AuthStack.Screen name="WelcomeLanding" component={WelcomeLandingScreen} />
-        <AuthStack.Screen name="PublicLedger" component={PublicLedgerScreen} />
-        <AuthStack.Screen name="VerifyTransaction" component={VerifyTransactionScreen} />
-        <AuthStack.Screen name="VerificationReport" component={VerificationReportScreen} />
-        <AuthStack.Screen name="Login" component={LoginScreen} />
-        <AuthStack.Screen name="Register" component={RegisterScreen} />
-        <AuthStack.Screen name="RecoveryPhrase" component={RecoveryPhraseScreen} />
-        <AuthStack.Screen name="RestoreWallet" component={RestoreWalletScreen} />
-        <AuthStack.Screen name="HelpFaq" component={HelpFaqScreen} />
-        <AuthStack.Screen name="DataPrivacy" component={DataPrivacyScreen} />
-      </AuthStack.Navigator>
-      <StatusBar style={colors.statusBarStyle} />
-    </NavigationContainer>
+    <View style={{ flex: 1, backgroundColor: '#090616' }}>
+      <NavigationContainer theme={navigationTheme}>
+        <AuthStack.Navigator
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: '#090616' },
+            animation: 'fade',
+          }}
+        >
+          <AuthStack.Screen name="WelcomeLanding" component={WelcomeLandingScreen} />
+          <AuthStack.Screen name="PublicLedger" component={PublicLedgerScreen} />
+          <AuthStack.Screen name="VerifyTransaction" component={VerifyTransactionScreen} />
+          <AuthStack.Screen name="VerificationReport" component={VerificationReportScreen} />
+          <AuthStack.Screen name="Login" component={LoginScreen} />
+          <AuthStack.Screen name="Register" component={RegisterScreen} />
+          <AuthStack.Screen name="RecoveryPhrase" component={RecoveryPhraseScreen} />
+          <AuthStack.Screen name="RestoreWallet" component={RestoreWalletScreen} />
+          <AuthStack.Screen name="HelpFaq" component={HelpFaqScreen} />
+          <AuthStack.Screen name="DataPrivacy" component={DataPrivacyScreen} />
+        </AuthStack.Navigator>
+        <StatusBar style="light" />
+      </NavigationContainer>
+    </View>
   );
 }
 
@@ -143,12 +145,13 @@ const RootNavigator = ({ navigationRef }: { navigationRef: React.MutableRefObjec
 
   // Logged in + has org → main app
   return (
-    <NavigationContainer ref={navigationRef as any} theme={navigationTheme} linking={linking as any}>
-      <RootStackNavigator />
-      <StatusBar style={colors.statusBarStyle} />
-    </NavigationContainer>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <NavigationContainer ref={navigationRef as any} theme={navigationTheme} linking={linking as any}>
+        <RootStackNavigator />
+        <StatusBar style={colors.statusBarStyle} />
+      </NavigationContainer>
+    </View>
   );
-
 };
 
 
@@ -205,7 +208,7 @@ export default function App() {
   }, []);
 
   return (
-    <SafeAreaProvider>
+    <SafeAreaProvider style={{ flex: 1, backgroundColor: '#05040F' }}>
       <ThemeProvider>
         <ToastProvider>
           <OfflineBanner />

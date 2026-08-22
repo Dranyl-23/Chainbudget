@@ -162,17 +162,11 @@ export default function HelpFaqScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Header Hero */}
-        <View className="items-center mb-6 pt-2">
-          <View
-            style={{ backgroundColor: colors.primaryMuted, borderColor: colors.primary + '40' }}
-            className="w-16 h-16 rounded-3xl border items-center justify-center mb-3 shadow-sm"
-          >
-            <Ionicons name="help-buoy" size={32} color={colors.primary} />
-          </View>
-          <Text style={{ color: colors.textPrimary }} className="text-2xl font-extrabold text-center">
+        <View className="mb-5 pt-2">
+          <Text style={{ color: colors.textPrimary }} className="text-2xl font-extrabold">
             Help & Knowledge Base
           </Text>
-          <Text style={{ color: colors.textSecondary }} className="text-xs text-center mt-1 px-4">
+          <Text style={{ color: colors.textSecondary }} className="text-xs mt-1">
             Guides, technical answers, and security instructions for ChainBudget Mobile.
           </Text>
         </View>

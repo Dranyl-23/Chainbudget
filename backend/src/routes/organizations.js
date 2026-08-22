@@ -167,8 +167,8 @@ router.post("/:orgId/approve-liquidation", authenticate, async (req, res) => {
     if (!org) return res.status(404).json({ error: "Organization not found" });
     if (org.liquidationStatus !== "pending") return res.status(400).json({ error: "No pending liquidation to approve" });
 
-    // 1. Approve Liquidation
-    org.liquidationStatus = "approved";
+    // 1. Complete Liquidation (LOW-5 FIX: Reset status to "none" on replenishment so next cycle can be initiated)
+    org.liquidationStatus = "none";
     await org.save();
 
     // 2. Automated Budget Replenishment (Record Income Off-Chain)
