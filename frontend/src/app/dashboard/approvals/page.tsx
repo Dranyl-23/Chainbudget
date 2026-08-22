@@ -95,7 +95,7 @@ function getRpcErrorCode(err: unknown): number | undefined {
 }
 
 export default function ApprovalsPage() {
-  const { activeOrgId, refreshToken } = useAuth();
+  const { activeOrgId, refreshToken, user } = useAuth();
   const [pendingApprovals, setPendingApprovals] = useState<Approval[]>(() => {
     if (typeof window !== "undefined") {
       const cached = sessionStorage.getItem("cb_cache_approvals");
@@ -220,6 +220,13 @@ export default function ApprovalsPage() {
     }
     const provider = new ethers.BrowserProvider(window.ethereum as ethers.Eip1193Provider);
     const signer = await provider.getSigner();
+    const activeAddress = await signer.getAddress();
+
+    if (user?.walletAddress && activeAddress.toLowerCase() !== user.walletAddress.toLowerCase()) {
+      throw new Error(
+        `MetaMask account mismatch! Active MetaMask wallet is ${activeAddress.slice(0, 6)}...${activeAddress.slice(-4)}, but your logged-in account is ${user.walletAddress.slice(0, 6)}...${user.walletAddress.slice(-4)}. Please switch to the matching account in MetaMask.`
+      );
+    }
     
     const domain = { name: "ChainBudget", version: "1" };
     const types = {
@@ -232,12 +239,16 @@ export default function ApprovalsPage() {
         { name: "amountWei", type: "uint256" }
       ]
     };
+
+    const candidateTo = req.to || req.submittedBy?.walletAddress || "";
+    const safeTo = ethers.isAddress(candidateTo) ? ethers.getAddress(candidateTo) : ethers.ZeroAddress;
+
     const message = {
       action,
       txId: req._id,
       amount: req.amount.toString(),
-      description: req.description,
-      to: req.to || req.submittedBy?.walletAddress || ethers.ZeroAddress,
+      description: req.description || "",
+      to: safeTo,
       amountWei: req.amount.toString()
     };
     
