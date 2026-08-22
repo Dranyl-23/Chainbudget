@@ -430,9 +430,9 @@ export default function TransactionDetailScreen() {
                 {attachingReceipt ? (
                   <ActivityIndicator size="small" color={colors.primary} />
                 ) : (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                     <Ionicons name="cloud-upload-outline" size={18} color={colors.primary} />
-                    <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 13 }}>Attach Receipt</Text>
+                    <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 13, includeFontPadding: false }}>Attach Receipt</Text>
                   </View>
                 )}
               </TouchableOpacity>
@@ -540,15 +540,29 @@ export default function TransactionDetailScreen() {
                   <TouchableOpacity
                     onPress={handleEscrowRelease}
                     disabled={releasing}
-                    style={{ backgroundColor: colors.success }}
-                    className="py-3.5 rounded-xl flex-row items-center justify-center gap-2 shadow-lg mt-2"
+                    activeOpacity={0.8}
+                    style={{
+                      backgroundColor: colors.success,
+                      paddingVertical: 14,
+                      borderRadius: 14,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 8,
+                      marginTop: 8,
+                      shadowColor: colors.success,
+                      shadowOffset: { width: 0, height: 3 },
+                      shadowOpacity: 0.3,
+                      shadowRadius: 6,
+                      elevation: 3,
+                    }}
                   >
                     {releasing ? (
                       <ActivityIndicator color="#ffffff" size="small" />
                     ) : (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                         <Ionicons name="finger-print" size={18} color="#ffffff" />
-                        <Text className="text-white font-bold text-sm">
+                        <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 14, includeFontPadding: false }}>
                           Sign & Release Escrow (Gasless)
                         </Text>
                       </View>
@@ -560,15 +574,29 @@ export default function TransactionDetailScreen() {
                   <TouchableOpacity
                     onPress={handleEscrowRelease}
                     disabled={releasing}
-                    style={{ backgroundColor: colors.primary }}
-                    className="py-3.5 rounded-xl flex-row items-center justify-center gap-2 shadow-lg mt-2"
+                    activeOpacity={0.8}
+                    style={{
+                      backgroundColor: colors.primary,
+                      paddingVertical: 14,
+                      borderRadius: 14,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 8,
+                      marginTop: 8,
+                      shadowColor: colors.primary,
+                      shadowOffset: { width: 0, height: 3 },
+                      shadowOpacity: 0.3,
+                      shadowRadius: 6,
+                      elevation: 3,
+                    }}
                   >
                     {releasing ? (
                       <ActivityIndicator color="#ffffff" size="small" />
                     ) : (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                         <Ionicons name="checkmark-done" size={18} color="#ffffff" />
-                        <Text className="text-white font-bold text-sm">
+                        <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 14, includeFontPadding: false }}>
                           Approve Release as Payer
                         </Text>
                       </View>
