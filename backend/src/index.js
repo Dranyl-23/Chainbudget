@@ -47,21 +47,14 @@ const socketAllowedOrigins = [
 ];
 const io = new Server(server, {
   cors: {
-    origin: (origin, callback) => {
-      // Allow mobile apps and server-to-server (no origin header)
-      if (!origin) return callback(null, true);
-      if (
-        socketAllowedOrigins.includes(origin) ||
-        origin.endsWith('.vercel.app') ||
-        origin.endsWith('.ngrok-free.app') ||
-        process.env.NODE_ENV !== 'production'
-      ) {
-        return callback(null, true);
-      }
-      return callback(new Error("Origin not allowed"));
-    },
-    methods: ["GET", "POST"]
-  }
+    origin: "*",
+    methods: ["GET", "POST"],
+    credentials: true,
+  },
+  transports: ["polling", "websocket"],
+  allowEIO3: true,
+  pingTimeout: 60000,
+  pingInterval: 25000,
 });
 app.set("io", io);
 
