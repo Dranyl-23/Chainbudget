@@ -150,9 +150,10 @@ export default function GovernanceScreen() {
     setCreatingProposal(true);
     try {
       await api.post('/dao/proposals', {
-        title: newProposalTitle,
+        title: newProposalTitle.trim(),
         amount: Number(newProposalAmount),
-        description: newProposalDescription,
+        description: newProposalDescription.trim(),
+        orgId: activeOrgId,
         organizationId: activeOrgId,
       });
       setCreateModalVisible(false);
