@@ -363,18 +363,35 @@ export default function DashboardScreen() {
 
                   {/* Middle: Organization Balance Display */}
                   <View style={{ marginVertical: 4 }}>
-                    <Text
-                      style={{
-                        color: 'rgba(216, 180, 254, 0.9)',
-                        fontSize: 11,
-                        fontWeight: '700',
-                        letterSpacing: 1.5,
-                        textTransform: 'uppercase',
-                        marginBottom: 4,
-                      }}
-                    >
-                      {activeOrg.name} Balance (PHP)
-                    </Text>
+                    <View style={{ maxWidth: '58%' }}>
+                      <Text
+                        style={{
+                          color: 'rgba(216, 180, 254, 0.95)',
+                          fontSize: 11,
+                          fontWeight: '800',
+                          letterSpacing: 0.6,
+                          textTransform: 'uppercase',
+                          lineHeight: 15,
+                          marginBottom: 2,
+                        }}
+                        numberOfLines={2}
+                        ellipsizeMode="tail"
+                      >
+                        {activeOrg.name}
+                      </Text>
+                      <Text
+                        style={{
+                          color: 'rgba(255, 255, 255, 0.65)',
+                          fontSize: 9.5,
+                          fontWeight: '700',
+                          letterSpacing: 1.2,
+                          textTransform: 'uppercase',
+                          marginBottom: 4,
+                        }}
+                      >
+                        Treasury Balance (PHP)
+                      </Text>
+                    </View>
 
                     <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
                       <Text
