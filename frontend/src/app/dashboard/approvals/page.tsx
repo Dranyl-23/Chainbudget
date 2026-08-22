@@ -8,6 +8,7 @@ import ChainBudgetABI from "@/lib/ChainBudget.json";
 import api from "@/lib/api";
 import toast from "react-hot-toast";
 import TableSkeleton from "@/components/TableSkeleton";
+import WalletMismatchGuideModal from "@/components/WalletMismatchGuideModal";
 import confetti from "canvas-confetti";
 import axios from "axios";
 import { BACKEND_URL } from "@/lib/config";
@@ -114,6 +115,18 @@ export default function ApprovalsPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [budgetData, setBudgetData] = useState<BudgetItem[]>([]);
   const [verifiedReceipts, setVerifiedReceipts] = useState<Record<string, boolean>>({});
+
+  // Wallet Mismatch Interactive Guide Modal
+  const [mismatchGuide, setMismatchGuide] = useState<{
+    isOpen: boolean;
+    expectedAddress: string;
+    activeAddress: string;
+    targetTx?: Approval;
+  }>({
+    isOpen: false,
+    expectedAddress: "",
+    activeAddress: "",
+  });
 
   useEffect(() => {
     let isCancelled = false;
@@ -223,8 +236,14 @@ export default function ApprovalsPage() {
     const activeAddress = await signer.getAddress();
 
     if (user?.walletAddress && activeAddress.toLowerCase() !== user.walletAddress.toLowerCase()) {
+      setMismatchGuide({
+        isOpen: true,
+        expectedAddress: user.walletAddress,
+        activeAddress,
+        targetTx: req,
+      });
       throw new Error(
-        `MetaMask account mismatch! Active MetaMask wallet is ${activeAddress.slice(0, 6)}...${activeAddress.slice(-4)}, but your logged-in account is ${user.walletAddress.slice(0, 6)}...${user.walletAddress.slice(-4)}. Please switch to the matching account in MetaMask.`
+        `MetaMask account mismatch! Active MetaMask wallet is ${activeAddress.slice(0, 6)}...${activeAddress.slice(-4)}, but your logged-in account is ${user.walletAddress.slice(0, 6)}...${user.walletAddress.slice(-4)}.`
       );
     }
     
@@ -624,6 +643,19 @@ export default function ApprovalsPage() {
           )}
         </div>
       )}
+
+      {/* Interactive Wallet Mismatch Guide & Tutorial Modal */}
+      <WalletMismatchGuideModal
+        isOpen={mismatchGuide.isOpen}
+        onClose={() => setMismatchGuide((prev) => ({ ...prev, isOpen: false }))}
+        expectedAddress={mismatchGuide.expectedAddress}
+        activeAddress={mismatchGuide.activeAddress}
+        onRetry={() => {
+          if (mismatchGuide.targetTx) {
+            handleApprove(mismatchGuide.targetTx);
+          }
+        }}
+      />
     </div>
   );
 }
