@@ -192,9 +192,6 @@ export async function linkWallet(): Promise<{ user: User }> {
 
     const { user } = linkRes.data;
 
-    // ── Step 6: Persist user session data ────────────────────────────────────
-    localStorage.setItem("cb_user", JSON.stringify(user));
-
     return { user };
   } catch (error: unknown) {
     console.error("Wallet login error:", error);
@@ -202,30 +199,32 @@ export async function linkWallet(): Promise<{ user: User }> {
   }
 }
 
-export function getStoredUser(): User | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem("cb_user");
-    if (!raw) return null;
-    const user = JSON.parse(raw) as User;
-    if (!user.walletAddress || !user.id) {
-      console.warn("Stored user object is malformed, clearing session");
-      clearSession();
-      return null;
-    }
-    return user;
-  } catch (error: unknown) {
-    console.error(
-      "Failed to parse stored user:",
-      error instanceof Error ? error.message : String(error)
-    );
-    clearSession();
-    return null;
-  }
+/**
+ * getStoredUser
+ *
+ * CRIT-2: User state is no longer stored in localStorage. This function now
+ * always returns null — session restoration is handled by GET /api/auth/session
+ * (the Next.js HttpOnly cookie route) in AuthContext.
+ *
+ * @deprecated Use AuthContext.user instead.
+ */
+export function getStoredUser(): null {
+  return null;
 }
 
+/**
+ * clearSession
+ *
+ * CRIT-2: Clears local state. The HttpOnly session cookie is cleared by calling
+ * DELETE /api/auth/session from AuthContext.logout().
+ */
 export function clearSession(): void {
-  if (typeof window === "undefined") return;
-  localStorage.removeItem("cb_token");
-  localStorage.removeItem("cb_user");
+  // No-op: no sensitive data is stored in localStorage anymore.
+  // The session cookie is managed server-side via DELETE /api/auth/session.
+  if (typeof window !== "undefined") {
+    // Clear any legacy keys that may exist from a previous app version
+    localStorage.removeItem("cb_token");
+    localStorage.removeItem("cb_user");
+    localStorage.removeItem("cb_active_org");
+  }
 }

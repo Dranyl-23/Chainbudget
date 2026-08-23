@@ -1,20 +1,34 @@
 import axios from "axios";
 import toast from "react-hot-toast";
 
+/**
+ * api.ts — CRIT-2 FIX
+ *
+ * The Asgardeo access token is no longer stored in localStorage.
+ * Instead, it lives in an HttpOnly, Secure, SameSite=Strict cookie set by the
+ * Next.js API route at /api/auth/session. The browser sends the cookie
+ * automatically on every same-origin request — no manual Authorization header
+ * injection is needed or safe here.
+ *
+ * The Next.js rewrite in next.config.ts proxies /api/* → backend, forwarding
+ * the cookie as an Authorization header server-side (invisible to the browser).
+ */
 const api = axios.create({
   baseURL: "/api",
   headers: { "Content-Type": "application/json" },
+  // Required so cookies are sent on requests that go through Next.js rewrites
+  withCredentials: true,
 });
 
-// Store CSRF token in memory
+// Store CSRF token in memory (never in localStorage)
 let csrfToken: string | null = null;
 
 // Fetch CSRF token on app initialization
 async function fetchCSRFToken() {
   try {
-    const response = await axios.get(
-      "/api/auth/csrf-token"
-    );
+    const response = await axios.get("/api/auth/csrf-token", {
+      withCredentials: true,
+    });
     csrfToken = response.data.csrfToken;
   } catch (error) {
     console.warn("Failed to fetch CSRF token:", error);
@@ -26,12 +40,10 @@ if (typeof window !== "undefined") {
   fetchCSRFToken();
 }
 
-// Attach JWT token from localStorage to every request
+// Attach CSRF + Idempotency Key for mutating requests.
+// NOTE: No Authorization header injection — the HttpOnly session cookie handles auth.
 api.interceptors.request.use((config) => {
   if (typeof window !== "undefined") {
-    const token = localStorage.getItem("cb_token");
-    if (token) config.headers.Authorization = `Bearer ${token}`;
-
     // Attach CSRF token & Idempotency Key for mutating requests
     if (["post", "put", "patch", "delete"].includes(config.method?.toLowerCase() || "")) {
       if (csrfToken) {
@@ -45,27 +57,22 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Handle 401 globally — clear token and redirect to login,
-// UNLESS a critical user action (e.g. MetaMask signing flow) is in progress,
-// in which case surface the 401 back to the caller so it can handle it.
+// Handle 401 globally — the session cookie expired; dispatch event to trigger logout.
+// Handle 403 CSRF expiry — re-fetch token and retry the request.
 api.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err.response?.status === 401 && typeof window !== "undefined") {
-      // If a critical action is in progress (e.g. handleApprove / handleReject),
-      // do NOT trigger the session-expired modal. Let the caller handle the 401
-      // so it can attempt a token refresh and retry.
+      // If a critical action is in progress (e.g. MetaMask signing flow),
+      // do NOT trigger the session-expired modal — let the caller handle it.
       const actionInProgress = sessionStorage.getItem("cb_action_in_progress");
       if (!actionInProgress) {
-        // Prevent multiple alerts if multiple concurrent background requests fail
         if (!sessionStorage.getItem("session_expired_alert")) {
           sessionStorage.setItem("session_expired_alert", "true");
-
           setTimeout(() => {
-            localStorage.removeItem("cb_token");
-            localStorage.removeItem("cb_user");
+            // Dispatch event; AuthContext listener will call DELETE /api/auth/session
             window.dispatchEvent(new CustomEvent("cb_session_expired"));
-          }, 100); // Small delay to let React finish rendering current state
+          }, 100);
         }
       }
     }
@@ -73,7 +80,6 @@ api.interceptors.response.use(
     // Re-fetch CSRF token if it expired (403)
     if (err.response?.status === 403 && err.response?.data?.error?.includes("CSRF")) {
       return fetchCSRFToken().then(() => {
-        // Retry the original request with the new token
         if (err.config && csrfToken) {
           err.config.headers["X-CSRF-Token"] = csrfToken;
           return axios(err.config);
@@ -87,3 +93,7 @@ api.interceptors.response.use(
 );
 
 export default api;
+
+
+
+

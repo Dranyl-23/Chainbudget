@@ -29,13 +29,11 @@ describe("Gemini Model Configuration — Fix 4", () => {
     );
   });
 
-  it("source file contains exactly 3 references to gemini-2.0-flash (one per endpoint)", () => {
+  it("source file contains gemini-2.0-flash in candidate models list", () => {
     const source = fs.readFileSync(AI_ROUTE_PATH, "utf8");
-    const occurrences = (source.match(/gemini-2\.0-flash/g) || []).length;
-    assert.equal(
-      occurrences,
-      3,
-      `Expected 3 references to 'gemini-2.0-flash' (one per AI endpoint), found ${occurrences}`
+    assert.ok(
+      source.includes("gemini-2.0-flash"),
+      "Expected ai.js GEMINI_MODELS to include 'gemini-2.0-flash'"
     );
   });
 

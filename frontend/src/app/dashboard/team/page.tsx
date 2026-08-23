@@ -7,6 +7,7 @@ import api from "@/lib/api";
 import toast from "react-hot-toast";
 import TableSkeleton from "@/components/TableSkeleton";
 import axios from "axios";
+import { getErrorMessage } from "@/lib/utils";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface UserOrgRef {
@@ -51,16 +52,7 @@ interface AddMemberFormData {
   roleLabel: string;
 }
 
-// ── Helper to safely extract error message ──────────────────────────────────
-function getErrorMessage(err: unknown, fallback: string): string {
-  if (axios.isAxiosError(err)) {
-    return err.response?.data?.error || err.message || fallback;
-  }
-  if (err instanceof Error) {
-    return err.message;
-  }
-  return fallback;
-}
+
 
 function getOrgId(org: string | UserOrgRef | undefined): string | undefined {
   if (!org) return undefined;

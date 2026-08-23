@@ -13,6 +13,8 @@ import * as ScreenCapture from 'expo-screen-capture';
 import { useTheme } from '../context/ThemeContext';
 import { getPrivateKey, getMnemonic } from '../lib/secureStorage';
 import { triggerLightHaptic, triggerErrorHaptic, triggerSuccessHaptic, authenticateWithBiometrics } from '../lib/biometrics';
+import api from '../lib/api';
+
 
 export default function SecurityKeysScreen() {
   const { colors, isDark } = useTheme();
@@ -35,6 +37,8 @@ export default function SecurityKeysScreen() {
 
   const fetchKeys = async (target: 'phrase' | 'privateKey') => {
     await triggerLightHaptic();
+
+    // ── Step 1: Biometric gate ──────────────────────────────────────────────
     const promptMessage =
       target === 'privateKey'
         ? 'Authenticate with Biometrics / PIN to Export Private Key'
@@ -50,45 +54,81 @@ export default function SecurityKeysScreen() {
 
     setIsLoadingKeys(true);
     try {
-      let mnemonic = keys?.mnemonic;
-      let privateKey = keys?.privateKey;
+      // ── Step 2 (CRIT-3): Request a one-time challenge nonce from the backend ──
+      // This ensures even a stolen JWT cannot export keys without the private key.
+      const challengeRes = await api.post<{ challenge: string; walletAddress: string }>(
+        '/auth/keys/challenge'
+      );
+      const { challenge } = challengeRes.data;
 
-      if (!mnemonic || !privateKey) {
-        const [loadedMnemonic, loadedPrivateKey] = await Promise.all([
-          getMnemonic(),
-          getPrivateKey(),
-        ]);
-        mnemonic = loadedMnemonic || undefined;
-        privateKey = loadedPrivateKey || undefined;
-      }
-
-      if (target === 'phrase' && !mnemonic) {
+      // ── Step 3: Sign the challenge with the device-secured private key ─────
+      // getPrivateKey() is guarded by the biometric prompt above.
+      const privateKeyForSigning = await getPrivateKey();
+      if (!privateKeyForSigning) {
         Alert.alert(
-          'Seed Phrase Not Found',
-          'No 12-word seed phrase is stored on this device. If you imported your account or created it on another browser, please restore using your original recovery phrase.'
+          'Signing Failed',
+          'Could not retrieve signing key from device secure storage.'
         );
         return;
       }
 
-      if (target === 'privateKey' && !privateKey) {
+      const { ethers } = await import('ethers');
+      const signerWallet = new ethers.Wallet(privateKeyForSigning);
+      // EIP-191 personal_sign — matches ethers.verifyMessage() on the backend
+      const signature = await signerWallet.signMessage(challenge);
+
+      // ── Step 4: Submit signature to backend for ECDSA verification ─────────
+      // Backend: verifyMessage(challenge, signature) === user.walletAddress
+      const exportRes = await api.post<{ privateKey: string; mnemonic: string }>(
+        '/auth/keys/export',
+        { signature }
+      );
+      const { privateKey: serverPrivateKey, mnemonic: serverMnemonic } = exportRes.data;
+
+      // ── Step 5: Also read local SecureStore for display ───────────────────
+      // The server keys are the authoritative source; local keys are a fallback
+      // in case the server has no backup (e.g. mobile-only accounts).
+      let displayMnemonic = serverMnemonic;
+      let displayPrivateKey = serverPrivateKey;
+
+      if (!displayMnemonic || !displayPrivateKey) {
+        const [localMnemonic, localPrivateKey] = await Promise.all([
+          getMnemonic(),
+          getPrivateKey(),
+        ]);
+        displayMnemonic = displayMnemonic || localMnemonic || '';
+        displayPrivateKey = displayPrivateKey || localPrivateKey || '';
+      }
+
+      if (target === 'phrase' && !displayMnemonic) {
+        Alert.alert(
+          'Seed Phrase Not Found',
+          'No 12-word seed phrase is available. If you created your account on another device, please restore using your original recovery phrase.'
+        );
+        return;
+      }
+
+      if (target === 'privateKey' && !displayPrivateKey) {
         Alert.alert(
           'Private Key Not Found',
-          'No wallet private key was found in this device\'s secure storage.'
+          'No wallet private key was found. Please contact support.'
         );
         return;
       }
 
       setKeys({
-        mnemonic: mnemonic || '',
-        privateKey: privateKey || '',
+        mnemonic: displayMnemonic,
+        privateKey: displayPrivateKey,
       });
       setActiveTab(target);
     } catch (err: any) {
-      Alert.alert('Authentication Error', err.message || 'Could not retrieve wallet keys.');
+      const message: string = err?.response?.data?.error || err?.message || 'Could not retrieve wallet keys.';
+      Alert.alert('Export Failed', message);
     } finally {
       setIsLoadingKeys(false);
     }
   };
+
 
   const copyToClipboard = async (text: string, label: string) => {
     await Clipboard.setStringAsync(text);

@@ -12,6 +12,7 @@ import WalletMismatchGuideModal from "@/components/WalletMismatchGuideModal";
 import confetti from "canvas-confetti";
 import axios from "axios";
 import { BACKEND_URL } from "@/lib/config";
+import { getErrorMessage } from "@/lib/utils";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface SubmittedByUser {
@@ -87,16 +88,7 @@ interface RpcError {
   message?: string;
 }
 
-// ── Helper to safely extract error message ──────────────────────────────────
-function getErrorMessage(err: unknown, fallback: string): string {
-  if (axios.isAxiosError(err)) {
-    return err.response?.data?.error || err.message || fallback;
-  }
-  if (err instanceof Error) {
-    return err.message;
-  }
-  return fallback;
-}
+
 
 function getRpcErrorCode(err: unknown): number | undefined {
   if (typeof err === "object" && err !== null && "code" in err) {

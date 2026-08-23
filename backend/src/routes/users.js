@@ -319,7 +319,11 @@ router.post("/push-token", authenticate, async (req, res) => {
     if (!["ios", "android"].includes(platform)) {
       return res.status(400).json({ error: "platform must be 'ios' or 'android'" });
     }
-    if (typeof token !== "string" || (!token.startsWith("ExponentPushToken[") && !token.startsWith("ExpoPushToken[") && token.length < 15)) {
+    const isExpoToken = typeof token === "string" && (
+      token.startsWith("ExponentPushToken[") ||
+      token.startsWith("ExpoPushToken[")
+    );
+    if (!isExpoToken) {
       return res.status(400).json({ error: "Invalid Expo push token format" });
     }
 
@@ -345,73 +349,79 @@ router.post("/push-token", authenticate, async (req, res) => {
   }
 });
 
-/**
- * sendPushNotifications
- *
- * Sends push notifications to one or more users via the Expo Push API.
- * This is a fire-and-forget helper — failures are logged but do not throw.
- *
- * @param {string[]} userIds       - MongoDB User IDs to notify
- * @param {string}   title         - Notification title
- * @param {string}   body          - Notification body text
- * @param {object}   data          - Extra data payload (e.g. { txId, screen })
- */
-async function sendPushNotifications(userIds, title, body, data = {}) {
-  const EXPO_CHUNK_SIZE = 100;
-
+// ── GET /api/users/preferences ───────────────────────────────────────────────
+router.get("/preferences", authenticate, async (req, res) => {
   try {
-    // Fetch push tokens for all target users
-    const users = await User.find({ _id: { $in: userIds }, "pushTokens.0": { $exists: true } })
-      .select("pushTokens")
-      .lean();
+    const user = await User.findById(req.user.id).select("notificationPreferences");
+    if (!user) return res.status(404).json({ error: "User not found" });
 
-    const tokens = users.flatMap((u) => u.pushTokens?.map((t) => t.token) || []);
-    if (tokens.length === 0) {
-      console.log(`[Push] No push tokens found for users: ${userIds.join(', ')}`);
-      return;
-    }
+    res.json({
+      preferences: user.notificationPreferences || {
+        email: true,
+        push: true,
+        daoProposals: true,
+        approvals: true,
+        transactions: true,
+        chatMentions: true,
+        securityAlerts: true,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-    const messages = tokens.map((to) => ({
-      to,
-      sound: "default",
-      title,
-      body,
-      data,
-      priority: "high",
-      channelId: data.channelId || "chainbudget-default",
-      _displayInForeground: true,
-    }));
+// ── PUT /api/users/preferences ───────────────────────────────────────────────
+router.put("/preferences", authenticate, async (req, res) => {
+  try {
+    const allowedKeys = [
+      "email",
+      "push",
+      "daoProposals",
+      "approvals",
+      "transactions",
+      "chatMentions",
+      "securityAlerts",
+    ];
 
-    // Chunk into batches of EXPO_CHUNK_SIZE and send each batch
-    for (let i = 0; i < messages.length; i += EXPO_CHUNK_SIZE) {
-      const chunk = messages.slice(i, i + EXPO_CHUNK_SIZE);
-      try {
-        // Send via Expo Push API (https://exp.host/--/api/v2/push/send)
-        const response = await fetch("https://exp.host/--/api/v2/push/send", {
-          method: "POST",
-          headers: {
-            Accept: "application/json",
-            "Accept-Encoding": "gzip, deflate",
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(chunk),
-        });
-
-        const result = await response.json();
-        if (result.errors) {
-          console.warn(`[Push] Expo push API errors (chunk ${i / EXPO_CHUNK_SIZE + 1}):`, result.errors);
-        }
-      } catch (chunkErr) {
-        console.error(`[Push] Failed to send chunk ${i / EXPO_CHUNK_SIZE + 1}:`, chunkErr.message || chunkErr);
+    const updates = {};
+    for (const key of allowedKeys) {
+      if (typeof req.body[key] === "boolean") {
+        updates[`notificationPreferences.${key}`] = req.body[key];
       }
     }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      req.user.id,
+      { $set: updates },
+      { new: true, runValidators: true }
+    ).select("notificationPreferences");
+
+    if (!updatedUser) return res.status(404).json({ error: "User not found" });
+
+    res.json({
+      success: true,
+      preferences: updatedUser.notificationPreferences,
+    });
   } catch (err) {
-    console.error("[Push] Failed to send push notifications:", err.message || err);
+    res.status(500).json({ error: err.message });
   }
+});
+
+/**
+ * sendPushNotifications (Backward Compatibility Wrapper)
+ * Delegates to centralized NotificationService.
+ */
+async function sendPushNotifications(userIds, title, body, data = {}) {
+  const NotificationService = require("../services/notificationService");
+  return NotificationService.sendPush(userIds, {
+    title,
+    body,
+    channelId: data.channelId || "chainbudget-default",
+    data,
+  });
 }
 
-// LOW-1 FIX: Define sendPushNotifications before module.exports so the attachment
-// is explicit and the function can safely be moved or renamed without breaking imports.
 module.exports = router;
 module.exports.sendPushNotifications = sendPushNotifications;
 

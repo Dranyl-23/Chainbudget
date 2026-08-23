@@ -24,6 +24,12 @@ yarn-error.log*
 *.keystore
 *.id_rsa
 *.id_ecdsa
+*.jks
+*.bak.jks
+
+# Android / Expo Signing Credentials — NEVER commit these
+credentials.json
+mobile/credentials.json
 
 # Build outputs & caches
 dist/

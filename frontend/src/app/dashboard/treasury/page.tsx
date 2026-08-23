@@ -8,6 +8,7 @@ import toast from "react-hot-toast";
 import { ethers } from "ethers";
 import { getAmoyProvider } from "@/lib/rpcProvider";
 import axios from "axios";
+import { getErrorMessage } from "@/lib/utils";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface UserOrgRef {
@@ -35,16 +36,7 @@ interface TreasuryFormData {
   highValueThreshold: number;
 }
 
-// ── Helper to safely extract error message ──────────────────────────────────
-function getErrorMessage(err: unknown, fallback: string): string {
-  if (axios.isAxiosError(err)) {
-    return err.response?.data?.error || err.message || fallback;
-  }
-  if (err instanceof Error) {
-    return err.message;
-  }
-  return fallback;
-}
+
 
 function getOrgId(org?: string | UserOrgRef): string | undefined {
   if (!org) return undefined;

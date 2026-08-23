@@ -202,6 +202,13 @@ router.put("/proposals/:id/sync", authenticate, async (req, res) => {
     const proposal = await Proposal.findById(req.params.id);
     if (!proposal) return res.status(404).json({ error: "Not found" });
 
+    // Authorization check: User must be Level <= 2 in the organization or SuperAdmin
+    const roleLevel = req.user.getRoleInOrg(proposal.organization);
+    const isCreator = proposal.proposer && proposal.proposer.toString() === req.user._id.toString();
+    if (!req.user.isSuperAdmin && (roleLevel === null || roleLevel > 2) && !isCreator) {
+      return res.status(403).json({ error: "Access denied. Insufficient permissions to sync proposal." });
+    }
+
     proposal.blockchainProposalId = blockchainProposalId;
     await proposal.save();
 
@@ -228,9 +235,10 @@ router.post("/proposals/:id/vote", authenticate, async (req, res) => {
       return res.status(400).json({ error: "Voting is closed for this proposal" });
     }
 
-    // Check if user is a member
-    if (!req.user.memberships.some(m => m.organization.toString() === proposal.organization.toString())) {
-      return res.status(403).json({ error: "Not a member of this organization" });
+    // B-8 FIX: Check if user is an active member of the organization (or super admin)
+    const roleLevel = req.user.getRoleInOrg(proposal.organization);
+    if (!req.user.isSuperAdmin && roleLevel === null) {
+      return res.status(403).json({ error: "Not an active member of this organization" });
     }
 
     const newVote = new DaoVote({

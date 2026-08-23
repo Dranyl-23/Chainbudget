@@ -190,15 +190,14 @@ router.post("/:orgId/messages", authenticate, requireOrgMembership, async (req, 
         .filter((id) => id !== req.user.id.toString());
 
       if (recipientIds.length > 0) {
-        const senderName = req.user.displayName || "A member";
-        const preview = content.length > 80 ? `${content.substring(0, 77)}...` : content;
-
-        sendPushNotifications(
-          recipientIds,
-          `${orgName}`,
-          `${senderName}: ${preview}`,
-          { orgId, screen: "OrgChat", channelId: "chainbudget-default" }
-        );
+        const NotificationService = require("../services/notificationService");
+        NotificationService.notifyChatMessage({
+          orgId,
+          orgName,
+          sender: req.user,
+          content,
+          recipientUserIds: recipientIds,
+        });
       }
     } catch (pushErr) {
       console.warn("[chat:push-notification warning]", pushErr.message);

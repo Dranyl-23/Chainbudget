@@ -9,9 +9,12 @@
     "dev": "npx concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:all": "npx concurrently \"npm run dev:backend\" \"npm run dev:frontend\" \"npm run dev:mobile\"",
     "test:contracts": "cd contracts && npx hardhat test",
-    "lint:frontend": "cd frontend && npx tsc --noEmit"
+    "lint:frontend": "cd frontend && npx tsc --noEmit",
+    "prepare": "husky"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "concurrently": "^8.2.2",
+    "husky": "^9.1.7"
   }
 }
+

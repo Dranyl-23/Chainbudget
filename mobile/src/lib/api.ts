@@ -18,21 +18,39 @@ const TRUSTED_PRODUCTION_HOST = 'chainbudget-api.fly.dev';
 export function validateHostSecurity(url: string): boolean {
   if (__DEV__) return true; // Bypass in local development / Expo Go
 
-  const fullUrl = url.startsWith('http') ? url : `${API_URL}${url}`;
-  
-  // 1. Enforce HTTPS in production
-  if (!fullUrl.startsWith('https://')) {
-    console.error('[Security] Insecure HTTP transport rejected in production:', fullUrl);
+  try {
+    const fullUrl = url.startsWith('http') ? url : `${API_URL}${url}`;
+    const parsed = new URL(fullUrl);
+    
+    // 1. Enforce HTTPS in production
+    if (parsed.protocol !== 'https:') {
+      console.error('[Security] Insecure HTTP transport rejected in production:', fullUrl);
+      return false;
+    }
+
+    // 2. Validate exact trusted host or subdomain
+    if (parsed.hostname !== TRUSTED_PRODUCTION_HOST && !parsed.hostname.endsWith(`.${TRUSTED_PRODUCTION_HOST}`)) {
+      console.error('[Security] Untrusted host connection rejected in production:', parsed.hostname);
+      return false;
+    }
+
+    return true;
+  } catch {
+    console.error('[Security] Invalid URL format rejected:', url);
     return false;
   }
+}
 
-  // 2. Validate trusted domain
-  if (!fullUrl.includes(TRUSTED_PRODUCTION_HOST)) {
-    console.error('[Security] Untrusted host connection rejected in production:', fullUrl);
-    return false;
-  }
-
-  return true;
+function generateSecureIdempotencyKey(): string {
+  try {
+    const bytes = new Uint8Array(8);
+    if (typeof globalThis.crypto?.getRandomValues === 'function') {
+      globalThis.crypto.getRandomValues(bytes);
+      const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+      return `cb-mob-${Date.now()}-${hex}`;
+    }
+  } catch {}
+  return `cb-mob-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
 }
 
 const api = axios.create({
@@ -48,49 +66,37 @@ let csrfToken: string | null = null;
 async function fetchCsrfToken(): Promise<string | null> {
   try {
     const res = await axios.get(`${API_URL}/auth/csrf-token`);
-    csrfToken = res.data.csrfToken ?? null;
+    csrfToken = res.data?.csrfToken || null;
     return csrfToken;
-  } catch (err) {
-    console.warn('[API] Failed to fetch CSRF token:', err);
+  } catch (err: any) {
+    console.warn('[api] Failed to fetch CSRF token:', err.message);
     return null;
   }
 }
 
 // ── Request Interceptor ───────────────────────────────────────────────────────
-// Dynamic route timeout tuning + Certificate/Host integrity + Auth token + CSRF injection
 api.interceptors.request.use(async (config) => {
-  const url = config.url || '';
-
-  // 0. Production Transport & Host Security Check
-  if (!validateHostSecurity(url)) {
-    return Promise.reject(new Error('Security violation: Untrusted host or insecure connection rejected'));
+  // 0. Host transport security validation in production
+  const requestUrl = config.url || '';
+  if (!validateHostSecurity(requestUrl)) {
+    return Promise.reject(new Error(`[Security] Connection to untrusted host rejected in production build.`));
   }
 
-  // 1. Dynamic Timeout Tuning based on route workload
-  if (!config.timeout || config.timeout === 20000) {
-    if (url.includes('/ai/') || url.includes('/scan-receipt')) {
-      config.timeout = 45000; // AI multimodal operations (Gemini / OCR) take up to 45s
-    } else if (
-      url.includes('/transactions') ||
-      url.includes('/approvals') ||
-      url.includes('/dao/') ||
-      url.includes('/escrow')
-    ) {
-      config.timeout = 30000; // Blockchain cryptographic checks / indexing take up to 30s
-    } else {
-      config.timeout = 20000; // Standard REST endpoints: 20s
-    }
-  }
+  // 1. Dynamic Timeout Tuning: give complex AI / IPFS uploads more headroom
+  const isAiUpload = requestUrl.includes('/ai/') || requestUrl.includes('/receipt') || requestUrl.includes('/ipfs');
+  config.timeout = isAiUpload ? 45000 : 20000;
 
-
-  // 2. Attach JWT
+  // 2. Attach JWT Session Token from hardware SecureStore
   const token = await getSessionToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
 
-  // 3. Attach CSRF & Idempotency Key for mutating requests
-  if (config.method && ['post', 'put', 'patch', 'delete'].includes(config.method.toLowerCase())) {
+  // 3. Attach CSRF token & Idempotency Key for all state-mutating requests
+  const method = (config.method || '').toUpperCase();
+  const isMutating = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
+
+  if (isMutating) {
     if (!csrfToken) {
       await fetchCsrfToken();
     }
@@ -100,7 +106,7 @@ api.interceptors.request.use(async (config) => {
 
     // Enterprise Idempotency: Protect against duplicate submissions & double-spending
     if (!config.headers['X-Idempotency-Key']) {
-      config.headers['X-Idempotency-Key'] = `cb-mob-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
+      config.headers['X-Idempotency-Key'] = generateSecureIdempotencyKey();
     }
   }
 
@@ -136,6 +142,11 @@ api.interceptors.response.use(
       if (!isSignatureError && sessionExpiredHandler) {
         sessionExpiredHandler();
       }
+    }
+
+    // ── Network / Offline Error Handling (M-4) ───────────────────────────────
+    if (!err.response || err.code === 'ERR_NETWORK' || err.message?.includes('Network Error')) {
+      err.userFriendlyMessage = 'You are currently offline. Please check your internet connection and try again.';
     }
 
     return Promise.reject(err);

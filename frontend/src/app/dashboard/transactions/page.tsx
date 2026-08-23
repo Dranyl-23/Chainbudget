@@ -32,9 +32,11 @@ import toast from "react-hot-toast";
 import api from "@/lib/api";
 import TableSkeleton from "@/components/TableSkeleton";
 import TxExplorerModal from "@/components/TxExplorerModal";
+import TransactionFilterBar from "@/components/TransactionFilterBar";
 import { exportToCSV, exportToPDF } from "@/lib/exportUtils";
 import axios from "axios";
 import { BACKEND_URL } from "@/lib/config";
+import { getErrorMessage } from "@/lib/utils";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface UserOrgRef {
@@ -125,16 +127,7 @@ interface ProcessRequestResponse {
   message?: string;
 }
 
-// ── Helper to safely extract error message ──────────────────────────────────
-function getErrorMessage(err: unknown, fallback: string): string {
-  if (axios.isAxiosError(err)) {
-    return err.response?.data?.error || err.message || fallback;
-  }
-  if (err instanceof Error) {
-    return err.message;
-  }
-  return fallback;
-}
+
 
 function getOrgId(org?: string | UserOrgRef): string | undefined {
   if (!org) return undefined;
@@ -529,40 +522,7 @@ export default function TransactionsPage() {
       </header>
 
       {/* ── Filters ── */}
-      <div className="flex flex-col md:flex-row gap-3 mb-6">
-        <div className="flex-1 relative">
-          <Search className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Search transactions..."
-            className="input !pl-9 w-full"
-            value={filters.search}
-            onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-          />
-        </div>
-        <div className="grid grid-cols-2 gap-3 w-full md:w-auto">
-          <select
-            className="input w-full"
-            value={filters.type}
-            onChange={(e) => setFilters({ ...filters, type: e.target.value })}
-          >
-            <option value="">All Types</option>
-            <option value="income">Income</option>
-            <option value="expense">Expense</option>
-          </select>
-          <select
-            className="input w-full"
-            value={filters.status}
-            onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-          >
-            <option value="">All Statuses</option>
-            <option value="approved">Approved</option>
-            <option value="pending_approval">Pending</option>
-            <option value="requested">Requested</option>
-            <option value="rejected">Rejected</option>
-          </select>
-        </div>
-      </div>
+      <TransactionFilterBar filters={filters} onFilterChange={setFilters} />
 
       {/* ── Table ── */}
       {loading ? (

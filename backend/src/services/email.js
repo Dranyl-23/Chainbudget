@@ -51,6 +51,22 @@ const sendEmail = async (to, subject, html) => {
   }
 };
 
+/**
+ * Escape user input before interpolating into HTML email templates
+ * @param {string} str
+ * @returns {string}
+ */
+const escapeHtml = (str) => {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+};
+
 module.exports = {
   sendEmail,
+  escapeHtml,
 };

@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const crypto = require("crypto");
 const { ethers } = require("ethers");
 const User = require("../models/User");
 const AuditLog = require("../models/AuditLog");
@@ -11,6 +12,7 @@ const {
   keyExportRateLimiter,
   generateCSRFToken,
 } = require("../middleware/security");
+
 
 // Helper to validate Ethereum address format
 function isValidEthereumAddress(address) {
@@ -293,44 +295,128 @@ router.get("/me", authenticate, async (req, res) => {
   }
 });
 
-/// GET /api/auth/keys
-/// Returns the decrypted auto-generated wallet keys (private key + 12-word mnemonic) for the authenticated user,
-/// enabling seamless backup and account restore on mobile.
-/// Protected by authenticate middleware and strict rate limiting.
-router.get("/keys", authenticate, keyExportRateLimiter, async (req, res) => {
+
+/// POST /api/auth/keys/challenge
+/// CRIT-3 FIX: Issues a one-time, time-limited nonce that the client must sign with their
+/// wallet private key. The signed nonce is then presented to POST /keys/export.
+/// This two-step flow ensures that anyone who obtains a stolen JWT alone cannot export keys —
+/// they would also need the user's private key to produce a valid signature.
+///
+/// Rate limit: 3 requests per 15 minutes (reuses keyExportRateLimiter).
+router.post("/keys/challenge", authenticate, keyExportRateLimiter, async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).select("+encryptedPrivateKey +encryptedMnemonic");
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
-    }
-    if (!user.isActive) {
-      return res.status(401).json({ error: "Account is inactive" });
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+    if (!user.isActive) return res.status(401).json({ error: "Account is inactive" });
+    if (!user.walletAddress) {
+      return res.status(400).json({
+        error: "No wallet linked to this account. Complete wallet setup before exporting keys.",
+      });
     }
 
+    // Generate a 32-byte cryptographically random nonce prefixed with context
+    const rawNonce = crypto.randomBytes(32).toString("hex");
+    const challengeNonce = `ChainBudget Key Export Challenge: ${rawNonce}`;
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+
+    // Persist the nonce (select:false fields require explicit findById + save)
+    await User.findByIdAndUpdate(req.user._id, {
+      keyExportNonce: challengeNonce,
+      keyExportNonceExpiresAt: expiresAt,
+    });
+
+    console.log(`[auth/keys/challenge] Issued export challenge for user ${user._id} (${user.walletAddress})`);
+
+    res.json({
+      challenge: challengeNonce,
+      walletAddress: user.walletAddress,
+      expiresAt: expiresAt.toISOString(),
+      message: "Sign this challenge string with your wallet private key (personal_sign / EIP-191), then call POST /api/auth/keys/export.",
+    });
+  } catch (err) {
+    console.error("[auth/keys/challenge] Error:", err.message);
+    res.status(500).json({ error: "Failed to issue challenge. Please try again." });
+  }
+});
+
+/// POST /api/auth/keys/export
+/// CRIT-3 FIX: Verifies the ECDSA signature from the client over the previously-issued
+/// one-time challenge nonce. Only after cryptographic proof of key ownership does the
+/// backend decrypt and return the wallet keys.
+///
+/// Body: { signature: string }  — EIP-191 personal_sign of the challenge nonce
+/// Rate limit: 3 requests per 15 minutes.
+router.post("/keys/export", authenticate, keyExportRateLimiter, async (req, res) => {
+  try {
+    const { signature } = req.body;
+    if (!signature || typeof signature !== "string" || signature.trim().length === 0) {
+      return res.status(400).json({ error: "signature is required" });
+    }
+
+    // Load user including the hidden challenge fields
+    const user = await User.findById(req.user._id)
+      .select("+encryptedPrivateKey +encryptedMnemonic +keyExportNonce +keyExportNonceExpiresAt");
+    if (!user) return res.status(404).json({ error: "User not found" });
+    if (!user.isActive) return res.status(401).json({ error: "Account is inactive" });
+
+    // ── 1. Check a challenge was issued and has not expired ──────────────────
+    if (!user.keyExportNonce || !user.keyExportNonceExpiresAt) {
+      return res.status(401).json({
+        error: "No active export challenge found. Please call POST /api/auth/keys/challenge first.",
+      });
+    }
+    if (new Date() > user.keyExportNonceExpiresAt) {
+      // Consume the expired nonce to force a fresh challenge
+      await User.findByIdAndUpdate(user._id, {
+        keyExportNonce: null,
+        keyExportNonceExpiresAt: null,
+      });
+      return res.status(401).json({
+        error: "Export challenge has expired (5-minute window). Please request a new challenge.",
+      });
+    }
+    if (!user.walletAddress) {
+      return res.status(400).json({ error: "No wallet linked to this account." });
+    }
+
+    // ── 2. Verify ECDSA signature — recover signer and compare to stored wallet ──
+    let recoveredAddress;
+    try {
+      recoveredAddress = ethers.verifyMessage(user.keyExportNonce, signature);
+    } catch (sigErr) {
+      await logFailedExportAttempt(user, req, "Invalid signature format");
+      return res.status(401).json({ error: "Invalid digital signature format." });
+    }
+
+    if (recoveredAddress.toLowerCase() !== user.walletAddress.toLowerCase()) {
+      await logFailedExportAttempt(user, req, `Wallet mismatch: recovered=${recoveredAddress}`);
+      return res.status(401).json({
+        error: "Signature verification failed. The signature does not match your registered wallet address.",
+      });
+    }
+
+    // ── 3. Consume the nonce immediately — single use ─────────────────────────
+    await User.findByIdAndUpdate(user._id, {
+      keyExportNonce: null,
+      keyExportNonceExpiresAt: null,
+      $inc: { keyExportCount: 1 },
+    });
+
+    // ── 4. Decrypt and return keys ────────────────────────────────────────────
     let privateKey = null;
     let mnemonic = "";
 
-    // ── Attempt 1: Decrypt existing encrypted keys ──────────────────────────
     if (user.encryptedPrivateKey) {
       try {
         const decryptedPriv = decrypt(user.encryptedPrivateKey);
         const decryptedMnem = user.encryptedMnemonic ? decrypt(user.encryptedMnemonic) : "";
 
-        // Verify validity (valid EVM private key is 64 hex chars or 0x + 64 hex chars)
         if (decryptedPriv && (decryptedPriv.startsWith("0x") || decryptedPriv.length === 64)) {
           privateKey = decryptedPriv.startsWith("0x") ? decryptedPriv : `0x${decryptedPriv}`;
           mnemonic = decryptedMnem;
         }
       } catch (decryptErr) {
-        // HIGH-1 FIX: Decryption failure (e.g. rotated ENCRYPTION_SECRET) must NEVER
-        // silently overwrite the user's existing walletAddress with a brand-new wallet.
-        // That would orphan all their on-chain SBTs, transaction records, and EIP-712
-        // signatures — permanently breaking their blockchain identity.
-        //
-        // Instead, return a clear error instructing the user to restore from their
-        // saved recovery phrase. An admin can then re-encrypt and repair the record
-        // using the correct ENCRYPTION_SECRET.
-        console.error("[auth/keys] Decryption failed for user", user._id, "— refusing to overwrite wallet:", decryptErr.message);
+        console.error("[auth/keys/export] Decryption failed for user", user._id, ":", decryptErr.message);
         return res.status(503).json({
           error: "Unable to decrypt your wallet keys. This may be caused by a server configuration change.",
           hint: "Please restore your wallet using your 12-word recovery phrase. If you never saved it, contact your administrator.",
@@ -338,48 +424,39 @@ router.get("/keys", authenticate, keyExportRateLimiter, async (req, res) => {
       }
     }
 
-    // ── Attempt 2: First-time setup — generate a wallet ONLY if none exists ──
-    // HIGH-1 FIX: Only generate a fresh wallet when walletAddress is genuinely null
-    // (true first-time Asgardeo user who has never had a wallet assigned).
-    // Never overwrite an existing walletAddress.
+    // ── 5. First-time Asgardeo user: generate wallet on demand ───────────────
     if (!privateKey || !mnemonic || mnemonic.trim().split(/\s+/).length !== 12) {
       if (user.walletAddress) {
-        // The user already has a wallet on-chain but the keys are unreadable.
-        // Do NOT generate a replacement — see the error path above.
-        console.error("[auth/keys] Mnemonic invalid/missing but walletAddress exists — refusing to overwrite:", user._id);
+        console.error("[auth/keys/export] Mnemonic missing but walletAddress exists — refusing to overwrite:", user._id);
         return res.status(503).json({
           error: "Wallet key data is incomplete or corrupt.",
           hint: "Please restore your wallet using your 12-word recovery phrase.",
         });
       }
 
-      // Genuine first-time: no walletAddress and no keys → create new BIP-39 wallet
       const wallet = ethers.Wallet.createRandom();
       privateKey = wallet.privateKey;
       mnemonic = wallet.mnemonic.phrase;
-
       user.walletAddress = wallet.address.toLowerCase();
       user.walletType = "asgardeo_generated";
       user.encryptedPrivateKey = encrypt(privateKey);
       user.encryptedMnemonic = encrypt(mnemonic);
       await user.save();
-      console.log(`[auth/keys] Generated new BIP-39 wallet for user ${user._id}: ${user.walletAddress}`);
+      console.log(`[auth/keys/export] Generated new BIP-39 wallet for user ${user._id}: ${user.walletAddress}`);
     } else {
       // Auto-migrate legacy format to modern v2 in background
       if (user.encryptedPrivateKey && !user.encryptedPrivateKey.startsWith("v2:")) {
         try {
           user.encryptedPrivateKey = encrypt(privateKey);
-          if (mnemonic) {
-            user.encryptedMnemonic = encrypt(mnemonic);
-          }
+          if (mnemonic) user.encryptedMnemonic = encrypt(mnemonic);
           await user.save();
         } catch (migrationErr) {
-          console.warn("[auth/keys] Non-blocking format migration warning:", migrationErr.message);
+          console.warn("[auth/keys/export] Non-blocking format migration warning:", migrationErr.message);
         }
       }
     }
 
-    // Log the security-critical export event to AuditLog
+    // ── 6. Audit log the successful export ────────────────────────────────────
     try {
       await AuditLog.create({
         organization: user.memberships?.[0]?.organization || null,
@@ -388,23 +465,50 @@ router.get("/keys", authenticate, keyExportRateLimiter, async (req, res) => {
         action: "RECOVERY_KEYS_EXPORTED",
         targetType: "User",
         targetId: user._id,
-        details: { walletAddress: user.walletAddress || "unknown" },
+        details: {
+          walletAddress: user.walletAddress || "unknown",
+          method: "wallet_signature_challenge",
+          recoveredAddress,
+          totalExportCount: (user.keyExportCount || 0) + 1,
+        },
         ipAddress: req.ip || req.connection?.remoteAddress,
       });
     } catch (auditErr) {
-      console.warn("Failed to log key export audit event:", auditErr.message);
+      console.warn("[auth/keys/export] Failed to log key export audit event:", auditErr.message);
     }
 
+    console.log(`[auth/keys/export] Keys exported for user ${user._id} (${user.walletAddress})`);
     res.json({
       privateKey,
       mnemonic,
       walletAddress: user.walletAddress,
     });
   } catch (err) {
-    console.error("[auth/keys] Unexpected error for user:", req.user?._id, err.message);
+    console.error("[auth/keys/export] Unexpected error for user:", req.user?._id, err.message);
     res.status(500).json({ error: "Failed to retrieve wallet keys. Please try again." });
   }
 });
+
+/// Helper: Log a failed key export attempt for audit / anomaly detection
+async function logFailedExportAttempt(user, req, reason) {
+  try {
+    await AuditLog.create({
+      organization: user.memberships?.[0]?.organization || null,
+      actor: user._id,
+      actorWallet: user.walletAddress,
+      action: "RECOVERY_KEYS_EXPORT_FAILED",
+      targetType: "User",
+      targetId: user._id,
+      details: { reason, walletAddress: user.walletAddress },
+      ipAddress: req.ip || req.connection?.remoteAddress,
+    });
+  } catch (e) {
+    console.warn("[auth/keys/export] Failed to log audit event:", e.message);
+  }
+}
+
+
+
 
 /// POST /api/auth/confirm-backup
 /// Called from mobile after the user confirms they saved their recovery phrase.

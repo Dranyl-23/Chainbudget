@@ -7,7 +7,7 @@ const mongoose = require("mongoose");
 const AuditLog = require("../models/AuditLog");
 const User = require("../models/User");
 const Notification = require("../models/Notification");
-const { recordTransactionOnChain } = require("../services/blockchain");
+const { recordTransactionOnChain, releaseEscrowOnChain } = require("../services/blockchain");
 const { authenticate, requireRole } = require("../middleware/auth");
 const { requireIdempotency } = require("../middleware/idempotency");
 const { sendEmail } = require("../services/email");
@@ -994,6 +994,12 @@ router.get("/:id", authenticate, async (req, res) => {
 // ── POST /api/transactions/sync-onchain ── Trigger on-chain reconciliation
 router.post("/sync-onchain", authenticate, async (req, res) => {
   try {
+    // B-13 FIX: Restrict sync trigger to SuperAdmin or Level <= 2 Finance/Executive officers
+    const isAuthorized = req.user.isSuperAdmin || (req.user.memberships && req.user.memberships.some(m => m.isActive && m.roleLevel <= 2));
+    if (!isAuthorized) {
+      return res.status(403).json({ error: "Access denied. Requires Finance Officer (Level 2) or Executive (Level 1) permissions." });
+    }
+
     const io = req.app.get("io");
     const { syncPendingTransactions } = require("../services/blockchainSyncWorker");
     const result = await syncPendingTransactions(io);

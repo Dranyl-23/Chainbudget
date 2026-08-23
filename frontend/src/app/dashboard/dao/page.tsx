@@ -10,6 +10,7 @@ import { io } from "socket.io-client";
 import TableSkeleton from "@/components/TableSkeleton";
 import axios from "axios";
 import { BACKEND_URL } from "@/lib/config";
+import { getErrorMessage } from "@/lib/utils";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface UserOrgRef {
@@ -73,16 +74,7 @@ interface AiInsightData {
   cons?: string[];
 }
 
-// ── Helper to safely extract error message ──────────────────────────────────
-function getErrorMessage(err: unknown, fallback: string): string {
-  if (axios.isAxiosError(err)) {
-    return err.response?.data?.error || err.message || fallback;
-  }
-  if (err instanceof Error) {
-    return err.message;
-  }
-  return fallback;
-}
+
 
 export default function DAOGovernancePage() {
   const { user, activeOrgId, isConnected } = useAuth();

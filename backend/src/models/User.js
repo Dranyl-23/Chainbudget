@@ -71,6 +71,16 @@ const UserSchema = new mongoose.Schema(
     // Whether the user has viewed and acknowledged their recovery phrase.
     // Used to show the backup reminder banner on mobile until confirmed.
     hasBackedUpPhrase: { type: Boolean, default: false },
+
+    // ── Key Export Re-authentication (CRIT-3) ─────────────────────────────────
+    // One-time challenge nonce issued by POST /api/auth/keys/challenge.
+    // The user must sign this nonce with their wallet private key and present
+    // the signature to POST /api/auth/keys/export within the TTL window.
+    // The nonce is single-use: it is cleared immediately after a successful export.
+    keyExportNonce: { type: String, select: false },
+    keyExportNonceExpiresAt: { type: Date, select: false },
+    // Cumulative count of successful key exports — used for audit and anomaly detection.
+    keyExportCount: { type: Number, default: 0 },
     // ── Push Notifications ────────────────────────────────────────────────────
     // Stores Expo push tokens per device. Each entry represents one physical
     // device. Tokens are deduplicated on write (POST /api/users/push-token).
@@ -81,6 +91,16 @@ const UserSchema = new mongoose.Schema(
         updatedAt: { type: Date, default: Date.now },
       },
     ],
+    // ── Notification Preferences ──────────────────────────────────────────────
+    notificationPreferences: {
+      email: { type: Boolean, default: true },
+      push: { type: Boolean, default: true },
+      daoProposals: { type: Boolean, default: true },
+      approvals: { type: Boolean, default: true },
+      transactions: { type: Boolean, default: true },
+      chatMentions: { type: Boolean, default: true },
+      securityAlerts: { type: Boolean, default: true },
+    },
   },
   { timestamps: true }
 );

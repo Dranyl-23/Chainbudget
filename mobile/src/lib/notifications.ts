@@ -87,6 +87,15 @@ export async function setupAndroidNotificationChannel() {
       sound: 'default',
       description: 'Alerts for new DAO proposals and voting rounds',
     });
+
+    await Notifications.setNotificationChannelAsync('chainbudget-chat', {
+      name: 'Organization Chat Messages',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 150, 250],
+      lightColor: '#38bdf8', // Sky/Cyan accent
+      sound: 'default',
+      description: 'Real-time organization chat messages and mentions',
+    });
   }
 }
 

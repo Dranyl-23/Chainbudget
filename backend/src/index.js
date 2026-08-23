@@ -150,12 +150,16 @@ app.use(cors({
     if (!origin) return callback(null, true);
     if (
       allowedOrigins.includes(origin) ||
-      origin.endsWith('.vercel.app') ||
-      (process.env.NODE_ENV !== 'production' && (
+      origin.endsWith('chainbudget.vercel.app') ||
+      origin.endsWith('chainbudget-dranyl-23s-projects.vercel.app') ||
+      (process.env.NODE_ENV === 'development' && (
         origin.endsWith('.trycloudflare.com') ||
-        origin.endsWith('.ngrok-free.app')
-      )) ||
-      process.env.NODE_ENV !== 'production'
+        origin.endsWith('.ngrok-free.app') ||
+        origin.startsWith('http://localhost:') ||
+        origin.startsWith('http://127.0.0.1:') ||
+        origin.startsWith('http://192.168.') ||
+        origin.startsWith('http://10.')
+      ))
     ) {
       return callback(null, true);
     }

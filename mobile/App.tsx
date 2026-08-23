@@ -212,7 +212,7 @@ export default function App() {
           navigationRef.current.dispatch(CommonActions.navigate('MainTabs', { screen: 'Inbox' }));
         } else if (data?.screen === 'DAO') {
           navigationRef.current.dispatch(CommonActions.navigate('MainTabs', { screen: 'DAO' }));
-        } else if (data?.screen === 'OrgChat') {
+        } else if (data?.screen === 'OrgChat' || data?.orgId) {
           navigationRef.current.dispatch(CommonActions.navigate('OrgChat', { orgId: data.orgId }));
         }
       });

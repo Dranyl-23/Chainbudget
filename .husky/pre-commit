@@ -1,0 +1,29 @@
+﻿#!/usr/bin/env sh
+# .husky/pre-commit
+#
+# Runs gitleaks against staged files before every commit.
+# Blocks commit if any secret is detected.
+#
+# Install: npx husky install  (or: npm run prepare)
+# Requires gitleaks to be installed:
+#   - macOS/Linux: brew install gitleaks
+#   - Windows: scoop install gitleaks  (or download from GitHub Releases)
+
+. "$(dirname -- "$0")/_/husky.sh"
+
+echo "Running gitleaks secret detection on staged files..."
+
+if command -v gitleaks &> /dev/null; then
+  gitleaks protect --staged --config .gitleaks.toml --verbose --redact
+  if [ $? -ne 0 ]; then
+    echo ""
+    echo "COMMIT BLOCKED: Gitleaks detected a potential secret in staged files."
+    echo "   Review the output above, remove the secret, and try again."
+    echo "   If this is a false positive, add a gitleaks:allow comment or update .gitleaks.toml."
+    exit 1
+  fi
+  echo "No secrets detected. Proceeding with commit."
+else
+  echo "WARNING: gitleaks is not installed. Secret scanning is disabled."
+  echo "   Install with: brew install gitleaks (macOS) or scoop install gitleaks (Windows)"
+fi

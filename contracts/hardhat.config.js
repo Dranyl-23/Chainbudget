@@ -20,7 +20,12 @@ export default {
     },
     amoy: {
       url: process.env.AMOY_RPC_URL || "https://rpc-amoy.polygon.technology/",
-      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+      accounts:
+        process.env.PRIVATE_KEY &&
+        process.env.PRIVATE_KEY.startsWith("0x") &&
+        process.env.PRIVATE_KEY.length === 66
+          ? [process.env.PRIVATE_KEY]
+          : [],
       chainId: 80002,
     },
   },

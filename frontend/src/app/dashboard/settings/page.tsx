@@ -7,13 +7,15 @@ import { ethers } from "ethers";
 import { getAmoyProvider } from "@/lib/rpcProvider";
 import api from "@/lib/api";
 import { getExplorerAddressUrl } from "@/lib/config";
+import { getProvider } from "@/lib/wallet";
+import { getErrorMessage } from "@/lib/utils";
 import toast from "react-hot-toast";
 import { 
   Save, Wallet, Upload, User as UserIcon, ShieldCheck, 
   ExternalLink, Copy, Check, Smartphone, CheckCircle2, 
-  Sparkles, X, Lock, Key, Eye, EyeOff, Clock, ShieldAlert 
+  Sparkles, X, Lock, Key, Clock, ShieldAlert,
+  Bell
 } from "lucide-react";
-import axios from "axios";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface UserOrgRef {
@@ -51,16 +53,7 @@ interface UploadResponse {
   documentHash?: string;
 }
 
-// ── Helper to safely extract error message ──────────────────────────────────
-function getErrorMessage(err: unknown, fallback: string): string {
-  if (axios.isAxiosError(err)) {
-    return err.response?.data?.error || err.message || fallback;
-  }
-  if (err instanceof Error) {
-    return err.message;
-  }
-  return fallback;
-}
+
 
 function formatAvatarUrl(url?: string) {
   if (!url) return null;
@@ -91,13 +84,36 @@ export default function SettingsPage() {
   const [autoWalletKeys, setAutoWalletKeys] = useState<AutoWalletKeys | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
-  // Password & Biometric Security Gate
+  // Security Verification Modal Gate
   const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
-  const [securityPassword, setSecurityPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   const [isVerifyingSecurity, setIsVerifyingSecurity] = useState(false);
   const [securityError, setSecurityError] = useState<string | null>(null);
   const [keyCountdown, setKeyCountdown] = useState<number | null>(null);
+
+  // User Notification Preferences State
+  const [notificationPrefs, setNotificationPrefs] = useState<Record<string, boolean>>({
+    email: true,
+    push: true,
+    daoProposals: true,
+    approvals: true,
+    transactions: true,
+    chatMentions: true,
+    securityAlerts: true,
+  });
+
+  const handleTogglePreference = async (key: string, currentValue: boolean) => {
+    const updated = !currentValue;
+    setNotificationPrefs((prev) => ({ ...prev, [key]: updated }));
+
+    try {
+      await api.put("/users/preferences", { [key]: updated });
+      toast.success("Notification preference saved");
+    } catch (err: unknown) {
+      // Revert on error
+      setNotificationPrefs((prev) => ({ ...prev, [key]: currentValue }));
+      toast.error(getErrorMessage(err, "Failed to update preference"));
+    }
+  };
 
   // Auto-hide security countdown timer
   useEffect(() => {
@@ -170,6 +186,19 @@ export default function SettingsPage() {
     
     fetchBalance();
     fetchLiquidations();
+
+    // Fetch user notification preferences
+    const fetchPreferences = async () => {
+      try {
+        const res = await api.get<{ preferences: Record<string, boolean> }>("/users/preferences");
+        if (res.data?.preferences && !isCancelled) {
+          setNotificationPrefs(res.data.preferences);
+        }
+      } catch (err) {
+        console.error("Failed to fetch notification preferences:", err);
+      }
+    };
+    fetchPreferences();
 
     return () => {
       isCancelled = true;
@@ -307,30 +336,47 @@ export default function SettingsPage() {
       setKeyCountdown(null);
       return;
     }
-    setSecurityPassword("");
     setSecurityError(null);
     setIsSecurityModalOpen(true);
   };
 
   const handleConfirmSecurity = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!securityPassword.trim()) {
-      setSecurityError("Please enter your account password to confirm your identity.");
-      return;
-    }
 
     setIsVerifyingSecurity(true);
     setSecurityError(null);
     try {
-      // Fetch decrypted auto-generated wallet keys
-      const res = await api.get<AutoWalletKeys>("/auth/keys");
+      // 1. Request one-time challenge from backend
+      const challengeRes = await api.post<{ challenge: string; walletAddress: string }>("/auth/keys/challenge");
+      const { challenge, walletAddress } = challengeRes.data;
+
+      // 2. Sign challenge with connected MetaMask/Web3 wallet
+      const provider = getProvider();
+      if (!provider) {
+        throw new Error("MetaMask is required to sign the security verification challenge.");
+      }
+
+      await provider.send("eth_requestAccounts", []);
+      const signer = await provider.getSigner();
+      const currentAddress = (await signer.getAddress()).toLowerCase();
+
+      if (walletAddress && currentAddress !== walletAddress.toLowerCase()) {
+        throw new Error(
+          `Connected wallet (${currentAddress.slice(0, 6)}...${currentAddress.slice(-4)}) does not match your registered account wallet (${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}). Please switch accounts in MetaMask.`
+        );
+      }
+
+      const signature = await signer.signMessage(challenge);
+
+      // 3. Send signature to backend for cryptographic verification and decryption
+      const res = await api.post<AutoWalletKeys>("/auth/keys/export", { signature });
       setAutoWalletKeys(res.data);
       setShowKeys(true);
       setKeyCountdown(60); // 60s auto-hide countdown
       setIsSecurityModalOpen(false);
-      toast.success("Identity verified! Keys will auto-hide in 60s.");
+      toast.success("Identity cryptographically verified! Keys will auto-hide in 60s.");
     } catch (err: unknown) {
-      setSecurityError(getErrorMessage(err, "Failed to fetch wallet keys. Please check your credentials."));
+      setSecurityError(getErrorMessage(err, "Failed to verify identity and export keys."));
     } finally {
       setIsVerifyingSecurity(false);
     }
@@ -747,6 +793,61 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        {/* ── Notification Preferences Card ── */}
+        <div className="glass p-6 rounded-2xl border border-primary/20 md:col-span-2">
+          <div className="flex items-center justify-between mb-4 border-b pb-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center">
+                <Bell className="w-5 h-5 text-purple-400" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-gray-800 dark:text-white">Notification Preferences</h2>
+                <p className="text-xs text-gray-500">Configure which notifications you receive on Web, Mobile, and Email.</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
+            {[
+              { key: "push", label: "Mobile Push Notifications", desc: "Receive alerts on your iOS / Android devices" },
+              { key: "email", label: "Email Notifications", desc: "Important transaction summaries and receipts" },
+              { key: "approvals", label: "Approval Requests", desc: "Alerts when a transaction requires your review" },
+              { key: "transactions", label: "Transaction Updates", desc: "Status changes, payouts, and confirmations" },
+              { key: "daoProposals", label: "DAO Proposals & Voting", desc: "New governance ballots and voting deadlines" },
+              { key: "chatMentions", label: "Chat Mentions", desc: "Notifications when tagged in organization channels" },
+            ].map(({ key, label, desc }) => {
+              const isEnabled = notificationPrefs[key] !== false;
+              return (
+                <div
+                  key={key}
+                  onClick={() => handleTogglePreference(key, isEnabled)}
+                  className={`p-4 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 select-none ${
+                    isEnabled
+                      ? "bg-purple-500/10 border-purple-500/30 shadow-sm"
+                      : "bg-white/5 border-white/10 opacity-70 hover:opacity-100"
+                  }`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-bold text-gray-800 dark:text-white truncate">{label}</p>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-1">{desc}</p>
+                  </div>
+                  <div
+                    className={`w-10 h-5 rounded-full transition-colors relative flex items-center p-0.5 shrink-0 ${
+                      isEnabled ? "bg-purple-600" : "bg-gray-400 dark:bg-gray-600"
+                    }`}
+                  >
+                    <div
+                      className={`w-4 h-4 rounded-full bg-white transition-transform ${
+                        isEnabled ? "translate-x-5" : "translate-x-0"
+                      }`}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
       </div>
 
       {/* SuperAdmin: Pending Liquidations */}
@@ -810,61 +911,50 @@ export default function SettingsPage() {
             </div>
 
             <p className="text-xs text-slate-300 mb-5 leading-relaxed">
-              Your recovery phrase and private key grant full authority to sign on-chain approvals and manage treasury funds. Please confirm to proceed.
+              Your recovery phrase and private key grant full authority over your on-chain assets. To export your keys, MetaMask will prompt you to cryptographically sign a single-use verification challenge issued by the server.
             </p>
 
-            <form onSubmit={handleConfirmSecurity} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
-                  Account Password
-                </label>
-                <div className="relative">
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    value={securityPassword}
-                    onChange={(e) => setSecurityPassword(e.target.value)}
-                    placeholder="Enter your account password"
-                    autoFocus
-                    className="w-full px-4 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-orange-500 transition-colors pr-10"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-                {securityError && (
-                  <p className="text-xs text-rose-400 font-semibold mt-1.5 flex items-center gap-1">
-                    <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
-                    {securityError}
-                  </p>
-                )}
-              </div>
+            <div className="p-3.5 mb-5 rounded-xl bg-orange-500/10 border border-orange-500/30 text-xs text-orange-300 flex items-start gap-2.5">
+              <ShieldCheck className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
+              <span>
+                <strong>Zero-Knowledge Security:</strong> This challenge requires ECDSA signature verification on the server before keys are decrypted.
+              </span>
+            </div>
 
-              <div className="flex gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsSecurityModalOpen(false)}
-                  className="flex-1 py-3 px-4 rounded-xl border border-slate-700 bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 font-bold text-xs transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isVerifyingSecurity || !securityPassword.trim()}
-                  className="flex-1 py-3 px-4 rounded-xl bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-orange-600/30 transition-all"
-                >
-                  {isVerifyingSecurity ? (
+            {securityError && (
+              <p className="text-xs text-rose-400 font-semibold mb-4 flex items-center gap-1.5 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30">
+                <ShieldAlert className="w-4 h-4 shrink-0" />
+                {securityError}
+              </p>
+            )}
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsSecurityModalOpen(false)}
+                className="flex-1 py-3 px-4 rounded-xl border border-slate-700 bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 font-bold text-xs transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleConfirmSecurity()}
+                disabled={isVerifyingSecurity}
+                className="flex-1 py-3 px-4 rounded-xl bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-orange-600/30 transition-all"
+              >
+                {isVerifyingSecurity ? (
+                  <>
                     <span className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
-                  ) : (
+                    <span>Signing...</span>
+                  </>
+                ) : (
+                  <>
                     <Key className="w-4 h-4" />
-                  )}
-                  Verify & Reveal
-                </button>
-              </div>
-            </form>
+                    <span>Sign & Export Keys</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

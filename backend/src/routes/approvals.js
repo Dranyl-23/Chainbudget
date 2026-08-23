@@ -312,6 +312,17 @@ router.post("/:txId", authenticate, requireRole(2), requireIdempotency, async (r
 /// GET /api/approvals/:txId — Get approvals for a transaction
 router.get("/:txId", authenticate, async (req, res) => {
   try {
+    const txn = await Transaction.findById(req.params.txId);
+    if (!txn) {
+      return res.status(404).json({ error: "Transaction not found" });
+    }
+
+    // B-7 FIX: User must be an active member of the transaction's organization or SuperAdmin
+    const roleLevel = req.user.getRoleInOrg(txn.organization);
+    if (!req.user.isSuperAdmin && roleLevel === null) {
+      return res.status(403).json({ error: "Access denied. You are not a member of this organization." });
+    }
+
     const approvals = await Approval.find({ transaction: req.params.txId })
       .populate("approver", "walletAddress displayName");
     res.json(approvals);

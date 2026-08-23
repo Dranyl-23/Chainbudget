@@ -84,11 +84,10 @@ export async function restoreWalletFromPhrase(phrase: string): Promise<Generated
 
   const hdWallet = ethers.HDNodeWallet.fromPhrase(phrase.trim(), undefined, DERIVATION_PATH);
 
-  await Promise.all([
-    storePrivateKey(hdWallet.privateKey),
-    storeMnemonic(phrase.trim()),
-    storeWalletAddress(hdWallet.address),
-  ]);
+  // Store sequentially to prevent concurrent BiometricPrompt rejection on Android
+  await storeWalletAddress(hdWallet.address); // non-gated
+  await storePrivateKey(hdWallet.privateKey);  // biometric prompt #1
+  await storeMnemonic(phrase.trim());         // biometric prompt #2
 
   return {
     address: hdWallet.address,
