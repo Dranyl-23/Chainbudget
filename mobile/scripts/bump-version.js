@@ -5,7 +5,6 @@
  * Automatically updates:
  *  1. mobile/app.json (version, android.versionCode, ios.buildNumber)
  *  2. mobile/package.json (version)
- *  3. mobile/src/screens/ProfileScreen.tsx (in-app version label)
  *
  * Usage:
  *  node scripts/bump-version.js [patch | minor | major]
@@ -18,7 +17,6 @@ const path = require('path');
 const rootDir = path.resolve(__dirname, '..');
 const appJsonPath = path.join(rootDir, 'app.json');
 const packageJsonPath = path.join(rootDir, 'package.json');
-const profileScreenPath = path.join(rootDir, 'src', 'screens', 'ProfileScreen.tsx');
 
 // 1. Read files
 const appJson = JSON.parse(fs.readFileSync(appJsonPath, 'utf8'));
@@ -77,15 +75,4 @@ packageJson.version = newVersion;
 fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2) + '\n', 'utf8');
 console.log('✅ Updated package.json');
 
-// 5. Update ProfileScreen.tsx if present
-if (fs.existsSync(profileScreenPath)) {
-  let profileContent = fs.readFileSync(profileScreenPath, 'utf8');
-  profileContent = profileContent.replace(
-    /v\d+\.\d+\.\d+(\s+Capstone\s+Edition)?/g,
-    `v${newVersion} Capstone Edition`
-  );
-  fs.writeFileSync(profileScreenPath, profileContent, 'utf8');
-  console.log('✅ Updated ProfileScreen.tsx in-app label');
-}
-
-console.log('✨ All configuration files synchronized successfully!\n');
+console.log('✨ All configuration files synchronized dynamically!\n');
