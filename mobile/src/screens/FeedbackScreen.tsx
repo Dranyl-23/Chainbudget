@@ -588,15 +588,15 @@ export default function FeedbackScreen() {
               style={{ width: '100%' }}
             >
               <LinearGradient
-                colors={['#1d4ed8', '#00E5FF']}
+                colors={['#1e40af', '#2563eb']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={{
-                  paddingVertical: 13,
+                  paddingVertical: 14,
                   borderRadius: 16,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  shadowColor: '#00E5FF',
+                  shadowColor: '#2563eb',
                   shadowOffset: { width: 0, height: 4 },
                   shadowOpacity: 0.3,
                   shadowRadius: 8,

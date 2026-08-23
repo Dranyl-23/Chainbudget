@@ -418,7 +418,7 @@ export default function CreateOrganizationScreen() {
           }}
         >
           <LinearGradient
-            colors={['#1d4ed8', '#00E5FF']}
+            colors={['#1e40af', '#2563eb']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={{
@@ -433,14 +433,14 @@ export default function CreateOrganizationScreen() {
             {creating ? (
               <View className="flex-row items-center justify-center gap-2">
                 <ActivityIndicator size="small" color="#ffffff" />
-                <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 15 }}>
+                <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 15 }}>
                   Creating Organization...
                 </Text>
               </View>
             ) : (
               <View className="flex-row items-center justify-center gap-2">
                 <Ionicons name="sparkles" size={20} color="#ffffff" />
-                <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 15 }}>
+                <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 15, letterSpacing: 0.2 }}>
                   Deploy & Create Organization
                 </Text>
               </View>
@@ -573,15 +573,15 @@ export default function CreateOrganizationScreen() {
               style={{ width: '100%' }}
             >
               <LinearGradient
-                colors={['#1d4ed8', '#00E5FF']}
+                colors={['#1e40af', '#2563eb']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={{
-                  paddingVertical: 13,
+                  paddingVertical: 14,
                   borderRadius: 16,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  shadowColor: '#00E5FF',
+                  shadowColor: '#2563eb',
                   shadowOffset: { width: 0, height: 4 },
                   shadowOpacity: 0.3,
                   shadowRadius: 8,
