@@ -110,14 +110,22 @@ router.post("/", authenticate, upload.single("file"), async (req, res) => {
     fs.writeFileSync(localFilePath, req.file.buffer);
     const localUrl = `${req.protocol}://${req.get("host")}/uploads/${localFilename}`;
 
-    // Return local URL as fallback with warning
+    // For avatar & logo images under 1.5MB, use a self-contained Data URI as primary URL
+    // so images render permanently and never break when cloud containers restart
+    const isSmallImage = req.file.mimetype.startsWith("image/") && req.file.size <= 1.5 * 1024 * 1024;
+    const documentUrl = isSmallImage
+      ? `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`
+      : localUrl;
+
+    // Return resilient URL as fallback with warning
     return res.status(201).json({
-      documentUrl: localUrl,
+      documentUrl,
+      localUrl,
       documentHash: "local_" + crypto.randomBytes(8).toString("hex"),
       originalName: req.file.originalname,
       mimeType: req.file.mimetype,
       isLocal: true,
-      warning: "File stored on server storage."
+      warning: "File stored via resilient local/inline fallback."
     });
   }
 });

@@ -67,6 +67,7 @@ function ChatAvatar({
 
   const formattedSrc = useMemo(() => {
     if (!src) return null;
+    if (src.startsWith("data:")) return src;
     if (src.startsWith("/uploads")) {
       const backendBase = process.env.NEXT_PUBLIC_BACKEND_URL || "https://chainbudget-api.fly.dev";
       return `${backendBase}${src}`;
