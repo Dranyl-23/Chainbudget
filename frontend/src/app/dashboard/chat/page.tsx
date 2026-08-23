@@ -5,7 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { io, Socket } from "socket.io-client";
 import {
   Send, Pin, PinOff, Trash2, Copy, Check, MessageSquare, RefreshCw,
-  Smile, CheckCheck
+  Smile, CheckCheck, UserCircle
 } from "lucide-react";
 import toast from "react-hot-toast";
 import api from "@/lib/api";
@@ -49,6 +49,66 @@ interface ChatMessage {
   reactions?: ReactionGroup[];
   seenBy?: UserRef[];
   createdAt: string;
+}
+
+function ChatAvatar({
+  src,
+  name,
+  size = 28,
+  className = "",
+}: {
+  src?: string;
+  name?: string;
+  size?: number;
+  className?: string;
+}) {
+  const [hasError, setHasError] = useState(false);
+
+  const formattedSrc = useMemo(() => {
+    if (!src) return null;
+    if (src.startsWith("/uploads")) {
+      const backendBase = process.env.NEXT_PUBLIC_BACKEND_URL || "https://chainbudget-api.fly.dev";
+      return `${backendBase}${src}`;
+    }
+    if (src.includes("localhost:5001") || src.includes("127.0.0.1:5001")) {
+      const backendBase = process.env.NEXT_PUBLIC_BACKEND_URL || "https://chainbudget-api.fly.dev";
+      return src.replace(/http:\/\/(localhost|127\.0\.0\.1):5001/, backendBase);
+    }
+    if (src.startsWith("http://") || src.startsWith("https://")) {
+      return src;
+    }
+    return null;
+  }, [src]);
+
+  const initial = (name || "M").trim().charAt(0).toUpperCase();
+
+  if (!formattedSrc || hasError) {
+    return (
+      <div
+        style={{ width: size, height: size }}
+        className={`rounded-full bg-gradient-to-br from-purple-600 to-indigo-600 flex items-center justify-center text-white font-bold text-[11px] shadow-sm border border-purple-400/30 select-none shrink-0 ${className}`}
+      >
+        {initial || <UserCircle className="w-full h-full text-purple-300" />}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{ width: size, height: size }}
+      className={`rounded-full overflow-hidden border border-purple-400/30 bg-purple-900/30 shadow-sm shrink-0 ${className}`}
+    >
+      <Image
+        src={formattedSrc}
+        alt={name || "Avatar"}
+        width={size}
+        height={size}
+        unoptimized
+        className="w-full h-full object-cover"
+        onError={() => setHasError(true)}
+      />
+    </div>
+  );
 }
 
 function getRoleBadge(roleLevel: number, roleLabel?: string) {
@@ -425,7 +485,7 @@ export default function OrgChatPage() {
       )}
 
       {/* ── MESSAGES CHAT STREAM ── */}
-      <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-zinc-950/60 backdrop-blur-md border border-white/8 rounded-2xl mb-4 space-y-5 shadow-inner [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+      <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-zinc-950/60 backdrop-blur-md border border-white/8 rounded-2xl mb-4 space-y-4 shadow-inner [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center h-full text-zinc-400 text-sm gap-3">
             <RefreshCw className="w-6 h-6 animate-spin text-purple-400" />
@@ -446,46 +506,42 @@ export default function OrgChatPage() {
             const isMe = msg.sender?._id === currentUserId;
             const badge = getRoleBadge(msg.roleLevel, msg.roleLabel);
             const senderName = msg.sender?.displayName || "Member";
-            const avatarUrl =
-              msg.sender?.avatarUrl ||
-              `https://ui-avatars.com/api/?name=${encodeURIComponent(senderName)}&background=9333ea&color=fff&size=100`;
 
             const isLastInSequence =
               index === messages.length - 1 ||
               messages[index + 1]?.sender?._id !== msg.sender?._id;
 
-            const otherSeenUsers = (msg.seenBy || []).filter((u) => u._id !== currentUserId && u._id !== msg.sender?._id);
+            const otherSeenUsers = (msg.seenBy || []).filter(
+              (u) => u._id !== currentUserId && u._id !== msg.sender?._id
+            );
 
             return (
               <div
                 key={msg._id}
-                className={`group flex items-end gap-2.5 ${isMe ? "flex-row-reverse" : "flex-row"}`}
+                className={`group flex items-end gap-2 ${isMe ? "justify-end" : "justify-start"}`}
               >
-                {/* ── SENDER AVATAR (Messenger Style: Beside message bubble) ── */}
-                <div className="w-8 h-8 shrink-0 flex items-center justify-center">
-                  {isLastInSequence ? (
-                    <div className="w-8 h-8 rounded-full bg-purple-600/30 border border-purple-500/30 overflow-hidden shadow-sm">
-                      <Image
-                        src={avatarUrl}
-                        alt="Avatar"
-                        width={32}
-                        height={32}
-                        className="w-full h-full object-cover"
-                        unoptimized
+                {/* ── SENDER AVATAR (Only for other members on the left side, compact 28px) ── */}
+                {!isMe && (
+                  <div className="w-7 h-7 shrink-0 mb-0.5">
+                    {isLastInSequence ? (
+                      <ChatAvatar
+                        src={msg.sender?.avatarUrl}
+                        name={senderName}
+                        size={28}
                       />
-                    </div>
-                  ) : (
-                    <div className="w-8 h-8" />
-                  )}
-                </div>
+                    ) : (
+                      <div className="w-7 h-7" />
+                    )}
+                  </div>
+                )}
 
                 {/* ── MESSAGE CONTENT CONTAINER ── */}
-                <div className={`max-w-[80%] md:max-w-[65%] flex flex-col ${isMe ? "items-end" : "items-start"}`}>
-                  {/* Sender Name & Role Badge (shown on first/lone messages) */}
+                <div className={`max-w-[78%] md:max-w-[62%] flex flex-col ${isMe ? "items-end" : "items-start"}`}>
+                  {/* Sender Name & Role Badge (shown only for incoming messages) */}
                   {!isMe && (
-                    <div className="flex items-center gap-2 mb-1 px-1">
-                      <span className="text-xs font-bold text-zinc-200">{senderName}</span>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${badge.bg}`}>
+                    <div className="flex items-center gap-1.5 mb-1 px-1">
+                      <span className="text-[11px] font-semibold text-zinc-300">{senderName}</span>
+                      <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold border ${badge.bg}`}>
                         {badge.label}
                       </span>
                     </div>
@@ -494,9 +550,9 @@ export default function OrgChatPage() {
                   {/* Message Bubble + Floating Toolbar */}
                   <div className="relative group/bubble">
                     <div
-                      className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
+                      className={`px-3.5 py-2 rounded-2xl text-sm leading-relaxed ${
                         isMe
-                          ? "bg-linear-to-r from-purple-600 to-indigo-600 text-white rounded-br-xs shadow-md shadow-purple-900/20"
+                          ? "bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-br-xs shadow-md shadow-purple-900/20"
                           : "bg-zinc-900/90 border border-white/8 text-zinc-100 rounded-bl-xs shadow-sm"
                       } ${msg.isPinned ? "border-amber-500/50 ring-1 ring-amber-500/30" : ""}`}
                     >
@@ -524,13 +580,12 @@ export default function OrgChatPage() {
                       </div>
                     </div>
 
-                    {/* ── HOVER ACTION TOOLBAR (Quick Reactions & Options) ── */}
+                    {/* ── HOVER ACTION TOOLBAR ── */}
                     <div
                       className={`absolute top-0 -translate-y-1/2 hidden group-hover/bubble:flex items-center gap-1 p-1 bg-zinc-900 border border-white/15 rounded-xl shadow-xl z-20 ${
                         isMe ? "right-2" : "left-2"
                       }`}
                     >
-                      {/* React Emoji Selector Trigger */}
                       <button
                         onClick={() =>
                           setActiveReactingMessageId(
@@ -572,7 +627,7 @@ export default function OrgChatPage() {
                       )}
                     </div>
 
-                    {/* ── QUICK REACTION EMOJI POPUP (Messenger Style) ── */}
+                    {/* ── QUICK REACTION EMOJI POPUP ── */}
                     {activeReactingMessageId === msg._id && (
                       <div
                         className={`absolute -top-10 flex items-center gap-1.5 p-1.5 bg-zinc-900/95 border border-purple-500/40 rounded-full shadow-2xl z-30 animate-fade-in ${
@@ -583,7 +638,7 @@ export default function OrgChatPage() {
                           <button
                             key={emoji}
                             onClick={() => void handleToggleReaction(msg._id, emoji)}
-                            className="text-lg hover:scale-125 transition-transform p-1 rounded-full hover:bg-white/10"
+                            className="text-base hover:scale-125 transition-transform p-1 rounded-full hover:bg-white/10"
                           >
                             {emoji}
                           </button>
@@ -592,16 +647,16 @@ export default function OrgChatPage() {
                     )}
                   </div>
 
-                  {/* ── REACTION PILLS UNDER BUBBLE (Messenger Style) ── */}
+                  {/* ── REACTION PILLS UNDER BUBBLE ── */}
                   {msg.reactions && msg.reactions.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mt-1.5">
+                    <div className="flex flex-wrap gap-1 mt-1">
                       {msg.reactions.map((r) => {
                         const hasReacted = r.users?.some((u) => u._id === currentUserId);
                         return (
                           <button
                             key={r.emoji}
                             onClick={() => void handleToggleReaction(msg._id, r.emoji)}
-                            className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition ${
+                            className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] border transition ${
                               hasReacted
                                 ? "bg-purple-600/25 border-purple-500/50 text-purple-200"
                                 : "bg-zinc-900 border-white/10 text-zinc-400 hover:border-white/20"
@@ -616,29 +671,26 @@ export default function OrgChatPage() {
                     </div>
                   )}
 
-                  {/* ── SEEN BY AVATARS (Messenger Style: Mini profile icons below message) ── */}
+                  {/* ── SEEN BY AVATARS (Messenger Style: Sleek 14px mini circles below message) ── */}
                   {isMe && otherSeenUsers.length > 0 && isLastInSequence && (
-                    <div className="flex items-center gap-1 mt-1.5 pr-1 self-end" title={`Seen by ${otherSeenUsers.map(u => u.displayName).join(", ")}`}>
-                      <span className="text-[10px] text-zinc-500 font-medium mr-1">Seen</span>
-                      <div className="flex -space-x-1.5 overflow-hidden">
+                    <div
+                      className="flex items-center gap-1 mt-1 pr-1 self-end"
+                      title={`Seen by ${otherSeenUsers.map((u) => u.displayName || "Member").join(", ")}`}
+                    >
+                      <span className="text-[9px] text-zinc-500 font-medium mr-0.5">Seen</span>
+                      <div className="flex -space-x-1 overflow-hidden">
                         {otherSeenUsers.slice(0, 4).map((u) => (
-                          <div
+                          <ChatAvatar
                             key={u._id}
-                            className="w-4 h-4 rounded-full border border-zinc-900 bg-purple-600 overflow-hidden"
-                            title={u.displayName || "Member"}
-                          >
-                            {u.avatarUrl ? (
-                              <Image src={u.avatarUrl} alt="Seen" width={16} height={16} className="w-full h-full object-cover" unoptimized />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center text-[8px] font-bold text-white">
-                                {(u.displayName || "M").charAt(0).toUpperCase()}
-                              </div>
-                            )}
-                          </div>
+                            src={u.avatarUrl}
+                            name={u.displayName || "M"}
+                            size={14}
+                            className="text-[7px]"
+                          />
                         ))}
                       </div>
                       {otherSeenUsers.length > 4 && (
-                        <span className="text-[9px] text-zinc-400">+{otherSeenUsers.length - 4}</span>
+                        <span className="text-[8px] text-zinc-400">+{otherSeenUsers.length - 4}</span>
                       )}
                     </div>
                   )}

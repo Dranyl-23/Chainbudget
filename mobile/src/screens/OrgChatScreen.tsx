@@ -102,6 +102,46 @@ function formatChatTime(dateString: string) {
   return `${date.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${timeStr}`;
 }
 
+function ChatMobileAvatar({
+  uri,
+  name,
+  size = 28,
+}: {
+  uri?: string;
+  name?: string;
+  size?: number;
+}) {
+  const [error, setError] = useState(false);
+  const initial = (name || 'M').trim().charAt(0).toUpperCase();
+
+  if (!uri || error) {
+    return (
+      <View
+        style={{
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor: '#9333EA',
+          justifyContent: 'center',
+          alignItems: 'center',
+          borderWidth: 1,
+          borderColor: 'rgba(255,255,255,0.2)',
+        }}
+      >
+        <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: size * 0.42 }}>{initial}</Text>
+      </View>
+    );
+  }
+
+  return (
+    <Image
+      source={{ uri }}
+      style={{ width: size, height: size, borderRadius: size / 2 }}
+      onError={() => setError(true)}
+    />
+  );
+}
+
 export default function OrgChatScreen() {
   const insets = useSafeAreaInsets();
   const route = useRoute<any>();
@@ -397,18 +437,13 @@ export default function OrgChatScreen() {
               <Text style={{ fontSize: 9.5, color: colors.textMuted, fontWeight: '500' }}>Seen by</Text>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 {otherSeenUsers.slice(0, 4).map((u, i) => (
-                  <Image
-                    key={u._id}
-                    source={{ uri: u.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.displayName || 'M')}&background=9333ea&color=fff&size=50` }}
-                    style={{
-                      width: 14,
-                      height: 14,
-                      borderRadius: 7,
-                      borderWidth: 1,
-                      borderColor: isDark ? colors.surface : '#FFFFFF',
-                      marginLeft: i > 0 ? -4 : 0,
-                    }}
-                  />
+                  <View key={u._id} style={{ marginLeft: i > 0 ? -4 : 0 }}>
+                    <ChatMobileAvatar
+                      uri={u.avatarUrl}
+                      name={u.displayName || 'M'}
+                      size={14}
+                    />
+                  </View>
                 ))}
               </View>
             </View>
@@ -419,12 +454,13 @@ export default function OrgChatScreen() {
 
     return (
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginBottom: 12, paddingHorizontal: 14, gap: 8 }}>
-        {/* ── SENDER AVATAR (Messenger Style: Beside message bubble) ── */}
-        <View style={{ width: 32, height: 32, justifyContent: 'center', alignItems: 'center' }}>
+        {/* ── SENDER AVATAR (Messenger Style: Beside message bubble, 28px) ── */}
+        <View style={{ width: 28, height: 28, justifyContent: 'center', alignItems: 'center', marginBottom: 2 }}>
           {isLastInSequence ? (
-            <Image
-              source={{ uri: avatarUrl }}
-              style={{ width: 32, height: 32, borderRadius: 16 }}
+            <ChatMobileAvatar
+              uri={item.sender?.avatarUrl}
+              name={senderName}
+              size={28}
             />
           ) : null}
         </View>
