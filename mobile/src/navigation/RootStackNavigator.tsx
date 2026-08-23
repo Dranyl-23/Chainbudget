@@ -21,6 +21,9 @@ import NotificationDetailScreen from '../screens/NotificationDetailScreen';
 import PublicOrgDetailScreen from '../screens/PublicOrgDetailScreen';
 import PublicLedgerScreen from '../screens/PublicLedgerScreen';
 import FeedbackScreen from '../screens/FeedbackScreen';
+import AboutScreen from '../screens/AboutScreen';
+import NetworkStatusScreen from '../screens/NetworkStatusScreen';
+import SecurityKeysScreen from '../screens/SecurityKeysScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -127,6 +130,21 @@ export default function RootStackNavigator() {
         name="Feedback"
         component={FeedbackScreen}
         options={{ title: 'Feedback & Reports' }}
+      />
+      <Stack.Screen
+        name="About"
+        component={AboutScreen}
+        options={{ title: 'About ChainBudget' }}
+      />
+      <Stack.Screen
+        name="NetworkStatus"
+        component={NetworkStatusScreen}
+        options={{ title: 'Network & Protocol' }}
+      />
+      <Stack.Screen
+        name="SecurityKeys"
+        component={SecurityKeysScreen}
+        options={{ title: 'Web3 Security & Keys' }}
       />
     </Stack.Navigator>
   );

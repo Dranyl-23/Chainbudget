@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, Alert, Modal, ScrollView, BackHandler } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, Alert, Modal, ScrollView } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -8,12 +8,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
-import * as ScreenCapture from 'expo-screen-capture';
 import { Image } from 'react-native';
-import { getPrivateKey, getMnemonic } from '../lib/secureStorage';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { triggerLightHaptic, triggerErrorHaptic, triggerSuccessHaptic, authenticateWithBiometrics } from '../lib/biometrics';
+import {
+  triggerLightHaptic,
+  triggerErrorHaptic,
+  triggerSuccessHaptic,
+  authenticateWithBiometrics,
+} from '../lib/biometrics';
 import ThemeSelectorModal from '../components/ThemeSelectorModal';
 import appConfig from '../../app.json';
 
@@ -25,83 +28,16 @@ export default function ProfileScreen() {
   const { colors, isDark, themeMode } = useTheme();
   const navigation = useNavigation<any>();
 
-
-  const [showSecurityModal, setShowSecurityModal] = useState(false);
-  const [showNetworkModal, setShowNetworkModal] = useState(false);
-  const [showAboutModal, setShowAboutModal] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showThemeModal, setShowThemeModal] = useState(false);
   const [mintingSbt, setMintingSbt] = useState(false);
-  
-  // Vault state
-  const [activeTab, setActiveTab] = useState<'menu' | 'phrase' | 'privateKey'>('menu');
-  const [keys, setKeys] = useState<{privateKey: string, mnemonic: string} | null>(null);
-  const [isLoadingKeys, setIsLoadingKeys] = useState(false);
-
-  // Prevent screenshots when viewing private keys/phrase
-  useEffect(() => {
-    if (showSecurityModal && (activeTab === 'phrase' || activeTab === 'privateKey')) {
-      ScreenCapture.preventScreenCaptureAsync();
-    } else {
-      ScreenCapture.allowScreenCaptureAsync();
-    }
-  }, [showSecurityModal, activeTab]);
-
-
-  const fetchKeys = async (target: 'phrase' | 'privateKey') => {
-    await triggerLightHaptic();
-    const promptMessage = target === 'privateKey'
-      ? 'Authenticate with Biometrics / PIN to Export Private Key'
-      : 'Authenticate with Biometrics / PIN to View Recovery Phrase';
-
-    const auth = await authenticateWithBiometrics(promptMessage);
-    if (!auth.success) {
-      await triggerErrorHaptic();
-      return;
-    }
-
-    await triggerSuccessHaptic();
-    setIsLoadingKeys(true);
-    try {
-      if (!keys) {
-        const [mnemonic, privateKey] = await Promise.all([
-          getMnemonic(),
-          getPrivateKey(),
-        ]);
-        if (!mnemonic || !privateKey) {
-          Alert.alert('Wallet Not Found', 'No wallet keys were found on this device. Please restore your account.');
-          return;
-        }
-        setKeys({ privateKey, mnemonic });
-      }
-      setActiveTab(target);
-    } catch (err: any) {
-      Alert.alert('Authentication Failed', err.message || 'Could not retrieve wallet keys.');
-    } finally {
-      setIsLoadingKeys(false);
-    }
-  };
+  const [isUploading, setIsUploading] = useState(false);
 
   const copyToClipboard = async (text: string, label: string) => {
     await Clipboard.setStringAsync(text);
-    const isSensitive = label.toLowerCase().includes('private') || label.toLowerCase().includes('phrase');
-
-    if (isSensitive) {
-      // Auto-clear clipboard in 60 seconds
-      setTimeout(async () => {
-        try {
-          await Clipboard.setStringAsync('');
-        } catch {}
-      }, 60000);
-
-      Alert.alert('🔒 Copied to Clipboard', `${label} copied. For your security, the clipboard will automatically be wiped in 60 seconds.`);
-    } else {
-      Alert.alert('Copied!', `${label} copied to clipboard.`);
-    }
+    await triggerSuccessHaptic();
+    Alert.alert('Copied!', `${label} copied to clipboard.`);
   };
-
-
-  const [isUploading, setIsUploading] = useState(false);
 
   const handlePickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -444,7 +380,10 @@ export default function ProfileScreen() {
 
           {/* Network Status Item */}
           <TouchableOpacity 
-            onPress={() => setShowNetworkModal(true)}
+            onPress={() => {
+              triggerLightHaptic();
+              navigation.navigate('NetworkStatus');
+            }}
             activeOpacity={0.7}
             className="flex-row items-center justify-between p-3.5"
           >
@@ -474,8 +413,8 @@ export default function ProfileScreen() {
           {/* Security & Web3 Vault Item */}
           <TouchableOpacity 
             onPress={() => {
-              setActiveTab('menu');
-              setShowSecurityModal(true);
+              triggerLightHaptic();
+              navigation.navigate('SecurityKeys');
             }}
             activeOpacity={0.7}
             style={{ borderBottomColor: colors.borderSubtle }}
@@ -493,7 +432,7 @@ export default function ProfileScreen() {
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </TouchableOpacity>
 
-          {/* Data Privacy Notice (RA 10173) */}
+          {/* Data Privacy Notice */}
           <TouchableOpacity 
             onPress={() => {
               triggerLightHaptic();
@@ -577,7 +516,10 @@ export default function ProfileScreen() {
 
           {/* About Item */}
           <TouchableOpacity 
-            onPress={() => setShowAboutModal(true)}
+            onPress={() => {
+              triggerLightHaptic();
+              navigation.navigate('About');
+            }}
             activeOpacity={0.7}
             className="flex-row items-center justify-between p-3.5"
           >
@@ -616,314 +558,7 @@ export default function ProfileScreen() {
         <Text style={{ color: colors.error }} className="font-bold text-base">Sign Out</Text>
       </TouchableOpacity>
 
-      {/* ── MODAL 1: Professional Web3 Security Vault ── */}
-      <Modal
-        visible={showSecurityModal}
-        animationType="slide"
-        transparent={true}
-        statusBarTranslucent={true}
-        onRequestClose={() => setShowSecurityModal(false)}
-      >
-        <View 
-          style={{ backgroundColor: colors.modalBackdrop }}
-          className="flex-1 justify-end"
-        >
-          <View 
-            style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-            className="border-t rounded-t-3xl p-6 max-h-[85%]"
-          >
-            {/* Modal Header */}
-            <View className="flex-row justify-between items-center mb-5">
-              <View className="flex-row items-center gap-2">
-                {activeTab !== 'menu' && (
-                  <TouchableOpacity onPress={() => setActiveTab('menu')} className="mr-1">
-                    <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
-                  </TouchableOpacity>
-                )}
-                <Ionicons name="shield-checkmark" size={24} color="#f97316" />
-                <Text style={{ color: colors.textPrimary }} className="font-bold text-lg">
-                  {activeTab === 'menu' && 'Web3 Vault Settings'}
-                  {activeTab === 'phrase' && 'Recovery Seed Phrase'}
-                  {activeTab === 'privateKey' && 'Export Private Key'}
-                </Text>
-              </View>
-
-              <TouchableOpacity 
-                onPress={() => setShowSecurityModal(false)}
-                style={{ backgroundColor: colors.cardGlass }}
-                className="w-8 h-8 rounded-full items-center justify-center"
-              >
-                <Ionicons name="close" size={20} color={colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            {/* TAB 1: MENU SELECTION */}
-            {activeTab === 'menu' && (
-              <View className="space-y-4">
-                <Text style={{ color: colors.textSecondary }} className="text-xs leading-relaxed mb-4">
-                  Select a security item to view. Each action requires device authentication (Biometrics or PIN).
-                </Text>
-
-                {/* Option 1: View Seed Phrase */}
-                <TouchableOpacity
-                  onPress={() => fetchKeys('phrase')}
-                  disabled={isLoadingKeys}
-                  activeOpacity={0.8}
-                  style={{ backgroundColor: colors.cardGlass, borderColor: colors.border }}
-                  className="border p-4 rounded-2xl flex-row items-center justify-between mb-3"
-                >
-                  <View className="flex-row items-center gap-3">
-                    <View className="w-10 h-10 rounded-xl bg-orange-500/20 items-center justify-center border border-orange-500/30">
-                      <Ionicons name="document-text-outline" size={22} color="#f97316" />
-                    </View>
-                    <View>
-                      <Text style={{ color: colors.textPrimary }} className="font-bold text-sm">Backup Recovery Seed Phrase</Text>
-                      <Text style={{ color: colors.textMuted }} className="text-xs">12-word secret mnemonic</Text>
-                    </View>
-                  </View>
-                  {isLoadingKeys ? <ActivityIndicator color="#f97316" /> : <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />}
-                </TouchableOpacity>
-
-                {/* Option 2: Export Private Key */}
-                <TouchableOpacity
-                  onPress={() => fetchKeys('privateKey')}
-                  disabled={isLoadingKeys}
-                  activeOpacity={0.8}
-                  style={{ backgroundColor: colors.cardGlass, borderColor: colors.border }}
-                  className="border p-4 rounded-2xl flex-row items-center justify-between mb-6"
-                >
-                  <View className="flex-row items-center gap-3">
-                    <View className="w-10 h-10 rounded-xl bg-red-500/20 items-center justify-center border border-red-500/30">
-                      <Ionicons name="key-outline" size={22} color={colors.error} />
-                    </View>
-                    <View>
-                      <Text style={{ color: colors.textPrimary }} className="font-bold text-sm">Export Wallet Private Key</Text>
-                      <Text style={{ color: colors.textMuted }} className="text-xs">Raw hex private key for import</Text>
-                    </View>
-                  </View>
-                  {isLoadingKeys ? <ActivityIndicator color={colors.error} /> : <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />}
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {/* TAB 2: SEED PHRASE DISPLAY (NUMBERED GRID) */}
-            {activeTab === 'phrase' && keys && (
-              <ScrollView contentContainerStyle={{ paddingBottom: 20 }}>
-                <Text style={{ color: colors.textSecondary }} className="text-xs leading-relaxed mb-4">
-                  Write down these 12 words in order. Keep them stored offline in a safe place.
-                </Text>
-
-                {/* 12 Word Grid */}
-                <View className="flex-row flex-wrap justify-between mb-4">
-                  {keys.mnemonic.split(' ').map((word, index) => (
-                    <View 
-                      key={index}
-                      style={{ 
-                        backgroundColor: isDark ? 'rgba(0,0,0,0.6)' : colors.backgroundSecondary,
-                        borderColor: colors.border,
-                      }}
-                      className="border rounded-xl p-3 w-[48%] flex-row items-center mb-2"
-                    >
-                      <Text className="text-orange-400 font-mono text-xs font-bold mr-2">{index + 1}.</Text>
-                      <Text style={{ color: colors.textPrimary }} className="font-mono text-sm font-semibold">{word}</Text>
-                    </View>
-                  ))}
-                </View>
-
-                {/* Copy Button Wrapper */}
-                <View style={{ paddingHorizontal: 4, width: '100%', alignItems: 'center' }}>
-                  <TouchableOpacity
-                    onPress={() => copyToClipboard(keys.mnemonic, 'Recovery phrase')}
-                    activeOpacity={0.7}
-                    style={{ 
-                      width: '100%',
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor: 'rgba(249, 115, 22, 0.15)',
-                      borderColor: 'rgba(249, 115, 22, 0.5)',
-                      borderWidth: 1.5,
-                      borderRadius: 16,
-                      paddingVertical: 14,
-                      marginTop: 10,
-                      marginBottom: 16
-                    }}
-                  >
-                    <Ionicons name="copy-outline" size={18} color="#f97316" />
-                    <Text style={{ color: '#f97316', fontWeight: 'bold', fontSize: 14, marginLeft: 8 }}>
-                      Copy Seed Phrase
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </ScrollView>
-            )}
-
-            {/* TAB 3: PRIVATE KEY DISPLAY */}
-            {activeTab === 'privateKey' && keys && (
-              <ScrollView contentContainerStyle={{ paddingBottom: 20 }}>
-                <View 
-                  style={{ backgroundColor: colors.errorBg, borderColor: colors.errorBorder }}
-                  className="border p-3.5 rounded-xl mb-4 flex-row items-center gap-2"
-                >
-                  <Ionicons name="warning" size={20} color={colors.error} />
-                  <Text style={{ color: colors.error }} className="text-xs font-medium flex-1 ml-2">
-                    Never share your Private Key with anyone. Anyone with this key can access your funds.
-                  </Text>
-                </View>
-
-                <View 
-                  style={{ 
-                    backgroundColor: isDark ? 'rgba(0,0,0,0.8)' : colors.backgroundSecondary,
-                    borderColor: colors.errorBorder,
-                  }}
-                  className="p-4 rounded-xl border mb-4"
-                >
-                  <Text style={{ color: colors.error }} className="text-xs font-bold uppercase tracking-widest mb-2">Private Key</Text>
-                  <Text style={{ color: colors.textPrimary }} className="font-mono text-xs leading-5" selectable>{keys.privateKey}</Text>
-                </View>
-
-                {/* Copy Button Wrapper */}
-                <View style={{ paddingHorizontal: 4, width: '100%', alignItems: 'center' }}>
-                  <TouchableOpacity
-                    onPress={() => copyToClipboard(keys.privateKey, 'Private key')}
-                    activeOpacity={0.7}
-                    style={{ 
-                      width: '100%',
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor: colors.errorBg,
-                      borderColor: colors.errorBorder,
-                      borderWidth: 1.5,
-                      borderRadius: 16,
-                      paddingVertical: 14,
-                      marginTop: 10,
-                      marginBottom: 16
-                    }}
-                  >
-                    <Ionicons name="copy-outline" size={18} color={colors.error} />
-                    <Text style={{ color: colors.error, fontWeight: 'bold', fontSize: 14, marginLeft: 8 }}>
-                      Copy Private Key
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </ScrollView>
-            )}
-          </View>
-        </View>
-      </Modal>
-
-      {/* ── MODAL 2: Network Status ── */}
-      <Modal
-        visible={showNetworkModal}
-        animationType="slide"
-        transparent={true}
-        statusBarTranslucent={true}
-        onRequestClose={() => setShowNetworkModal(false)}
-      >
-        <View 
-          style={{ backgroundColor: colors.modalBackdrop }}
-          className="flex-1 justify-end"
-        >
-          <View 
-            style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-            className="border-t rounded-t-3xl p-6"
-          >
-            <View className="flex-row justify-between items-center mb-5">
-              <View className="flex-row items-center gap-2">
-                <Ionicons name="hardware-chip-outline" size={24} color={colors.accentCyan} />
-                <Text style={{ color: colors.textPrimary }} className="font-bold text-lg">Network & Protocol</Text>
-              </View>
-              <TouchableOpacity 
-                onPress={() => setShowNetworkModal(false)}
-                style={{ backgroundColor: colors.cardGlass }}
-                className="w-8 h-8 rounded-full items-center justify-center"
-              >
-                <Ionicons name="close" size={20} color={colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            <View className="space-y-3 mb-6">
-              <View 
-                style={{ 
-                  backgroundColor: isDark ? 'rgba(0,0,0,0.4)' : colors.backgroundSecondary,
-                  borderColor: colors.border,
-                }}
-                className="flex-row items-center justify-between p-4 rounded-xl border mb-2"
-              >
-                <Text style={{ color: colors.textSecondary }} className="text-xs font-bold">Network Name</Text>
-                <Text style={{ color: colors.success }} className="font-bold text-xs">Polygon Amoy Testnet</Text>
-              </View>
-
-              <View 
-                style={{ 
-                  backgroundColor: isDark ? 'rgba(0,0,0,0.4)' : colors.backgroundSecondary,
-                  borderColor: colors.border,
-                }}
-                className="flex-row items-center justify-between p-4 rounded-xl border mb-2"
-              >
-                <Text style={{ color: colors.textSecondary }} className="text-xs font-bold">Chain ID</Text>
-                <Text style={{ color: colors.accentCyan }} className="font-mono text-xs font-bold">80002</Text>
-              </View>
-
-              <View 
-                style={{ 
-                  backgroundColor: isDark ? 'rgba(0,0,0,0.4)' : colors.backgroundSecondary,
-                  borderColor: colors.border,
-                }}
-                className="flex-row items-center justify-between p-4 rounded-xl border"
-              >
-                <Text style={{ color: colors.textSecondary }} className="text-xs font-bold">Gasless Relayer</Text>
-                <Text style={{ color: colors.success }} className="font-bold text-xs">Active (Zero-Gas for Users)</Text>
-              </View>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* ── MODAL 3: About ── */}
-      <Modal
-        visible={showAboutModal}
-        animationType="slide"
-        transparent={true}
-        statusBarTranslucent={true}
-        onRequestClose={() => setShowAboutModal(false)}
-      >
-        <View 
-          style={{ backgroundColor: colors.modalBackdrop }}
-          className="flex-1 justify-end"
-        >
-          <View 
-            style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-            className="border-t rounded-t-3xl p-6"
-          >
-            <View className="items-center mb-6">
-              <View className="items-center justify-center mb-4">
-                <Image 
-                  source={require('../../assets/3D-Chainbudget.png')} 
-                  style={{ width: 140, height: 140 }} 
-                  resizeMode="contain" 
-                />
-              </View>
-              <Text style={{ color: colors.textPrimary }} className="text-2xl font-bold mb-2">ChainBudget Mobile</Text>
-              <Text style={{ color: colors.primary }} className="font-bold mb-6">Version {APP_VERSION} (Capstone Edition)</Text>
-            </View>
-            <Text style={{ color: colors.textSecondary }} className="text-xs text-center leading-relaxed mb-6">
-              A Transparent & Accountable On-Chain Budget Dissemination System powered by Polygon Blockchain, Asgardeo SSO, and AI Receipt Processing.
-            </Text>
-
-            <TouchableOpacity 
-              onPress={() => setShowAboutModal(false)}
-              style={{ backgroundColor: colors.cardGlass, borderColor: colors.border }}
-              className="border py-3 px-8 rounded-xl items-center"
-            >
-              <Text style={{ color: colors.textPrimary }} className="font-bold text-sm">Close</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* ── MODAL 4: Sign Out Confirmation Modal ── */}
+      {/* ── MODAL: Sign Out Confirmation Modal ── */}
       <Modal
         visible={showLogoutModal}
         animationType="fade"
