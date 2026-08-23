@@ -166,32 +166,23 @@ export default function OrgChatScreen() {
   const [loadingInitial, setLoadingInitial] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [showPinnedBanner, setShowPinnedBanner] = useState(true);
-  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [selectedMessageForAction, setSelectedMessageForAction] = useState<ChatMessageItem | null>(null);
 
   const flatListRef = useRef<FlatList>(null);
 
-  // Keyboard show/hide listeners for smooth chat auto-scrolling
+  // Keyboard show listeners for smooth chat auto-scrolling
   useEffect(() => {
     const showSub = Keyboard.addListener(
       Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
       () => {
-        setIsKeyboardVisible(true);
         setTimeout(() => {
           flatListRef.current?.scrollToEnd({ animated: true });
         }, 100);
       }
     );
-    const hideSub = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
-      () => {
-        setIsKeyboardVisible(false);
-      }
-    );
 
     return () => {
       showSub.remove();
-      hideSub.remove();
     };
   }, []);
 
@@ -718,7 +709,7 @@ export default function OrgChatScreen() {
           style={{
             paddingHorizontal: 14,
             paddingTop: 10,
-            paddingBottom: isKeyboardVisible ? 10 : Math.max(insets.bottom + 10, 28),
+            paddingBottom: Math.max(insets.bottom + 8, 20),
             backgroundColor: isDark ? colors.surface : '#FFFFFF',
             borderTopWidth: 1,
             borderTopColor: colors.borderSubtle,
