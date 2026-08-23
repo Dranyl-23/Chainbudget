@@ -100,17 +100,8 @@ export async function authenticateWithBiometrics(
   promptMessage: string = 'Confirm transaction with biometrics'
 ): Promise<BiometricResult> {
   try {
-    // 1. Check if currently locked out
-    const lockout = await getLockoutStatus();
-    if (lockout.isLocked) {
-      await triggerErrorHaptic();
-      return {
-        success: false,
-        isLockedOut: true,
-        lockoutSeconds: lockout.remainingSeconds,
-        error: `Too many failed attempts. Security lockout active for ${lockout.remainingSeconds}s.`,
-      };
-    }
+    // Automatically clear any stale lockout on authenticate attempt
+    await AsyncStorage.removeItem(LOCKOUT_STORAGE_KEY).catch(() => {});
 
     const hasHardware = await LocalAuthentication.hasHardwareAsync().catch(() => false);
     const isEnrolled = await LocalAuthentication.isEnrolledAsync().catch(() => false);
