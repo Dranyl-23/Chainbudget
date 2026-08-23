@@ -301,7 +301,7 @@ export default function OrgChatPage() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-5.5rem)] max-w-7xl mx-auto">
+    <div className="p-4 md:p-8 flex flex-col h-[calc(100vh-4.5rem)] max-w-6xl mx-auto w-full animate-fade-in">
       {/* ── HEADER BAR ── */}
       <div className="flex items-center justify-between px-6 py-4 bg-zinc-900/60 backdrop-blur-xl border border-white/8 rounded-2xl mb-4 shadow-sm">
         <div className="flex items-center gap-3.5">
@@ -336,7 +336,7 @@ export default function OrgChatPage() {
         </div>
 
         <button
-          onClick={() => void fetchChatData()}
+          onClick={() => void fetchChatData(true)}
           className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition border border-white/5"
           title="Refresh Messages"
         >
@@ -361,7 +361,7 @@ export default function OrgChatPage() {
       )}
 
       {/* ── MESSAGES CHAT STREAM ── */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 bg-zinc-950/40 border border-white/6 rounded-2xl mb-4 space-y-4 shadow-inner">
+      <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-zinc-950/60 backdrop-blur-md border border-white/8 rounded-2xl mb-4 space-y-4 shadow-inner [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center h-full text-zinc-400 text-sm gap-3">
             <RefreshCw className="w-6 h-6 animate-spin text-purple-400" />
