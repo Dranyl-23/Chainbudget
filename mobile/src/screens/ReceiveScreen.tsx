@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { triggerLightHaptic, triggerSuccessHaptic } from '../lib/biometrics';
+import { PROTOCOL_CONFIG } from '../config/contracts';
 import api from '../lib/api';
 
 export default function ReceiveScreen() {
@@ -33,13 +34,13 @@ export default function ReceiveScreen() {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    fetchOrgs();
+    fetchOrganizations();
   }, []);
 
-  const fetchOrgs = async () => {
+  const fetchOrganizations = async () => {
     try {
       const res = await api.get('/organizations');
-      const orgs = res.data || [];
+      const orgs = res.data.organizations || res.data || [];
       setOrganizations(orgs);
       if (orgs.length > 0 && !selectedOrgId) {
         setSelectedOrgId(orgs[0]._id);
@@ -52,8 +53,8 @@ export default function ReceiveScreen() {
   // Determine active address
   const activeAddress =
     mode === 'personal'
-      ? user?.walletAddress || '0x0000000000000000000000000000000000000000'
-      : selectedOrg?.vaultAddress || selectedOrg?.contractAddress || user?.walletAddress || '0x0000000000000000000000000000000000000000';
+      ? user?.walletAddress || PROTOCOL_CONFIG.contracts.masterTreasury
+      : selectedOrg?.vaultAddress || selectedOrg?.contractAddress || user?.walletAddress || PROTOCOL_CONFIG.contracts.masterTreasury;
 
   // Construct standard Ethereum Payment URI if amount is specified
   const qrValue =

@@ -1,3 +1,10 @@
+/**
+ * NetworkStatusScreen.tsx
+ *
+ * Displays live blockchain protocol metrics, RPC node latency, and smart contract architecture.
+ * Dynamic & Centralized: Discovers verified on-chain parameters via Protocol Discovery Service.
+ */
+
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -14,33 +21,47 @@ import * as Clipboard from 'expo-clipboard';
 import { useTheme } from '../context/ThemeContext';
 import { useOrg } from '../context/OrgContext';
 import { triggerLightHaptic, triggerSuccessHaptic } from '../lib/biometrics';
-
-const DEFAULT_AMOY_RPC = 'https://rpc-amoy.polygon.technology';
-const EXPLORER_BASE = 'https://amoy.polygonscan.com';
-const CHAINBUDGET_MASTER_CONTRACT = '0x1887be6c9cc06ddddb125da24b9b554c18f0a1fb';
-const DAO_GOVERNANCE_CONTRACT = '0x0b15187c87a9c3f8588753c123b7071a9548cc9c';
-const SBT_MEMBERSHIP_CONTRACT = '0x7a376e224276988e3b01aae7a5b17c8c14e94031';
+import {
+  fetchLiveProtocolConfig,
+  getExplorerAddressUrl,
+  LiveProtocolResponse,
+  PROTOCOL_CONFIG,
+} from '../config/contracts';
 
 export default function NetworkStatusScreen() {
   const { colors, isDark } = useTheme();
   const { organizations, activeOrgId } = useOrg();
   const activeOrg = organizations.find((o) => o._id === activeOrgId);
 
+  const [protocolInfo, setProtocolInfo] = useState<LiveProtocolResponse | null>(null);
   const [pingLatency, setPingLatency] = useState<number | null>(null);
   const [checkingPing, setCheckingPing] = useState<boolean>(false);
 
-  const contractAddress =
+  useEffect(() => {
+    async function loadProtocol() {
+      const data = await fetchLiveProtocolConfig();
+      setProtocolInfo(data);
+    }
+    loadProtocol();
+    checkLatency();
+  }, []);
+
+  const network = protocolInfo?.network || PROTOCOL_CONFIG.network;
+  const contracts = protocolInfo?.contracts || PROTOCOL_CONFIG.contracts;
+  const relayer = protocolInfo?.relayer || PROTOCOL_CONFIG.relayer;
+
+  const activeContractAddress =
     (activeOrg?.contractAddress && activeOrg.contractAddress !== '0x0000000000000000000000000000000000000000')
       ? activeOrg.contractAddress
       : (activeOrg?.vaultAddress && activeOrg.vaultAddress !== '0x0000000000000000000000000000000000000000')
       ? activeOrg.vaultAddress
-      : CHAINBUDGET_MASTER_CONTRACT;
+      : contracts.masterTreasury;
 
   const checkLatency = async () => {
     setCheckingPing(true);
     const start = Date.now();
     try {
-      await fetch(DEFAULT_AMOY_RPC, {
+      await fetch(network.rpcUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ jsonrpc: '2.0', method: 'eth_blockNumber', params: [], id: 1 }),
@@ -52,10 +73,6 @@ export default function NetworkStatusScreen() {
       setCheckingPing(false);
     }
   };
-
-  useEffect(() => {
-    checkLatency();
-  }, []);
 
   const copyText = async (text: string, label: string) => {
     await Clipboard.setStringAsync(text);
@@ -103,10 +120,10 @@ export default function NetworkStatusScreen() {
             </View>
             <View>
               <Text style={{ color: colors.textPrimary, fontSize: 16, fontWeight: '800' }}>
-                Polygon Amoy Testnet
+                {network.name}
               </Text>
               <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                Chain ID: 80002 • Proof-of-Stake (PoS)
+                Chain ID: {network.chainId} • Proof-of-Stake (PoS)
               </Text>
             </View>
           </View>
@@ -159,11 +176,11 @@ export default function NetworkStatusScreen() {
         }}
       >
         {[
-          { label: 'Blockchain Network', value: 'Polygon Amoy (POS Testnet)' },
-          { label: 'Network Chain ID', value: '80002 (Hex: 0x13882)' },
-          { label: 'Native Currency', value: 'POL (Polygon Ecosystem Token)' },
-          { label: 'Gasless Relayer', value: 'Active (Sponsored Meta-Tx)' },
-          { label: 'Consensus Mechanism', value: 'Bor + Heimdall (Proof-of-Stake)' },
+          { label: 'Blockchain Network', value: network.name },
+          { label: 'Network Chain ID', value: `${network.chainId} (Hex: ${network.hexChainId})` },
+          { label: 'Native Currency', value: network.currency },
+          { label: 'Gasless Relayer', value: `${relayer.status} (${relayer.type})` },
+          { label: 'Consensus Mechanism', value: network.consensus },
         ].map((item, idx) => (
           <View
             key={idx}
@@ -206,10 +223,12 @@ export default function NetworkStatusScreen() {
           marginBottom: 20,
         }}
       >
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <View>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <View style={{ flex: 1, marginRight: 10 }}>
             <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '700' }}>Public JSON-RPC Endpoint</Text>
-            <Text style={{ color: colors.textMuted, fontSize: 11, marginTop: 2 }}>{DEFAULT_AMOY_RPC}</Text>
+            <Text style={{ color: colors.textMuted, fontSize: 11, marginTop: 2 }} numberOfLines={1}>
+              {network.rpcUrl}
+            </Text>
           </View>
           <TouchableOpacity
             onPress={() => {
@@ -255,7 +274,7 @@ export default function NetworkStatusScreen() {
           marginLeft: 4,
         }}
       >
-        Organization Smart Contract
+        Active Vault Smart Contract
       </Text>
       <View
         style={{
@@ -268,10 +287,10 @@ export default function NetworkStatusScreen() {
         }}
       >
         <Text style={{ color: colors.textSecondary, fontSize: 12, marginBottom: 8 }}>
-          On-Chain Vault Address ({activeOrg?.name || 'Current Organization'})
+          On-Chain Vault Address ({activeOrg?.name || 'ChainBudget Master'})
         </Text>
         <TouchableOpacity
-          onPress={() => copyText(contractAddress, 'Smart contract address')}
+          onPress={() => copyText(activeContractAddress, 'Smart contract address')}
           activeOpacity={0.7}
           style={{
             backgroundColor: isDark ? 'rgba(0,0,0,0.4)' : colors.backgroundSecondary,
@@ -289,7 +308,7 @@ export default function NetworkStatusScreen() {
             style={{ color: colors.primary, fontSize: 12, fontWeight: '700', fontFamily: 'monospace', flex: 1, marginRight: 8 }}
             numberOfLines={1}
           >
-            {contractAddress}
+            {activeContractAddress}
           </Text>
           <Ionicons name="copy-outline" size={16} color={colors.primary} />
         </TouchableOpacity>
@@ -297,7 +316,7 @@ export default function NetworkStatusScreen() {
         <TouchableOpacity
           onPress={() => {
             triggerLightHaptic();
-            Linking.openURL(`${EXPLORER_BASE}/address/${contractAddress}`);
+            Linking.openURL(getExplorerAddressUrl(activeContractAddress, network.explorerUrl));
           }}
           activeOpacity={0.85}
           style={{
@@ -356,15 +375,15 @@ export default function NetworkStatusScreen() {
         }}
       >
         {[
-          { label: 'Master Treasury Contract', address: CHAINBUDGET_MASTER_CONTRACT },
-          { label: 'DAO Governance Contract', address: DAO_GOVERNANCE_CONTRACT },
-          { label: 'Soulbound SBT Tokens', address: SBT_MEMBERSHIP_CONTRACT },
+          { label: 'Master Treasury Contract', address: contracts.masterTreasury },
+          { label: 'DAO Governance Contract', address: contracts.daoGovernance },
+          { label: 'Soulbound SBT Tokens', address: contracts.sbtMembership },
         ].map((c) => (
           <TouchableOpacity
             key={c.label}
             onPress={() => {
               triggerLightHaptic();
-              Linking.openURL(`${EXPLORER_BASE}/address/${c.address}`);
+              Linking.openURL(getExplorerAddressUrl(c.address, network.explorerUrl));
             }}
             activeOpacity={0.7}
             style={{

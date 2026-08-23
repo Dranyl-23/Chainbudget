@@ -215,4 +215,38 @@ router.get("/verify/:hash", async (req, res) => {
   }
 });
 
+// ── GET /api/public/protocol ── Dynamic live protocol & smart contract discovery endpoint
+router.get("/protocol", async (req, res) => {
+  try {
+    const amoyRpc = process.env.AMOY_RPC_URL || "https://rpc-amoy.polygon.technology";
+    const masterContract = process.env.CONTRACT_ADDRESS || "0x1887be6c9cc06ddddb125da24b9b554c18f0a1fb";
+    const daoContract = process.env.DAO_CONTRACT_ADDRESS || "0x0b15187c87a9c3f8588753c123b7071a9548cc9c";
+    const sbtContract = process.env.SBT_CONTRACT_ADDRESS || "0x7a376e224276988e3b01aae7a5b17c8c14e94031";
+
+    res.json({
+      success: true,
+      network: {
+        name: "Polygon Amoy (POS Testnet)",
+        chainId: 80002,
+        hexChainId: "0x13882",
+        currency: "POL (Polygon Ecosystem Token)",
+        rpcUrl: amoyRpc,
+        explorerUrl: "https://amoy.polygonscan.com",
+        consensus: "Bor + Heimdall (Proof-of-Stake)",
+      },
+      contracts: {
+        masterTreasury: masterContract,
+        daoGovernance: daoContract,
+        sbtMembership: sbtContract,
+      },
+      relayer: {
+        status: "active",
+        type: "Sponsored Gasless Meta-Tx",
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 module.exports = router;
