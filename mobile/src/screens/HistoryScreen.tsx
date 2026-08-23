@@ -111,60 +111,110 @@ export default function HistoryScreen() {
   const renderItem = ({ item }: { item: any }) => {
     const isExpense = item.type === 'expense';
     const isPending = item.status === 'pending_approval' || item.status === 'requested';
-    const isApproved = item.status === 'approved';
+    const isApproved = item.status === 'approved' || item.status === 'completed';
+    const isRejected = item.status === 'rejected';
+
+    const getStatusLabel = () => {
+      if (item.status === 'pending_approval') return 'Pending';
+      if (item.status === 'requested') return 'Requested';
+      if (item.status === 'approved') return 'Approved';
+      if (item.status === 'completed') return 'Completed';
+      if (item.status === 'rejected') return 'Rejected';
+      return (item.status || 'Pending').replace(/_/g, ' ');
+    };
+
+    const statusColor = isPending ? '#F59E0B' : isApproved ? '#10B981' : isRejected ? '#EF4444' : '#6B7280';
+    const statusBg = isPending ? (isDark ? 'rgba(245, 158, 11, 0.15)' : '#FEF3C7')
+      : isApproved ? (isDark ? 'rgba(16, 185, 129, 0.15)' : '#DCFCE7')
+      : isRejected ? (isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEE2E2')
+      : (isDark ? 'rgba(107, 114, 128, 0.15)' : '#F3F4F6');
 
     return (
       <TouchableOpacity 
-        style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+        style={{
+          backgroundColor: isDark ? colors.surface : '#FFFFFF',
+          borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#F1F5F9',
+        }}
         className="flex-row items-center p-4 rounded-2xl border mb-3 shadow-sm"
         onPress={() => navigation.navigate('TransactionDetail', { txId: item._id })}
+        activeOpacity={0.7}
       >
+        {/* Icon */}
         <View 
           style={{
-            backgroundColor: isExpense ? colors.errorBg : colors.successBg,
-            borderColor: isExpense ? colors.errorBorder : colors.successBorder,
+            backgroundColor: isExpense
+              ? (isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEE2E2')
+              : (isDark ? 'rgba(16, 185, 129, 0.15)' : '#DCFCE7'),
+            borderColor: isExpense ? '#EF444430' : '#10B98130',
           }}
-          className="w-12 h-12 rounded-2xl items-center justify-center mr-4 border"
+          className="w-12 h-12 rounded-2xl items-center justify-center mr-3.5 border"
         >
           <Ionicons 
             name={isExpense ? 'arrow-up' : 'arrow-down'} 
-            size={20} 
-            color={isExpense ? colors.error : colors.success} 
+            size={22} 
+            color={isExpense ? '#EF4444' : '#10B981'} 
           />
         </View>
-        <View className="flex-1 mr-2">
-          <Text style={{ color: colors.textPrimary }} className="font-bold text-base mb-1" numberOfLines={1}>
+
+        {/* Middle Info (Description, Date, Category) */}
+        <View className="flex-1 mr-3">
+          <Text style={{ color: colors.textPrimary }} className="font-bold text-[15px] mb-1" numberOfLines={1}>
             {item.description || 'Transaction'}
           </Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <Text style={{ color: colors.textMuted, fontSize: 12 }}>
               {new Date(item.createdAt).toLocaleDateString()}
             </Text>
             {item.category ? (
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <>
                 <Text style={{ color: colors.textMuted, fontSize: 12, marginHorizontal: 4 }}>•</Text>
-                <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: '600' }}>{item.category}</Text>
-              </View>
+                <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: '500' }} numberOfLines={1}>
+                  {item.category}
+                </Text>
+              </>
             ) : null}
-            <Text style={{ color: colors.textMuted, fontSize: 12, marginHorizontal: 4 }}>•</Text>
+          </View>
+        </View>
+
+        {/* Right Info (Amount + Clean Status Badge) */}
+        <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
+          <Text 
+            style={{
+              color: isExpense ? colors.textPrimary : '#10B981',
+              fontSize: 16,
+              fontWeight: '800',
+              fontVariant: ['tabular-nums'],
+            }}
+          >
+            {isExpense ? '-' : '+'}₱{Number(item.amount || 0).toLocaleString()}
+          </Text>
+          
+          {/* Status Badge */}
+          <View
+            style={{
+              backgroundColor: statusBg,
+              borderColor: statusColor + '40',
+              borderWidth: 1,
+              borderRadius: 8,
+              paddingHorizontal: 7,
+              paddingVertical: 2,
+              marginTop: 4,
+            }}
+          >
             <Text
               style={{
-                color: isPending ? colors.warning : isApproved ? colors.success : colors.error,
+                color: statusColor,
                 fontWeight: '700',
-                fontSize: 11,
+                fontSize: 10,
                 textTransform: 'uppercase',
+                letterSpacing: 0.5,
+                includeFontPadding: false,
               }}
             >
-              {item.status}
+              {getStatusLabel()}
             </Text>
           </View>
         </View>
-        <Text 
-          style={{ color: isExpense ? colors.textPrimary : colors.success }}
-          className="font-bold text-lg"
-        >
-          {isExpense ? '-' : '+'}₱{item.amount?.toLocaleString() || '0'}
-        </Text>
       </TouchableOpacity>
     );
   };
