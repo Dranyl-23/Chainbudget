@@ -38,8 +38,9 @@ router.post("/", authenticate, requireRole(3), async (req, res) => {
     if (!type || !["income", "expense"].includes(type)) {
       return res.status(400).json({ error: "type must be 'income' or 'expense'" });
     }
-    if (!amount || typeof amount !== "number" || amount <= 0) {
-      return res.status(400).json({ error: "amount must be a positive number" });
+    const MIN_AMOUNT = 1;
+    if (!amount || typeof amount !== "number" || amount < MIN_AMOUNT) {
+      return res.status(400).json({ error: `amount must be at least ${MIN_AMOUNT}` });
     }
     if (!description || typeof description !== "string" || description.trim().length === 0) {
       return res.status(400).json({ error: "description is required and must be non-empty" });
@@ -57,9 +58,14 @@ router.post("/", authenticate, requireRole(3), async (req, res) => {
       // cannot use an index. Normalize the category to lowercase for an exact $eq lookup,
       // which is fast, deterministic, and index-friendly.
       const normalizedCategory = category.trim().toLowerCase();
+      const escapedCategory = category.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const budget = await Budget.findOne({
         organization: organizationId,
-        name: normalizedCategory,
+        $or: [
+          { name: category.trim() },
+          { name: normalizedCategory },
+          { name: { $regex: new RegExp(`^${escapedCategory}$`, "i") } }
+        ]
       });
 
       if (!budget) {
@@ -72,7 +78,7 @@ router.post("/", authenticate, requireRole(3), async (req, res) => {
             organization: new mongoose.Types.ObjectId(organizationId),
             type: "expense",
             status: { $in: ["approved", "pending_approval", "requested"] },
-            category: normalizedCategory,
+            category: { $regex: new RegExp(`^${escapedCategory}$`, "i") },
           }
         },
         {
@@ -270,7 +276,7 @@ router.post("/", authenticate, requireRole(3), async (req, res) => {
     res.status(201).json({ transaction: txn, blockchain: blockchainResult });
   } catch (err) {
     console.error("Transaction creation error:", err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal Server Error' : err.message });
   }
 });
 
@@ -332,10 +338,13 @@ router.get("/", authenticate, async (req, res) => {
         // Level 4 (Public Viewers) ONLY see approved transactions
         filter.status = "approved";
       } else if (roleLevel === 3) {
-        // Level 3 can see approved and their/others' requested transactions
+        // Level 3 can see approved and their own requested transactions
         if (status) {
           if (["approved", "requested"].includes(status)) {
             filter.status = status;
+            if (status === "requested") {
+              filter.submittedBy = req.user._id;
+            }
           } else {
             filter.status = "unauthorized_status";
           }
@@ -459,7 +468,7 @@ router.get("/", authenticate, async (req, res) => {
     res.json({ transactions, total, page: Number(page), limit: safeLimit });
   } catch (err) {
     console.error("GET /transactions error:", err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal Server Error' : err.message });
   }
 });
 
@@ -559,7 +568,7 @@ router.patch("/:id/process-request", authenticate, requireRole(2), async (req, r
     res.json({ transaction: txn, blockchain: blockchainResult, message: "Request approved and processed" });
   } catch (err) {
     console.error("Process request error:", err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal Server Error' : err.message });
   }
 });
 
@@ -625,11 +634,12 @@ router.get("/public/:hash", async (req, res) => {
     const { hash } = req.params;
     
     // Allow searching by blockchainTxHash or short reference if implemented
+    const idFilter = mongoose.Types.ObjectId.isValid(hash) ? [{ _id: hash }] : [];
     const txn = await Transaction.findOne({
       $or: [
         { blockchainTxHash: hash },
         { referenceNumber: hash },
-        { _id: hash.length === 24 ? hash : null } // Fallback to ID if it looks like one
+        ...idFilter,
       ]
     }).populate("organization", "name");
 
@@ -674,7 +684,7 @@ router.patch("/:id/execute", authenticate, requireRole(2), async (req, res) => {
 
     res.json({ success: true, transaction: txn });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal Server Error' : err.message });
   }
 });
 
@@ -829,7 +839,7 @@ router.post("/:id/release-escrow", authenticate, async (req, res) => {
     });
   } catch (err) {
     console.error("Release escrow error:", err);
-    res.status(500).json({ error: err.message || "Failed to process escrow release" });
+    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal Server Error' : (err.message || "Failed to process escrow release") });
   }
 });
 
@@ -881,7 +891,7 @@ router.patch("/:id/receipt", authenticate, async (req, res) => {
 
     res.json(txn);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal Server Error' : err.message });
   }
 });
 
@@ -944,7 +954,7 @@ router.post("/:id/retry-sync", authenticate, requireRole(2), async (req, res) =>
     }
   } catch (err) {
     console.error("Retry sync error:", err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal Server Error' : err.message });
   }
 });
 
@@ -976,7 +986,7 @@ router.get("/:id", authenticate, async (req, res) => {
 
     res.json(txn);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal Server Error' : err.message });
   }
 });
 

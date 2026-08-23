@@ -128,7 +128,8 @@ export default function ProfileScreen() {
       const formData = new FormData();
       const filename = uri.split('/').pop() || 'avatar.jpg';
       const match = /\.(\w+)$/.exec(filename);
-      const type = match ? `image/${match[1]}` : `image/jpeg`;
+      const ext = match ? match[1].toLowerCase() : 'jpeg';
+      const type = ext === 'jpg' ? 'image/jpeg' : `image/${ext}`;
 
       formData.append('file', {
         uri,
@@ -146,7 +147,8 @@ export default function ProfileScreen() {
       }
     } catch (err: any) {
       console.error("Avatar Upload Error:", err);
-      Alert.alert('Upload Failed', 'There was an error uploading your profile picture.');
+      const reason = err.response?.data?.error || 'There was an error uploading your profile picture.';
+      Alert.alert('Upload Failed', reason);
     } finally {
       setIsUploading(false);
     }

@@ -437,6 +437,13 @@ router.post("/link-wallet", authenticate, verifyRateLimiter, async (req, res) =>
       return res.status(400).json({ error: "No nonce found. Request a nonce first." });
     }
 
+    if (req.user.nonceExpiresAt && new Date() > new Date(req.user.nonceExpiresAt)) {
+      req.user.nonce = null;
+      req.user.nonceExpiresAt = null;
+      await req.user.save();
+      return res.status(401).json({ error: "Challenge expired. Please request a new nonce." });
+    }
+
     let recoveredAddress;
     try {
       recoveredAddress = ethers.verifyMessage(req.user.nonce, signature);

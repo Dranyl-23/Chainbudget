@@ -1,10 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, Image, Animated, Easing, StyleSheet, Dimensions, ActivityIndicator } from 'react-native';
+import { View, Text, Image, Animated, Easing, StyleSheet, ActivityIndicator, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-
-const { width, height } = Dimensions.get('window');
 
 interface SplashScreenProps {
   onFinish: () => void;
@@ -12,6 +10,7 @@ interface SplashScreenProps {
 
 export default function SplashScreen({ onFinish }: SplashScreenProps) {
   const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
   
   // Phase management:
   // 1 = Initial Splash (Single text line)
@@ -145,7 +144,7 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
   }, []);
 
   return (
-    <Animated.View style={[styles.container, { opacity: containerFade, paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+    <Animated.View style={[styles.container, { opacity: containerFade, paddingTop: insets.top }]}>
       {/* Background Decorators */}
       <View style={StyleSheet.absoluteFillObject}>
         <LinearGradient 
@@ -157,12 +156,12 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
         {/* Subtle Blockchain Network Abstract Background */}
         <Image 
           source={require('../../assets/Blocks.png')}
-          style={{ position: 'absolute', top: -60, right: -120, width: 420, height: 420, opacity: 0.05 }}
+          style={{ position: 'absolute', top: -screenWidth * 0.16, right: -screenWidth * 0.32, width: screenWidth * 1.1, height: screenWidth * 1.1, opacity: 0.05 }}
           resizeMode="contain"
         />
         <Image 
           source={require('../../assets/Blocks.png')}
-          style={{ position: 'absolute', bottom: -60, left: -140, width: 380, height: 380, opacity: 0.04 }}
+          style={{ position: 'absolute', bottom: -screenWidth * 0.16, left: -screenWidth * 0.37, width: screenWidth * 1.0, height: screenWidth * 1.0, opacity: 0.04 }}
           resizeMode="contain"
         />
       </View>
@@ -308,7 +307,7 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
       </View>
 
       {/* Security Footer (Constant across all splash steps) */}
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 24) }]}>
         <View style={styles.footerInner}>
           <Ionicons name="cube-outline" size={15} color="#00E5FF" style={{ opacity: 0.8 }} />
           <Text style={styles.footerText}>Secured by Polygon</Text>
@@ -488,7 +487,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     alignItems: 'center',
-    paddingBottom: 24,
   },
   footerInner: {
     flexDirection: 'row',

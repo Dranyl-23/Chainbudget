@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Image, ImageBackground } from 'react-native';
+import { View, Text, TouchableOpacity, Image, ImageBackground, ScrollView, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 export default function WelcomeLandingScreen() {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
 
   return (
     <View className="flex-1 bg-[#090616]">
@@ -19,22 +20,23 @@ export default function WelcomeLandingScreen() {
         {/* Floating Blocks Decorator */}
         <Image 
           source={require('../../assets/Blocks.png')}
-          style={{ position: 'absolute', top: -60, right: -80, width: 400, height: 400, opacity: 0.8 }}
+          style={{ position: 'absolute', top: -screenWidth * 0.16, right: -screenWidth * 0.21, width: screenWidth * 1.05, height: screenWidth * 1.05, opacity: 0.8 }}
           resizeMode="contain"
         />
         <LinearGradient 
           colors={['transparent', '#090616', '#090616']} 
           locations={[0, 0.4, 1]}
           className="flex-1 px-6 justify-center" 
-          style={{ paddingTop: insets.top + 40, paddingBottom: insets.bottom + 20 }}
+          style={{ paddingTop: Math.max(insets.top, 12) + 24, paddingBottom: Math.max(insets.bottom, 12) + 16 }}
         >
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1 }}>
           {/* Logo & Hero */}
           <View className="items-center mb-10">
             {/* Logo Box */}
             <View className="items-center justify-center mb-4 relative">
               <Image 
                 source={require('../../assets/3D-Chainbudget.png')} 
-                style={{ width: 160, height: 160, zIndex: 10 }} 
+                style={{ width: Math.min(screenWidth * 0.40, 170), height: Math.min(screenWidth * 0.40, 170), zIndex: 10 }} 
                 resizeMode="contain" 
               />
             </View>
@@ -108,7 +110,7 @@ export default function WelcomeLandingScreen() {
                 colors={['#1d4ed8', '#00E5FF']} 
                 start={{ x: 0, y: 0.5 }} 
                 end={{ x: 1, y: 0.5 }} 
-                className="w-full p-3 rounded-half flex-row items-center justify-center shadow-lg"
+                className="w-full p-3 rounded-full flex-row items-center justify-center shadow-lg"
               >
                 <Ionicons name="wallet-outline" size={26} color="#ffffff" style={{ marginRight: 16 }} />
                 <View>
@@ -140,6 +142,7 @@ export default function WelcomeLandingScreen() {
               <Text className="text-white/50 text-[11px] font-medium">Data Privacy (RA 10173)</Text>
             </TouchableOpacity>
           </View>
+          </ScrollView>
           
         </LinearGradient>
 

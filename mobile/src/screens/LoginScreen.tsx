@@ -18,6 +18,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useAuth } from '../context/AuthContext';
 import { getStoredWalletAddress } from '../lib/wallet';
+import { clearAll } from '../lib/secureStorage';
 
 
 export default function LoginScreen({ navigation }: any) {
@@ -48,9 +49,12 @@ export default function LoginScreen({ navigation }: any) {
               text: 'Clear Wallet', 
               style: 'destructive', 
               onPress: async () => {
-                const { clearAll } = require('../lib/secureStorage');
-                await clearAll();
-                resetWalletState();
+                try {
+                  await clearAll();
+                  resetWalletState();
+                } catch (e) {
+                  console.error('Failed to clear wallet storage:', e);
+                }
               }
             }
 

@@ -31,14 +31,17 @@ export default function RegisterScreen({ navigation }: any) {
   const [email, setEmail] = useState('');
   const [agreePrivacy, setAgreePrivacy] = useState(false);
   const [step, setStep] = useState<Step>('form');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleRegister = async () => {
+    if (isSubmitting) return;
     const name = displayName.trim();
     if (!name) {
       Alert.alert('Name Required', 'Please enter your full name to continue.');
       return;
     }
-    if (!email.trim() || !email.includes('@')) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email.trim() || !emailRegex.test(email.trim())) {
       Alert.alert('Email Required', 'Please enter a valid email address to continue.');
       return;
     }
@@ -47,6 +50,7 @@ export default function RegisterScreen({ navigation }: any) {
       return;
     }
 
+    setIsSubmitting(true);
     setStep('generating');
 
     try {
@@ -65,6 +69,7 @@ export default function RegisterScreen({ navigation }: any) {
       navigation.replace('RecoveryPhrase', { walletAddress: address, autoLogin: true });
 
     } catch (err: any) {
+      setIsSubmitting(false);
       setStep('form');
       Alert.alert('Registration Failed', err.response?.data?.error || err.message || 'Something went wrong.');
     }
@@ -176,14 +181,14 @@ export default function RegisterScreen({ navigation }: any) {
           <TouchableOpacity
             style={[
               styles.createBtn,
-              (!displayName.trim() || !email.trim() || !agreePrivacy) && styles.createBtnDisabled,
+              (isSubmitting || !displayName.trim() || !email.trim() || !agreePrivacy) && styles.createBtnDisabled,
             ]}
             onPress={handleRegister}
-            disabled={!displayName.trim() || !email.trim() || !agreePrivacy}
+            disabled={isSubmitting || !displayName.trim() || !email.trim() || !agreePrivacy}
             activeOpacity={0.85}
           >
             <Ionicons name="cube" size={20} color="#fff" />
-            <Text style={styles.createBtnText}>Create My Account</Text>
+            <Text style={styles.createBtnText}>{isSubmitting ? 'Creating Account...' : 'Create My Account'}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity

@@ -21,7 +21,7 @@ const TransactionSchema = new mongoose.Schema(
     escrowStatus: { type: String, enum: ["none", "locked", "released"], default: "none" },
     payerApproved: { type: Boolean, default: false },
     payeeApproved: { type: Boolean, default: false },
-    approvals: [{ type: String, trim: true }],
+    approvals: [{ type: mongoose.Schema.Types.ObjectId, ref: "Approval" }],
     amount: { type: Number, required: true, min: 0 },
     currency: { type: String, default: "PHP", maxlength: 10 },
     description: { type: String, required: true, trim: true, maxlength: 2000 },

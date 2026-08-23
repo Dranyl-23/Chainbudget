@@ -57,7 +57,7 @@ router.get("/", authenticate, async (req, res) => {
     res.json(budgetsWithSpent);
   } catch (err) {
     console.error("Fetch budgets error:", err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal Server Error' : err.message });
   }
 });
 
@@ -94,7 +94,7 @@ router.post("/", authenticate, async (req, res) => {
       return res.status(400).json({ error: "Budget category with this name already exists in this organization." });
     }
     console.error("Create budget error:", err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal Server Error' : err.message });
   }
 });
 
@@ -127,7 +127,7 @@ router.put("/:id", authenticate, async (req, res) => {
       return res.status(400).json({ error: "Budget category with this name already exists." });
     }
     console.error("Update budget error:", err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal Server Error' : err.message });
   }
 });
 
@@ -146,7 +146,7 @@ router.delete("/:id", authenticate, async (req, res) => {
     res.json({ success: true, message: "Budget category deleted" });
   } catch (err) {
     console.error("Delete budget error:", err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal Server Error' : err.message });
   }
 });
 

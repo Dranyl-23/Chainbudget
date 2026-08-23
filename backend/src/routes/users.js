@@ -74,7 +74,18 @@ router.put("/me", authenticate, async (req, res) => {
     if (!user) return res.status(404).json({ error: "User not found" });
 
     if (displayName !== undefined) user.displayName = displayName;
-    if (avatarUrl !== undefined) user.avatarUrl = avatarUrl;
+    if (avatarUrl !== undefined) {
+      const isValidAvatarUrl = typeof avatarUrl === 'string' && (
+        avatarUrl.startsWith('https://gateway.pinata.cloud/ipfs/') ||
+        avatarUrl.startsWith('https://ipfs.io/ipfs/') ||
+        avatarUrl.startsWith('/uploads/') ||
+        /^https?:\/\/[^/]+\/uploads\//.test(avatarUrl)
+      );
+      if (avatarUrl !== '' && !isValidAvatarUrl) {
+        return res.status(400).json({ error: 'Invalid avatar URL. Must be an IPFS or server-hosted URL.' });
+      }
+      user.avatarUrl = avatarUrl;
+    }
     
     // Add to linked wallets, avoiding duplicates and current wallet
     if (linkedWallets && Array.isArray(linkedWallets)) {

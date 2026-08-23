@@ -24,7 +24,8 @@ export default function GovernanceScreen() {
   const [proposals, setProposals] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [votingOn, setVotingOn] = useState<string | null>(null);
+  const [votingOn, setVotingOn] = useState<{ proposalId: string; support: boolean } | null>(null);
+  const recentlyVotedRef = useRef<string | null>(null);
 
   // Proposal Creation State
   const [createModalVisible, setCreateModalVisible] = useState(false);
@@ -82,7 +83,10 @@ export default function GovernanceScreen() {
 
     const unsub = on('dao_vote_updated', (data: any) => {
       if (!data?.orgId || data.orgId === activeOrgId) {
-        fetchProposals(activeOrgId);
+        // Skip if we just manually voted (handleVote already triggers fetchProposals)
+        if (!recentlyVotedRef.current) {
+          fetchProposals(activeOrgId);
+        }
         triggerLightHaptic();
       }
     });
@@ -122,7 +126,8 @@ export default function GovernanceScreen() {
     );
     if (!auth.success) return;
 
-    setVotingOn(proposalId);
+    setVotingOn({ proposalId, support });
+    recentlyVotedRef.current = proposalId;
     try {
       await api.post(`/dao/proposals/${proposalId}/vote`, {
         support,
@@ -138,6 +143,8 @@ export default function GovernanceScreen() {
       showToast(err.response?.data?.error || 'Failed to cast vote', 'error');
     } finally {
       setVotingOn(null);
+      // Clear debounce flag after 2s to allow WebSocket to re-fetch if a different vote comes in
+      setTimeout(() => { recentlyVotedRef.current = null; }, 2000);
     }
   };
 
@@ -210,6 +217,10 @@ export default function GovernanceScreen() {
 
     const isClosed = proposal.status !== 'active';
 
+    const isVotingAny = votingOn?.proposalId === proposal._id;
+    const isVotingYes = isVotingAny && votingOn?.support === true;
+    const isVotingNo  = isVotingAny && votingOn?.support === false;
+
     return (
       <View 
         style={{ backgroundColor: colors.surface, borderColor: colors.border }}
@@ -255,7 +266,7 @@ export default function GovernanceScreen() {
           <View className="flex-row gap-3">
             <ScaleButton
               onPress={() => handleVote(proposal._id, false)}
-              disabled={votingOn === proposal._id}
+              disabled={isVotingAny}
               style={{
                 backgroundColor: colors.errorBg,
                 borderColor: colors.errorBorder,
@@ -271,13 +282,19 @@ export default function GovernanceScreen() {
               accessibilityRole="button"
               accessibilityLabel="Vote No on proposal"
             >
-              <Ionicons name="close" size={18} color={colors.error} style={{ marginRight: 4 }} />
-              <Text style={{ color: colors.error, fontWeight: 'bold' }}>Vote No</Text>
+              {isVotingNo ? (
+                <ActivityIndicator size="small" color={colors.error} />
+              ) : (
+                <>
+                  <Ionicons name="close" size={18} color={colors.error} style={{ marginRight: 4 }} />
+                  <Text style={{ color: colors.error, fontWeight: 'bold' }}>Vote No</Text>
+                </>
+              )}
             </ScaleButton>
 
             <ScaleButton
               onPress={() => handleVote(proposal._id, true)}
-              disabled={votingOn === proposal._id}
+              disabled={isVotingAny}
               style={{
                 backgroundColor: colors.successBg,
                 borderColor: colors.successBorder,
@@ -293,7 +310,7 @@ export default function GovernanceScreen() {
               accessibilityRole="button"
               accessibilityLabel="Vote Yes on proposal"
             >
-              {votingOn === proposal._id ? (
+              {isVotingYes ? (
                 <ActivityIndicator size="small" color={colors.success} />
               ) : (
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>

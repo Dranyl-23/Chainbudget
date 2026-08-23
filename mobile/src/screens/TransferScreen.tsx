@@ -63,6 +63,20 @@ export default function TransferScreen() {
       return;
     }
 
+    const MAX_AMOUNT = 10_000_000;
+    if (numAmount > MAX_AMOUNT) {
+      showToast(`Amount cannot exceed ₱${MAX_AMOUNT.toLocaleString()}.`, 'warning');
+      return;
+    }
+
+    if (destination && destination.trim()) {
+      const ethAddressRegex = /^0x[0-9a-fA-F]{40}$/;
+      if (!ethAddressRegex.test(destination.trim())) {
+        showToast("Please enter a valid Ethereum wallet address (0x...)", 'warning');
+        return;
+      }
+    }
+
     // Require biometric confirmation before submitting the fund request
     const authResult = await authenticateWithBiometrics(
       `Confirm fund request for ₱${numAmount.toLocaleString()}`

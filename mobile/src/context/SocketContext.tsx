@@ -5,7 +5,7 @@
  * Automatically synchronizes with the user's login state.
  */
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { Socket } from 'socket.io-client';
 import { getSocket, disconnectSocket } from '../lib/socket';
 import { useAuth } from './AuthContext';
@@ -33,6 +33,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let isMounted = true;
+    let cleanupFn: (() => void) | null = null;
 
     if (user) {
       getSocket().then((s) => {
@@ -40,13 +41,13 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
         setSocketInstance(s);
         setIsConnected(s.connected);
 
-        const onConnect = () => setIsConnected(true);
-        const onDisconnect = () => setIsConnected(false);
+        const onConnect = () => { if (isMounted) setIsConnected(true); };
+        const onDisconnect = () => { if (isMounted) setIsConnected(false); };
 
         s.on('connect', onConnect);
         s.on('disconnect', onDisconnect);
 
-        return () => {
+        cleanupFn = () => {
           s.off('connect', onConnect);
           s.off('disconnect', onDisconnect);
         };
@@ -59,13 +60,14 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       isMounted = false;
+      cleanupFn?.();
     };
   }, [user]);
 
   /**
    * Helper to subscribe to socket events with automatic cleanup
    */
-  const on = (event: string, callback: (...args: any[]) => void) => {
+  const on = useCallback((event: string, callback: (...args: any[]) => void) => {
     let activeSocket: Socket | null = socketInstance;
 
     if (activeSocket) {
@@ -88,7 +90,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
         });
       }
     };
-  };
+  }, [socketInstance]);
 
   return (
     <SocketContext.Provider

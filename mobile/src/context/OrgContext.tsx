@@ -23,6 +23,7 @@ import React, {
   useContext,
   useEffect,
   useState,
+  useRef,
 } from 'react';
 import api from '../lib/api';
 import { useAuth } from './AuthContext';
@@ -90,6 +91,9 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
   const [activeOrgId, setActiveOrgIdState] = useState<string | null>(null);
   const [isLoadingOrgs, setIsLoadingOrgs] = useState(false);
 
+  const userRef = useRef(user);
+  useEffect(() => { userRef.current = user; }, [user]);
+
   // ── Fetch orgs whenever the user changes (login / logout) ─────────────────
   useEffect(() => {
     if (user) {
@@ -108,8 +112,9 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
       const orgs: OrgSummary[] = res.data || [];
 
       // Fallback: seed from user.memberships if API returns empty
-      if (orgs.length === 0 && user?.memberships?.length) {
-        const fromMemberships = user.memberships
+      const currentUser = userRef.current;
+      if (orgs.length === 0 && currentUser?.memberships?.length) {
+        const fromMemberships = currentUser.memberships
           .filter((m: any) => m.isActive)
           .map((m: any) => ({
             _id: m.organization?._id || m.organization,
@@ -120,7 +125,7 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
         setOrganizations(fromMemberships);
         if (fromMemberships.length > 0) {
           setActiveOrgIdState((prev) =>
-            prev && fromMemberships.some((o) => o._id === prev) ? prev : fromMemberships[0]._id
+            prev && fromMemberships.some((o: any) => o._id === prev) ? prev : fromMemberships[0]._id
           );
         }
         return;
@@ -140,7 +145,7 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setIsLoadingOrgs(false);
     }
-  }, [user]);
+  }, []);
 
   const setActiveOrgId = useCallback((orgId: string) => {
     setActiveOrgIdState(orgId);

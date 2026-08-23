@@ -52,16 +52,20 @@ export default function ApprovalsScreen() {
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    let isMounted = true;
     if (activeOrgId) {
       // Instant cache snapshot
       getCachedApprovals(activeOrgId).then((cached) => {
-        if (cached && cached.length > 0) {
+        if (isMounted && cached && cached.length > 0) {
           setPendingTx(cached);
           fadeAnim.setValue(1);
         }
       });
       fetchPending(activeOrgId);
     }
+    return () => {
+      isMounted = false;
+    };
   }, [activeOrgId]);
 
   // Live WebSocket Subscription: Auto-update approvals list on real-time transaction updates
@@ -91,6 +95,7 @@ export default function ApprovalsScreen() {
       Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
     } catch (err) {
       console.error(err);
+      showToast('Failed to load approvals. Pull down to refresh.', 'error');
     } finally {
       setLoading(false);
     }

@@ -47,7 +47,7 @@ const socketAllowedOrigins = [
 ];
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin: socketAllowedOrigins,
     methods: ["GET", "POST"],
     credentials: true,
   },
@@ -149,8 +149,10 @@ app.use(cors({
     if (
       allowedOrigins.includes(origin) ||
       origin.endsWith('.vercel.app') ||
-      origin.endsWith('.trycloudflare.com') ||
-      origin.endsWith('.ngrok-free.app') ||
+      (process.env.NODE_ENV !== 'production' && (
+        origin.endsWith('.trycloudflare.com') ||
+        origin.endsWith('.ngrok-free.app')
+      )) ||
       process.env.NODE_ENV !== 'production'
     ) {
       return callback(null, true);
@@ -225,6 +227,12 @@ app.use((req, res) => {
 app.use((err, req, res, next) => {
   console.error(`[ERROR] ${req.method} ${req.path}:`, err.stack || err);
   const isProd = process.env.NODE_ENV === "production";
+  // Multer errors (wrong file type, file too large) → always return 400 with reason
+  const isMulterError = err.code === 'LIMIT_FILE_SIZE' ||
+    (err.message && (err.message.startsWith('Only') || err.message.includes('allowed')));
+  if (isMulterError) {
+    return res.status(400).json({ error: err.message || 'File upload error' });
+  }
   res.status(err.status || 500).json({
     error: isProd ? "Internal Server Error" : (err.message || "Internal Server Error"),
   });

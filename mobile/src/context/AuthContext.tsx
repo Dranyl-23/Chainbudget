@@ -74,10 +74,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // the next API call would fail silently with 401. We proactively check on resume
   // and log the user out gracefully if the token is no longer valid.
   useEffect(() => {
+    let cancelled = false;
     const subscription = AppState.addEventListener('change', async (nextState: AppStateStatus) => {
       if (nextState === 'active' && isLoggedInRef.current) {
         try {
           const currentUser = await fetchCurrentUser();
+          if (cancelled) return;
           if (!currentUser) {
             // JWT expired while backgrounded — log out cleanly
             console.log('[AuthContext] JWT expired in background — logging out');
@@ -92,7 +94,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
-    return () => subscription.remove();
+    return () => {
+      cancelled = true;
+      subscription.remove();
+    };
   }, []);
 
   // ── 401 Interceptor Registration ───────────────────────────────────────────

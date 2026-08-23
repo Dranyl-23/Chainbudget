@@ -116,16 +116,17 @@ export default function DashboardScreen() {
     };
   }, [activeOrgId, on]);
 
+  const activeOrgIdRef = useRef<string | null>(activeOrgId);
+  useEffect(() => { activeOrgIdRef.current = activeOrgId; }, [activeOrgId]);
+
   const fetchPersonalBalance = async () => {
     try {
-      api
-        .get('/users/me/balance')
-        .then((res) => {
-          const bal = res.data.balance || '0.0';
-          setPersonalBalance(bal);
-          setCachedDashboard({ personalBalance: bal });
-        })
-        .catch(() => {});
+      const res = await api.get('/users/me/balance');
+      const bal = res.data.balance || '0.0';
+      setPersonalBalance(bal);
+      setCachedDashboard({ personalBalance: bal });
+    } catch {
+      // Balance is non-critical; fail silently
     } finally {
       setLoadingInitial(false);
       Animated.timing(fadeAnim, { toValue: 1, duration: 350, useNativeDriver: true }).start();
@@ -171,11 +172,14 @@ export default function DashboardScreen() {
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
     triggerLightHaptic();
-    fetchPersonalBalance().then(() => {
-      if (activeOrgId) fetchOrgContent(activeOrgId);
+    const currentOrgId = activeOrgIdRef.current;
+    Promise.all([
+      fetchPersonalBalance(),
+      currentOrgId ? fetchOrgContent(currentOrgId) : Promise.resolve(),
+    ]).finally(() => {
       setRefreshing(false);
     });
-  }, [activeOrgId]);
+  }, []);
 
   const activeOrg = organizations.find((o) => o._id === activeOrgId);
 
@@ -839,19 +843,19 @@ export default function DashboardScreen() {
                 <SkeletonBudgetList />
               ) : budgets.length > 0 ? (
                 budgets.map((b: any) => {
-                  const spent = b.spentAmount || b.spent || 0;
-                  const total = b.allocatedAmount || b.amount || 0;
+                  const spent = b.spent ?? b.spentAmount ?? 0;
+                  const total = b.allocated ?? b.allocatedAmount ?? b.amount ?? 0;
                   const pct = total > 0 ? Math.min(100, Math.round((spent / total) * 100)) : 0;
                   const isHigh = pct >= 85;
 
                   return (
                     <View
-                      key={b._id || b.category}
+                      key={b._id || b.name || b.category}
                       style={{ backgroundColor: colors.surface, borderColor: colors.border }}
                       className="p-4 rounded-[20px] border mb-3 shadow-sm"
                     >
                       <View className="flex-row justify-between items-center mb-2">
-                        <Text style={{ color: colors.textPrimary }} className="font-bold text-sm">{b.category}</Text>
+                        <Text style={{ color: colors.textPrimary }} className="font-bold text-sm">{b.name || b.category}</Text>
                         <Text style={{ color: colors.textSecondary }} className="text-xs font-semibold">
                           ₱{spent.toLocaleString()} / ₱{total.toLocaleString()}
                         </Text>

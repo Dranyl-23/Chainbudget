@@ -98,7 +98,7 @@ function verifyInternalJWT(token) {
   try {
     const secret = process.env.JWT_SECRET;
     if (!secret) return null;
-    return jwt.verify(token, secret);
+    return jwt.verify(token, secret, { algorithms: ['HS256'] });
   } catch (err) {
     console.warn("[auth] Internal JWT verification failed:", err.message);
     return null;

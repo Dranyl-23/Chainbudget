@@ -76,7 +76,7 @@ function AuthNavigator() {
           <AuthStack.Screen name="HelpFaq" component={HelpFaqScreen} />
           <AuthStack.Screen name="DataPrivacy" component={DataPrivacyScreen} />
         </AuthStack.Navigator>
-        <StatusBar style="light" />
+        <StatusBar style="light" translucent={true} />
       </NavigationContainer>
     </View>
   );
@@ -138,10 +138,10 @@ const RootNavigator = ({ navigationRef }: { navigationRef: React.MutableRefObjec
   const hasActiveMembership = user.memberships?.some((m: any) => m.isActive);
   if (!hasActiveMembership) {
     return (
-      <NavigationContainer theme={navigationTheme}>
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
         <NoOrganizationScreen />
         <StatusBar style={colors.statusBarStyle} />
-      </NavigationContainer>
+      </View>
     );
   }
 
