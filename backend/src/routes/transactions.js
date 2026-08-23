@@ -992,7 +992,7 @@ router.get("/:id", authenticate, async (req, res) => {
 });
 
 // ── POST /api/transactions/sync-onchain ── Trigger on-chain reconciliation
-router.post("/sync-onchain", authenticateToken, async (req, res) => {
+router.post("/sync-onchain", authenticate, async (req, res) => {
   try {
     const io = req.app.get("io");
     const { syncPendingTransactions } = require("../services/blockchainSyncWorker");
