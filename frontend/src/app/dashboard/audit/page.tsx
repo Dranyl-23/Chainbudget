@@ -216,7 +216,7 @@ export default function AuditPage() {
         <div>
           <h1 className="text-3xl font-black mb-2 flex items-center gap-3 drop-shadow-md">
             <BookOpen className="w-8 h-8 text-fuchsia-400 drop-shadow-[0_0_15px_rgba(217,70,239,0.8)]" />
-            <span className="bg-clip-text text-transparent bg-gradient-to-r from-white to-white/70">
+            <span className="bg-clip-text text-transparent bg-linear-to-r from-white to-white/70">
               System Audit Trail
             </span>
           </h1>
@@ -228,7 +228,7 @@ export default function AuditPage() {
           <button onClick={() => handleExport("csv")} className="btn glass border border-white/10 hover:border-cyan-400/50 hover:bg-white/5 text-white text-sm flex items-center gap-2 rounded-xl px-5 py-2.5 font-bold transition-all shadow-[0_0_15px_rgba(255,255,255,0.05)]">
             <Download className="w-4 h-4 text-cyan-400" /> Export CSV
           </button>
-          <button onClick={() => handleExport("pdf")} className="btn glass border border-fuchsia-500/50 bg-gradient-to-r from-fuchsia-600/40 to-purple-600/40 hover:from-fuchsia-500/60 hover:to-purple-500/60 text-white text-sm flex items-center gap-2 rounded-xl px-5 py-2.5 font-bold transition-all shadow-[0_0_20px_rgba(217,70,239,0.3)]">
+          <button onClick={() => handleExport("pdf")} className="btn glass border border-fuchsia-500/50 bg-linear-to-r from-fuchsia-600/40 to-purple-600/40 hover:from-fuchsia-500/60 hover:to-purple-500/60 text-white text-sm flex items-center gap-2 rounded-xl px-5 py-2.5 font-bold transition-all shadow-[0_0_20px_rgba(217,70,239,0.3)]">
             <FileText className="w-4 h-4 text-white" /> Export PDF
           </button>
         </div>
@@ -245,13 +245,13 @@ export default function AuditPage() {
         <div className="space-y-4">
           {[1, 2, 3, 4, 5].map((i) => (
             <div key={i} className="h-20 w-full glass rounded-xl border border-white/5 relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-500/10 to-transparent -translate-x-full animate-[shimmer_1.5s_infinite]" />
+              <div className="absolute inset-0 bg-linear-to-r from-transparent via-cyan-500/10 to-transparent -translate-x-full animate-[shimmer_1.5s_infinite]" />
             </div>
           ))}
         </div>
       ) : (
         <div className="glass rounded-2xl overflow-hidden shadow-[0_0_40px_rgba(139,92,246,0.1)] border border-purple-500/20 relative">
-          <div className="absolute inset-0 bg-gradient-to-br from-fuchsia-500/5 to-cyan-500/5 pointer-events-none" />
+          <div className="absolute inset-0 bg-linear-to-br from-fuchsia-500/5 to-cyan-500/5 pointer-events-none" />
           
           {logs.length === 0 ? (
             <div className="p-16 text-center text-white/50 relative z-10">

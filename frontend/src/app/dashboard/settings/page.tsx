@@ -666,7 +666,7 @@ export default function SettingsPage() {
         
         {/* Info Card */}
         <div className="space-y-6">
-          <div className="glass p-6 rounded-2xl bg-gradient-to-br from-primary/5 to-purple-500/5 border border-primary/20 relative overflow-hidden">
+          <div className="glass p-6 rounded-2xl bg-linear-to-br from-primary/5 to-purple-500/5 border border-primary/20 relative overflow-hidden">
             {/* Background design */}
             <div className="absolute -top-10 -right-10 w-32 h-32 bg-primary/10 rounded-full blur-2xl pointer-events-none"></div>
             
@@ -677,7 +677,7 @@ export default function SettingsPage() {
             
             {activeMembership?.hasSBT ? (
               <div className="mt-4 animate-fade-in">
-                <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-1 rounded-xl shadow-lg">
+                <div className="bg-linear-to-r from-indigo-600 to-purple-600 p-1 rounded-xl shadow-lg">
                   <div className="bg-gray-900 rounded-lg p-4 text-white relative overflow-hidden">
                     <div className="absolute opacity-10 -right-5 -top-5">
                       <ShieldCheck className="w-32 h-32" />
@@ -722,7 +722,7 @@ export default function SettingsPage() {
                       }
                     }}
                     disabled={isLinking}
-                    className="btn-primary w-full text-sm font-semibold py-3 px-4 rounded-xl flex justify-center items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-lg whitespace-nowrap transition-all hover:scale-[1.02]"
+                    className="btn-primary w-full text-sm font-semibold py-3 px-4 rounded-xl flex justify-center items-center gap-2 bg-linear-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-lg whitespace-nowrap transition-all hover:scale-[1.02]"
                   >
                     {isLinking ? (
                       <span className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />

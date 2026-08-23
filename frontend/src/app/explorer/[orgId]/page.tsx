@@ -3,7 +3,8 @@
 import React, { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ShieldCheck, Activity, Link as LinkIcon, AlertTriangle, ArrowUpRight, ArrowDownRight, ArrowRight, ExternalLink, Lock } from "lucide-react";
+import Image from "next/image";
+import { ArrowLeft, ShieldCheck, Activity, Link as LinkIcon, AlertTriangle, ExternalLink, Lock } from "lucide-react";
 import api from "@/lib/api";
 import { ethers } from "ethers";
 import { getAmoyProvider } from "@/lib/rpcProvider";
@@ -134,10 +135,13 @@ export default function PublicDashboardPage() {
           <span className="font-bold tracking-tight hidden sm:inline">Back to Explorer</span>
         </Link>
         <div className="flex items-center gap-3">
-          <img 
+          <Image 
             src={org.logoUrl ? (org.logoUrl.startsWith('http') ? org.logoUrl : `${backendUrl}${org.logoUrl}`) : "/images/logo.png"} 
-            alt={org.name} 
+            alt={org.name || "Organization"} 
+            width={32}
+            height={32}
             className="w-8 h-8 rounded-lg object-contain bg-white/5" 
+            unoptimized
           />
           <span className="font-bold tracking-tight text-white">{org.name}</span>
         </div>
@@ -148,10 +152,13 @@ export default function PublicDashboardPage() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 mb-12">
           <div className="flex items-center gap-6">
             <div className="w-24 h-24 md:w-32 md:h-32 rounded-2xl bg-white/5 border border-white/10 p-2 shrink-0">
-              <img 
+              <Image 
                 src={org.logoUrl ? (org.logoUrl.startsWith('http') ? org.logoUrl : `${backendUrl}${org.logoUrl}`) : "/images/logo.png"} 
                 alt={org.name || "Organization"} 
+                width={128}
+                height={128}
                 className="w-full h-full object-contain rounded-xl" 
+                unoptimized
               />
             </div>
             <div>
@@ -168,7 +175,7 @@ export default function PublicDashboardPage() {
             </div>
           </div>
 
-          <div className={`p-6 rounded-2xl glass border ${getScoreColor(org.transparencyScore || 0)} flex flex-col items-center justify-center min-w-[200px]`}>
+          <div className={`p-6 rounded-2xl glass border ${getScoreColor(org.transparencyScore || 0)} flex flex-col items-center justify-center min-w-50`}>
             <span className="text-[10px] uppercase tracking-widest font-bold mb-1 opacity-70">Transparency Score</span>
             <div className="text-5xl font-black tracking-tighter drop-shadow-lg">{org.transparencyScore || 0}%</div>
           </div>
@@ -200,7 +207,7 @@ export default function PublicDashboardPage() {
                 </div>
                 <div className="flex-1 flex flex-col justify-center relative z-10">
                   <div className="flex items-baseline gap-2">
-                    <span className="text-5xl md:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-cyan-500 drop-shadow-lg">
+                    <span className="text-5xl md:text-6xl font-black text-transparent bg-clip-text bg-linear-to-r from-cyan-300 to-cyan-500 drop-shadow-lg">
                       {balance || "0.0000"}
                     </span>
                     <span className="text-xl font-bold text-cyan-500/50">POL</span>
@@ -238,7 +245,7 @@ export default function PublicDashboardPage() {
                   </div>
                   <div className="w-full bg-white/5 rounded-full h-3 overflow-hidden border border-white/10">
                     <div 
-                      className="bg-gradient-to-r from-purple-500 to-fuchsia-500 h-full rounded-full relative"
+                      className="bg-linear-to-r from-purple-500 to-fuchsia-500 h-full rounded-full relative"
                       style={{ width: `${totalBudgetPercentage || 0}%` }}
                     >
                       <div className="absolute inset-0 bg-white/20 w-full h-full animate-[shimmer_2s_infinite]" />
@@ -290,7 +297,7 @@ export default function PublicDashboardPage() {
                       </tr>
                     ) : (
                       transactions.map((tx) => (
-                        <tr key={tx._id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors group">
+                        <tr key={tx._id} className="border-b border-white/5 hover:bg-white/2 transition-colors group">
                           <td className="py-4 pl-2 text-white/60 whitespace-nowrap">
                             {tx.createdAt ? new Date(tx.createdAt).toLocaleDateString() : "Unknown"}
                           </td>

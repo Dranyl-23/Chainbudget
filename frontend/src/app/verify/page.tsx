@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, ShieldCheck, ArrowLeft, ExternalLink, Calendar, Building, DollarSign, Activity } from "lucide-react";
+import { Search, ShieldCheck, ArrowLeft, ExternalLink, Calendar, Building, Activity } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import axios from "axios";
@@ -75,9 +75,9 @@ export default function VerifyPage() {
   return (
     <div className="min-h-screen flex flex-col relative overflow-hidden bg-[#0A0216] text-white">
       {/* ── Massive Holographic Fluid Background ── */}
-      <div className="absolute -top-1/4 -left-[10%] w-[70vw] h-[70vw] rounded-full bg-fuchsia-600/30 blur-[150px] pointer-events-none mix-blend-screen animate-pulse" style={{ animationDuration: '10s' }} />
-      <div className="absolute top-[10%] -right-[20%] w-[60vw] h-[60vw] rounded-full bg-cyan-600/20 blur-[130px] pointer-events-none mix-blend-screen animate-pulse" style={{ animationDuration: '14s' }} />
-      <div className="absolute -bottom-[10%] left-[20%] w-[80vw] h-[80vw] rounded-full bg-blue-800/20 blur-[160px] pointer-events-none mix-blend-screen animate-pulse" style={{ animationDuration: '12s' }} />
+      <div className="absolute -top-1/4 left-[-10%] w-[70vw] h-[70vw] rounded-full bg-fuchsia-600/30 blur-[150px] pointer-events-none mix-blend-screen animate-pulse" style={{ animationDuration: '10s' }} />
+      <div className="absolute top-[10%] right-[-20%] w-[60vw] h-[60vw] rounded-full bg-cyan-600/20 blur-[130px] pointer-events-none mix-blend-screen animate-pulse" style={{ animationDuration: '14s' }} />
+      <div className="absolute bottom-[-10%] left-[20%] w-[80vw] h-[80vw] rounded-full bg-blue-800/20 blur-[160px] pointer-events-none mix-blend-screen animate-pulse" style={{ animationDuration: '12s' }} />
 
 
       {/* ── Nav ── */}
@@ -124,7 +124,7 @@ export default function VerifyPage() {
             <button
               type="submit"
               disabled={loading || !query.trim()}
-              className="absolute right-2 top-1/2 -translate-y-1/2 bg-gradient-to-r from-fuchsia-500 to-purple-600 text-white px-6 py-2.5 rounded-xl font-bold hover:scale-105 transition-all disabled:opacity-50 shadow-[0_0_20px_rgba(139,92,246,0.4)]"
+              className="absolute right-2 top-1/2 -translate-y-1/2 bg-linear-to-r from-fuchsia-500 to-purple-600 text-white px-6 py-2.5 rounded-xl font-bold hover:scale-105 transition-all disabled:opacity-50 shadow-[0_0_20px_rgba(139,92,246,0.4)]"
             >
               {loading ? "Searching..." : "Verify"}
             </button>
@@ -160,7 +160,7 @@ export default function VerifyPage() {
                 </div>
                 <div className="text-right">
                   <span className="text-xs font-bold uppercase tracking-widest text-white/50 block mb-1">Amount</span>
-                  <span className="font-black text-2xl md:text-3xl text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-cyan-500 drop-shadow-md">
+                  <span className="font-black text-2xl md:text-3xl text-transparent bg-clip-text bg-linear-to-r from-cyan-300 to-cyan-500 drop-shadow-md">
                     ₱{result.amount.toLocaleString()}
                   </span>
                 </div>
