@@ -665,166 +665,215 @@ export default function DashboardScreen() {
               </View>
             )}
 
-            {/* Quick Actions Grid */}
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: gridGap, marginBottom: 24 }}>
+            {/* ── PRIMARY ACTION BAR (4 CORE ACTIONS) ── */}
+            <View
+              style={{
+                backgroundColor: isDark ? colors.surface : '#FFFFFF',
+                borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#F1F5F9',
+                borderWidth: 1,
+                borderRadius: 24,
+                paddingVertical: 14,
+                paddingHorizontal: 8,
+                marginBottom: 20,
+                flexDirection: 'row',
+                justifyContent: 'space-around',
+                alignItems: 'center',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: isDark ? 0.25 : 0.05,
+                shadowRadius: 10,
+                elevation: 3,
+              }}
+            >
               {[
-                {
-                  id: 'scan',
-                  label: 'Scan',
-                  subtitle: 'Scan QR or code',
-                  icon: (color: string) => <Ionicons name="scan" size={26} color={color} />,
-                  color: '#9333EA',
-                  bgColor: isDark ? 'rgba(147, 51, 234, 0.15)' : '#F5EEFC',
-                  route: 'Scanner',
-                },
                 {
                   id: 'request',
                   label: 'Request',
-                  subtitle: 'Send a request',
-                  icon: (color: string) => (
-                    <Ionicons
-                      name="paper-plane-outline"
-                      size={25}
-                      color={color}
-                      style={{ transform: [{ rotate: '0deg' }, { translateX: -1 }] }}
-                    />
-                  ),
+                  icon: 'paper-plane',
                   color: '#0284C7',
                   bgColor: isDark ? 'rgba(2, 132, 199, 0.15)' : '#E0F2FE',
-                  route: 'Transfer',
+                  onPress: () => navigation.navigate('Transfer', { orgId: activeOrgId }),
                 },
                 {
                   id: 'receive',
                   label: 'Receive',
-                  subtitle: 'Receive payment',
-                  icon: (color: string) => <Ionicons name="qr-code-outline" size={25} color={color} />,
+                  icon: 'qr-code',
                   color: '#7C3AED',
                   bgColor: isDark ? 'rgba(124, 58, 237, 0.15)' : '#EDE9FE',
-                  route: 'Receive',
+                  onPress: () => navigation.navigate('Receive', { orgId: activeOrgId }),
                 },
                 {
-                  id: 'members',
-                  label: 'Members',
-                  subtitle: 'Manage members',
-                  icon: (color: string) => <Ionicons name="people" size={26} color={color} />,
-                  color: '#10B981',
-                  bgColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#DCFCE7',
-                  route: 'Members',
+                  id: 'scan',
+                  label: 'Scan QR',
+                  icon: 'scan',
+                  color: '#9333EA',
+                  bgColor: isDark ? 'rgba(147, 51, 234, 0.15)' : '#F5EEFC',
+                  onPress: () => navigation.navigate('MainTabs', { screen: 'Scanner', params: { orgId: activeOrgId } }),
                 },
                 {
                   id: 'history',
                   label: 'History',
-                  subtitle: 'View transactions',
-                  icon: (color: string) => <Ionicons name="time-outline" size={26} color={color} />,
+                  icon: 'time',
                   color: '#F59E0B',
                   bgColor: isDark ? 'rgba(245, 158, 11, 0.15)' : '#FEF3C7',
-                  route: 'History',
+                  onPress: () => navigation.navigate('History', { orgId: activeOrgId }),
                 },
-                {
-                  id: 'budget',
-                  label: 'Budget',
-                  subtitle: 'Track your budget',
-                  icon: (color: string) => <Ionicons name="pie-chart-outline" size={26} color={color} />,
-                  color: '#0D9488',
-                  bgColor: isDark ? 'rgba(13, 148, 136, 0.15)' : '#CCFBF1',
-                  route: 'Budget',
-                },
-                {
-                  id: 'reports',
-                  label: 'Reports',
-                  subtitle: 'Analytics & reports',
-                  icon: (color: string) => <Ionicons name="bar-chart" size={25} color={color} />,
-                  color: '#2563EB',
-                  bgColor: isDark ? 'rgba(37, 99, 235, 0.15)' : '#DBEAFE',
-                  route: 'Reports',
-                },
-                {
-                  id: 'audit',
-                  label: 'Audit',
-                  subtitle: 'Security & logs',
-                  icon: (color: string) => <Ionicons name="shield-checkmark" size={25} color={color} />,
-                  color: '#7C3AED',
-                  bgColor: isDark ? 'rgba(124, 58, 237, 0.15)' : '#F3E8FF',
-                  route: 'Audit',
-                },
-                {
-                  id: 'treasury',
-                  label: 'Treasury',
-                  subtitle: 'Treasury overview',
-                  icon: (color: string) => <MaterialCommunityIcons name="office-building" size={26} color={color} />,
-                  color: '#EA580C',
-                  bgColor: isDark ? 'rgba(234, 88, 12, 0.15)' : '#FFEDD5',
-                  route: 'Treasury',
-                },
-              ].map((action, idx) => (
-                <ScaleButton
-                  key={action.id || idx}
-                  containerStyle={{ width: itemWidth, marginBottom: 2 }}
-                  style={{
-                    width: '100%',
-                    backgroundColor: isDark ? colors.surface : '#FFFFFF',
-                    borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#F1F5F9',
-                    borderWidth: 1,
-                    borderRadius: 24,
-                    paddingVertical: 16,
-                    paddingHorizontal: 4,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 3 },
-                    shadowOpacity: isDark ? 0.25 : 0.04,
-                    shadowRadius: 8,
-                    elevation: 2,
-                  }}
+              ].map((action) => (
+                <TouchableOpacity
+                  key={action.id}
                   onPress={() => {
-                    if (action.route === 'Scanner') {
-                      navigation.navigate('MainTabs', { screen: 'Scanner', params: { orgId: activeOrgId } });
-                    } else {
-                      navigation.navigate(action.route, { orgId: activeOrgId });
-                    }
+                    triggerLightHaptic();
+                    action.onPress();
                   }}
-                  accessible={true}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Quick action: ${action.label}`}
+                  activeOpacity={0.7}
+                  style={{ alignItems: 'center', minWidth: 68 }}
                 >
                   <View
                     style={{
-                      backgroundColor: action.bgColor,
                       width: 52,
                       height: 52,
-                      borderRadius: 18,
+                      borderRadius: 20,
+                      backgroundColor: action.bgColor,
                       alignItems: 'center',
                       justifyContent: 'center',
                       marginBottom: 8,
+                      borderWidth: 1,
+                      borderColor: action.color + '30',
                     }}
                   >
-                    {action.icon(action.color)}
+                    <Ionicons name={action.icon as any} size={24} color={action.color} />
                   </View>
                   <Text
                     style={{
                       color: colors.textPrimary,
-                      fontSize: 13,
+                      fontSize: 12,
                       fontWeight: '700',
                       textAlign: 'center',
+                      includeFontPadding: false,
                     }}
-                    numberOfLines={1}
                   >
                     {action.label}
                   </Text>
-                  <Text
-                    style={{
-                      color: colors.textMuted,
-                      fontSize: 9.5,
-                      fontWeight: '400',
-                      marginTop: 2,
-                      textAlign: 'center',
-                    }}
-                    numberOfLines={1}
-                  >
-                    {action.subtitle}
-                  </Text>
-                </ScaleButton>
+                </TouchableOpacity>
               ))}
+            </View>
+
+            {/* ── DAO & MANAGEMENT TOOLS (2x2 FEATURE HUB) ── */}
+            <View style={{ marginBottom: 24 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, paddingHorizontal: 4 }}>
+                <Text
+                  style={{
+                    color: colors.textMuted,
+                    fontSize: 11.5,
+                    fontWeight: '800',
+                    textTransform: 'uppercase',
+                    letterSpacing: 1.2,
+                  }}
+                >
+                  DAO & Management Tools
+                </Text>
+              </View>
+
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                {[
+                  {
+                    id: 'budget',
+                    title: 'Budget Tracker',
+                    subtitle: 'Limits & allocations',
+                    icon: 'pie-chart-outline',
+                    color: '#0D9488',
+                    bgColor: isDark ? 'rgba(13, 148, 136, 0.15)' : '#CCFBF1',
+                    route: 'Budget',
+                  },
+                  {
+                    id: 'members',
+                    title: 'DAO Members',
+                    subtitle: 'Soulbound IDs & roles',
+                    icon: 'people-outline',
+                    color: '#10B981',
+                    bgColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#DCFCE7',
+                    route: 'Members',
+                  },
+                  {
+                    id: 'treasury',
+                    title: 'Treasury Vault',
+                    subtitle: 'Subsidies & balances',
+                    icon: 'business-outline',
+                    color: '#EA580C',
+                    bgColor: isDark ? 'rgba(234, 88, 12, 0.15)' : '#FFEDD5',
+                    route: 'Treasury',
+                  },
+                  {
+                    id: 'audit',
+                    title: 'Audit & Reports',
+                    subtitle: 'On-chain proof & logs',
+                    icon: 'shield-checkmark-outline',
+                    color: '#2563EB',
+                    bgColor: isDark ? 'rgba(37, 99, 235, 0.15)' : '#DBEAFE',
+                    route: 'Audit',
+                  },
+                ].map((item) => (
+                  <TouchableOpacity
+                    key={item.id}
+                    onPress={() => {
+                      triggerLightHaptic();
+                      navigation.navigate(item.route, { orgId: activeOrgId });
+                    }}
+                    activeOpacity={0.75}
+                    style={{
+                      width: '48.4%',
+                      backgroundColor: isDark ? colors.surface : '#FFFFFF',
+                      borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#F1F5F9',
+                      borderWidth: 1,
+                      borderRadius: 20,
+                      padding: 16,
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 3 },
+                      shadowOpacity: isDark ? 0.2 : 0.04,
+                      shadowRadius: 8,
+                      elevation: 2,
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 42,
+                        height: 42,
+                        borderRadius: 14,
+                        backgroundColor: item.bgColor,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginBottom: 12,
+                        borderWidth: 1,
+                        borderColor: item.color + '30',
+                      }}
+                    >
+                      <Ionicons name={item.icon as any} size={22} color={item.color} />
+                    </View>
+                    <Text
+                      style={{
+                        color: colors.textPrimary,
+                        fontSize: 14,
+                        fontWeight: '700',
+                        marginBottom: 3,
+                        includeFontPadding: false,
+                      }}
+                      numberOfLines={1}
+                    >
+                      {item.title}
+                    </Text>
+                    <Text
+                      style={{
+                        color: colors.textSecondary,
+                        fontSize: 11,
+                        includeFontPadding: false,
+                      }}
+                      numberOfLines={1}
+                    >
+                      {item.subtitle}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
 
 
