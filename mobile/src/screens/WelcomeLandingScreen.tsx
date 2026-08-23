@@ -139,7 +139,7 @@ export default function WelcomeLandingScreen() {
             </TouchableOpacity>
             <Text className="text-white/20 text-[11px]">·</Text>
             <TouchableOpacity onPress={() => navigation.navigate('DataPrivacy')}>
-              <Text className="text-white/50 text-[11px] font-medium">Data Privacy (RA 10173)</Text>
+              <Text className="text-white/50 text-[11px] font-medium">Data Privacy</Text>
             </TouchableOpacity>
           </View>
           </ScrollView>

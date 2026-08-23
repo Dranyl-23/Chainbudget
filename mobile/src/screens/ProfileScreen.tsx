@@ -508,7 +508,7 @@ export default function ProfileScreen() {
               </View>
               <View>
                 <Text style={{ color: colors.textPrimary }} className="font-bold text-sm">Data Privacy & Security</Text>
-                <Text style={{ color: colors.textSecondary }} className="text-xs">RA 10173 compliance & DPO contact</Text>
+                <Text style={{ color: colors.textSecondary }} className="text-xs">Compliance & DPO contact</Text>
               </View>
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />

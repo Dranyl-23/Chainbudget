@@ -46,7 +46,7 @@ export default function RegisterScreen({ navigation }: any) {
       return;
     }
     if (!agreePrivacy) {
-      Alert.alert('Privacy Consent Required', 'Please read and accept the Data Privacy Notice (RA 10173) to proceed.');
+      Alert.alert('Privacy Consent Required', 'Please read and accept the Data Privacy Notice to proceed.');
       return;
     }
 
@@ -170,7 +170,7 @@ export default function RegisterScreen({ navigation }: any) {
                   style={styles.consentLink}
                   onPress={() => navigation.navigate('DataPrivacy')}
                 >
-                  Data Privacy Notice (RA 10173)
+                  Data Privacy Notice
                 </Text>{' '}
                 and understand my private keys are stored non-custodially on this device.
               </Text>
