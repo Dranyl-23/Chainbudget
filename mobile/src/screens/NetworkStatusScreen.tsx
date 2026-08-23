@@ -9,6 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Clipboard from 'expo-clipboard';
 import { useTheme } from '../context/ThemeContext';
 import { useOrg } from '../context/OrgContext';
@@ -293,21 +294,34 @@ export default function NetworkStatusScreen() {
             triggerLightHaptic();
             Linking.openURL(`${EXPLORER_BASE}/address/${contractAddress}`);
           }}
-          activeOpacity={0.8}
+          activeOpacity={0.85}
           style={{
-            backgroundColor: colors.primary,
             borderRadius: 14,
-            paddingVertical: 12,
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 6,
+            shadowColor: '#6366F1',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.35,
+            shadowRadius: 6,
+            elevation: 4,
           }}
         >
-          <Ionicons name="open-outline" size={16} color="#FFFFFF" />
-          <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '700' }}>
-            View Contract on PolygonScan
-          </Text>
+          <LinearGradient
+            colors={['#4F46E5', '#7C3AED']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={{
+              borderRadius: 14,
+              paddingVertical: 13,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+            }}
+          >
+            <Ionicons name="open-outline" size={16} color="#FFFFFF" />
+            <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '700' }}>
+              View Contract on PolygonScan
+            </Text>
+          </LinearGradient>
         </TouchableOpacity>
       </View>
     </ScrollView>
