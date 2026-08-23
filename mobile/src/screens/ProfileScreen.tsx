@@ -15,7 +15,6 @@ import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { triggerLightHaptic, triggerErrorHaptic, triggerSuccessHaptic, authenticateWithBiometrics } from '../lib/biometrics';
 import ThemeSelectorModal from '../components/ThemeSelectorModal';
-import { FeedbackModal } from '../components/FeedbackModal';
 import appConfig from '../../app.json';
 
 const APP_VERSION = appConfig?.expo?.version || '1.1.3';
@@ -32,7 +31,6 @@ export default function ProfileScreen() {
   const [showAboutModal, setShowAboutModal] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showThemeModal, setShowThemeModal] = useState(false);
-  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [mintingSbt, setMintingSbt] = useState(false);
   
   // Vault state
@@ -531,7 +529,7 @@ export default function ProfileScreen() {
           <TouchableOpacity 
             onPress={() => {
               triggerLightHaptic();
-              setShowFeedbackModal(true);
+              navigation.navigate('Feedback');
             }}
             activeOpacity={0.7}
             style={{ borderBottomColor: colors.borderSubtle }}
@@ -1041,12 +1039,6 @@ export default function ProfileScreen() {
       <ThemeSelectorModal
         visible={showThemeModal}
         onClose={() => setShowThemeModal(false)}
-      />
-
-      {/* ── MODAL 6: In-App Tester Feedback Modal ── */}
-      <FeedbackModal
-        visible={showFeedbackModal}
-        onClose={() => setShowFeedbackModal(false)}
       />
     </KeyboardAwareScrollView>
   </View>

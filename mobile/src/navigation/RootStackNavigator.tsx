@@ -20,6 +20,7 @@ import DataPrivacyScreen from '../screens/DataPrivacyScreen';
 import NotificationDetailScreen from '../screens/NotificationDetailScreen';
 import PublicOrgDetailScreen from '../screens/PublicOrgDetailScreen';
 import PublicLedgerScreen from '../screens/PublicLedgerScreen';
+import FeedbackScreen from '../screens/FeedbackScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -121,6 +122,11 @@ export default function RootStackNavigator() {
         name="PublicOrgDetail"
         component={PublicOrgDetailScreen}
         options={{ title: 'Organization Ledger' }}
+      />
+      <Stack.Screen
+        name="Feedback"
+        component={FeedbackScreen}
+        options={{ title: 'Feedback & Reports' }}
       />
     </Stack.Navigator>
   );
