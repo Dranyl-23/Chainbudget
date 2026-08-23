@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, FlatList, Animated } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, FlatList, Animated, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
@@ -34,6 +34,10 @@ export default function ApprovalsScreen() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [signingTxId, setSigningTxId] = useState<string | null>(null);
+
+  // Filter & Search State
+  const [filterTab, setFilterTab] = useState<'needs_my_sign' | 'awaiting_others' | 'urgent' | 'all'>('needs_my_sign');
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Org Selector Bottom Sheet State
   const [showOrgSheet, setShowOrgSheet] = useState(false);
@@ -345,6 +349,46 @@ export default function ApprovalsScreen() {
     );
   };
 
+  const currentUserId = user?.id || (user as any)?._id;
+  const userWallet = user?.walletAddress?.toLowerCase();
+
+  const isSignedByMe = (tx: any) => {
+    return tx.approvals?.some((a: any) => {
+      const approverId = a.approver?._id || a.approver?.id || a.approver;
+      const approverWallet = a.walletAddress?.toLowerCase();
+      return (
+        (currentUserId && approverId === currentUserId) ||
+        (userWallet && approverWallet === userWallet)
+      );
+    });
+  };
+
+  const isUrgent = (tx: any) => {
+    const u = (tx.urgency || '').toLowerCase();
+    return u === 'high' || u === 'critical' || u === 'urgent';
+  };
+
+  const needsMySignCount = pendingTx.filter((tx) => !isSignedByMe(tx)).length;
+  const awaitingOthersCount = pendingTx.filter((tx) => isSignedByMe(tx)).length;
+  const urgentCount = pendingTx.filter((tx) => isUrgent(tx)).length;
+  const allCount = pendingTx.length;
+
+  const filteredTx = pendingTx.filter((tx) => {
+    if (filterTab === 'needs_my_sign' && isSignedByMe(tx)) return false;
+    if (filterTab === 'awaiting_others' && !isSignedByMe(tx)) return false;
+    if (filterTab === 'urgent' && !isUrgent(tx)) return false;
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      const descMatch = (tx.description || '').toLowerCase().includes(q);
+      const requesterMatch = (tx.submittedBy?.displayName || '').toLowerCase().includes(q);
+      const catMatch = (tx.category || '').toLowerCase().includes(q);
+      const amountMatch = (tx.amount || '').toString().includes(q);
+      if (!descMatch && !requesterMatch && !catMatch && !amountMatch) return false;
+    }
+    return true;
+  });
+
   return (
     <View style={{ backgroundColor: colors.background }} className="flex-1">
       {/* Header & Org Switcher */}
@@ -462,7 +506,7 @@ export default function ApprovalsScreen() {
       ) : (
         <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
           <FlatList
-            data={pendingTx}
+            data={filteredTx}
             keyExtractor={(item) => item._id}
             renderItem={renderTransactionCard}
             showsVerticalScrollIndicator={false}
@@ -475,17 +519,135 @@ export default function ApprovalsScreen() {
                 colors={[colors.primary]}
               />
             }
-            ListEmptyComponent={
-              <View 
-                style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-                className="p-6 rounded-3xl border items-center justify-center mt-10 shadow-sm"
-              >
-                <Ionicons name="checkmark-done-circle" size={50} color={colors.success} className="mb-4" />
-                <Text style={{ color: colors.textPrimary }} className="text-center font-bold text-lg">Inbox Zero!</Text>
-                <Text style={{ color: colors.textSecondary }} className="text-center text-sm mt-2">
-                  There are no pending budget requests requiring your approval in this organization.
-                </Text>
+            ListHeaderComponent={
+              <View className="mb-3">
+                {/* Search Bar */}
+                <View
+                  style={{
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
+                  }}
+                  className="flex-row items-center px-3.5 py-2.5 rounded-2xl border mb-3"
+                >
+                  <Ionicons name="search" size={18} color={colors.textMuted} />
+                  <TextInput
+                    placeholder="Search requests, category, amount..."
+                    placeholderTextColor={colors.textMuted}
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                    style={{ color: colors.textPrimary }}
+                    className="flex-1 ml-2.5 text-sm"
+                  />
+                  {searchQuery.length > 0 && (
+                    <TouchableOpacity
+                      onPress={() => setSearchQuery('')}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                      <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {/* Filter Tabs Pills (Horizontal Scroll) */}
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ gap: 8, paddingBottom: 4 }}
+                >
+                  {[
+                    { key: 'needs_my_sign', label: 'Needs My Sign', icon: 'flash-outline', count: needsMySignCount },
+                    { key: 'awaiting_others', label: 'Awaiting Others', icon: 'time-outline', count: awaitingOthersCount },
+                    { key: 'urgent', label: 'Urgent', icon: 'alert-circle-outline', count: urgentCount },
+                    { key: 'all', label: 'All Pending', icon: 'file-tray-full-outline', count: allCount },
+                  ].map((tab) => {
+                    const isSelected = filterTab === tab.key;
+                    return (
+                      <TouchableOpacity
+                        key={tab.key}
+                        onPress={() => {
+                          triggerLightHaptic();
+                          setFilterTab(tab.key as any);
+                        }}
+                        activeOpacity={0.7}
+                        style={{
+                          backgroundColor: isSelected ? colors.primary : colors.surface,
+                          borderColor: isSelected ? colors.primary : colors.border,
+                          borderWidth: 1,
+                          paddingVertical: 6,
+                          paddingHorizontal: 12,
+                          borderRadius: 999,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <Ionicons
+                          name={tab.icon as any}
+                          size={13}
+                          color={isSelected ? '#fff' : colors.textSecondary}
+                          style={{ marginRight: 4 }}
+                        />
+                        <Text
+                          style={{
+                            color: isSelected ? '#fff' : colors.textSecondary,
+                            fontWeight: isSelected ? '700' : '600',
+                            fontSize: 12,
+                          }}
+                        >
+                          {tab.label}
+                        </Text>
+                        <View
+                          style={{
+                            backgroundColor: isSelected
+                              ? 'rgba(255,255,255,0.25)'
+                              : colors.cardGlass,
+                            paddingHorizontal: 5,
+                            paddingVertical: 1,
+                            borderRadius: 999,
+                            marginLeft: 5,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              color: isSelected ? '#fff' : colors.textMuted,
+                              fontSize: 10,
+                              fontWeight: '800',
+                            }}
+                          >
+                            {tab.count}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
               </View>
+            }
+            ListEmptyComponent={
+              allCount === 0 ? (
+                <View 
+                  style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                  className="p-6 rounded-3xl border items-center justify-center mt-6 shadow-sm"
+                >
+                  <Ionicons name="checkmark-done-circle" size={48} color={colors.success} className="mb-3" />
+                  <Text style={{ color: colors.textPrimary }} className="text-center font-bold text-base">Inbox Zero!</Text>
+                  <Text style={{ color: colors.textSecondary }} className="text-center text-xs mt-1.5 leading-4">
+                    There are no pending budget requests requiring approval in this organization.
+                  </Text>
+                </View>
+              ) : (
+                <View 
+                  style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                  className="py-10 px-6 rounded-2xl border items-center justify-center mt-2"
+                >
+                  <Ionicons name="file-tray-outline" size={44} color={colors.textMuted} />
+                  <Text style={{ color: colors.textPrimary }} className="mt-3 font-bold text-sm">
+                    No requests matching this filter
+                  </Text>
+                  <Text style={{ color: colors.textSecondary }} className="mt-1 text-xs text-center">
+                    {searchQuery ? `No results match "${searchQuery}"` : 'Try selecting "All Pending" to view all requests.'}
+                  </Text>
+                </View>
+              )
             }
           />
         </Animated.View>
