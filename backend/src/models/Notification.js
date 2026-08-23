@@ -33,5 +33,6 @@ const notificationSchema = new mongoose.Schema(
 // Indexes for fast per-org notification retrieval and unread filtering
 notificationSchema.index({ organization: 1, createdAt: -1 });
 notificationSchema.index({ organization: 1, readBy: 1 });
+notificationSchema.index({ organization: 1, type: 1, createdAt: -1 });
 
 module.exports = mongoose.model("Notification", notificationSchema);

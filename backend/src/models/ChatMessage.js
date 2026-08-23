@@ -66,5 +66,6 @@ const chatMessageSchema = new mongoose.Schema(
 
 // Compound index for fast chronological pagination by organization
 chatMessageSchema.index({ organization: 1, createdAt: -1 });
+chatMessageSchema.index({ organization: 1, isPinned: 1, pinnedAt: -1 });
 
 module.exports = mongoose.model("ChatMessage", chatMessageSchema);

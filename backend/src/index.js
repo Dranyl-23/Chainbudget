@@ -260,9 +260,15 @@ if (mongoUri.includes("<cluster-url>") || mongoUri.includes("<db_user>") || mong
 }
 
 mongoose
-  .connect(mongoUri)
+  .connect(mongoUri, {
+    maxPoolSize: 50,
+    minPoolSize: 5,
+    serverSelectionTimeoutMS: 5000,
+    socketTimeoutMS: 45000,
+    family: 4, // Force IPv4 to prevent IPv6 DNS stalls on cloud providers
+  })
   .then(() => {
-    console.log("Connected to MongoDB");
+    console.log("Connected to MongoDB (Pool: min=5, max=50)");
     server.listen(PORT, "0.0.0.0", () => {
       console.log(`ChainBudget API running on http://0.0.0.0:${PORT} (http://localhost:${PORT})`);
       // Start Asynchronous Blockchain Auto-Retry Reconciliation Worker

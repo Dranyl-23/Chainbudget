@@ -85,6 +85,10 @@ const UserSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// High-performance compound indexes for membership lookups and push notifications
+UserSchema.index({ "memberships.organization": 1, "memberships.isActive": 1 });
+UserSchema.index({ "pushTokens.token": 1 });
+
 // Helper: get role level for a specific organization
 UserSchema.methods.getRoleInOrg = function (orgId) {
   const membership = this.memberships.find(

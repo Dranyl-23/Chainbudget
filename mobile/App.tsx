@@ -20,6 +20,7 @@ import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { OrgProvider } from './src/context/OrgContext';
 import { SocketProvider } from './src/context/SocketContext';
 import { setupAndroidNotificationChannel } from './src/lib/notifications';
+import { pruneExpiredCache } from './src/lib/cache';
 
 import { ToastProvider } from './src/context/ToastContext';
 import OfflineBanner from './src/components/OfflineBanner';
@@ -186,6 +187,7 @@ export default function App() {
       }
     }
     checkSecurity();
+    pruneExpiredCache().catch(() => {});
 
     // ── Push Notifications: Android channel setup ───────────────────────────
     // Must be called before any notifications are shown. Safe to call on iOS too.

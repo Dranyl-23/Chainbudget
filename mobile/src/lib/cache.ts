@@ -156,3 +156,32 @@ export async function getCachedNotifications(orgId: string, enforceTtl = true): 
   const ttl = enforceTtl ? CACHE_TTL.NOTIFICATIONS : undefined;
   return getCachedItem<any[]>(`${CACHE_KEYS.NOTIFICATIONS_PREFIX}${orgId}`, ttl);
 }
+
+/**
+ * Prunes expired local cache items to prevent AsyncStorage growth over months/years.
+ * Safe to run during app startup or background resume.
+ */
+export async function pruneExpiredCache(maxAgeMs = 24 * 60 * 60 * 1000): Promise<void> {
+  try {
+    const allKeys = await AsyncStorage.getAllKeys();
+    const cbKeys = allKeys.filter((k) => k.startsWith('cb_cache_'));
+
+    for (const key of cbKeys) {
+      const raw = await AsyncStorage.getItem(key);
+      if (!raw) continue;
+      try {
+        const envelope = JSON.parse(raw);
+        if (envelope && typeof envelope.cachedAt === 'number') {
+          if (Date.now() - envelope.cachedAt > maxAgeMs) {
+            await AsyncStorage.removeItem(key);
+          }
+        }
+      } catch {
+        // Corrupted item — clean it up
+        await AsyncStorage.removeItem(key);
+      }
+    }
+  } catch (err) {
+    console.warn('[Cache] Failed to prune expired cache:', err);
+  }
+}
