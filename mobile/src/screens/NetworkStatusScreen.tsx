@@ -17,6 +17,9 @@ import { triggerLightHaptic, triggerSuccessHaptic } from '../lib/biometrics';
 
 const DEFAULT_AMOY_RPC = 'https://rpc-amoy.polygon.technology';
 const EXPLORER_BASE = 'https://amoy.polygonscan.com';
+const CHAINBUDGET_MASTER_CONTRACT = '0x1887be6c9cc06ddddb125da24b9b554c18f0a1fb';
+const DAO_GOVERNANCE_CONTRACT = '0x0b15187c87a9c3f8588753c123b7071a9548cc9c';
+const SBT_MEMBERSHIP_CONTRACT = '0x7a376e224276988e3b01aae7a5b17c8c14e94031';
 
 export default function NetworkStatusScreen() {
   const { colors, isDark } = useTheme();
@@ -27,9 +30,11 @@ export default function NetworkStatusScreen() {
   const [checkingPing, setCheckingPing] = useState<boolean>(false);
 
   const contractAddress =
-    activeOrg?.contractAddress ||
-    activeOrg?.vaultAddress ||
-    '0x0000000000000000000000000000000000000000';
+    (activeOrg?.contractAddress && activeOrg.contractAddress !== '0x0000000000000000000000000000000000000000')
+      ? activeOrg.contractAddress
+      : (activeOrg?.vaultAddress && activeOrg.vaultAddress !== '0x0000000000000000000000000000000000000000')
+      ? activeOrg.vaultAddress
+      : CHAINBUDGET_MASTER_CONTRACT;
 
   const checkLatency = async () => {
     setCheckingPing(true);
@@ -323,6 +328,63 @@ export default function NetworkStatusScreen() {
             </Text>
           </LinearGradient>
         </TouchableOpacity>
+      </View>
+
+      {/* Protocol Core Contracts */}
+      <Text
+        style={{
+          color: colors.textMuted,
+          fontSize: 11.5,
+          fontWeight: '800',
+          textTransform: 'uppercase',
+          letterSpacing: 1.2,
+          marginBottom: 10,
+          marginLeft: 4,
+        }}
+      >
+        Deployed Protocol Contracts
+      </Text>
+      <View
+        style={{
+          backgroundColor: colors.surface,
+          borderColor: colors.border,
+          borderWidth: 1,
+          borderRadius: 22,
+          padding: 16,
+          marginBottom: 20,
+          gap: 12,
+        }}
+      >
+        {[
+          { label: 'Master Treasury Contract', address: CHAINBUDGET_MASTER_CONTRACT },
+          { label: 'DAO Governance Contract', address: DAO_GOVERNANCE_CONTRACT },
+          { label: 'Soulbound SBT Tokens', address: SBT_MEMBERSHIP_CONTRACT },
+        ].map((c) => (
+          <TouchableOpacity
+            key={c.label}
+            onPress={() => {
+              triggerLightHaptic();
+              Linking.openURL(`${EXPLORER_BASE}/address/${c.address}`);
+            }}
+            activeOpacity={0.7}
+            style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              paddingVertical: 8,
+              borderBottomWidth: 1,
+              borderBottomColor: colors.borderSubtle,
+            }}
+          >
+            <View style={{ flex: 1, marginRight: 8 }}>
+              <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '700' }}>{c.label}</Text>
+              <Text style={{ color: colors.textMuted, fontSize: 11, fontFamily: 'monospace', marginTop: 2 }}>
+                {c.address.slice(0, 10)}...{c.address.slice(-8)}
+              </Text>
+            </View>
+            <Ionicons name="open-outline" size={16} color={colors.primary} />
+          </TouchableOpacity>
+        ))}
       </View>
     </ScrollView>
   );
