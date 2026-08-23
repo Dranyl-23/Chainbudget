@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const Organization = require("../models/Organization");
+const User = require("../models/User");
 const Budget = require("../models/Budget");
 const { authenticate, requireRole } = require("../middleware/auth");
 const multer = require("multer");
@@ -114,6 +115,19 @@ router.get("/:orgId", authenticate, requireRole(4), async (req, res) => {
   }
 });
 
+/// GET /api/organizations/:orgId/members — List members of an org
+router.get("/:orgId/members", authenticate, requireRole(4), async (req, res) => {
+  try {
+    const users = await User.find({
+      "memberships.organization": req.params.orgId,
+      "memberships.isActive": true,
+    }).select("-nonce");
+    res.json(users);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 /// PATCH /api/organizations/:orgId — Update (Level 1 only)
 router.patch("/:orgId", authenticate, requireRole(1), async (req, res) => {
   try {
@@ -133,6 +147,16 @@ router.patch("/:orgId", authenticate, requireRole(1), async (req, res) => {
       { new: true, runValidators: true }
     );
     if (!org) return res.status(404).json({ error: "Organization not found" });
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(`org:${org._id}`).emit("org_updated", {
+        orgId: org._id,
+        name: org.name,
+        logoUrl: org.logoUrl,
+      });
+    }
+
     res.json(org);
   } catch (err) {
     res.status(400).json({ error: err.message });

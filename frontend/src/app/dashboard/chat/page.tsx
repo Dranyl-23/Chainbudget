@@ -5,7 +5,8 @@ import { useAuth } from "@/context/AuthContext";
 import { io, Socket } from "socket.io-client";
 import {
   Send, Pin, PinOff, Trash2, Copy, Check, MessageSquare, RefreshCw,
-  Smile, CheckCheck, UserCircle
+  Smile, CheckCheck, UserCircle, Camera, Info, X, ChevronDown, ChevronUp,
+  ShieldCheck, Users, Search
 } from "lucide-react";
 import toast from "react-hot-toast";
 import api from "@/lib/api";
@@ -86,7 +87,7 @@ function ChatAvatar({
     return (
       <div
         style={{ width: size, height: size }}
-        className={`rounded-full bg-gradient-to-br from-purple-600 to-indigo-600 flex items-center justify-center text-white font-bold text-[11px] shadow-sm border border-purple-400/30 select-none shrink-0 ${className}`}
+        className={`rounded-full bg-linear-to-br from-purple-600 to-indigo-600 flex items-center justify-center text-white font-bold text-[11px] shadow-sm border border-purple-400/30 select-none shrink-0 ${className}`}
       >
         {initial || <UserCircle className="w-full h-full text-purple-300" />}
       </div>
@@ -148,6 +149,39 @@ function formatChatTime(dateString: string) {
   return `${date.toLocaleDateString([], { month: "short", day: "numeric" })} ${timeStr}`;
 }
 
+interface OrgMemberItem {
+  _id: string;
+  displayName?: string;
+  avatarUrl?: string;
+  email?: string;
+  roleLevel: number;
+  roleLabel: string;
+}
+
+interface OrgFullDetails {
+  _id?: string;
+  name?: string;
+  description?: string;
+  logoUrl?: string;
+  treasuryWallet?: string;
+  walletAddress?: string;
+  highValueThreshold?: number;
+  requiredApprovals?: number;
+}
+
+interface RawUserMember {
+  _id: string;
+  displayName?: string;
+  avatarUrl?: string;
+  email?: string;
+  memberships?: Array<{
+    organization: string | { _id: string };
+    roleLevel?: number;
+    roleLabel?: string;
+    isActive?: boolean;
+  }>;
+}
+
 export default function OrgChatPage() {
   const { user, activeOrgId, isConnected } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -158,10 +192,106 @@ export default function OrgChatPage() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isSocketConnected, setIsSocketConnected] = useState(false);
   const [activeReactingMessageId, setActiveReactingMessageId] = useState<string | null>(null);
+  const [activeTimestampMessageId, setActiveTimestampMessageId] = useState<string | null>(null);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [orgLogoUrl, setOrgLogoUrl] = useState<string | undefined>(undefined);
+  const [showChatInfoDrawer, setShowChatInfoDrawer] = useState(false);
+  const [orgMembers, setOrgMembers] = useState<OrgMemberItem[]>([]);
+  const [orgFullDetails, setOrgFullDetails] = useState<OrgFullDetails | null>(null);
+  const [openSection, setOpenSection] = useState<{ [key: string]: boolean }>({
+    chatInfo: true,
+    members: false,
+    pinned: false,
+    privacy: false,
+  });
+
+  // Messenger Search States (Web)
+  const [isSearchActive, setIsSearchActive] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchMatches, setSearchMatches] = useState<ChatMessage[]>([]);
+  const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
+  const [isSearchingServer, setIsSearchingServer] = useState(false);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+
+  const toggleSection = (key: string) => {
+    setOpenSection((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
   const socketRef = useRef<Socket | null>(null);
+
+  // Jump to specific message by ID and highlight it
+  const jumpToMessage = useCallback((messageId: string) => {
+    setHighlightedMessageId(messageId);
+    const element = document.getElementById(`msg-${messageId}`);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    setTimeout(() => {
+      setHighlightedMessageId((prev) => (prev === messageId ? null : prev));
+    }, 3500);
+  }, []);
+
+  // Debounced search effect
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      if (!isSearchActive || !searchQuery.trim()) {
+        setSearchMatches([]);
+        setCurrentMatchIndex(0);
+        return;
+      }
+
+      const q = searchQuery.toLowerCase().trim();
+      const localMatches = messages.filter((m) => m.content.toLowerCase().includes(q));
+
+      setIsSearchingServer(true);
+      try {
+        const res = await api.get<{ results: ChatMessage[] }>(
+          `/chat/${activeOrgId}/search?q=${encodeURIComponent(q)}`
+        );
+        const serverResults = res.data?.results || [];
+
+        const merged = [...localMatches];
+        for (const s of serverResults) {
+          if (!merged.some((m) => m._id === s._id)) {
+            merged.push(s);
+          }
+        }
+
+        setSearchMatches(merged);
+        setCurrentMatchIndex(0);
+        if (merged.length > 0) {
+          jumpToMessage(merged[0]._id);
+        }
+      } catch {
+        setSearchMatches(localMatches);
+        if (localMatches.length > 0) {
+          jumpToMessage(localMatches[0]._id);
+        }
+      } finally {
+        setIsSearchingServer(false);
+      }
+    }, 280);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, isSearchActive, activeOrgId, messages, jumpToMessage]);
+
+  const handleNextMatch = () => {
+    if (searchMatches.length === 0) return;
+    const nextIdx = (currentMatchIndex + 1) % searchMatches.length;
+    setCurrentMatchIndex(nextIdx);
+    jumpToMessage(searchMatches[nextIdx]._id);
+  };
+
+  const handlePrevMatch = () => {
+    if (searchMatches.length === 0) return;
+    const prevIdx = (currentMatchIndex - 1 + searchMatches.length) % searchMatches.length;
+    setCurrentMatchIndex(prevIdx);
+    jumpToMessage(searchMatches[prevIdx]._id);
+  };
 
   const currentUserId = user?.id || (user as { _id?: string })?._id;
 
@@ -180,6 +310,74 @@ export default function OrgChatPage() {
   }, [currentMembership]);
 
   const userRoleLevel = currentMembership?.roleLevel || 4;
+  const activeOrgLogo = orgLogoUrl || currentOrg?.logoUrl;
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !activeOrgId) return;
+
+    if (userRoleLevel > 2) {
+      toast.error("Only Organization Officers (Level 1 & Level 2) can change the organization picture");
+      return;
+    }
+
+    setIsUploadingLogo(true);
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const uploadRes = await api.post<{ documentUrl?: string }>("/upload", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      const uploadedUrl = uploadRes.data?.documentUrl;
+      if (uploadedUrl) {
+        await api.patch(`/organizations/${activeOrgId}`, { logoUrl: uploadedUrl });
+        setOrgLogoUrl(uploadedUrl);
+        toast.success("Organization profile picture updated successfully!");
+      }
+    } catch {
+      toast.error("Failed to upload organization picture");
+    } finally {
+      setIsUploadingLogo(false);
+      if (logoInputRef.current) logoInputRef.current.value = "";
+    }
+  };
+
+  useEffect(() => {
+    if (showChatInfoDrawer && activeOrgId) {
+      void (async () => {
+        try {
+          const [mRes, oRes] = await Promise.all([
+            api.get<RawUserMember[]>(`/users/${activeOrgId}/members`),
+            api.get<OrgFullDetails>(`/organizations/${activeOrgId}`),
+          ]);
+          const formatted: OrgMemberItem[] = (mRes.data || []).map((u) => {
+            const m = u.memberships?.find(
+              (mem) =>
+                (typeof mem.organization === "object"
+                  ? mem.organization?._id
+                  : mem.organization) === activeOrgId
+            );
+            return {
+              _id: u._id,
+              displayName: u.displayName || u.email?.split("@")[0] || "Member",
+              avatarUrl: u.avatarUrl,
+              email: u.email,
+              roleLevel: m?.roleLevel || 4,
+              roleLabel:
+                m?.roleLabel ||
+                (m?.roleLevel === 1 ? "President" : m?.roleLevel === 2 ? "Auditor" : m?.roleLevel === 3 ? "Treasurer" : "Member"),
+            };
+          });
+          setOrgMembers(formatted);
+          setOrgFullDetails(oRes.data);
+        } catch (e) {
+          console.error("Error loading chat details:", e);
+        }
+      })();
+    }
+  }, [showChatInfoDrawer, activeOrgId]);
 
   const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
     messagesEndRef.current?.scrollIntoView({ behavior });
@@ -272,6 +470,15 @@ export default function OrgChatPage() {
     socket.on("new_org_message", (data: { orgId: string; message: ChatMessage }) => {
       if (data.orgId === activeOrgId && data.message) {
         setMessages((prev) => {
+          const tempMsg = prev.find(
+            (m) =>
+              m._id.startsWith("temp-") &&
+              m.content === data.message.content &&
+              m.sender?._id === data.message.sender?._id
+          );
+          if (tempMsg) {
+            return prev.map((m) => (m._id === tempMsg._id ? data.message : m));
+          }
           if (prev.some((m) => m._id === data.message._id)) return prev;
           return [...prev, data.message];
         });
@@ -320,19 +527,60 @@ export default function OrgChatPage() {
       }
     });
 
+    socket.on("org_updated", (data: { orgId: string; logoUrl?: string; name?: string }) => {
+      if (data.orgId === activeOrgId && data.logoUrl) {
+        setOrgLogoUrl(data.logoUrl);
+      }
+    });
+
     return () => {
       socket.disconnect();
       socketRef.current = null;
     };
   }, [activeOrgId, currentUserId, markMessagesAsSeen]);
 
-  // 3. Send message handler
+  // 3. Instant Optimistic Send message handler (0ms UI latency)
   const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const trimmed = inputText.trim();
     if (!trimmed || isSending || !activeOrgId) return;
 
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const roleLevel = userRoleLevel;
+    const roleLabel =
+      currentMembership?.roleLabel ||
+      (roleLevel === 1 ? "President" : roleLevel === 2 ? "Auditor" : roleLevel === 3 ? "Treasurer" : "Member");
+
+    const optimisticMessage: ChatMessage = {
+      _id: tempId,
+      organization: activeOrgId,
+      sender: {
+        _id: currentUserId || "me",
+        displayName: user?.displayName || "Me",
+        avatarUrl: user?.avatarUrl,
+        walletAddress: user?.walletAddress,
+        email: (user as { email?: string })?.email,
+      },
+      content: trimmed,
+      messageType: "text",
+      roleLevel,
+      roleLabel,
+      isPinned: false,
+      reactions: [],
+      seenBy: [
+        {
+          _id: currentUserId || "me",
+          displayName: user?.displayName || "Me",
+          avatarUrl: user?.avatarUrl,
+        },
+      ],
+      createdAt: new Date().toISOString(),
+    };
+
+    // 1. Instantly render in UI with 0ms delay!
     setInputText("");
+    setMessages((prev) => [...prev, optimisticMessage]);
+    setTimeout(() => scrollToBottom("smooth"), 20);
     setIsSending(true);
 
     try {
@@ -343,15 +591,14 @@ export default function OrgChatPage() {
 
       const sentMsg = res.data.message;
       if (sentMsg) {
-        setMessages((prev) => {
-          if (prev.some((m) => m._id === sentMsg._id)) return prev;
-          return [...prev, sentMsg];
-        });
-        scrollToBottom("smooth");
+        setMessages((prev) =>
+          prev.map((m) => (m._id === tempId ? sentMsg : m))
+        );
       }
     } catch (err: unknown) {
       console.error("[Chat] Send failed:", err);
       toast.error("Failed to send message");
+      setMessages((prev) => prev.filter((m) => m._id !== tempId));
       setInputText(trimmed);
     } finally {
       setIsSending(false);
@@ -427,46 +674,145 @@ export default function OrgChatPage() {
   return (
     <div className="p-4 md:p-8 flex flex-col h-[calc(100vh-4.5rem)] max-w-6xl mx-auto w-full animate-fade-in">
       {/* ── HEADER BAR ── */}
-      <div className="flex items-center justify-between px-6 py-4 bg-zinc-900/60 backdrop-blur-xl border border-white/8 rounded-2xl mb-4 shadow-sm">
-        <div className="flex items-center gap-3.5">
-          <div className="relative">
-            <div className="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/30 flex items-center justify-center text-purple-300 font-bold overflow-hidden">
-              {currentOrg?.logoUrl ? (
-                <Image src={currentOrg.logoUrl} alt="Org" width={40} height={40} className="w-full h-full object-cover" unoptimized />
-              ) : (
-                <MessageSquare className="w-5 h-5 text-purple-400" />
-              )}
-            </div>
-            <span
-              className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-zinc-900 ${
-                isSocketConnected ? "bg-emerald-500" : "bg-amber-500"
-              }`}
-              title={isSocketConnected ? "Live Connected" : "Connecting..."}
+      {isSearchActive ? (
+        <div className="flex items-center justify-between px-4 py-3 bg-zinc-900/70 backdrop-blur-xl border border-purple-500/30 rounded-2xl mb-4 shadow-sm gap-3">
+          <div className="flex items-center gap-2 flex-1">
+            <Search className="w-4 h-4 text-zinc-400 shrink-0" />
+            <input
+              ref={searchInputRef}
+              autoFocus
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search past messages in conversation..."
+              className="bg-transparent text-sm text-white placeholder-zinc-500 focus:outline-none flex-1"
             />
+            {isSearchingServer && <RefreshCw className="w-3.5 h-3.5 text-purple-400 animate-spin" />}
+            {searchQuery && !isSearchingServer && (
+              <button onClick={() => setSearchQuery("")} className="text-zinc-500 hover:text-white p-1">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
 
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-base font-bold text-white">{currentOrg?.name || "Organization Group Chat"}</h1>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/15 text-purple-300 border border-purple-500/30">
-                All Roles (L1-L4)
-              </span>
-            </div>
-            <p className="text-xs text-zinc-400 flex items-center gap-1.5 mt-0.5">
-              <span className={`inline-block w-1.5 h-1.5 rounded-full ${isSocketConnected ? "bg-emerald-400" : "bg-amber-400"}`} />
-              {isSocketConnected ? "Real-time stream active" : "Reconnecting to live channel..."}
-            </p>
+          <div className="flex items-center gap-2 shrink-0">
+            {searchMatches.length > 0 && (
+              <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-xl px-2 py-1 text-xs text-zinc-300">
+                <span className="font-mono text-[11px] font-bold">
+                  {currentMatchIndex + 1}/{searchMatches.length}
+                </span>
+                <button
+                  onClick={handlePrevMatch}
+                  className="p-0.5 hover:bg-white/10 rounded text-zinc-300 hover:text-white transition"
+                  title="Previous match"
+                >
+                  <ChevronUp className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={handleNextMatch}
+                  className="p-0.5 hover:bg-white/10 rounded text-zinc-300 hover:text-white transition"
+                  title="Next match"
+                >
+                  <ChevronDown className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
+            <button
+              onClick={() => {
+                setIsSearchActive(false);
+                setSearchQuery("");
+                setSearchMatches([]);
+                setHighlightedMessageId(null);
+              }}
+              className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-semibold text-zinc-300 hover:text-white transition border border-white/5"
+            >
+              Cancel
+            </button>
           </div>
         </div>
+      ) : (
+        <div className="flex items-center justify-between px-6 py-4 bg-zinc-900/60 backdrop-blur-xl border border-white/8 rounded-2xl mb-4 shadow-sm">
+          <div className="flex items-center gap-3.5">
+            <div className="relative group/logo">
+              <input
+                type="file"
+                ref={logoInputRef}
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => void handleLogoUpload(e)}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (userRoleLevel <= 2) {
+                    logoInputRef.current?.click();
+                  }
+                }}
+                disabled={userRoleLevel > 2 || isUploadingLogo}
+                className={`w-8 h-8 rounded-lg bg-purple-600/20 border border-purple-500/30 flex items-center justify-center text-purple-300 font-bold overflow-hidden relative ${
+                  userRoleLevel <= 2 ? "cursor-pointer hover:border-purple-400 hover:opacity-90" : "cursor-default"
+                }`}
+                title={userRoleLevel <= 2 ? "Click to change organization picture" : "Organization Picture"}
+              >
+                {isUploadingLogo ? (
+                  <RefreshCw className="w-4 h-4 text-purple-400 animate-spin" />
+                ) : activeOrgLogo ? (
+                  <Image
+                    src={activeOrgLogo.startsWith("/") ? `${BACKEND_URL}${activeOrgLogo}` : activeOrgLogo}
+                    alt="Org"
+                    width={32}
+                    height={32}
+                    className="w-full h-full object-cover"
+                    unoptimized
+                  />
+                ) : (
+                  <MessageSquare className="w-4 h-4 text-purple-400" />
+                )}
 
-        <button
-          onClick={() => void fetchChatData(true)}
-          className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition border border-white/5"
-          title="Refresh Messages"
-        >
-          <RefreshCw className="w-4 h-4" />
-        </button>
-      </div>
+                {userRoleLevel <= 2 && !isUploadingLogo && (
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover/logo:opacity-100 flex items-center justify-center transition">
+                    <Camera className="w-3.5 h-3.5 text-white" />
+                  </div>
+                )}
+              </button>
+              <span
+                className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-zinc-900 pointer-events-none ${
+                  isSocketConnected ? "bg-emerald-500" : "bg-amber-500"
+                }`}
+                title={isSocketConnected ? "Live Connected" : "Connecting..."}
+              />
+            </div>
+
+            <div>
+              <h1 className="text-base font-bold text-white">{currentOrg?.name || "Organization Group Chat"}</h1>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => void fetchChatData(true)}
+              className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition border border-white/5"
+              title="Refresh Messages"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+
+            {/* ── MESSENGER-STYLE (i) INFO BUTTON ── */}
+            <button
+              onClick={() => setShowChatInfoDrawer((prev) => !prev)}
+              className={`p-2 rounded-xl transition border ${
+                showChatInfoDrawer
+                  ? "bg-indigo-600 text-white border-indigo-500 shadow-md shadow-indigo-600/30"
+                  : "bg-white/5 hover:bg-white/10 text-indigo-300 hover:text-white border-white/5"
+              }`}
+              title="Chat info & Organization details"
+            >
+              <Info className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── PINNED ANNOUNCEMENTS BANNER ── */}
       {pinnedMessages.length > 0 && (
@@ -485,7 +831,7 @@ export default function OrgChatPage() {
       )}
 
       {/* ── MESSAGES CHAT STREAM ── */}
-      <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-zinc-950/60 backdrop-blur-md border border-white/8 rounded-2xl mb-4 space-y-4 shadow-inner [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+      <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-zinc-950/60 backdrop-blur-md border border-white/8 rounded-2xl mb-4 space-y-4 shadow-inner [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] scrollbar-none">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center h-full text-zinc-400 text-sm gap-3">
             <RefreshCw className="w-6 h-6 animate-spin text-purple-400" />
@@ -520,17 +866,17 @@ export default function OrgChatPage() {
                 key={msg._id}
                 className={`group flex items-end gap-2 ${isMe ? "justify-end" : "justify-start"}`}
               >
-                {/* ── SENDER AVATAR (Only for other members on the left side, compact 28px) ── */}
+                {/* ── SENDER AVATAR (Only for other members on the left side, compact 22px) ── */}
                 {!isMe && (
-                  <div className="w-7 h-7 shrink-0 mb-0.5">
+                  <div className="w-5.5 h-5.5 shrink-0 mb-0.5">
                     {isLastInSequence ? (
                       <ChatAvatar
                         src={msg.sender?.avatarUrl}
                         name={senderName}
-                        size={28}
+                        size={22}
                       />
                     ) : (
-                      <div className="w-7 h-7" />
+                      <div className="w-5.5 h-5.5" />
                     )}
                   </div>
                 )}
@@ -550,21 +896,35 @@ export default function OrgChatPage() {
                   {/* Message Bubble + Floating Toolbar */}
                   <div className="relative group/bubble">
                     <div
-                      className={`px-3.5 py-2 rounded-2xl text-sm leading-relaxed ${
+                      id={`msg-${msg._id}`}
+                      onClick={() =>
+                        setActiveTimestampMessageId(
+                          activeTimestampMessageId === msg._id ? null : msg._id
+                        )
+                      }
+                      className={`px-3.5 py-2 rounded-2xl text-sm leading-relaxed cursor-pointer select-text transition-all duration-300 ${
                         isMe
-                          ? "bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-br-xs shadow-md shadow-purple-900/20"
+                          ? "bg-linear-to-r from-purple-600 to-indigo-600 text-white rounded-br-xs shadow-md shadow-purple-900/20"
                           : "bg-zinc-900/90 border border-white/8 text-zinc-100 rounded-bl-xs shadow-sm"
-                      } ${msg.isPinned ? "border-amber-500/50 ring-1 ring-amber-500/30" : ""}`}
+                      } ${msg.isPinned ? "border-amber-500/50 ring-1 ring-amber-500/30" : ""} ${
+                        highlightedMessageId === msg._id
+                          ? "ring-2 ring-amber-400 border-amber-400 shadow-lg shadow-amber-500/20 scale-[1.02]"
+                          : ""
+                      }`}
                     >
                       {msg.isPinned && (
                         <div className="flex items-center gap-1 text-[10px] font-bold text-amber-300 mb-1 pb-1 border-b border-white/10">
                           <Pin className="w-3 h-3" /> Pinned Announcement
                         </div>
                       )}
-                      <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                      <p className="whitespace-pre-wrap wrap-break-word">{msg.content}</p>
+                    </div>
+
+                    {/* ── TAP/CLICK TO SHOW TIMESTAMP ── */}
+                    {activeTimestampMessageId === msg._id && (
                       <div
-                        className={`text-[10px] mt-1 font-mono flex items-center gap-1.5 ${
-                          isMe ? "text-purple-200/70 justify-end" : "text-zinc-500 justify-end"
+                        className={`text-[10px] mt-1 font-mono flex items-center gap-1.5 px-1 animate-fade-in ${
+                          isMe ? "text-zinc-400 justify-end" : "text-zinc-500 justify-start"
                         }`}
                       >
                         <span>{formatChatTime(msg.createdAt)}</span>
@@ -573,12 +933,12 @@ export default function OrgChatPage() {
                             {otherSeenUsers.length > 0 ? (
                               <CheckCheck className="w-3.5 h-3.5 text-cyan-300 inline" />
                             ) : (
-                              <Check className="w-3 h-3 text-purple-200/70 inline" />
+                              <Check className="w-3 h-3 text-zinc-400 inline" />
                             )}
                           </span>
                         )}
                       </div>
-                    </div>
+                    )}
 
                     {/* ── HOVER ACTION TOOLBAR ── */}
                     <div
@@ -696,17 +1056,17 @@ export default function OrgChatPage() {
                   )}
                 </div>
 
-                {/* ── SENDER AVATAR (Right side for own messages, 28px) ── */}
+                {/* ── SENDER AVATAR (Right side for own messages, 22px) ── */}
                 {isMe && (
-                  <div className="w-7 h-7 shrink-0 mb-0.5">
+                  <div className="w-5.5 h-5.5 shrink-0 mb-0.5">
                     {isLastInSequence ? (
                       <ChatAvatar
                         src={msg.sender?.avatarUrl}
                         name={senderName}
-                        size={28}
+                        size={22}
                       />
                     ) : (
-                      <div className="w-7 h-7" />
+                      <div className="w-5.5 h-5.5" />
                     )}
                   </div>
                 )}
@@ -743,6 +1103,224 @@ export default function OrgChatPage() {
           )}
         </button>
       </form>
+
+      {/* ── MESSENGER-STYLE CHAT INFO DRAWER (Web Slide-Over) ── */}
+      {showChatInfoDrawer && (
+        <div className="fixed inset-y-0 right-0 w-full max-w-sm bg-zinc-950/95 backdrop-blur-2xl border-l border-white/10 shadow-2xl z-50 flex flex-col animate-in slide-in-from-right duration-200">
+          {/* Drawer Header */}
+          <div className="p-4 border-b border-white/10 flex items-center justify-between">
+            <h2 className="text-sm font-bold text-white flex items-center gap-2">
+              <Info className="w-4 h-4 text-purple-400" /> Chat details
+            </h2>
+            <button
+              onClick={() => setShowChatInfoDrawer(false)}
+              className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition"
+              title="Close info"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Drawer Body Scroll */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-5 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] scrollbar-none">
+            {/* Org Profile Header */}
+            <div className="flex flex-col items-center text-center pt-2">
+              <div className="relative group/avatar mb-3">
+                <div className="w-20 h-20 rounded-2xl bg-purple-600/20 border-2 border-purple-500/40 flex items-center justify-center text-purple-300 font-bold overflow-hidden shadow-lg shadow-purple-900/30">
+                  {activeOrgLogo ? (
+                    <Image
+                      src={activeOrgLogo.startsWith("/") ? `${BACKEND_URL}${activeOrgLogo}` : activeOrgLogo}
+                      alt="Org"
+                      width={80}
+                      height={80}
+                      className="w-full h-full object-cover"
+                      unoptimized
+                    />
+                  ) : (
+                    <span className="text-2xl">{currentOrg?.name?.charAt(0).toUpperCase() || "O"}</span>
+                  )}
+                </div>
+
+                {userRoleLevel <= 2 && (
+                  <button
+                    onClick={() => logoInputRef.current?.click()}
+                    className="absolute -bottom-1 -right-1 p-1.5 bg-purple-600 hover:bg-purple-500 rounded-lg text-white shadow-md transition"
+                    title="Change picture"
+                  >
+                    <Camera className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              <h3 className="text-base font-bold text-white">{currentOrg?.name}</h3>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                {orgMembers.length > 0 ? `${orgMembers.length} members` : "Organization Group"} • Active DAO
+              </p>
+
+              {/* Quick Actions */}
+              <div className="flex items-center justify-center gap-2 mt-4 w-full">
+                <button
+                  onClick={() => {
+                    setShowChatInfoDrawer(false);
+                    setIsSearchActive(true);
+                  }}
+                  className="flex-1 py-2 px-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs font-semibold text-zinc-300 flex items-center justify-center gap-1.5 transition"
+                >
+                  <Search className="w-3.5 h-3.5" /> Search
+                </button>
+                {userRoleLevel <= 2 && (
+                  <button
+                    onClick={() => logoInputRef.current?.click()}
+                    className="flex-1 py-2 px-2.5 bg-purple-600/15 hover:bg-purple-600/25 border border-purple-500/30 rounded-xl text-xs font-semibold text-purple-300 flex items-center justify-center gap-1.5 transition"
+                  >
+                    <Camera className="w-3.5 h-3.5" /> Photo
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    const wallet = orgFullDetails?.treasuryWallet || orgFullDetails?.walletAddress;
+                    if (wallet) {
+                      void navigator.clipboard.writeText(wallet);
+                      toast.success("Wallet address copied!");
+                    }
+                  }}
+                  className="flex-1 py-2 px-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs font-semibold text-zinc-300 flex items-center justify-center gap-1.5 transition"
+                >
+                  <Copy className="w-3.5 h-3.5" /> Copy
+                </button>
+              </div>
+            </div>
+
+            {/* Accordion 1: Chat Info */}
+            <div className="border border-white/8 rounded-xl overflow-hidden bg-zinc-900/40">
+              <button
+                onClick={() => toggleSection("chatInfo")}
+                className="w-full p-3 flex items-center justify-between text-xs font-bold text-zinc-200 hover:bg-white/5 transition"
+              >
+                <span className="flex items-center gap-2">
+                  <Info className="w-3.5 h-3.5 text-purple-400" /> Chat info
+                </span>
+                {openSection.chatInfo ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </button>
+
+              {openSection.chatInfo && (
+                <div className="p-3 border-t border-white/5 text-xs space-y-3 text-zinc-300 bg-zinc-950/40">
+                  {orgFullDetails?.description && (
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-zinc-500 block mb-0.5">Description</span>
+                      <p className="text-zinc-300 leading-relaxed">{orgFullDetails.description}</p>
+                    </div>
+                  )}
+
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-zinc-500 block mb-0.5">Treasury Address</span>
+                    <p className="font-mono text-[11px] text-purple-300 break-all">
+                      {orgFullDetails?.treasuryWallet || orgFullDetails?.walletAddress || "0x..."}
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-zinc-500 block mb-0.5">Threshold</span>
+                      <span className="font-semibold text-white">
+                        ₱{Number(orgFullDetails?.highValueThreshold || 5000).toLocaleString()}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-zinc-500 block mb-0.5">Approvals</span>
+                      <span className="font-semibold text-white">
+                        {orgFullDetails?.requiredApprovals || 2} Signatures
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Accordion 2: Chat Members */}
+            <div className="border border-white/8 rounded-xl overflow-hidden bg-zinc-900/40">
+              <button
+                onClick={() => toggleSection("members")}
+                className="w-full p-3 flex items-center justify-between text-xs font-bold text-zinc-200 hover:bg-white/5 transition"
+              >
+                <span className="flex items-center gap-2">
+                  <Users className="w-3.5 h-3.5 text-indigo-400" /> Chat members ({orgMembers.length})
+                </span>
+                {openSection.members ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </button>
+
+              {openSection.members && (
+                <div className="p-3 border-t border-white/5 space-y-2.5 max-h-60 overflow-y-auto bg-zinc-950/40">
+                  {orgMembers.map((m, idx) => {
+                    const badge = getRoleBadge(m.roleLevel, m.roleLabel);
+                    const mName = m.displayName || "Member";
+                    return (
+                      <div key={m._id || idx} className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <ChatAvatar src={m.avatarUrl} name={mName} size={24} />
+                          <span className="font-medium text-zinc-200 truncate">{mName}</span>
+                        </div>
+                        <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold border shrink-0 ${badge.bg}`}>
+                          {badge.label}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Accordion 3: Pinned Announcements */}
+            <div className="border border-white/8 rounded-xl overflow-hidden bg-zinc-900/40">
+              <button
+                onClick={() => toggleSection("pinned")}
+                className="w-full p-3 flex items-center justify-between text-xs font-bold text-zinc-200 hover:bg-white/5 transition"
+              >
+                <span className="flex items-center gap-2">
+                  <Pin className="w-3.5 h-3.5 text-amber-400" /> Pinned announcements ({pinnedMessages.length})
+                </span>
+                {openSection.pinned ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </button>
+
+              {openSection.pinned && (
+                <div className="p-3 border-t border-white/5 space-y-2 bg-zinc-950/40">
+                  {pinnedMessages.length === 0 ? (
+                    <p className="text-xs text-zinc-500">No pinned announcements</p>
+                  ) : (
+                    pinnedMessages.map((pin) => (
+                      <div key={pin._id} className="p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-lg text-xs space-y-1">
+                        <p className="text-amber-100">{pin.content}</p>
+                        <span className="text-[10px] text-amber-400 font-mono block">
+                          Pinned by {pin.sender?.displayName || "Officer"}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Accordion 4: Privacy & Governance */}
+            <div className="border border-white/8 rounded-xl overflow-hidden bg-zinc-900/40">
+              <button
+                onClick={() => toggleSection("privacy")}
+                className="w-full p-3 flex items-center justify-between text-xs font-bold text-zinc-200 hover:bg-white/5 transition"
+              >
+                <span className="flex items-center gap-2">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Privacy & governance
+                </span>
+                {openSection.privacy ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </button>
+
+              {openSection.privacy && (
+                <div className="p-3 border-t border-white/5 text-xs text-zinc-400 space-y-2 bg-zinc-950/40 leading-relaxed">
+                  <p>All organizational budget votes, multi-sig signoffs, and expense liquidations are cryptographically recorded and decentralized.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

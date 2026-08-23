@@ -27,6 +27,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import * as Clipboard from 'expo-clipboard';
+import * as ImagePicker from 'expo-image-picker';
 import api from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { useOrg } from '../context/OrgContext';
@@ -102,10 +103,26 @@ function formatChatTime(dateString: string) {
   return `${date.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${timeStr}`;
 }
 
+const BACKEND_BASE = 'https://chainbudget-api.fly.dev';
+
+function formatMobileAvatarUrl(uri?: string) {
+  if (!uri) return undefined;
+  if (uri.startsWith('/uploads')) {
+    return `${BACKEND_BASE}${uri}`;
+  }
+  if (uri.includes('localhost:5001') || uri.includes('127.0.0.1:5001')) {
+    return uri.replace(/http:\/\/(localhost|127\.0\.0\.1):5001/, BACKEND_BASE);
+  }
+  if (uri.startsWith('http://') || uri.startsWith('https://')) {
+    return uri;
+  }
+  return undefined;
+}
+
 function ChatMobileAvatar({
   uri,
   name,
-  size = 28,
+  size = 22,
 }: {
   uri?: string;
   name?: string;
@@ -113,8 +130,9 @@ function ChatMobileAvatar({
 }) {
   const [error, setError] = useState(false);
   const initial = (name || 'M').trim().charAt(0).toUpperCase();
+  const resolvedUri = formatMobileAvatarUrl(uri);
 
-  if (!uri || error) {
+  if (!resolvedUri || error) {
     return (
       <View
         style={{
@@ -135,7 +153,7 @@ function ChatMobileAvatar({
 
   return (
     <Image
-      source={{ uri }}
+      source={{ uri: resolvedUri }}
       style={{ width: size, height: size, borderRadius: size / 2 }}
       onError={() => setError(true)}
     />
@@ -167,8 +185,112 @@ export default function OrgChatScreen() {
   const [isSending, setIsSending] = useState(false);
   const [showPinnedBanner, setShowPinnedBanner] = useState(true);
   const [selectedMessageForAction, setSelectedMessageForAction] = useState<ChatMessageItem | null>(null);
+  const [selectedTimestampMessageId, setSelectedTimestampMessageId] = useState<string | null>(null);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [orgLogoUrl, setOrgLogoUrl] = useState<string | undefined>(currentOrg?.logo);
+
+  // Messenger Conversation Search States
+  const [isSearchActive, setIsSearchActive] = useState(Boolean(route.params?.initialSearch));
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchMatches, setSearchMatches] = useState<ChatMessageItem[]>([]);
+  const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
+  const [isSearchingServer, setIsSearchingServer] = useState(false);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
 
   const flatListRef = useRef<FlatList>(null);
+
+  useEffect(() => {
+    if (route.params?.initialSearch) {
+      setIsSearchActive(true);
+    }
+  }, [route.params?.initialSearch]);
+
+  // Jump to specific message and highlight it
+  const jumpToMessage = useCallback((messageId: string) => {
+    setHighlightedMessageId(messageId);
+    setMessages((currentMsgs) => {
+      const idx = currentMsgs.findIndex((m) => m._id === messageId);
+      if (idx !== -1 && flatListRef.current) {
+        setTimeout(() => {
+          try {
+            flatListRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.5 });
+          } catch {
+            // fallback
+          }
+        }, 100);
+      }
+      return currentMsgs;
+    });
+
+    // Remove highlight after 3.5 seconds
+    setTimeout(() => {
+      setHighlightedMessageId((prev) => (prev === messageId ? null : prev));
+    }, 3500);
+  }, []);
+
+  // Debounced search effect across local memory & server history
+  useEffect(() => {
+    if (!isSearchActive || !searchQuery.trim()) {
+      setSearchMatches([]);
+      setCurrentMatchIndex(0);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      const q = searchQuery.toLowerCase().trim();
+      const localMatches = messages.filter((m) => m.content.toLowerCase().includes(q));
+
+      setIsSearchingServer(true);
+      try {
+        const res = await api.get(`/chat/${targetOrgId}/search?q=${encodeURIComponent(q)}`);
+        const serverResults: ChatMessageItem[] = res.data?.results || [];
+
+        // Merge local and server matches
+        const merged = [...localMatches];
+        for (const s of serverResults) {
+          if (!merged.some((m) => m._id === s._id)) {
+            merged.push(s);
+          }
+        }
+
+        setSearchMatches(merged);
+        setCurrentMatchIndex(0);
+        if (merged.length > 0) {
+          jumpToMessage(merged[0]._id);
+        }
+      } catch (err) {
+        console.warn('[search error]', err);
+        setSearchMatches(localMatches);
+        if (localMatches.length > 0) {
+          jumpToMessage(localMatches[0]._id);
+        }
+      } finally {
+        setIsSearchingServer(false);
+      }
+    }, 280);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, isSearchActive, targetOrgId, messages, jumpToMessage]);
+
+  const handleNextMatch = () => {
+    if (searchMatches.length === 0) return;
+    const nextIdx = (currentMatchIndex + 1) % searchMatches.length;
+    setCurrentMatchIndex(nextIdx);
+    jumpToMessage(searchMatches[nextIdx]._id);
+  };
+
+  const handlePrevMatch = () => {
+    if (searchMatches.length === 0) return;
+    const prevIdx = (currentMatchIndex - 1 + searchMatches.length) % searchMatches.length;
+    setCurrentMatchIndex(prevIdx);
+    jumpToMessage(searchMatches[prevIdx]._id);
+  };
+
+  useEffect(() => {
+    if (currentOrg?.logo) {
+      setOrgLogoUrl(currentOrg.logo);
+    }
+  }, [currentOrg?.logo]);
 
   // Keyboard show listeners for smooth chat auto-scrolling
   useEffect(() => {
@@ -231,6 +353,15 @@ export default function OrgChatScreen() {
     const unsubNewMsg = on('new_org_message', (data: { orgId: string; message: ChatMessageItem }) => {
       if (data.orgId === targetOrgId && data.message) {
         setMessages((prev) => {
+          const tempMsg = prev.find(
+            (m) =>
+              m._id.startsWith('temp-') &&
+              m.content === data.message.content &&
+              m.sender?._id === data.message.sender?._id
+          );
+          if (tempMsg) {
+            return prev.map((m) => (m._id === tempMsg._id ? data.message : m));
+          }
           if (prev.some((m) => m._id === data.message._id)) return prev;
           return [...prev, data.message];
         });
@@ -282,21 +413,154 @@ export default function OrgChatScreen() {
       }
     });
 
+    const unsubOrgUpdated = on('org_updated', (data: { orgId: string; logoUrl?: string; name?: string }) => {
+      if (data.orgId === targetOrgId && data.logoUrl) {
+        setOrgLogoUrl(data.logoUrl);
+      }
+    });
+
     return () => {
       unsubNewMsg();
       unsubReaction();
       unsubSeen();
       unsubPin();
       unsubDelete();
+      unsubOrgUpdated();
     };
   }, [targetOrgId, pinnedMessage, currentUserId, on, markMessagesAsSeen]);
 
-  // Send a message
+  // Handle Changing Organization Profile Picture
+  const handleChangeOrgLogo = async () => {
+    if (userRoleLevel > 2) {
+      Alert.alert('Permission Notice', 'Only Organization Officers (Level 1 & Level 2) can change the organization profile image.');
+      return;
+    }
+
+    Alert.alert(
+      'Organization Picture',
+      'Choose an option to update this organization\'s profile picture',
+      [
+        {
+          text: 'Choose from Gallery',
+          onPress: async () => {
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== 'granted') {
+              Alert.alert('Permission Denied', 'Gallery access is needed to pick a picture.');
+              return;
+            }
+
+            const result = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              allowsEditing: true,
+              aspect: [1, 1],
+              quality: 0.7,
+            });
+
+            if (!result.canceled && result.assets[0]?.uri) {
+              await uploadOrgLogo(result.assets[0].uri);
+            }
+          },
+        },
+        {
+          text: 'Take Photo',
+          onPress: async () => {
+            const { status } = await ImagePicker.requestCameraPermissionsAsync();
+            if (status !== 'granted') {
+              Alert.alert('Permission Denied', 'Camera access is needed to take a picture.');
+              return;
+            }
+
+            const result = await ImagePicker.launchCameraAsync({
+              allowsEditing: true,
+              aspect: [1, 1],
+              quality: 0.7,
+            });
+
+            if (!result.canceled && result.assets[0]?.uri) {
+              await uploadOrgLogo(result.assets[0].uri);
+            }
+          },
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  };
+
+  const uploadOrgLogo = async (uri: string) => {
+    setIsUploadingLogo(true);
+    await triggerLightHaptic();
+    try {
+      const formData = new FormData();
+      const filename = uri.split('/').pop() || 'org-logo.jpg';
+      const match = /\.(\w+)$/.exec(filename);
+      const ext = match ? match[1].toLowerCase() : 'jpeg';
+      const type = ext === 'jpg' ? 'image/jpeg' : `image/${ext}`;
+
+      formData.append('file', {
+        uri,
+        name: filename,
+        type,
+      } as any);
+
+      const uploadRes = await api.post('/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      const uploadedUrl = uploadRes.data?.documentUrl;
+      if (uploadedUrl) {
+        await api.patch(`/organizations/${targetOrgId}`, { logoUrl: uploadedUrl });
+        setOrgLogoUrl(uploadedUrl);
+        await triggerSuccessHaptic();
+        Alert.alert('Success', 'Organization profile picture updated successfully!');
+      }
+    } catch (err: any) {
+      console.warn('[uploadOrgLogo error]', err?.response?.data || err.message);
+      Alert.alert('Error', err?.response?.data?.error || 'Failed to upload organization picture.');
+    } finally {
+      setIsUploadingLogo(false);
+    }
+  };
+
+  // 3. Instant Optimistic Send message handler (0ms UI latency)
   const handleSendMessage = async () => {
     const trimmed = inputText.trim();
     if (!trimmed || isSending) return;
 
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const roleLevel = userRoleLevel;
+    const roleLabel =
+      currentMembership?.roleLabel ||
+      (roleLevel === 1 ? 'President' : roleLevel === 2 ? 'Auditor' : roleLevel === 3 ? 'Treasurer' : 'Member');
+
+    const optimisticMessage: ChatMessageItem = {
+      _id: tempId,
+      organization: targetOrgId,
+      sender: {
+        _id: currentUserId || 'me',
+        displayName: user?.displayName || 'Me',
+        avatarUrl: user?.avatarUrl,
+        walletAddress: user?.walletAddress,
+        email: user?.email,
+      },
+      content: trimmed,
+      messageType: 'text',
+      roleLevel,
+      roleLabel,
+      isPinned: false,
+      reactions: [],
+      seenBy: [
+        {
+          _id: currentUserId || 'me',
+          displayName: user?.displayName || 'Me',
+          avatarUrl: user?.avatarUrl,
+        },
+      ],
+      createdAt: new Date().toISOString(),
+    };
+
+    // 1. Instantly display in UI (0ms latency!)
     setInputText('');
+    setMessages((prev) => [...prev, optimisticMessage]);
     setIsSending(true);
     await triggerLightHaptic();
 
@@ -308,13 +572,14 @@ export default function OrgChatScreen() {
 
       const sentMsg: ChatMessageItem = res.data?.message;
       if (sentMsg) {
-        setMessages((prev) => {
-          if (prev.some((m) => m._id === sentMsg._id)) return prev;
-          return [...prev, sentMsg];
-        });
+        setMessages((prev) =>
+          prev.map((m) => (m._id === tempId ? sentMsg : m))
+        );
       }
     } catch (err: any) {
+      console.warn('[chat:send error]', err?.response?.data || err.message);
       Alert.alert('Error', err.response?.data?.error || 'Failed to send message.');
+      setMessages((prev) => prev.filter((m) => m._id !== tempId));
       setInputText(trimmed);
     } finally {
       setIsSending(false);
@@ -354,23 +619,28 @@ export default function OrgChatScreen() {
       (u) => u._id !== currentUserId && u._id !== item.sender?._id
     );
 
+    const isTimestampVisible = selectedTimestampMessageId === item._id;
+
     if (isMyMessage) {
       return (
-        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'flex-end', marginBottom: 10, paddingHorizontal: 14, gap: 8 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'flex-end', marginBottom: 8, paddingHorizontal: 14, gap: 8 }}>
           <View style={{ alignItems: 'flex-end', maxWidth: '82%' }}>
             <TouchableOpacity
               activeOpacity={0.85}
+              onPress={() => setSelectedTimestampMessageId((prev) => (prev === item._id ? null : item._id))}
               onLongPress={() => setSelectedMessageForAction(item)}
               style={{
                 backgroundColor: '#9333EA',
                 borderRadius: 18,
                 borderBottomRightRadius: 4,
                 paddingHorizontal: 14,
-                paddingVertical: 10,
+                paddingVertical: 9,
+                borderWidth: highlightedMessageId === item._id ? 2 : 0,
+                borderColor: '#FDE047',
                 shadowColor: '#9333EA',
                 shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.25,
-                shadowRadius: 4,
+                shadowOpacity: 0.2,
+                shadowRadius: 3,
                 elevation: 2,
               }}
             >
@@ -381,17 +651,21 @@ export default function OrgChatScreen() {
                 </View>
               )}
               <Text style={{ color: '#FFFFFF', fontSize: 14, lineHeight: 20 }}>{item.content}</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4, marginTop: 4 }}>
-                <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10 }}>
+            </TouchableOpacity>
+
+            {/* ── TAP-TO-SHOW TIMESTAMP & STATUS (Messenger Style) ── */}
+            {isTimestampVisible && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3, paddingRight: 2 }}>
+                <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '500' }}>
                   {formatChatTime(item.createdAt)}
                 </Text>
                 <Ionicons
                   name={otherSeenUsers.length > 0 ? "checkmark-done" : "checkmark"}
-                  size={13}
-                  color={otherSeenUsers.length > 0 ? "#67E8F9" : "rgba(255,255,255,0.7)"}
+                  size={12}
+                  color={otherSeenUsers.length > 0 ? "#22D3EE" : colors.textMuted}
                 />
               </View>
-            </TouchableOpacity>
+            )}
 
             {/* ── REACTIONS PILLS UNDER BUBBLE ── */}
             {item.reactions && item.reactions.length > 0 && (
@@ -441,13 +715,13 @@ export default function OrgChatScreen() {
             )}
           </View>
 
-          {/* ── SENDER AVATAR (Right side of own message, 28px) ── */}
-          <View style={{ width: 28, height: 28, justifyContent: 'center', alignItems: 'center', marginBottom: 2 }}>
+          {/* ── SENDER AVATAR (Right side of own message, 22px) ── */}
+          <View style={{ width: 22, height: 22, justifyContent: 'center', alignItems: 'center', marginBottom: 2 }}>
             {isLastInSequence ? (
               <ChatMobileAvatar
                 uri={item.sender?.avatarUrl}
                 name={senderName}
-                size={28}
+                size={22}
               />
             ) : null}
           </View>
@@ -456,14 +730,14 @@ export default function OrgChatScreen() {
     }
 
     return (
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginBottom: 12, paddingHorizontal: 14, gap: 8 }}>
-        {/* ── SENDER AVATAR (Messenger Style: Beside message bubble, 28px) ── */}
-        <View style={{ width: 28, height: 28, justifyContent: 'center', alignItems: 'center', marginBottom: 2 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginBottom: 10, paddingHorizontal: 14, gap: 8 }}>
+        {/* ── SENDER AVATAR (Messenger Style: Beside message bubble, 22px) ── */}
+        <View style={{ width: 22, height: 22, justifyContent: 'center', alignItems: 'center', marginBottom: 2 }}>
           {isLastInSequence ? (
             <ChatMobileAvatar
               uri={item.sender?.avatarUrl}
               name={senderName}
-              size={28}
+              size={22}
             />
           ) : null}
         </View>
@@ -489,15 +763,22 @@ export default function OrgChatScreen() {
 
           <TouchableOpacity
             activeOpacity={0.85}
+            onPress={() => setSelectedTimestampMessageId((prev) => (prev === item._id ? null : item._id))}
             onLongPress={() => setSelectedMessageForAction(item)}
             style={{
-              backgroundColor: isDark ? colors.surface : '#FFFFFF',
-              borderColor: isDark ? 'rgba(255,255,255,0.08)' : '#E2E8F0',
-              borderWidth: 1,
+              backgroundColor:
+                highlightedMessageId === item._id
+                  ? (isDark ? 'rgba(245, 158, 11, 0.25)' : '#FEF3C7')
+                  : (isDark ? colors.surface : '#FFFFFF'),
+              borderColor:
+                highlightedMessageId === item._id
+                  ? '#F59E0B'
+                  : (isDark ? 'rgba(255,255,255,0.08)' : '#E2E8F0'),
+              borderWidth: highlightedMessageId === item._id ? 2 : 1,
               borderRadius: 18,
               borderBottomLeftRadius: 4,
               paddingHorizontal: 14,
-              paddingVertical: 10,
+              paddingVertical: 9,
               maxWidth: '88%',
               shadowColor: '#000',
               shadowOffset: { width: 0, height: 1 },
@@ -513,10 +794,14 @@ export default function OrgChatScreen() {
               </View>
             )}
             <Text style={{ color: colors.textPrimary, fontSize: 14, lineHeight: 20 }}>{item.content}</Text>
-            <Text style={{ color: colors.textMuted, fontSize: 10, alignSelf: 'flex-end', marginTop: 4 }}>
+          </TouchableOpacity>
+
+          {/* ── TAP-TO-SHOW TIMESTAMP FOR INCOMING MESSAGES ── */}
+          {isTimestampVisible && (
+            <Text style={{ color: colors.textMuted, fontSize: 10, marginTop: 3, marginLeft: 4 }}>
               {formatChatTime(item.createdAt)}
             </Text>
-          </TouchableOpacity>
+          )}
 
           {/* ── REACTIONS PILLS UNDER BUBBLE ── */}
           {item.reactions && item.reactions.length > 0 && (
@@ -555,82 +840,172 @@ export default function OrgChatScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
-      {/* ── CUSTOM ORG CHAT HEADER ── */}
-      <View
-        style={{
-          paddingTop: insets.top + 6,
-          paddingBottom: 12,
-          paddingHorizontal: 16,
-          backgroundColor: isDark ? colors.surface : '#FFFFFF',
-          borderBottomWidth: 1,
-          borderBottomColor: colors.borderSubtle,
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
-      >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+      {/* ── CUSTOM ORG CHAT HEADER (Messenger Search / Normal Header) ── */}
+      {isSearchActive ? (
+        <View
+          style={{
+            paddingTop: insets.top + 6,
+            paddingBottom: 10,
+            paddingHorizontal: 14,
+            backgroundColor: isDark ? colors.surface : '#FFFFFF',
+            borderBottomWidth: 1,
+            borderBottomColor: colors.borderSubtle,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 10,
+          }}
+        >
           <TouchableOpacity
-            onPress={() => navigation.goBack()}
+            onPress={() => {
+              setIsSearchActive(false);
+              setSearchQuery('');
+              setSearchMatches([]);
+              setHighlightedMessageId(null);
+            }}
             style={{ padding: 4, marginLeft: -4 }}
             activeOpacity={0.7}
           >
-            <Ionicons name="chevron-back" size={26} color={colors.textPrimary} />
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
 
-          <View style={{ position: 'relative' }}>
-            <Image
-              source={{
-                uri:
-                  currentOrg?.logo ||
-                  `https://ui-avatars.com/api/?name=${encodeURIComponent(currentOrg?.name || 'Org')}&background=9333ea&color=fff`,
-              }}
-              style={{ width: 38, height: 38, borderRadius: 19 }}
+          <View
+            style={{
+              flex: 1,
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F1F5F9',
+              borderRadius: 20,
+              paddingHorizontal: 12,
+              paddingVertical: Platform.OS === 'ios' ? 8 : 4,
+              gap: 8,
+            }}
+          >
+            <Ionicons name="search" size={16} color={colors.textSecondary} />
+            <TextInput
+              autoFocus
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Search conversation..."
+              placeholderTextColor={colors.textSecondary}
+              style={{ flex: 1, color: colors.textPrimary, fontSize: 14, padding: 0 }}
+              returnKeyType="search"
             />
-            <View
-              style={{
-                position: 'absolute',
-                bottom: 0,
-                right: 0,
-                width: 11,
-                height: 11,
-                borderRadius: 6,
-                backgroundColor: isConnected ? '#10B981' : '#F59E0B',
-                borderWidth: 2,
-                borderColor: isDark ? colors.surface : '#FFFFFF',
-              }}
-            />
+            {isSearchingServer && <ActivityIndicator size="small" color={colors.primary} />}
+            {searchQuery.length > 0 && !isSearchingServer && (
+              <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close-circle" size={16} color={colors.textSecondary} />
+              </TouchableOpacity>
+            )}
           </View>
 
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: colors.textPrimary, fontWeight: '800', fontSize: 15 }} numberOfLines={1}>
-              {currentOrg?.name || 'Organization Chat'}
-            </Text>
-            <Text style={{ color: colors.textSecondary, fontSize: 11 }} numberOfLines={1}>
-              {isConnected ? 'Real-time Connected • All Roles (L1-L4)' : 'Reconnecting...'}
-            </Text>
-          </View>
+          {searchMatches.length > 0 && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Text style={{ color: colors.textSecondary, fontSize: 11, fontWeight: '700' }}>
+                {currentMatchIndex + 1}/{searchMatches.length}
+              </Text>
+              <TouchableOpacity onPress={handlePrevMatch} style={{ padding: 3 }} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                <Ionicons name="chevron-up" size={18} color={colors.textPrimary} />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleNextMatch} style={{ padding: 3 }} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                <Ionicons name="chevron-down" size={18} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
-
-        <TouchableOpacity
-          onPress={() => navigation.navigate('Members', { orgId: targetOrgId })}
-          activeOpacity={0.7}
+      ) : (
+        <View
           style={{
-            backgroundColor: colors.primaryMuted,
-            borderColor: colors.primary + '40',
-            borderWidth: 1,
-            borderRadius: 14,
-            paddingHorizontal: 10,
-            paddingVertical: 5,
+            paddingTop: insets.top + 6,
+            paddingBottom: 12,
+            paddingHorizontal: 16,
+            backgroundColor: isDark ? colors.surface : '#FFFFFF',
+            borderBottomWidth: 1,
+            borderBottomColor: colors.borderSubtle,
             flexDirection: 'row',
             alignItems: 'center',
-            gap: 4,
+            justifyContent: 'space-between',
           }}
         >
-          <Ionicons name="people" size={14} color={colors.primary} />
-          <Text style={{ color: colors.primary, fontSize: 11, fontWeight: '700' }}>Members</Text>
-        </TouchableOpacity>
-      </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              style={{ padding: 4, marginLeft: -4 }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="chevron-back" size={26} color={colors.textPrimary} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={handleChangeOrgLogo}
+              activeOpacity={0.8}
+              style={{ position: 'relative' }}
+            >
+              {isUploadingLogo ? (
+                <View
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 16,
+                    backgroundColor: colors.primaryMuted,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}
+                >
+                  <ActivityIndicator size="small" color={colors.primary} />
+                </View>
+              ) : (
+                <Image
+                  source={{
+                    uri:
+                      formatMobileAvatarUrl(orgLogoUrl) ||
+                      `https://ui-avatars.com/api/?name=${encodeURIComponent(currentOrg?.name || 'Org')}&background=9333ea&color=fff`,
+                  }}
+                  style={{ width: 32, height: 32, borderRadius: 16 }}
+                />
+              )}
+              <View
+                style={{
+                  position: 'absolute',
+                  bottom: 0,
+                  right: 0,
+                  width: 10,
+                  height: 10,
+                  borderRadius: 5,
+                  backgroundColor: isConnected ? '#10B981' : '#F59E0B',
+                  borderWidth: 1.5,
+                  borderColor: isDark ? colors.surface : '#FFFFFF',
+                }}
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => navigation.navigate('OrgChatInfo', { orgId: targetOrgId })}
+              activeOpacity={0.7}
+              style={{ flex: 1 }}
+            >
+              <Text style={{ color: colors.textPrimary, fontWeight: '800', fontSize: 16 }} numberOfLines={1}>
+                {currentOrg?.name || 'Organization Chat'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* ── MESSENGER-STYLE (i) INFO BUTTON ── */}
+          <TouchableOpacity
+            onPress={() => navigation.navigate('OrgChatInfo', { orgId: targetOrgId })}
+            activeOpacity={0.7}
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 17,
+              backgroundColor: isDark ? 'rgba(99, 102, 241, 0.15)' : '#EEF2FF',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Ionicons name="information-circle" size={22} color="#6366F1" />
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* ── PINNED ANNOUNCEMENT DRAWER ── */}
       {pinnedMessage && showPinnedBanner && (

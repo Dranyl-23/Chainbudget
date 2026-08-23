@@ -94,6 +94,41 @@ router.get("/:orgId/pinned", authenticate, requireOrgMembership, async (req, res
 });
 
 /**
+ * @route   GET /api/chat/:orgId/search
+ * @desc    Search past messages within an organization chat
+ * @access  Private (Org Members)
+ */
+router.get("/:orgId/search", authenticate, requireOrgMembership, async (req, res) => {
+  try {
+    const { orgId } = req.params;
+    const { q, limit = 30 } = req.query;
+
+    if (!q || !q.trim()) {
+      return res.json({ results: [] });
+    }
+
+    const queryRegex = new RegExp(q.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+
+    const messages = await ChatMessage.find({
+      organization: orgId,
+      content: { $regex: queryRegex },
+    })
+      .sort({ createdAt: -1 })
+      .limit(Math.min(parseInt(limit, 10) || 30, 100))
+      .populate("sender", "displayName avatarUrl walletAddress email")
+      .populate("seenBy", "displayName avatarUrl")
+      .populate("reactions.users", "displayName avatarUrl")
+      .populate("replyTo", "content sender createdAt roleLabel")
+      .lean();
+
+    res.json({ results: messages });
+  } catch (err) {
+    console.error("[chat:search]", err);
+    res.status(500).json({ error: "Failed to search messages" });
+  }
+});
+
+/**
  * @route   POST /api/chat/:orgId/messages
  * @desc    Send a new chat message in the organization room
  * @access  Private (Org Members)
