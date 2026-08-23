@@ -28,6 +28,7 @@ const daoRoutes = require("./routes/dao");
 const publicRoutes = require("./routes/public");
 const notificationRoutes = require("./routes/notifications");
 const aiRoutes = require("./routes/ai");
+const feedbackRoutes = require("./routes/feedback");
 const { generalRateLimiter, csrfProtection } = require("./middleware/security");
 
 const app = express();
@@ -214,6 +215,7 @@ app.use("/api/dao", daoRoutes);
 app.use("/api/public", publicRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/ai", aiRoutes);
+app.use("/api/feedback", feedbackRoutes);
 
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get("/api/health", (req, res) => {

@@ -15,6 +15,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { triggerLightHaptic, triggerErrorHaptic, triggerSuccessHaptic, authenticateWithBiometrics } from '../lib/biometrics';
 import ThemeSelectorModal from '../components/ThemeSelectorModal';
+import { FeedbackModal } from '../components/FeedbackModal';
 import appConfig from '../../app.json';
 
 const APP_VERSION = appConfig?.expo?.version || '1.1.3';
@@ -31,6 +32,7 @@ export default function ProfileScreen() {
   const [showAboutModal, setShowAboutModal] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showThemeModal, setShowThemeModal] = useState(false);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [mintingSbt, setMintingSbt] = useState(false);
   
   // Vault state
@@ -525,6 +527,31 @@ export default function ProfileScreen() {
           style={{ backgroundColor: colors.surface, borderColor: colors.border }}
           className="border rounded-2xl p-1 shadow-sm overflow-hidden"
         >
+          {/* Send Feedback & Bug Report */}
+          <TouchableOpacity 
+            onPress={() => {
+              triggerLightHaptic();
+              setShowFeedbackModal(true);
+            }}
+            activeOpacity={0.7}
+            style={{ borderBottomColor: colors.borderSubtle }}
+            className="flex-row items-center justify-between p-3.5 border-b"
+          >
+            <View className="flex-row items-center gap-3">
+              <View 
+                style={{ backgroundColor: '#F59E0B20', borderColor: '#F59E0B40' }}
+                className="w-9 h-9 rounded-xl items-center justify-center border"
+              >
+                <Ionicons name="chatbubbles-outline" size={20} color="#F59E0B" />
+              </View>
+              <View>
+                <Text style={{ color: colors.textPrimary }} className="font-bold text-sm">Send Feedback & Bug Report</Text>
+                <Text style={{ color: colors.textSecondary }} className="text-xs">Report issues, suggestions, or ratings</Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </TouchableOpacity>
+
           {/* Help & FAQs */}
           <TouchableOpacity 
             onPress={() => {
@@ -1014,6 +1041,12 @@ export default function ProfileScreen() {
       <ThemeSelectorModal
         visible={showThemeModal}
         onClose={() => setShowThemeModal(false)}
+      />
+
+      {/* ── MODAL 6: In-App Tester Feedback Modal ── */}
+      <FeedbackModal
+        visible={showFeedbackModal}
+        onClose={() => setShowFeedbackModal(false)}
       />
     </KeyboardAwareScrollView>
   </View>
