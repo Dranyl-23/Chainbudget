@@ -9,6 +9,9 @@ RUN npm ci --omit=dev
 # Copy backend source code
 COPY . .
 
+# Create uploads directory and grant ownership to node user
+RUN mkdir -p /app/uploads && chown -R node:node /app
+
 # Environment Defaults
 ENV PORT=5001
 ENV NODE_ENV=production

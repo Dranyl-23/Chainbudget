@@ -187,8 +187,10 @@ app.use((req, res, next) => {
   next();
 });
 
-// ── Static file serving for uploaded receipts ─────────────────────────────────
+// ── Static file serving for uploaded receipts & avatars ─────────────────────
+const os = require("os");
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
+app.use("/uploads", express.static(path.join(os.tmpdir(), "uploads")));
 
 // ── Security Middleware ───────────────────────────────────────────────────────
 // Apply general rate limiting to all API routes
