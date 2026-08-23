@@ -25,7 +25,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useRoute, useNavigation } from '@react-navigation/native';
+import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
 import api from '../lib/api';
@@ -187,7 +187,9 @@ export default function OrgChatScreen() {
   const [selectedMessageForAction, setSelectedMessageForAction] = useState<ChatMessageItem | null>(null);
   const [selectedTimestampMessageId, setSelectedTimestampMessageId] = useState<string | null>(null);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
-  const [orgLogoUrl, setOrgLogoUrl] = useState<string | undefined>(currentOrg?.logo);
+  const [orgLogoUrl, setOrgLogoUrl] = useState<string | undefined>(
+    (currentOrg as any)?.logoUrl || currentOrg?.logo
+  );
 
   // Messenger Conversation Search States
   const [isSearchActive, setIsSearchActive] = useState(Boolean(route.params?.initialSearch));
@@ -318,13 +320,14 @@ export default function OrgChatScreen() {
     }
   }, [targetOrgId]);
 
-  // Fetch initial chat messages and pinned announcements
+  // Fetch initial chat messages, pinned announcements, and organization details
   const loadChatHistory = useCallback(async () => {
     if (!targetOrgId) return;
     try {
-      const [msgRes, pinRes] = await Promise.all([
+      const [msgRes, pinRes, orgRes] = await Promise.all([
         api.get(`/chat/${targetOrgId}/messages?limit=50`),
         api.get(`/chat/${targetOrgId}/pinned`),
+        api.get(`/organizations/${targetOrgId}`).catch(() => null),
       ]);
 
       const history: ChatMessageItem[] = msgRes.data?.messages || [];
@@ -336,6 +339,11 @@ export default function OrgChatScreen() {
       } else {
         setPinnedMessage(null);
       }
+
+      if (orgRes?.data?.logoUrl || orgRes?.data?.logo) {
+        setOrgLogoUrl(orgRes.data.logoUrl || orgRes.data.logo);
+      }
+
       void markMessagesAsSeen();
     } catch (err) {
       console.warn('[OrgChat] Failed to load messages:', err);
@@ -347,6 +355,21 @@ export default function OrgChatScreen() {
   useEffect(() => {
     loadChatHistory();
   }, [loadChatHistory]);
+
+  // Refresh organization logo whenever screen is focused (e.g. returning from Chat Info)
+  useFocusEffect(
+    useCallback(() => {
+      if (!targetOrgId) return;
+      api
+        .get(`/organizations/${targetOrgId}`)
+        .then((res) => {
+          if (res.data?.logoUrl || res.data?.logo) {
+            setOrgLogoUrl(res.data.logoUrl || res.data.logo);
+          }
+        })
+        .catch(() => {});
+    }, [targetOrgId])
+  );
 
   // Live WebSocket subscriptions for real-time messages, reactions, and seen receipts
   useEffect(() => {
@@ -957,7 +980,7 @@ export default function OrgChatScreen() {
                 <Image
                   source={{
                     uri:
-                      formatMobileAvatarUrl(orgLogoUrl) ||
+                      formatMobileAvatarUrl(orgLogoUrl || (currentOrg as any)?.logoUrl || currentOrg?.logo) ||
                       `https://ui-avatars.com/api/?name=${encodeURIComponent(currentOrg?.name || 'Org')}&background=9333ea&color=fff`,
                   }}
                   style={{ width: 32, height: 32, borderRadius: 16 }}

@@ -393,18 +393,22 @@ export default function OrgChatPage() {
     }
   }, [activeOrgId]);
 
-  // 1. Fetch initial chat history and pinned messages
+  // 1. Fetch initial chat history, pinned messages, and organization details
   const fetchChatData = useCallback(async (showLoadingSpinner = false) => {
     if (!activeOrgId) return;
     if (showLoadingSpinner) setIsLoading(true);
     try {
-      const [msgRes, pinRes] = await Promise.all([
+      const [msgRes, pinRes, orgRes] = await Promise.all([
         api.get<{ messages: ChatMessage[] }>(`/chat/${activeOrgId}/messages?limit=50`),
         api.get<{ pinned: ChatMessage[] }>(`/chat/${activeOrgId}/pinned`),
+        api.get<OrgFullDetails>(`/organizations/${activeOrgId}`).catch(() => null),
       ]);
 
       setMessages(msgRes.data.messages || []);
       setPinnedMessages(pinRes.data.pinned || []);
+      if (orgRes?.data?.logoUrl) {
+        setOrgLogoUrl(orgRes.data.logoUrl);
+      }
       setTimeout(() => scrollToBottom("auto"), 100);
       void markMessagesAsSeen();
     } catch (err: unknown) {
@@ -421,14 +425,18 @@ export default function OrgChatPage() {
     if (activeOrgId) {
       void (async () => {
         try {
-          const [msgRes, pinRes] = await Promise.all([
+          const [msgRes, pinRes, orgRes] = await Promise.all([
             api.get<{ messages: ChatMessage[] }>(`/chat/${activeOrgId}/messages?limit=50`),
             api.get<{ pinned: ChatMessage[] }>(`/chat/${activeOrgId}/pinned`),
+            api.get<OrgFullDetails>(`/organizations/${activeOrgId}`).catch(() => null),
           ]);
 
           if (!isCancelled) {
             setMessages(msgRes.data.messages || []);
             setPinnedMessages(pinRes.data.pinned || []);
+            if (orgRes?.data?.logoUrl) {
+              setOrgLogoUrl(orgRes.data.logoUrl);
+            }
             setIsLoading(false);
             setTimeout(() => scrollToBottom("auto"), 100);
             void markMessagesAsSeen();
