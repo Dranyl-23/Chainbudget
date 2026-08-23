@@ -5,6 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { ShieldAlert, Activity, User, FileText, CheckCircle, XCircle, Download, BookOpen } from "lucide-react";
 import api from "@/lib/api";
 import { exportToCSV } from "@/lib/exportUtils";
+import { getExplorerTxUrl } from "@/lib/config";
 import Portal from "@/components/Portal";
 import axios from "axios";
 
@@ -308,7 +309,7 @@ export default function AuditPage() {
                           <div className="flex items-center justify-end gap-2">
                             <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_8px_rgba(34,211,238,0.8)] shrink-0" />
                             <a 
-                              href={`https://amoy.polygonscan.com/tx/${log.blockchainTxHash}`}
+                              href={getExplorerTxUrl(log.blockchainTxHash)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-xs font-mono text-cyan-400 hover:text-cyan-300 hover:underline truncate max-w-30 block"

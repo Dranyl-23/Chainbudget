@@ -8,10 +8,11 @@ const Organization = require("../models/Organization");
 const AuditLog = require("../models/AuditLog");
 const User = require("../models/User");
 const { authenticate, requireRole } = require("../middleware/auth");
+const { requireIdempotency } = require("../middleware/idempotency");
 const { sendPushNotifications } = require("./users");
 
 /// POST /api/approvals/:txId — Submit approval/rejection (Level 1 and 2)
-router.post("/:txId", authenticate, requireRole(2), async (req, res) => {
+router.post("/:txId", authenticate, requireRole(2), requireIdempotency, async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
   

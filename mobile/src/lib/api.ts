@@ -89,13 +89,18 @@ api.interceptors.request.use(async (config) => {
     config.headers.Authorization = `Bearer ${token}`;
   }
 
-  // 3. Attach CSRF for mutating requests
+  // 3. Attach CSRF & Idempotency Key for mutating requests
   if (config.method && ['post', 'put', 'patch', 'delete'].includes(config.method.toLowerCase())) {
     if (!csrfToken) {
       await fetchCsrfToken();
     }
     if (csrfToken) {
       config.headers['X-CSRF-Token'] = csrfToken;
+    }
+
+    // Enterprise Idempotency: Protect against duplicate submissions & double-spending
+    if (!config.headers['X-Idempotency-Key']) {
+      config.headers['X-Idempotency-Key'] = `cb-mob-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
     }
   }
 

@@ -9,12 +9,13 @@ const User = require("../models/User");
 const Notification = require("../models/Notification");
 const { recordTransactionOnChain } = require("../services/blockchain");
 const { authenticate, requireRole } = require("../middleware/auth");
+const { requireIdempotency } = require("../middleware/idempotency");
 const { sendEmail } = require("../services/email");
 const { ethers } = require("ethers");
 const { sendPushNotifications } = require("./users");
 
 /// POST /api/transactions — Create a new transaction (Level 2+) or Request (Level 3)
-router.post("/", authenticate, requireRole(3), async (req, res) => {
+router.post("/", authenticate, requireRole(3), requireIdempotency, async (req, res) => {
   try {
     const {
       organizationId,
@@ -987,6 +988,18 @@ router.get("/:id", authenticate, async (req, res) => {
     res.json(txn);
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Internal Server Error' : err.message });
+  }
+});
+
+// ── POST /api/transactions/sync-onchain ── Trigger on-chain reconciliation
+router.post("/sync-onchain", authenticateToken, async (req, res) => {
+  try {
+    const io = req.app.get("io");
+    const { syncPendingTransactions } = require("../services/blockchainSyncWorker");
+    const result = await syncPendingTransactions(io);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 

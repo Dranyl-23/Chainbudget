@@ -7,7 +7,7 @@ import { ArrowLeft, ShieldCheck, Activity, Link as LinkIcon, AlertTriangle, Arro
 import api from "@/lib/api";
 import { ethers } from "ethers";
 import { getAmoyProvider } from "@/lib/rpcProvider";
-import { BACKEND_URL } from "@/lib/config";
+import { BACKEND_URL, getExplorerAddressUrl, getExplorerTxUrl } from "@/lib/config";
 
 interface Organization {
   _id: string;
@@ -159,11 +159,9 @@ export default function PublicDashboardPage() {
                 <span className="px-2 py-1 rounded bg-white/5 text-[10px] font-bold text-white/50 uppercase tracking-widest border border-white/10">
                   {org.type ? org.type.replace('_', ' ') : 'ORG'}
                 </span>
-                {org.contractAddress && (
-                  <a href={`https://amoy.polygonscan.com/address/${org.contractAddress}`} target="_blank" rel="noopener noreferrer" className="px-2 py-1 rounded bg-purple-500/10 text-[10px] font-bold text-purple-400 uppercase tracking-widest border border-purple-500/20 flex items-center gap-1 hover:bg-purple-500/20 transition-colors">
-                    <LinkIcon className="w-3 h-3" /> Contract Linked
-                  </a>
-                )}
+                <a href={getExplorerAddressUrl(org.contractAddress)} target="_blank" rel="noopener noreferrer" className="px-2 py-1 rounded bg-purple-500/10 text-[10px] font-bold text-purple-400 uppercase tracking-widest border border-purple-500/20 flex items-center gap-1 hover:bg-purple-500/20 transition-colors">
+                  <LinkIcon className="w-3 h-3" /> Contract Linked
+                </a>
               </div>
               <h1 className="text-3xl md:text-5xl font-black tracking-tight drop-shadow-md mb-2">{org.name || "Unknown Organization"}</h1>
               <p className="text-white/60 max-w-2xl">{org.description || "Public organization ledger."}</p>
@@ -210,10 +208,12 @@ export default function PublicDashboardPage() {
                   {org.contractAddress ? (
                     <p className="text-xs text-white/30 mt-4 flex items-center gap-1 font-mono">
                       {org.contractAddress.slice(0, 8)}...{org.contractAddress.slice(-6)}
-                      <a href={`https://amoy.polygonscan.com/address/${org.contractAddress}`} target="_blank" rel="noopener noreferrer" className="ml-2 text-fuchsia-400 hover:text-fuchsia-300 underline">View on Explorer</a>
+                      <a href={getExplorerAddressUrl(org.contractAddress)} target="_blank" rel="noopener noreferrer" className="ml-2 text-fuchsia-400 hover:text-fuchsia-300 underline">View on Explorer</a>
                     </p>
                   ) : (
-                    <p className="text-xs text-yellow-500/70 mt-4">No Smart Contract Linked</p>
+                    <p className="text-xs text-yellow-500/70 mt-4">
+                      Using Master Protocol Vault (<a href={getExplorerAddressUrl()} target="_blank" rel="noopener noreferrer" className="text-fuchsia-400 underline">Explorer</a>)
+                    </p>
                   )}
                 </div>
               </div>
@@ -308,7 +308,7 @@ export default function PublicDashboardPage() {
                           <td className="py-4 text-center pr-2">
                             {tx.blockchainTxHash ? (
                               <a 
-                                href={`https://amoy.polygonscan.com/tx/${tx.blockchainTxHash}`} 
+                                href={getExplorerTxUrl(tx.blockchainTxHash)} 
                                 target="_blank" 
                                 rel="noopener noreferrer"
                                 className="inline-flex items-center justify-center p-1.5 rounded-lg bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 transition-colors border border-cyan-500/20"

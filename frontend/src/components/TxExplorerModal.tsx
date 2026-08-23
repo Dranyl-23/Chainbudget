@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { X, ExternalLink, Copy, CheckCircle2, Activity, Box, Clock, ShieldCheck, AlertCircle } from "lucide-react";
 import { ethers } from "ethers";
 import { getAmoyProvider } from "@/lib/rpcProvider";
+import { getExplorerTxUrl } from "@/lib/config";
 
 interface TxExplorerModalProps {
   isOpen: boolean;
@@ -232,7 +233,7 @@ export default function TxExplorerModal({ isOpen, onClose, txHash }: TxExplorerM
               {/* Action */}
               <div className="mt-6">
                 <a 
-                  href={`https://amoy.polygonscan.com/tx/${txHash}`}
+                  href={getExplorerTxUrl(txHash)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center justify-center gap-2 w-full py-3 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/50 rounded-xl text-sm font-bold text-white shadow-[0_0_20px_rgba(168,85,247,0.2)] transition-all"

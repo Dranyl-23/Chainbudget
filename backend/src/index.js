@@ -263,6 +263,9 @@ mongoose
     console.log("Connected to MongoDB");
     server.listen(PORT, "0.0.0.0", () => {
       console.log(`ChainBudget API running on http://0.0.0.0:${PORT} (http://localhost:${PORT})`);
+      // Start Asynchronous Blockchain Auto-Retry Reconciliation Worker
+      const { startBlockchainSyncWorker } = require("./services/blockchainSyncWorker");
+      startBlockchainSyncWorker(io);
     });
   })
   .catch((err) => {

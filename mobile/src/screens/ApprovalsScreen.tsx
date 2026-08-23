@@ -12,7 +12,7 @@ import { useTheme } from '../context/ThemeContext';
 import { ethers } from 'ethers';
 import { signApprovalAction } from '../lib/wallet';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { triggerSuccessHaptic, triggerErrorHaptic, triggerLightHaptic } from '../lib/biometrics';
+import { triggerSuccessHaptic, triggerErrorHaptic, triggerLightHaptic, authenticateWithBiometrics } from '../lib/biometrics';
 import { SkeletonTransactionList } from '../components/SkeletonLoader';
 import ApprovalConfirmModal from '../components/ApprovalConfirmModal';
 import SwipeableApprovalCard from '../components/SwipeableApprovalCard';
@@ -135,6 +135,62 @@ export default function ApprovalsScreen() {
     const tx = targetTx;
     const action = targetAction;
 
+    // 🔐 Biometric Gate: Require FaceID / Fingerprint for High-Value Payouts
+    if (action === 'approved' && (tx.isHighValue || (tx.amount || 0) >= 5000)) {
+      const authSuccess = await authenticateWithBiometrics(
+        `Authorize Multi-Sig Payout of ₱${(tx.amount || 0).toLocaleString()}`
+      );
+      if (!authSuccess) {
+        showToast('Biometric authorization cancelled or failed.', 'error');
+        await triggerErrorHaptic();
+        return;
+      }
+    }
+
+    const previousTxList = [...pendingTx];
+    const userId = (user as any)?._id || (user as any)?.id;
+    const userWallet = user?.walletAddress?.toLowerCase();
+
+    // ── 1. Optimistic Instant UI Update (0ms Response Rate) ──────────────────
+    setConfirmModalVisible(false);
+    setPendingTx((prev) =>
+      prev.map((t) => {
+        if (t._id !== tx._id) return t;
+
+        const existingApprovedBy = t.approvedBy || [];
+        const newApprovedBy = action === 'approved'
+          ? [...existingApprovedBy, { _id: userId, walletAddress: user?.walletAddress, displayName: user?.displayName }]
+          : existingApprovedBy;
+
+        const existingApprovals = t.approvals || [];
+        const newApprovals = [
+          ...existingApprovals,
+          {
+            approver: { _id: userId, displayName: user?.displayName, walletAddress: user?.walletAddress },
+            action,
+            createdAt: new Date().toISOString(),
+          },
+        ];
+
+        return {
+          ...t,
+          hasVoted: true,
+          approvalCount: action === 'approved' ? (t.approvalCount || 0) + 1 : (t.approvalCount || 0),
+          approvedBy: newApprovedBy,
+          approvals: newApprovals,
+          status: action === 'rejected' ? 'rejected' : t.status,
+        };
+      })
+    );
+
+    setCelebration({
+      visible: true,
+      title: action === 'approved' ? 'Approval Signed! 🎉' : 'Request Rejected',
+      subtitle: `Cryptographic EIP-712 signature anchored for ₱${(tx.amount || 0).toLocaleString()}`,
+    });
+    await triggerSuccessHaptic();
+
+    // ── 2. Background Cryptographic Signing & Network Sync ───────────────────
     try {
       setSigningTxId(tx._id);
 
@@ -163,16 +219,14 @@ export default function ApprovalsScreen() {
         amountWei,
       });
 
-      setConfirmModalVisible(false);
-      setCelebration({
-        visible: true,
-        title: action === 'approved' ? 'Approval Signed!' : 'Request Rejected',
-        subtitle: `Cryptographic EIP-712 signature anchored for ₱${(tx.amount || 0).toLocaleString()}`,
-      });
       if (activeOrgId) fetchPending(activeOrgId);
     } catch (err: any) {
-      console.error("Sign / Approve Error:", err);
-      showToast(err.response?.data?.error || err.message || "Failed to process approval.", 'error');
+      console.error("Sign / Approve Error (Rolling back optimistic state):", err);
+      // Rollback to previous state if network or signing fails
+      setPendingTx(previousTxList);
+      setCelebration({ visible: false, title: '', subtitle: '' });
+      await triggerErrorHaptic();
+      showToast(err.response?.data?.error || err.message || "Failed to submit approval. Reverted.", 'error');
     } finally {
       setSigningTxId(null);
     }

@@ -3,8 +3,11 @@
 import { useState, useEffect } from "react";
 import { Search, ShieldCheck, ArrowLeft, ExternalLink, Calendar, Building, DollarSign, Activity } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
+import axios from "axios";
 import api from "@/lib/api";
 import toast from "react-hot-toast";
+import { getExplorerTxUrl } from "@/lib/config";
 
 interface PublicTx {
   txHash: string;
@@ -16,12 +19,24 @@ interface PublicTx {
   date: string;
 }
 
+interface OverviewStats {
+  totalVerified?: number;
+  totalVolume?: number;
+  activeOrganizations?: number;
+  [key: string]: unknown;
+}
+
+interface OverviewData {
+  stats: OverviewStats;
+  recent: PublicTx[];
+}
+
 export default function VerifyPage() {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<PublicTx | null>(null);
   
-  const [overviewData, setOverviewData] = useState<{ stats: any, recent: PublicTx[] } | null>(null);
+  const [overviewData, setOverviewData] = useState<OverviewData | null>(null);
 
   useEffect(() => {
     const fetchOverview = async () => {
@@ -46,8 +61,8 @@ export default function VerifyPage() {
     try {
       const res = await api.get(`/transactions/public/${q}`);
       setResult(res.data);
-    } catch (err: any) {
-      if (err.response?.status === 404) {
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err) && err.response?.status === 404) {
         toast.error("Transaction not found on ChainBudget.");
       } else {
         toast.error("An error occurred while verifying the transaction.");
@@ -60,15 +75,22 @@ export default function VerifyPage() {
   return (
     <div className="min-h-screen flex flex-col relative overflow-hidden bg-[#0A0216] text-white">
       {/* ── Massive Holographic Fluid Background ── */}
-      <div className="absolute top-[-20%] left-[-10%] w-[70vw] h-[70vw] rounded-full bg-fuchsia-600/30 blur-[150px] pointer-events-none mix-blend-screen animate-pulse" style={{ animationDuration: '10s' }} />
-      <div className="absolute top-[10%] right-[-20%] w-[60vw] h-[60vw] rounded-full bg-cyan-600/20 blur-[130px] pointer-events-none mix-blend-screen animate-pulse" style={{ animationDuration: '14s' }} />
-      <div className="absolute bottom-[-10%] left-[20%] w-[80vw] h-[80vw] rounded-full bg-blue-800/20 blur-[160px] pointer-events-none mix-blend-screen animate-pulse" style={{ animationDuration: '12s' }} />
+      <div className="absolute -top-1/4 -left-[10%] w-[70vw] h-[70vw] rounded-full bg-fuchsia-600/30 blur-[150px] pointer-events-none mix-blend-screen animate-pulse" style={{ animationDuration: '10s' }} />
+      <div className="absolute top-[10%] -right-[20%] w-[60vw] h-[60vw] rounded-full bg-cyan-600/20 blur-[130px] pointer-events-none mix-blend-screen animate-pulse" style={{ animationDuration: '14s' }} />
+      <div className="absolute -bottom-[10%] left-[20%] w-[80vw] h-[80vw] rounded-full bg-blue-800/20 blur-[160px] pointer-events-none mix-blend-screen animate-pulse" style={{ animationDuration: '12s' }} />
 
 
       {/* ── Nav ── */}
       <nav className="relative z-20 flex items-center justify-between px-8 py-5 border-b border-purple-500/20 bg-[#160B2E]/40 backdrop-blur-md">
         <Link href="/" className="flex items-center gap-2.5">
-          <img src="/3D-Chainbudget.png" alt="ChainBudget logo" className="w-10 h-10 md:w-11 md:h-11 object-contain drop-shadow-md shrink-0" />
+          <Image 
+            src="/3D-Chainbudget.png" 
+            alt="ChainBudget logo" 
+            width={44} 
+            height={44} 
+            className="w-10 h-10 md:w-11 md:h-11 object-contain drop-shadow-md shrink-0" 
+            priority
+          />
           <span className="font-bold text-xl tracking-tight text-white">
             CHAIN<span className="text-fuchsia-400">BUDGET</span>
           </span>
@@ -119,119 +141,53 @@ export default function VerifyPage() {
             </div>
           )}
 
-          {!result && overviewData && (
-            <div className="animate-fade-in w-full max-w-3xl mx-auto space-y-8">
-              {/* Stats */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-[#160B2E]/60 backdrop-blur-xl border border-purple-500/20 rounded-2xl p-6 shadow-[0_0_30px_rgba(139,92,246,0.05)] flex items-center md:flex-col md:text-center gap-4 md:gap-0">
-                  <div className="w-12 h-12 md:mx-auto bg-green-500/20 border border-green-500/30 text-green-400 rounded-full flex items-center justify-center shrink-0 md:mb-4">
-                    <ShieldCheck className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h3 className="text-2xl font-bold text-white mb-1">{overviewData.stats.totalVerified}</h3>
-                    <p className="text-sm text-white/50 font-light uppercase tracking-wider">Verified Transactions</p>
-                  </div>
-                </div>
-                <div className="bg-[#160B2E]/60 backdrop-blur-xl border border-purple-500/20 rounded-2xl p-6 shadow-[0_0_30px_rgba(139,92,246,0.05)] flex items-center md:flex-col md:text-center gap-4 md:gap-0">
-                  <div className="w-12 h-12 md:mx-auto bg-cyan-500/20 border border-cyan-500/30 text-cyan-400 rounded-full flex items-center justify-center shrink-0 md:mb-4">
-                    <DollarSign className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h3 className="text-2xl font-bold text-white mb-1">₱{overviewData.stats.totalFunds.toLocaleString()}</h3>
-                    <p className="text-sm text-white/50 font-light uppercase tracking-wider">Secured on Blockchain</p>
-                  </div>
-                </div>
-                <div className="bg-[#160B2E]/60 backdrop-blur-xl border border-purple-500/20 rounded-2xl p-6 shadow-[0_0_30px_rgba(139,92,246,0.05)] flex items-center md:flex-col md:text-center gap-4 md:gap-0">
-                  <div className="w-12 h-12 md:mx-auto bg-fuchsia-500/20 border border-fuchsia-500/30 text-fuchsia-400 rounded-full flex items-center justify-center shrink-0 md:mb-4">
-                    <Building className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h3 className="text-2xl font-bold text-white mb-1">{overviewData.stats.activeOrgs}</h3>
-                    <p className="text-sm text-white/50 font-light uppercase tracking-wider">Active Organizations</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Recent Transactions List */}
-              {overviewData.recent.length > 0 && (
-                <div className="bg-[#160B2E]/60 backdrop-blur-xl border border-purple-500/20 rounded-3xl shadow-[0_0_30px_rgba(139,92,246,0.05)] overflow-hidden">
-                  <div className="px-6 py-5 border-b border-purple-500/20 bg-[#160B2E]/80 flex items-center gap-3">
-                    <Activity className="w-5 h-5 text-fuchsia-400" />
-                    <h3 className="font-bold text-white tracking-wide uppercase">Recent Public Transactions</h3>
-                  </div>
-                  <ul className="divide-y divide-purple-500/10">
-                    {overviewData.recent.map((tx, idx) => (
-                      <li key={idx} className="p-6 hover:bg-[#1a0e35]/80 transition-colors">
-                        <div className="flex items-start sm:items-center justify-between gap-4">
-                          <div className="flex-1 pr-2">
-                            <p className="font-bold text-white text-lg leading-tight mb-2">{tx.description}</p>
-                            <div className="flex items-center flex-wrap gap-3 text-sm text-white/50">
-                              <span className="flex items-center gap-1.5"><Building className="w-4 h-4"/>{tx.organization}</span>
-                              <span className="w-1 h-1 rounded-full bg-white/20"></span>
-                              <span className="flex items-center gap-1.5"><Calendar className="w-4 h-4"/>{new Date(tx.date).toLocaleDateString()}</span>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-5 text-right shrink-0">
-                            <div>
-                              <p className="font-bold text-white text-xl">₱{tx.amount.toLocaleString()}</p>
-                              <span className="inline-block mt-1 px-3 py-1 rounded-full text-[10px] uppercase tracking-widest font-bold bg-green-500/20 border border-green-500/30 text-green-400 shadow-[0_0_15px_rgba(34,197,94,0.2)]">
-                                Verified
-                              </span>
-                            </div>
-                            <button
-                              onClick={() => handleSearch(undefined, tx.txHash)}
-                              className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/30 hover:bg-purple-500/40 flex items-center justify-center text-fuchsia-400 transition-colors shrink-0 shadow-[0_0_15px_rgba(139,92,246,0.2)]"
-                              title="View details"
-                            >
-                              <Search className="w-5 h-5" />
-                            </button>
-                          </div>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+          {loading && (
+            <div className="glass rounded-3xl p-12 text-center border border-purple-500/30 shadow-[0_0_50px_rgba(139,92,246,0.2)]">
+              <div className="w-12 h-12 border-4 border-fuchsia-500/30 border-t-fuchsia-500 rounded-full animate-spin mx-auto mb-4" />
+              <p className="text-white/60 font-medium">Scanning Polygon Amoy and ChainBudget ledger...</p>
             </div>
           )}
 
           {result && (
-            <div className="bg-[#160B2E]/60 backdrop-blur-xl border border-purple-500/20 rounded-3xl p-8 shadow-[0_0_40px_rgba(139,92,246,0.1)] animate-fade-in w-full max-w-3xl mx-auto">
-              <div className="flex items-center justify-between mb-8 pb-6 border-b border-purple-500/20">
+            <div className="glass rounded-3xl p-8 md:p-10 border border-purple-500/30 shadow-[0_0_50px_rgba(139,92,246,0.2)] relative overflow-hidden">
+              <div className="flex items-center justify-between border-b border-purple-500/20 pb-6 mb-6">
                 <div>
-                  <p className="text-sm font-light text-white/50 uppercase tracking-wider mb-2">Status</p>
-                  <span className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest border shadow-[0_0_20px_rgba(0,0,0,0.2)] ${
-                    result.status === "Approved" ? "bg-green-500/20 border-green-500/30 text-green-400 shadow-[0_0_15px_rgba(34,197,94,0.2)]" :
-                    result.status === "Pending" ? "bg-amber-500/20 border-amber-500/30 text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.2)]" :
-                    "bg-red-500/20 border-red-500/30 text-red-400 shadow-[0_0_15px_rgba(239,68,68,0.2)]"
-                  }`}>
-                    {result.status}
-                  </span>
+                  <span className="text-xs font-bold uppercase tracking-widest text-fuchsia-400 block mb-1">Status</span>
+                  <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-full bg-green-400 animate-pulse shadow-[0_0_10px_rgba(74,222,128,0.8)]" />
+                    <span className="font-bold text-lg text-white capitalize">{result.status || "Verified"}</span>
+                  </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-light text-white/50 uppercase tracking-wider mb-1">Amount</p>
-                  <p className="text-3xl font-extrabold text-white">₱{result.amount.toLocaleString()}</p>
+                  <span className="text-xs font-bold uppercase tracking-widest text-white/50 block mb-1">Amount</span>
+                  <span className="font-black text-2xl md:text-3xl text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-cyan-500 drop-shadow-md">
+                    ₱{result.amount.toLocaleString()}
+                  </span>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 mb-8">
-                <div>
-                  <div className="flex items-center gap-2 text-fuchsia-400 mb-2">
-                    <Building className="w-5 h-5" />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div className="bg-[#160B2E]/60 rounded-2xl p-4 border border-purple-500/20">
+                  <div className="flex items-center gap-2 text-fuchsia-400 mb-1">
+                    <Building className="w-4 h-4" />
                     <span className="text-xs font-light uppercase tracking-widest text-white/50">Organization</span>
                   </div>
-                  <p className="font-bold text-lg text-white">{result.organization}</p>
+                  <p className="font-bold text-lg text-white truncate">{result.organization}</p>
                 </div>
-                <div>
-                  <div className="flex items-center gap-2 text-cyan-400 mb-2">
-                    <Calendar className="w-5 h-5" />
-                    <span className="text-xs font-light uppercase tracking-widest text-white/50">Date Created</span>
+
+                <div className="bg-[#160B2E]/60 rounded-2xl p-4 border border-purple-500/20">
+                  <div className="flex items-center gap-2 text-cyan-400 mb-1">
+                    <Calendar className="w-4 h-4" />
+                    <span className="text-xs font-light uppercase tracking-widest text-white/50">Date</span>
                   </div>
-                  <p className="font-bold text-lg text-white">{new Date(result.date).toLocaleString()}</p>
+                  <p className="font-bold text-lg text-white">
+                    {result.date ? new Date(result.date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : "N/A"}
+                  </p>
                 </div>
-                <div className="sm:col-span-2">
-                  <div className="flex items-center gap-2 text-purple-400 mb-2">
-                    <DollarSign className="w-5 h-5" />
+
+                <div className="bg-[#160B2E]/60 rounded-2xl p-4 border border-purple-500/20 md:col-span-2">
+                  <div className="flex items-center gap-2 text-purple-400 mb-1">
+                    <Activity className="w-4 h-4" />
                     <span className="text-xs font-light uppercase tracking-widest text-white/50">Description & Category</span>
                   </div>
                   <p className="font-bold text-xl text-white mb-1">{result.description}</p>
@@ -245,7 +201,7 @@ export default function VerifyPage() {
                   <div className="flex items-center justify-between gap-4">
                     <p className="font-mono text-sm text-white/70 truncate">{result.txHash}</p>
                     <a
-                      href={`https://amoy.polygonscan.com/tx/${result.txHash}`}
+                      href={getExplorerTxUrl(result.txHash)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-cyan-400 hover:text-cyan-300 flex items-center gap-2 text-sm font-bold uppercase tracking-wide shrink-0 transition-colors"

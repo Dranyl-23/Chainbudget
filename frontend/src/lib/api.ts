@@ -32,10 +32,13 @@ api.interceptors.request.use((config) => {
     const token = localStorage.getItem("cb_token");
     if (token) config.headers.Authorization = `Bearer ${token}`;
 
-    // Attach CSRF token for POST/PUT/DELETE requests
+    // Attach CSRF token & Idempotency Key for mutating requests
     if (["post", "put", "patch", "delete"].includes(config.method?.toLowerCase() || "")) {
       if (csrfToken) {
         config.headers["X-CSRF-Token"] = csrfToken;
+      }
+      if (!config.headers["X-Idempotency-Key"]) {
+        config.headers["X-Idempotency-Key"] = `cb-web-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
       }
     }
   }

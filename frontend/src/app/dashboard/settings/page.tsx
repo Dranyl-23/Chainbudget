@@ -6,11 +6,12 @@ import Image from "next/image";
 import { ethers } from "ethers";
 import { getAmoyProvider } from "@/lib/rpcProvider";
 import api from "@/lib/api";
+import { getExplorerAddressUrl } from "@/lib/config";
 import toast from "react-hot-toast";
 import { 
   Save, Wallet, Upload, User as UserIcon, ShieldCheck, 
   ExternalLink, Copy, Check, Smartphone, CheckCircle2, 
-  Sparkles, X, Lock, Key, Eye, EyeOff, Clock, Fingerprint, ShieldAlert 
+  Sparkles, X, Lock, Key, Eye, EyeOff, Clock, ShieldAlert 
 } from "lucide-react";
 import axios from "axios";
 
@@ -88,7 +89,6 @@ export default function SettingsPage() {
   // Auto-Wallet Security State
   const [showKeys, setShowKeys] = useState(false);
   const [autoWalletKeys, setAutoWalletKeys] = useState<AutoWalletKeys | null>(null);
-  const [isLoadingKeys, setIsLoadingKeys] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
   // Password & Biometric Security Gate
@@ -101,17 +101,31 @@ export default function SettingsPage() {
 
   // Auto-hide security countdown timer
   useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (showKeys && keyCountdown !== null && keyCountdown > 0) {
-      timer = setTimeout(() => {
-        setKeyCountdown((prev) => (prev !== null && prev > 1 ? prev - 1 : 0));
-      }, 1000);
-    } else if (showKeys && keyCountdown === 0) {
-      setShowKeys(false);
-      setAutoWalletKeys(null);
-      setKeyCountdown(null);
-      toast("Keys auto-hidden for security.", { icon: "🔒" });
+    if (!showKeys || keyCountdown === null) return;
+
+    if (keyCountdown <= 0) {
+      const timer = setTimeout(() => {
+        setShowKeys(false);
+        setAutoWalletKeys(null);
+        setKeyCountdown(null);
+        toast("Keys auto-hidden for security.", { icon: "🔒" });
+      }, 0);
+      return () => clearTimeout(timer);
     }
+
+    const timer = setTimeout(() => {
+      setKeyCountdown((prev) => {
+        if (prev === null) return null;
+        if (prev <= 1) {
+          setShowKeys(false);
+          setAutoWalletKeys(null);
+          toast("Keys auto-hidden for security.", { icon: "🔒" });
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
     return () => clearTimeout(timer);
   }, [showKeys, keyCountdown]);
 
@@ -428,7 +442,7 @@ export default function SettingsPage() {
                     <label className="text-sm font-semibold text-gray-700">Primary Wallet</label>
                     {user?.walletAddress && (
                       <a 
-                        href={`https://amoy.polygonscan.com/address/${user.walletAddress}`} 
+                        href={getExplorerAddressUrl(user.walletAddress)} 
                         target="_blank" 
                         rel="noopener noreferrer" 
                         className="text-xs flex items-center gap-1 text-primary hover:text-primary-hover font-medium bg-primary/5 hover:bg-primary/10 px-2 py-1 rounded-md transition-colors"
@@ -481,7 +495,7 @@ export default function SettingsPage() {
           </div>
 
           {/* ── Auto-Wallet Security & Backup ── */}
-          <div className="glass rounded-xl p-6 md:p-8 border border-[var(--color-border)] mb-8">
+          <div className="glass rounded-xl p-6 md:p-8 border border-(--color-border) mb-8">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center">
                 <ShieldCheck className="w-5 h-5 text-orange-400" />
@@ -502,11 +516,11 @@ export default function SettingsPage() {
               <div className="flex flex-wrap items-center gap-3">
                 <button 
                   onClick={handleRevealKeys}
-                  disabled={isLoadingKeys}
+                  disabled={isVerifyingSecurity}
                   className="btn-secondary py-2 border-orange-500/30 hover:border-orange-500 text-orange-300 flex items-center gap-2"
                 >
                   <Lock className="w-4 h-4 text-orange-400" />
-                  {isLoadingKeys ? "Loading..." : showKeys ? "Hide Recovery Phrase & Private Key" : "Reveal Recovery Phrase & Private Key"}
+                  {isVerifyingSecurity ? "Verifying..." : showKeys ? "Hide Recovery Phrase & Private Key" : "Reveal Recovery Phrase & Private Key"}
                 </button>
 
                 {showKeys && keyCountdown !== null && (
@@ -665,7 +679,7 @@ export default function SettingsPage() {
               <div className="mt-4 animate-fade-in">
                 <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-1 rounded-xl shadow-lg">
                   <div className="bg-gray-900 rounded-lg p-4 text-white relative overflow-hidden">
-                    <div className="absolute opacity-10 right-[-20px] top-[-20px]">
+                    <div className="absolute opacity-10 -right-5 -top-5">
                       <ShieldCheck className="w-32 h-32" />
                     </div>
                     <p className="text-xs text-indigo-300 font-mono tracking-widest uppercase mb-1">ChainBudget</p>
@@ -772,7 +786,7 @@ export default function SettingsPage() {
 
       {/* ── Security Verification Modal ── */}
       {isSecurityModalOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in">
+        <div className="fixed inset-0 z-9999 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in">
           <div className="relative bg-slate-900 border border-slate-700/80 rounded-3xl shadow-2xl w-full max-w-md p-6 md:p-8 animate-in zoom-in-95 duration-200">
             <button
               onClick={() => setIsSecurityModalOpen(false)}
