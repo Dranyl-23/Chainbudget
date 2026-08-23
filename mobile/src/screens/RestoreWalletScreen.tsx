@@ -118,10 +118,10 @@ export default function RestoreWalletScreen({ navigation }: any) {
             {isLoading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <>
-                <Ionicons name="lock-open-outline" size={20} color="#fff" />
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name="lock-open-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
                 <Text style={styles.restoreBtnText}>Restore Account</Text>
-              </>
+              </View>
             )}
           </TouchableOpacity>
 

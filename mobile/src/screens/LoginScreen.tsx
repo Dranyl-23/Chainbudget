@@ -139,10 +139,10 @@ export default function LoginScreen({ navigation }: any) {
                   {isLoading ? (
                     <ActivityIndicator color="#fff" />
                   ) : (
-                    <>
-                      <Ionicons name="finger-print" size={20} color="#fff" />
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                      <Ionicons name="finger-print" size={20} color="#fff" style={{ marginRight: 8 }} />
                       <Text style={styles.primaryBtnText}>Sign In</Text>
-                    </>
+                    </View>
                   )}
                 </LinearGradient>
               </TouchableOpacity>

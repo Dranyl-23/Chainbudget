@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -226,12 +226,12 @@ export default function NetworkStatusScreen() {
             {checkingPing ? (
               <ActivityIndicator size="small" color={colors.primary} />
             ) : (
-              <>
+              <View className="flex-row items-center gap-1">
                 <Ionicons name="refresh" size={14} color={colors.primary} />
                 <Text style={{ color: colors.primary, fontSize: 11, fontWeight: '700' }}>
                   {pingLatency !== null ? `${pingLatency} ms` : 'Ping'}
                 </Text>
-              </>
+              </View>
             )}
           </TouchableOpacity>
         </View>

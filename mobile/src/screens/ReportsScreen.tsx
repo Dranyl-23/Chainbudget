@@ -174,7 +174,7 @@ export default function ReportsScreen() {
             <Text style={{ color: colors.textSecondary, marginTop: 12 }}>Loading analytics...</Text>
           </View>
         ) : (
-          <>
+          <View>
             {/* Metric Summary Cards Grid (Responsive 4-col on tablet, 2-col on phone) */}
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 }}>
               {[
@@ -356,7 +356,7 @@ export default function ReportsScreen() {
                       </Text>
                     </View>
                   ) : forecast ? (
-                    <>
+                    <View>
                       {/* Health Badge */}
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                         <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: '600' }}>Treasury Health:</Text>
@@ -375,87 +375,93 @@ export default function ReportsScreen() {
                       </View>
 
                       {/* Forecast Summary Body */}
-                      <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 20, marginBottom: 14 }}>
-                        {forecast.forecast || forecast.summary || forecast.advice}
+                      <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 18, marginBottom: 12 }}>
+                        {forecast.summary}
                       </Text>
 
-                      {/* Actionable Insights */}
-                      <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '700', marginBottom: 8 }}>
-                        Actionable Insights & Recommendations:
-                      </Text>
-                      {(forecast.insights || forecast.recommendations || []).map((insight: string, i: number) => (
-                        <View key={i} style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 6 }}>
-                          <Ionicons name="bulb" size={15} color={colors.primary} style={{ marginRight: 8, marginTop: 2 }} />
-                          <Text style={{ color: colors.textSecondary, fontSize: 12, flex: 1, lineHeight: 18 }}>
-                            {insight}
-                          </Text>
+                      {forecast.risks && forecast.risks.length > 0 && (
+                        <View style={{ marginBottom: 12 }}>
+                          <Text style={{ color: colors.error, fontSize: 12, fontWeight: '700', marginBottom: 4 }}>Risks Identified:</Text>
+                          {forecast.risks.map((r: string, idx: number) => (
+                            <Text key={idx} style={{ color: colors.textSecondary, fontSize: 12, marginLeft: 8, marginBottom: 2 }}>
+                              • {r}
+                            </Text>
+                          ))}
                         </View>
-                      ))}
-                    </>
-                  ) : forecastError ? (
-                    <View style={{ alignItems: 'center', paddingVertical: 12 }}>
-                      <Ionicons name="information-circle-outline" size={24} color={colors.warning || '#F59E0B'} style={{ marginBottom: 6 }} />
-                      <Text style={{ color: colors.textSecondary, fontSize: 12, textAlign: 'center', marginBottom: 12, paddingHorizontal: 12 }}>
-                        {forecastError}
-                      </Text>
-                      <ScaleButton
-                        onPress={() => fetchForecast(true)}
-                        style={{
-                          backgroundColor: colors.primaryMuted,
-                          borderColor: colors.primary,
-                          borderWidth: 1,
-                          paddingHorizontal: 18,
-                          paddingVertical: 8,
-                          borderRadius: 12,
-                        }}
-                      >
-                        <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 12 }}>Retry Forecast</Text>
-                      </ScaleButton>
+                      )}
+
+                      {forecast.recommendations && forecast.recommendations.length > 0 && (
+                        <View>
+                          <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '700', marginBottom: 4 }}>Recommendations:</Text>
+                          {forecast.recommendations.map((rec: string, idx: number) => (
+                            <Text key={idx} style={{ color: colors.textSecondary, fontSize: 12, marginLeft: 8, marginBottom: 2 }}>
+                              • {rec}
+                            </Text>
+                          ))}
+                        </View>
+                      )}
                     </View>
                   ) : (
-                    <ScaleButton
+                    <TouchableOpacity
                       onPress={() => fetchForecast(true)}
                       style={{
-                        backgroundColor: colors.primary,
-                        paddingVertical: 12,
+                        backgroundColor: colors.primaryMuted,
+                        borderColor: colors.primary + '60',
+                        borderWidth: 1,
                         borderRadius: 14,
+                        paddingVertical: 12,
                         alignItems: 'center',
-                        marginTop: 8,
+                        justifyContent: 'center',
+                        flexDirection: 'row',
+                        gap: 8,
                       }}
                     >
-                      <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Generate AI Forecast</Text>
-                    </ScaleButton>
+                      <Ionicons name="sparkles" size={16} color={colors.primary} />
+                      <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 13 }}>
+                        Run Predictive AI Forecast
+                      </Text>
+                    </TouchableOpacity>
                   )}
                 </View>
               )}
             </View>
 
-
-            {/* Filtered Range Transactions */}
-            <Text maxFontSizeMultiplier={1.3} style={{ color: colors.textPrimary, fontWeight: '800', fontSize: 16, marginBottom: 12 }}>
-              Transactions in Range ({filtered.length})
+            {/* Recent Large Expenses Section */}
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontSize: 16,
+                fontWeight: '800',
+                marginBottom: 12,
+                marginTop: 8,
+              }}
+            >
+              Significant Outflows
             </Text>
-            {filtered.slice(0, 20).map((tx: any) => (
+            {filtered.filter(tx => tx.type === 'expense').slice(0, 5).map((tx: any) => (
               <View
                 key={tx._id}
                 style={{
                   backgroundColor: colors.surface,
                   borderColor: colors.border,
                   borderWidth: 1,
-                  borderRadius: 18,
-                  padding: 14,
+                  borderRadius: 14,
+                  padding: 12,
                   marginBottom: 8,
                   flexDirection: 'row',
-                  justifyContent: 'space-between',
                   alignItems: 'center',
+                  justifyContent: 'space-between',
                 }}
               >
-                <View style={{ flex: 1, marginRight: 8 }}>
-                  <Text maxFontSizeMultiplier={1.3} style={{ color: colors.textPrimary, fontWeight: '700', fontSize: 13 }} numberOfLines={1}>
+                <View style={{ flex: 1 }}>
+                  <Text
+                    maxFontSizeMultiplier={1.3}
+                    style={{ color: colors.textPrimary, fontWeight: '700', fontSize: 13 }}
+                  >
                     {tx.description}
                   </Text>
                   <Text style={{ color: colors.textMuted, fontSize: 11, marginTop: 2 }}>
-                    {tx.category || tx.budgetCategory || 'General'} · {new Date(tx.createdAt).toLocaleDateString()}
+                    {new Date(tx.createdAt).toLocaleDateString()} · {tx.category || tx.budgetCategory || 'General'}
                   </Text>
                 </View>
                 <Text
@@ -470,7 +476,7 @@ export default function ReportsScreen() {
                 </Text>
               </View>
             ))}
-          </>
+          </View>
         )}
       </ScrollView>
     </View>

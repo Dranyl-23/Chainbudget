@@ -249,7 +249,7 @@ export default function ProfileScreen() {
         </View>
 
         {user?.memberships && user.memberships.length > 0 ? (
-          <>
+          <View>
             {(showAllMemberships ? user.memberships : user.memberships.slice(0, 2)).map((m: any, idx: number) => {
               const badge = getRoleBadge(m.roleLevel || 3);
               const orgName = m.organization?.name || m.organizationName || 'Organization Member';
@@ -308,10 +308,10 @@ export default function ProfileScreen() {
                       {mintingSbt ? (
                         <ActivityIndicator size="small" color={colors.primary} />
                       ) : (
-                        <>
+                        <View className="flex-row items-center">
                           <Ionicons name="sparkles-outline" size={11} color={colors.primary} />
                           <Text style={{ color: colors.primary }} className="text-[9px] font-extrabold ml-1 uppercase">Mint</Text>
-                        </>
+                        </View>
                       )}
                     </TouchableOpacity>
                   )}
@@ -345,7 +345,7 @@ export default function ProfileScreen() {
                 />
               </TouchableOpacity>
             )}
-          </>
+          </View>
         ) : (
           <Text style={{ color: colors.textMuted }} className="text-xs text-center py-3">
             No active organization memberships found.

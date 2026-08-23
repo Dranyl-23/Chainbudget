@@ -248,10 +248,10 @@ export default function NoOrganizationScreen() {
             {isRefreshing ? (
               <ActivityIndicator color={colors.primary} size="small" />
             ) : (
-              <>
+              <View className="flex-row items-center gap-2">
                 <Ionicons name="refresh" size={16} color={colors.primary} />
                 <Text style={{ color: colors.primary }} className="font-bold text-sm">Check for membership</Text>
-              </>
+              </View>
             )}
           </TouchableOpacity>
         </View>

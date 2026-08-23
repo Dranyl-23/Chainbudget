@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -413,19 +413,19 @@ export default function FeedbackScreen() {
           }}
         >
           {submitting ? (
-            <>
+            <View className="flex-row items-center justify-center gap-2">
               <ActivityIndicator size="small" color="#ffffff" />
               <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 15, includeFontPadding: false }}>
                 {uploadingImage ? 'Uploading screenshot...' : 'Submitting feedback...'}
               </Text>
-            </>
+            </View>
           ) : (
-            <>
+            <View className="flex-row items-center justify-center gap-2">
               <Ionicons name="paper-plane" size={20} color="#ffffff" />
               <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 15, includeFontPadding: false }}>
                 Send Feedback Report
               </Text>
-            </>
+            </View>
           )}
         </TouchableOpacity>
       </KeyboardAwareScrollView>

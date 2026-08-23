@@ -166,12 +166,12 @@ export default function HistoryScreen() {
               {new Date(item.createdAt).toLocaleDateString()}
             </Text>
             {item.category ? (
-              <>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <Text style={{ color: colors.textMuted, fontSize: 12, marginHorizontal: 4 }}>•</Text>
                 <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: '500' }} numberOfLines={1}>
                   {item.category}
                 </Text>
-              </>
+              </View>
             ) : null}
           </View>
         </View>

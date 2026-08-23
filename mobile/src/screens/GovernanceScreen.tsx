@@ -46,6 +46,10 @@ export default function GovernanceScreen() {
     title: '',
   });
 
+  const [filterTab, setFilterTab] = useState<'active' | 'passed' | 'rejected' | 'all'>('active');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [expandedDesc, setExpandedDesc] = useState<Record<string, boolean>>({});
+
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   // Android BackHandler for modals
@@ -204,7 +208,51 @@ export default function GovernanceScreen() {
     }
   };
 
-  const activeOrg = organizations.find(o => o._id === activeOrgId);
+  const activeOrg = organizations.find((o) => o._id === activeOrgId);
+
+  // Proposal Counts
+  const activeCount = proposals.filter(
+    (p) => (p.status || 'active').toLowerCase() === 'active'
+  ).length;
+  const passedCount = proposals.filter((p) => {
+    const s = (p.status || '').toLowerCase();
+    return s === 'passed' || s === 'executed' || s === 'approved';
+  }).length;
+  const rejectedCount = proposals.filter((p) => {
+    const s = (p.status || '').toLowerCase();
+    return (
+      s === 'rejected' ||
+      s === 'failed' ||
+      s === 'cancelled' ||
+      s === 'expired' ||
+      s === 'closed'
+    );
+  }).length;
+  const allCount = proposals.length;
+
+  const filteredProposals = proposals.filter((p) => {
+    const s = (p.status || 'active').toLowerCase();
+    if (filterTab === 'active' && s !== 'active') return false;
+    if (filterTab === 'passed' && s !== 'passed' && s !== 'executed' && s !== 'approved') return false;
+    if (
+      filterTab === 'rejected' &&
+      s !== 'rejected' &&
+      s !== 'failed' &&
+      s !== 'cancelled' &&
+      s !== 'expired' &&
+      s !== 'closed'
+    )
+      return false;
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      const titleMatch = (p.title || '').toLowerCase().includes(q);
+      const descMatch = (p.description || '').toLowerCase().includes(q);
+      const proposerMatch = (p.creator?.displayName || '').toLowerCase().includes(q);
+      if (!titleMatch && !descMatch && !proposerMatch) return false;
+    }
+    return true;
+  });
 
   const renderProposal = ({ item: proposal }: { item: any }) => {
     const currentUserId = user?.id || (user as any)?._id;
@@ -215,8 +263,11 @@ export default function GovernanceScreen() {
     const noVotes = proposal.votesList?.filter((v: any) => !v.support).length || 0;
     const totalVotes = yesVotes + noVotes;
     const yesPercentage = totalVotes > 0 ? Math.round((yesVotes / totalVotes) * 100) : 0;
+    const noPercentage = totalVotes > 0 ? 100 - yesPercentage : 0;
 
     const isClosed = proposal.status !== 'active';
+    const isExpanded = Boolean(expandedDesc[proposal._id]);
+    const isLongDesc = (proposal.description || '').length > 110;
 
     const isVotingAny = votingOn?.proposalId === proposal._id;
     const isVotingYes = isVotingAny && votingOn?.support === true;
@@ -225,11 +276,11 @@ export default function GovernanceScreen() {
     return (
       <View 
         style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-        className="rounded-2xl border mb-4 p-5 shadow-sm"
+        className="rounded-2xl border mb-4 p-4 shadow-sm"
       >
-        <View className="flex-row justify-between items-start mb-3">
+        <View className="flex-row justify-between items-start mb-2.5">
           <View className="flex-1 mr-3">
-            <Text style={{ color: colors.textPrimary }} className="font-bold text-lg mb-1">{proposal.title}</Text>
+            <Text style={{ color: colors.textPrimary }} className="font-bold text-base mb-1">{proposal.title}</Text>
             <Text style={{ color: colors.textMuted }} className="text-xs mb-2">
               Proposed by {proposal.creator?.displayName || 'DAO Member'}
             </Text>
@@ -251,15 +302,48 @@ export default function GovernanceScreen() {
           </View>
         </View>
 
-        <Text style={{ color: colors.textSecondary }} className="text-sm mb-4 leading-5">{proposal.description}</Text>
+        {/* Description with Expand/Collapse */}
+        <View className="mb-3">
+          <Text 
+            style={{ color: colors.textSecondary }} 
+            className="text-sm leading-5"
+            numberOfLines={isExpanded ? undefined : 2}
+          >
+            {proposal.description}
+          </Text>
+          {isLongDesc && (
+            <TouchableOpacity 
+              onPress={() => {
+                triggerLightHaptic();
+                setExpandedDesc((prev) => ({ ...prev, [proposal._id]: !prev[proposal._id] }));
+              }}
+              className="mt-1"
+            >
+              <Text style={{ color: colors.primary }} className="text-xs font-bold">
+                {isExpanded ? 'Show less ▲' : 'Read more ▼'}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
 
-        <View style={{ backgroundColor: isDark ? 'rgba(0,0,0,0.3)' : colors.backgroundSecondary, borderColor: colors.borderSubtle }} className="p-3 rounded-xl border mb-4">
-          <View className="flex-row justify-between items-center mb-2">
-            <Text style={{ color: colors.textMuted }} className="text-xs">Votes: {totalVotes}</Text>
-            <Text style={{ color: colors.primary }} className="text-xs font-bold">{yesPercentage}% Support</Text>
+        {/* Dual Voting Support Bar */}
+        <View style={{ backgroundColor: isDark ? 'rgba(0,0,0,0.3)' : colors.backgroundSecondary, borderColor: colors.borderSubtle }} className="p-3 rounded-xl border mb-3">
+          <View className="flex-row justify-between items-center mb-1.5">
+            <Text style={{ color: colors.textSecondary }} className="text-xs font-semibold">
+              Votes: <Text style={{ color: colors.textPrimary, fontWeight: 'bold' }}>{totalVotes}</Text>
+            </Text>
+            <View className="flex-row items-center">
+              <Text style={{ color: colors.success }} className="text-xs font-bold">{yesPercentage}% Yes</Text>
+              {totalVotes > 0 && (
+                <View className="flex-row items-center ml-2">
+                  <Text style={{ color: colors.textMuted }} className="text-xs mr-2">•</Text>
+                  <Text style={{ color: colors.error }} className="text-xs font-bold">{noPercentage}% No</Text>
+                </View>
+              )}
+            </View>
           </View>
-          <View style={{ height: 6, backgroundColor: colors.cardGlass, borderRadius: 3, overflow: 'hidden' }}>
-            <View style={{ width: `${yesPercentage}%`, height: '100%', backgroundColor: colors.primary, borderRadius: 3 }} />
+          <View style={{ height: 6, backgroundColor: totalVotes > 0 && noPercentage > 0 ? colors.errorBg : colors.cardGlass, borderRadius: 3, overflow: 'hidden', flexDirection: 'row' }}>
+            <View style={{ width: `${yesPercentage}%`, height: '100%', backgroundColor: colors.success, borderRadius: 3 }} />
           </View>
         </View>
 
@@ -273,7 +357,7 @@ export default function GovernanceScreen() {
                 borderColor: colors.errorBorder,
                 flex: 1,
                 borderWidth: 1,
-                paddingVertical: 12,
+                paddingVertical: 11,
                 borderRadius: 12,
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -286,10 +370,10 @@ export default function GovernanceScreen() {
               {isVotingNo ? (
                 <ActivityIndicator size="small" color={colors.error} />
               ) : (
-                <>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <Ionicons name="close" size={18} color={colors.error} style={{ marginRight: 4 }} />
                   <Text style={{ color: colors.error, fontWeight: 'bold' }}>Vote No</Text>
-                </>
+                </View>
               )}
             </ScaleButton>
 
@@ -301,7 +385,7 @@ export default function GovernanceScreen() {
                 borderColor: colors.successBorder,
                 flex: 1,
                 borderWidth: 1,
-                paddingVertical: 12,
+                paddingVertical: 11,
                 borderRadius: 12,
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -324,7 +408,7 @@ export default function GovernanceScreen() {
         )}
 
         {hasVoted && (
-          <View style={{ backgroundColor: colors.cardGlass, borderColor: colors.borderSubtle }} className="p-3 rounded-xl border items-center">
+          <View style={{ backgroundColor: colors.cardGlass, borderColor: colors.borderSubtle }} className="p-2.5 rounded-xl border items-center">
             <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
               You voted <Text style={{ color: myVote?.support ? colors.success : colors.error, fontWeight: 'bold' }}>
                 {myVote?.support ? 'Yes' : 'No'}
@@ -355,37 +439,153 @@ export default function GovernanceScreen() {
 
       <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
         <FlatList
-          data={proposals}
+          data={filteredProposals}
           keyExtractor={(item) => item._id}
           renderItem={renderProposal}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ padding: 16 }}
-          ListHeaderComponent={activeOrg ? (
-            <View 
-              style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-              className="flex-row items-center p-3 rounded-2xl border mb-6 shadow-sm"
-            >
-              <View 
-                style={{ backgroundColor: colors.primaryMuted, borderColor: colors.primary + '40' }}
-                className="w-9 h-9 rounded-xl items-center justify-center mr-3 border"
+          contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+          }
+          ListHeaderComponent={
+            <View className="mb-3">
+              {/* Active Organization Pill */}
+              {activeOrg && (
+                <View 
+                  style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+                  className="flex-row items-center p-3 rounded-2xl border mb-3 shadow-sm"
+                >
+                  <View 
+                    style={{ backgroundColor: colors.primaryMuted, borderColor: colors.primary + '40' }}
+                    className="w-9 h-9 rounded-xl items-center justify-center mr-3 border"
+                  >
+                    <Ionicons name="library" size={16} color={colors.primary} />
+                  </View>
+                  <View className="flex-1">
+                    <Text style={{ color: colors.textMuted }} className="text-[10px] uppercase font-bold">Active Organization</Text>
+                    <Text style={{ color: colors.textPrimary }} className="text-sm font-bold">{activeOrg.name}</Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Search Bar */}
+              <View
+                style={{
+                  backgroundColor: colors.surface,
+                  borderColor: colors.border,
+                }}
+                className="flex-row items-center px-3.5 py-2.5 rounded-2xl border mb-3"
               >
-                <Ionicons name="library" size={16} color={colors.primary} />
+                <Ionicons name="search" size={18} color={colors.textMuted} />
+                <TextInput
+                  placeholder="Search proposals, details, or author..."
+                  placeholderTextColor={colors.textMuted}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  style={{ color: colors.textPrimary }}
+                  className="flex-1 ml-2.5 text-sm"
+                />
+                {searchQuery.length > 0 && (
+                  <TouchableOpacity
+                    onPress={() => setSearchQuery('')}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+                  </TouchableOpacity>
+                )}
               </View>
-              <View className="flex-1">
-                <Text style={{ color: colors.textMuted }} className="text-[10px] uppercase font-bold">Active Organization</Text>
-                <Text style={{ color: colors.textPrimary }} className="text-sm font-bold">{activeOrg.name}</Text>
-              </View>
+
+              {/* Filter Tabs Pills (Horizontal Scroll) */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: 8, paddingBottom: 4 }}
+              >
+                {[
+                  { key: 'active', label: 'Active', icon: 'flame-outline', count: activeCount },
+                  { key: 'passed', label: 'Passed', icon: 'checkmark-circle-outline', count: passedCount },
+                  { key: 'rejected', label: 'Closed', icon: 'close-circle-outline', count: rejectedCount },
+                  { key: 'all', label: 'All', icon: 'layers-outline', count: allCount },
+                ].map((tab) => {
+                  const isSelected = filterTab === tab.key;
+                  return (
+                    <TouchableOpacity
+                      key={tab.key}
+                      onPress={() => {
+                        triggerLightHaptic();
+                        setFilterTab(tab.key as any);
+                      }}
+                      activeOpacity={0.7}
+                      style={{
+                        backgroundColor: isSelected ? colors.primary : colors.surface,
+                        borderColor: isSelected ? colors.primary : colors.border,
+                        borderWidth: 1,
+                        paddingVertical: 6,
+                        paddingHorizontal: 12,
+                        borderRadius: 999,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Ionicons
+                        name={tab.icon as any}
+                        size={13}
+                        color={isSelected ? '#fff' : colors.textSecondary}
+                        style={{ marginRight: 4 }}
+                      />
+                      <Text
+                        style={{
+                          color: isSelected ? '#fff' : colors.textSecondary,
+                          fontWeight: isSelected ? '700' : '600',
+                          fontSize: 12,
+                        }}
+                      >
+                        {tab.label}
+                      </Text>
+                      <View
+                        style={{
+                          backgroundColor: isSelected
+                            ? 'rgba(255,255,255,0.25)'
+                            : colors.cardGlass,
+                          paddingHorizontal: 5,
+                          paddingVertical: 1,
+                          borderRadius: 999,
+                          marginLeft: 5,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: isSelected ? '#fff' : colors.textMuted,
+                            fontSize: 10,
+                            fontWeight: '800',
+                          }}
+                        >
+                          {tab.count}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
             </View>
-          ) : null}
+          }
           ListEmptyComponent={loading ? (
             <View className="py-10 items-center justify-center">
               <ActivityIndicator color={colors.primary} />
               <Text style={{ color: colors.textSecondary }} className="mt-4 text-xs">Loading proposals...</Text>
             </View>
           ) : (
-            <View className="py-12 items-center justify-center">
-              <Ionicons name="document-text-outline" size={48} color={colors.textMuted} />
-              <Text style={{ color: colors.textSecondary }} className="mt-4 font-medium">No proposals found</Text>
+            <View 
+              style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+              className="py-10 px-6 rounded-2xl border items-center justify-center mt-2"
+            >
+              <Ionicons name="document-text-outline" size={44} color={colors.textMuted} />
+              <Text style={{ color: colors.textPrimary }} className="mt-3 font-bold text-sm">
+                No {filterTab !== 'all' ? filterTab : ''} proposals found
+              </Text>
+              <Text style={{ color: colors.textSecondary }} className="mt-1 text-xs text-center">
+                {searchQuery ? `No results match "${searchQuery}"` : 'Proposals for this category will appear here.'}
+              </Text>
             </View>
           )}
         />
