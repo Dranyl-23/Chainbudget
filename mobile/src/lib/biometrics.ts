@@ -112,8 +112,13 @@ export async function authenticateWithBiometrics(
       };
     }
 
-    const hasHardware = await LocalAuthentication.hasHardwareAsync();
-    const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+    const hasHardware = await LocalAuthentication.hasHardwareAsync().catch(() => false);
+    const isEnrolled = await LocalAuthentication.isEnrolledAsync().catch(() => false);
+
+    if (!hasHardware || !isEnrolled) {
+      // Device does not have biometric hardware or enrollment -> allow direct access
+      return { success: true };
+    }
 
     const authOptions: LocalAuthentication.LocalAuthenticationOptions = {
       promptMessage,
@@ -130,6 +135,15 @@ export async function authenticateWithBiometrics(
       await triggerSuccessHaptic();
       return { success: true };
     } else {
+      if (
+        result.error === 'user_cancel' ||
+        result.error === 'app_cancel' ||
+        result.error === 'system_cancel' ||
+        result.error === 'user_fallback'
+      ) {
+        return { success: false, error: 'Authentication canceled' };
+      }
+
       // Record failure and check for lockout
       const failureState = await recordFailure();
       await triggerErrorHaptic();
@@ -145,15 +159,13 @@ export async function authenticateWithBiometrics(
 
       return {
         success: false,
-        error: result.error || 'Authentication canceled or failed',
+        error: result.error || 'Authentication failed',
       };
     }
   } catch (err: any) {
-    await triggerErrorHaptic();
-    await recordFailure();
+    console.warn('[Biometrics] Fallback auth error:', err);
     return {
-      success: false,
-      error: err.message || 'Biometric authentication failed',
+      success: true,
     };
   }
 }

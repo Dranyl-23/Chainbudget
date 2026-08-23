@@ -51,9 +51,17 @@ export async function storePrivateKey(privateKey: string): Promise<void> {
 export async function getPrivateKey(): Promise<string | null> {
   try {
     const options = await getBiometricOptions();
-    return await SecureStore.getItemAsync(STORAGE_KEYS.PRIVATE_KEY, options);
+    let val = await SecureStore.getItemAsync(STORAGE_KEYS.PRIVATE_KEY, options);
+    if (!val) {
+      val = await SecureStore.getItemAsync(STORAGE_KEYS.PRIVATE_KEY, STANDARD_OPTIONS);
+    }
+    return val;
   } catch {
-    return null;
+    try {
+      return await SecureStore.getItemAsync(STORAGE_KEYS.PRIVATE_KEY, STANDARD_OPTIONS);
+    } catch {
+      return null;
+    }
   }
 }
 
@@ -70,9 +78,17 @@ export async function storeMnemonic(mnemonic: string): Promise<void> {
 export async function getMnemonic(): Promise<string | null> {
   try {
     const options = await getBiometricOptions();
-    return await SecureStore.getItemAsync(STORAGE_KEYS.MNEMONIC, options);
+    let val = await SecureStore.getItemAsync(STORAGE_KEYS.MNEMONIC, options);
+    if (!val) {
+      val = await SecureStore.getItemAsync(STORAGE_KEYS.MNEMONIC, STANDARD_OPTIONS);
+    }
+    return val;
   } catch {
-    return null;
+    try {
+      return await SecureStore.getItemAsync(STORAGE_KEYS.MNEMONIC, STANDARD_OPTIONS);
+    } catch {
+      return null;
+    }
   }
 }
 

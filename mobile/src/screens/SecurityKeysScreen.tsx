@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -42,27 +42,49 @@ export default function SecurityKeysScreen() {
 
     const auth = await authenticateWithBiometrics(promptMessage);
     if (!auth.success) {
-      await triggerErrorHaptic();
+      if (auth.error && auth.error !== 'Authentication canceled') {
+        Alert.alert('Authentication Failed', auth.error);
+      }
       return;
     }
 
-    await triggerSuccessHaptic();
     setIsLoadingKeys(true);
     try {
-      if (!keys) {
-        const [mnemonic, privateKey] = await Promise.all([
+      let mnemonic = keys?.mnemonic;
+      let privateKey = keys?.privateKey;
+
+      if (!mnemonic || !privateKey) {
+        const [loadedMnemonic, loadedPrivateKey] = await Promise.all([
           getMnemonic(),
           getPrivateKey(),
         ]);
-        if (!mnemonic || !privateKey) {
-          Alert.alert('Wallet Not Found', 'No wallet keys were found on this device.');
-          return;
-        }
-        setKeys({ privateKey, mnemonic });
+        mnemonic = loadedMnemonic || undefined;
+        privateKey = loadedPrivateKey || undefined;
       }
+
+      if (target === 'phrase' && !mnemonic) {
+        Alert.alert(
+          'Seed Phrase Not Found',
+          'No 12-word seed phrase is stored on this device. If you imported your account or created it on another browser, please restore using your original recovery phrase.'
+        );
+        return;
+      }
+
+      if (target === 'privateKey' && !privateKey) {
+        Alert.alert(
+          'Private Key Not Found',
+          'No wallet private key was found in this device\'s secure storage.'
+        );
+        return;
+      }
+
+      setKeys({
+        mnemonic: mnemonic || '',
+        privateKey: privateKey || '',
+      });
       setActiveTab(target);
     } catch (err: any) {
-      Alert.alert('Authentication Failed', err.message || 'Could not retrieve wallet keys.');
+      Alert.alert('Authentication Error', err.message || 'Could not retrieve wallet keys.');
     } finally {
       setIsLoadingKeys(false);
     }
