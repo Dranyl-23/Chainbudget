@@ -356,89 +356,101 @@ export default function OrgChatScreen() {
 
     if (isMyMessage) {
       return (
-        <View style={{ alignItems: 'flex-end', marginBottom: 10, paddingHorizontal: 14 }}>
-          <TouchableOpacity
-            activeOpacity={0.85}
-            onLongPress={() => setSelectedMessageForAction(item)}
-            style={{
-              backgroundColor: '#9333EA',
-              borderRadius: 18,
-              borderBottomRightRadius: 4,
-              paddingHorizontal: 14,
-              paddingVertical: 10,
-              maxWidth: '82%',
-              shadowColor: '#9333EA',
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.25,
-              shadowRadius: 4,
-              elevation: 2,
-            }}
-          >
-            {item.isPinned && (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 }}>
-                <Ionicons name="pin" size={12} color="#FDE047" />
-                <Text style={{ color: '#FDE047', fontSize: 10, fontWeight: '700' }}>PINNED</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'flex-end', marginBottom: 10, paddingHorizontal: 14, gap: 8 }}>
+          <View style={{ alignItems: 'flex-end', maxWidth: '82%' }}>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onLongPress={() => setSelectedMessageForAction(item)}
+              style={{
+                backgroundColor: '#9333EA',
+                borderRadius: 18,
+                borderBottomRightRadius: 4,
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+                shadowColor: '#9333EA',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.25,
+                shadowRadius: 4,
+                elevation: 2,
+              }}
+            >
+              {item.isPinned && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+                  <Ionicons name="pin" size={12} color="#FDE047" />
+                  <Text style={{ color: '#FDE047', fontSize: 10, fontWeight: '700' }}>PINNED</Text>
+                </View>
+              )}
+              <Text style={{ color: '#FFFFFF', fontSize: 14, lineHeight: 20 }}>{item.content}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4, marginTop: 4 }}>
+                <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10 }}>
+                  {formatChatTime(item.createdAt)}
+                </Text>
+                <Ionicons
+                  name={otherSeenUsers.length > 0 ? "checkmark-done" : "checkmark"}
+                  size={13}
+                  color={otherSeenUsers.length > 0 ? "#67E8F9" : "rgba(255,255,255,0.7)"}
+                />
+              </View>
+            </TouchableOpacity>
+
+            {/* ── REACTIONS PILLS UNDER BUBBLE ── */}
+            {item.reactions && item.reactions.length > 0 && (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+                {item.reactions.map((r) => {
+                  const hasReacted = r.users?.some((u) => u._id === currentUserId);
+                  return (
+                    <TouchableOpacity
+                      key={r.emoji}
+                      onPress={() => handleToggleReaction(item._id, r.emoji)}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        backgroundColor: hasReacted ? 'rgba(147, 51, 234, 0.25)' : isDark ? '#1E293B' : '#F1F5F9',
+                        borderColor: hasReacted ? '#A855F7' : isDark ? '#334155' : '#CBD5E1',
+                        borderWidth: 1,
+                        borderRadius: 12,
+                        paddingHorizontal: 6,
+                        paddingVertical: 2,
+                        gap: 3,
+                      }}
+                    >
+                      <Text style={{ fontSize: 12 }}>{r.emoji}</Text>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: colors.textPrimary }}>{r.users.length}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             )}
-            <Text style={{ color: '#FFFFFF', fontSize: 14, lineHeight: 20 }}>{item.content}</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4, marginTop: 4 }}>
-              <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10 }}>
-                {formatChatTime(item.createdAt)}
-              </Text>
-              <Ionicons
-                name={otherSeenUsers.length > 0 ? "checkmark-done" : "checkmark"}
-                size={13}
-                color={otherSeenUsers.length > 0 ? "#67E8F9" : "rgba(255,255,255,0.7)"}
-              />
-            </View>
-          </TouchableOpacity>
 
-          {/* ── REACTIONS PILLS UNDER BUBBLE ── */}
-          {item.reactions && item.reactions.length > 0 && (
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
-              {item.reactions.map((r) => {
-                const hasReacted = r.users?.some((u) => u._id === currentUserId);
-                return (
-                  <TouchableOpacity
-                    key={r.emoji}
-                    onPress={() => handleToggleReaction(item._id, r.emoji)}
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      backgroundColor: hasReacted ? 'rgba(147, 51, 234, 0.25)' : isDark ? '#1E293B' : '#F1F5F9',
-                      borderColor: hasReacted ? '#A855F7' : isDark ? '#334155' : '#CBD5E1',
-                      borderWidth: 1,
-                      borderRadius: 12,
-                      paddingHorizontal: 6,
-                      paddingVertical: 2,
-                      gap: 3,
-                    }}
-                  >
-                    <Text style={{ fontSize: 12 }}>{r.emoji}</Text>
-                    <Text style={{ fontSize: 10, fontWeight: '700', color: colors.textPrimary }}>{r.users.length}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          )}
-
-          {/* ── SEEN BY AVATARS (Messenger Style: Bottom of sent message) ── */}
-          {otherSeenUsers.length > 0 && isLastInSequence && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3, paddingRight: 2 }}>
-              <Text style={{ fontSize: 9.5, color: colors.textMuted, fontWeight: '500' }}>Seen by</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                {otherSeenUsers.slice(0, 4).map((u, i) => (
-                  <View key={u._id} style={{ marginLeft: i > 0 ? -4 : 0 }}>
-                    <ChatMobileAvatar
-                      uri={u.avatarUrl}
-                      name={u.displayName || 'M'}
-                      size={14}
-                    />
-                  </View>
-                ))}
+            {/* ── SEEN BY AVATARS (Messenger Style: Bottom of sent message) ── */}
+            {otherSeenUsers.length > 0 && isLastInSequence && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3, paddingRight: 2 }}>
+                <Text style={{ fontSize: 9.5, color: colors.textMuted, fontWeight: '500' }}>Seen by</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  {otherSeenUsers.slice(0, 4).map((u, i) => (
+                    <View key={u._id} style={{ marginLeft: i > 0 ? -4 : 0 }}>
+                      <ChatMobileAvatar
+                        uri={u.avatarUrl}
+                        name={u.displayName || 'M'}
+                        size={14}
+                      />
+                    </View>
+                  ))}
+                </View>
               </View>
-            </View>
-          )}
+            )}
+          </View>
+
+          {/* ── SENDER AVATAR (Right side of own message, 28px) ── */}
+          <View style={{ width: 28, height: 28, justifyContent: 'center', alignItems: 'center', marginBottom: 2 }}>
+            {isLastInSequence ? (
+              <ChatMobileAvatar
+                uri={item.sender?.avatarUrl}
+                name={senderName}
+                size={28}
+              />
+            ) : null}
+          </View>
         </View>
       );
     }

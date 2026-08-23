@@ -695,6 +695,21 @@ export default function OrgChatPage() {
                     </div>
                   )}
                 </div>
+
+                {/* ── SENDER AVATAR (Right side for own messages, 28px) ── */}
+                {isMe && (
+                  <div className="w-7 h-7 shrink-0 mb-0.5">
+                    {isLastInSequence ? (
+                      <ChatAvatar
+                        src={msg.sender?.avatarUrl}
+                        name={senderName}
+                        size={28}
+                      />
+                    ) : (
+                      <div className="w-7 h-7" />
+                    )}
+                  </div>
+                )}
               </div>
             );
           })
