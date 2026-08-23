@@ -110,19 +110,26 @@ export default function RestoreWalletScreen({ navigation }: any) {
 
           {/* Restore button */}
           <TouchableOpacity
-            style={[styles.restoreBtn, (!isValid || isLoading) && styles.restoreBtnDisabled]}
+            style={[(!isValid || isLoading) && styles.restoreBtnDisabled]}
             onPress={handleRestore}
             disabled={!isValid || isLoading}
             activeOpacity={0.85}
           >
-            {isLoading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
-                <Ionicons name="lock-open-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
-                <Text style={styles.restoreBtnText}>Restore Account</Text>
-              </View>
-            )}
+            <LinearGradient
+              colors={['#4F46E5', '#7C3AED']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.restoreBtn}
+            >
+              {isLoading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                  <Ionicons name="lock-open-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
+                  <Text style={styles.restoreBtnText}>Restore Account</Text>
+                </View>
+              )}
+            </LinearGradient>
           </TouchableOpacity>
 
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>

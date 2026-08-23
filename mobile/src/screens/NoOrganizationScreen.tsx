@@ -14,6 +14,7 @@ import {
   Alert, RefreshControl, ScrollView, Modal, TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Clipboard from 'expo-clipboard';
 import api from '../lib/api';
 import { useAuth } from '../context/AuthContext';
@@ -145,30 +146,37 @@ export default function NoOrganizationScreen() {
           Create your own organization or get invited to an existing one.
         </Text>
 
-        {/* Action: Create Organization (FP-9) */}
+        {/* Action: Create Organization (Option 2 Web3 Indigo/Violet) */}
         <TouchableOpacity
           onPress={() => setCreateModalVisible(true)}
           style={{
-            backgroundColor: isDark ? '#FFFFFF' : '#0F172A',
-            borderRadius: 20,
-            paddingVertical: 16,
-            paddingHorizontal: 24,
             width: '100%',
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 8,
             marginBottom: 20,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: isDark ? 0.15 : 0.25,
-            shadowRadius: 8,
-            elevation: 4,
+            shadowColor: '#6366F1',
+            shadowOffset: { width: 0, height: 6 },
+            shadowOpacity: 0.35,
+            shadowRadius: 10,
+            elevation: 5,
           }}
-          activeOpacity={0.8}
+          activeOpacity={0.85}
         >
-          <Ionicons name="add-circle-outline" size={22} color={isDark ? '#09090B' : '#FFFFFF'} />
-          <Text style={{ color: isDark ? '#09090B' : '#FFFFFF', fontWeight: '800', fontSize: 16 }}>Create an Organization</Text>
+          <LinearGradient
+            colors={['#4F46E5', '#7C3AED']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={{
+              borderRadius: 20,
+              paddingVertical: 16,
+              paddingHorizontal: 24,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+            }}
+          >
+            <Ionicons name="add-circle-outline" size={22} color="#FFFFFF" />
+            <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 16 }}>Create an Organization</Text>
+          </LinearGradient>
         </TouchableOpacity>
 
         <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%', marginBottom: 20 }}>

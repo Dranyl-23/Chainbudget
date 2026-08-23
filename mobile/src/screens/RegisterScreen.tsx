@@ -180,15 +180,21 @@ export default function RegisterScreen({ navigation }: any) {
           {/* Create button */}
           <TouchableOpacity
             style={[
-              styles.createBtn,
               (isSubmitting || !displayName.trim() || !email.trim() || !agreePrivacy) && styles.createBtnDisabled,
             ]}
             onPress={handleRegister}
             disabled={isSubmitting || !displayName.trim() || !email.trim() || !agreePrivacy}
             activeOpacity={0.85}
           >
-            <Ionicons name="cube" size={20} color="#fff" />
-            <Text style={styles.createBtnText}>{isSubmitting ? 'Creating Account...' : 'Create My Account'}</Text>
+            <LinearGradient
+              colors={['#4F46E5', '#7C3AED']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.createBtn}
+            >
+              <Ionicons name="cube" size={20} color="#fff" />
+              <Text style={styles.createBtnText}>{isSubmitting ? 'Creating Account...' : 'Create My Account'}</Text>
+            </LinearGradient>
           </TouchableOpacity>
 
           <TouchableOpacity

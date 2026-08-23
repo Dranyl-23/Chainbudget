@@ -16,6 +16,7 @@ import {
   BackHandler,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import api from '../lib/api';
@@ -381,28 +382,39 @@ export default function BudgetScreen() {
         )}
       </ScrollView>
 
-      {/* FAB — Level 1 & 2 only */}
+      {/* FAB — Level 1 & 2 only (Option 2 Web3 Indigo/Violet) */}
       {canManage && (
         <TouchableOpacity
           onPress={openCreateModal}
+          activeOpacity={0.85}
           style={{
             position: 'absolute',
             bottom: 24,
             right: 24,
-            width: 56,
-            height: 56,
-            borderRadius: 28,
-            backgroundColor: colors.primary,
-            justifyContent: 'center',
-            alignItems: 'center',
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.3,
-            shadowRadius: 4,
-            elevation: 5,
+            width: 58,
+            height: 58,
+            borderRadius: 29,
+            shadowColor: '#6366F1',
+            shadowOffset: { width: 0, height: 6 },
+            shadowOpacity: 0.4,
+            shadowRadius: 8,
+            elevation: 6,
           }}
         >
-          <Ionicons name="add" size={32} color="#fff" />
+          <LinearGradient
+            colors={['#4F46E5', '#7C3AED']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{
+              width: '100%',
+              height: '100%',
+              borderRadius: 29,
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
+            <Ionicons name="add" size={32} color="#fff" />
+          </LinearGradient>
         </TouchableOpacity>
       )}
 
@@ -521,22 +533,35 @@ export default function BudgetScreen() {
               <TouchableOpacity
                 onPress={handleSave}
                 disabled={submitting}
+                activeOpacity={0.85}
                 style={{
-                  backgroundColor: colors.primary,
-                  padding: 16,
-                  borderRadius: 14,
-                  alignItems: 'center',
-                  justifyContent: 'center',
                   flex: isEditing ? 2 : 1,
+                  shadowColor: '#6366F1',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.35,
+                  shadowRadius: 6,
+                  elevation: 4,
                 }}
               >
-                {submitting ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={{ color: '#fff', fontWeight: '800', fontSize: 16 }}>
-                    {isEditing ? 'Save Changes' : 'Create Category'}
-                  </Text>
-                )}
+                <LinearGradient
+                  colors={['#4F46E5', '#7C3AED']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={{
+                    padding: 16,
+                    borderRadius: 14,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  {submitting ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={{ color: '#fff', fontWeight: '800', fontSize: 16 }}>
+                      {isEditing ? 'Save Changes' : 'Create Category'}
+                    </Text>
+                  )}
+                </LinearGradient>
               </TouchableOpacity>
             </View>
           </View>

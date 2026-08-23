@@ -131,7 +131,7 @@ export default function LoginScreen({ navigation }: any) {
             <>
               <TouchableOpacity onPress={handleSignIn} disabled={isLoading} activeOpacity={0.85}>
                 <LinearGradient
-                  colors={['#1e40af', '#2563eb']}
+                  colors={['#4F46E5', '#7C3AED']}
                   style={styles.primaryBtn}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
@@ -167,7 +167,7 @@ export default function LoginScreen({ navigation }: any) {
             <>
               <TouchableOpacity onPress={() => navigation.navigate('Register')} activeOpacity={0.85}>
                 <LinearGradient
-                  colors={['#1e40af', '#2563eb']}
+                  colors={['#4F46E5', '#7C3AED']}
                   style={styles.primaryBtn}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
