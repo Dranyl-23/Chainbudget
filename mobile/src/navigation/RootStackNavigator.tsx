@@ -24,6 +24,7 @@ import FeedbackScreen from '../screens/FeedbackScreen';
 import AboutScreen from '../screens/AboutScreen';
 import NetworkStatusScreen from '../screens/NetworkStatusScreen';
 import SecurityKeysScreen from '../screens/SecurityKeysScreen';
+import CreateOrganizationScreen from '../screens/CreateOrganizationScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -145,6 +146,11 @@ export default function RootStackNavigator() {
         name="SecurityKeys"
         component={SecurityKeysScreen}
         options={{ title: 'Web3 Security & Keys' }}
+      />
+      <Stack.Screen
+        name="CreateOrganization"
+        component={CreateOrganizationScreen}
+        options={{ title: 'Create Organization' }}
       />
     </Stack.Navigator>
   );
