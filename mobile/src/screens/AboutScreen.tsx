@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import appConfig from '../../app.json';
 
-const APP_VERSION = appConfig?.expo?.version || '1.1.7';
+const APP_VERSION = appConfig?.expo?.version || '1.1.9';
 
 export default function AboutScreen() {
   const { colors, isDark } = useTheme();
