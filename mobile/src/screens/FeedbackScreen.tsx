@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,8 +8,11 @@ import {
   Image,
   Platform,
   Alert,
+  Modal,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import * as Device from 'expo-device';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
@@ -30,7 +33,7 @@ const CATEGORIES: { id: FeedbackType; label: string; icon: keyof typeof Ionicons
 
 export default function FeedbackScreen() {
   const navigation = useNavigation<any>();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const { activeOrgId } = useOrg();
 
   const [type, setType] = useState<FeedbackType>('bug');
@@ -40,6 +43,13 @@ export default function FeedbackScreen() {
   const [screenshotUri, setScreenshotUri] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [uploadingImage, setUploadingImage] = useState<boolean>(false);
+
+  // Custom Success Modal State
+  const [showSuccessModal, setShowSuccessModal] = useState<boolean>(false);
+  const scaleAnim = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  const selectedCategory = CATEGORIES.find((c) => c.id === type);
 
   const handlePickImage = async () => {
     try {
@@ -117,16 +127,23 @@ export default function FeedbackScreen() {
 
       await triggerSuccessHaptic();
 
-      Alert.alert(
-        'Thank You!',
-        'Your feedback has been delivered to the development team. We appreciate your help in testing ChainBudget!',
-        [
-          {
-            text: 'OK',
-            onPress: () => navigation.goBack(),
-          },
-        ]
-      );
+      // Show Custom Success Modal
+      setShowSuccessModal(true);
+      scaleAnim.setValue(0);
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        friction: 6,
+        tension: 40,
+        useNativeDriver: true,
+      }).start();
+
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, { toValue: 1.2, duration: 800, useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+        ])
+      ).start();
+
     } catch (err: any) {
       console.error('Feedback submit error:', err);
       Alert.alert('Submission Error', err.response?.data?.error || 'Failed to submit feedback. Please try again.');
@@ -429,6 +446,171 @@ export default function FeedbackScreen() {
           )}
         </TouchableOpacity>
       </KeyboardAwareScrollView>
+
+      {/* Custom Designed Success Modal */}
+      <Modal
+        visible={showSuccessModal}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => {
+          setShowSuccessModal(false);
+          navigation.goBack();
+        }}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0, 0, 0, 0.75)',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 24,
+          }}
+        >
+          <Animated.View
+            style={{
+              transform: [{ scale: scaleAnim }],
+              backgroundColor: isDark ? '#13121d' : '#ffffff',
+              borderColor: colors.border,
+              borderWidth: 1.5,
+              borderRadius: 28,
+              padding: 24,
+              width: '100%',
+              maxWidth: 340,
+              alignItems: 'center',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.35,
+              shadowRadius: 20,
+              elevation: 10,
+            }}
+          >
+            {/* Glowing Pulse Rings + Gradient Icon */}
+            <View style={{ alignItems: 'center', justifyContent: 'center', marginBottom: 18, marginTop: 4 }}>
+              <Animated.View
+                style={{
+                  position: 'absolute',
+                  width: 86,
+                  height: 86,
+                  borderRadius: 43,
+                  backgroundColor: colors.successBg || 'rgba(34, 197, 94, 0.15)',
+                  borderWidth: 1.5,
+                  borderColor: colors.successBorder || 'rgba(34, 197, 94, 0.3)',
+                  transform: [{ scale: pulseAnim }],
+                }}
+              />
+              <LinearGradient
+                colors={['#10B981', '#059669']}
+                style={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: 32,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  shadowColor: '#10B981',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.4,
+                  shadowRadius: 10,
+                  elevation: 6,
+                }}
+              >
+                <Ionicons name="checkmark-sharp" size={34} color="#ffffff" />
+              </LinearGradient>
+            </View>
+
+            {/* Title & Description */}
+            <Text
+              style={{ color: colors.textPrimary }}
+              className="text-xl font-black text-center mb-2"
+            >
+              Thank You! 🎉
+            </Text>
+            <Text
+              style={{ color: colors.textSecondary }}
+              className="text-xs text-center leading-5 mb-5 px-2"
+            >
+              Your feedback has been delivered to the development team. We appreciate your help in testing ChainBudget!
+            </Text>
+
+            {/* Summary Tag / Pill */}
+            <View
+              style={{
+                backgroundColor: colors.cardGlass || (isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)'),
+                borderColor: colors.borderSubtle,
+                borderWidth: 1,
+                borderRadius: 16,
+                paddingVertical: 10,
+                paddingHorizontal: 14,
+                width: '100%',
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: 20,
+              }}
+            >
+              <View className="flex-row items-center gap-1.5">
+                <Ionicons name="star" size={15} color="#F59E0B" />
+                <Text style={{ color: colors.textPrimary }} className="text-xs font-bold">
+                  {rating}/5 Stars
+                </Text>
+              </View>
+
+              <View
+                style={{
+                  backgroundColor: (selectedCategory?.color || colors.primary) + '20',
+                  borderColor: (selectedCategory?.color || colors.primary) + '40',
+                  borderWidth: 1,
+                  paddingHorizontal: 10,
+                  paddingVertical: 3,
+                  borderRadius: 999,
+                }}
+              >
+                <Text
+                  style={{
+                    color: selectedCategory?.color || colors.primary,
+                    fontSize: 11,
+                    fontWeight: '700',
+                  }}
+                >
+                  {selectedCategory?.label || 'Feedback'}
+                </Text>
+              </View>
+            </View>
+
+            {/* Action Done Button */}
+            <TouchableOpacity
+              onPress={() => {
+                triggerLightHaptic();
+                setShowSuccessModal(false);
+                navigation.goBack();
+              }}
+              activeOpacity={0.85}
+              style={{ width: '100%' }}
+            >
+              <LinearGradient
+                colors={['#1d4ed8', '#00E5FF']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={{
+                  paddingVertical: 13,
+                  borderRadius: 16,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  shadowColor: '#00E5FF',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 8,
+                  elevation: 4,
+                }}
+              >
+                <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 14 }}>
+                  Done & Return
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </Animated.View>
+        </View>
+      </Modal>
     </View>
   );
 }
