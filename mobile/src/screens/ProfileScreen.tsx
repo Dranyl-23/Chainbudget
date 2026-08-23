@@ -20,7 +20,7 @@ import {
 import ThemeSelectorModal from '../components/ThemeSelectorModal';
 import appConfig from '../../app.json';
 
-const APP_VERSION = appConfig?.expo?.version || '1.1.9';
+const APP_VERSION = appConfig.expo.version;
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
