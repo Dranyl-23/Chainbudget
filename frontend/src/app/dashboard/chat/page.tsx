@@ -311,6 +311,11 @@ export default function OrgChatPage() {
 
   const userRoleLevel = currentMembership?.roleLevel || 4;
   const activeOrgLogo = orgLogoUrl || currentOrg?.logoUrl;
+  const [logoError, setLogoError] = useState(false);
+
+  useEffect(() => {
+    setLogoError(false);
+  }, [activeOrgId, activeOrgLogo]);
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -765,7 +770,7 @@ export default function OrgChatPage() {
               >
                 {isUploadingLogo ? (
                   <RefreshCw className="w-4 h-4 text-purple-400 animate-spin" />
-                ) : activeOrgLogo ? (
+                ) : activeOrgLogo && !logoError ? (
                   <Image
                     src={activeOrgLogo.startsWith("/") ? `${BACKEND_URL}${activeOrgLogo}` : activeOrgLogo}
                     alt="Org"
@@ -773,9 +778,12 @@ export default function OrgChatPage() {
                     height={32}
                     className="w-full h-full object-cover"
                     unoptimized
+                    onError={() => setLogoError(true)}
                   />
                 ) : (
-                  <MessageSquare className="w-4 h-4 text-purple-400" />
+                  <div className="w-full h-full bg-linear-to-br from-purple-600 to-indigo-600 flex items-center justify-center text-white text-xs font-bold uppercase">
+                    {(currentOrg?.name || "O").charAt(0)}
+                  </div>
                 )}
 
                 {userRoleLevel <= 2 && !isUploadingLogo && (
