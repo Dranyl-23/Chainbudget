@@ -181,19 +181,28 @@ export default function ApprovalsScreen() {
   const renderTransactionCard = ({ item: tx }: { item: any }) => {
     const activeOrg = organizations.find((o) => o._id === activeOrgId);
     const requiredApprovals = activeOrg?.requiredApprovals || tx.organization?.requiredApprovals || 2;
-    const currentApprovals = tx.approvalCount || tx.approvals?.filter((a: any) => a.action === 'approved').length || 0;
+    const currentApprovals = tx.approvalCount || tx.approvals?.filter((a: any) => a.action === 'approved').length || (tx.approvedBy ? tx.approvedBy.length : 0);
     const pct = Math.min(Math.round((currentApprovals / requiredApprovals) * 100), 100);
 
     const userId = (user as any)?._id || (user as any)?.id;
-    const userVote = tx.approvals?.find(
-      (a: any) => (a.approver?._id || a.approver) === userId || a.walletAddress?.toLowerCase() === user?.walletAddress?.toLowerCase()
+    const userWallet = user?.walletAddress?.toLowerCase();
+
+    const userApprovedInApprovedBy = tx.approvedBy?.find(
+      (a: any) => (a._id && a._id.toString() === userId?.toString()) || (a.walletAddress && a.walletAddress.toLowerCase() === userWallet)
     );
+
+    const userVoteInApprovals = tx.approvals?.find(
+      (a: any) => (a.approver?._id || a.approver) === userId || (a.walletAddress && a.walletAddress.toLowerCase() === userWallet)
+    );
+
+    const hasVoted = Boolean(tx.hasVoted) || Boolean(userApprovedInApprovedBy) || Boolean(userVoteInApprovals);
+    const voteAction = userVoteInApprovals?.action || (userApprovedInApprovedBy ? 'approved' : tx.hasVoted ? 'approved' : null);
 
     return (
       <SwipeableApprovalCard
         onSwipeApprove={() => promptConfirmation(tx, 'approved')}
         onSwipeReject={() => promptConfirmation(tx, 'rejected')}
-        disabled={Boolean(userVote) || signingTxId === tx._id}
+        disabled={hasVoted || signingTxId === tx._id}
       >
         <LinearGradient
           colors={isDark ? ['#1a1a24', '#0d0d12'] : ['#ffffff', '#f1f5f9']}
@@ -268,25 +277,25 @@ export default function ApprovalsScreen() {
           </View>
 
           {/* Already voted banner or Action Buttons */}
-          {userVote ? (
+          {hasVoted ? (
             <View
               style={{
-                backgroundColor: userVote.action === 'approved' ? colors.successBg : colors.errorBg,
-                borderColor: userVote.action === 'approved' ? colors.successBorder : colors.errorBorder,
+                backgroundColor: voteAction === 'rejected' ? colors.errorBg : colors.successBg,
+                borderColor: voteAction === 'rejected' ? colors.errorBorder : colors.successBorder,
               }}
               className="flex-row items-center justify-center p-2.5 rounded-xl border"
             >
               <Ionicons
-                name={userVote.action === 'approved' ? 'checkmark-circle' : 'close-circle'}
+                name={voteAction === 'rejected' ? 'close-circle' : 'checkmark-circle'}
                 size={16}
-                color={userVote.action === 'approved' ? colors.success : colors.error}
+                color={voteAction === 'rejected' ? colors.error : colors.success}
                 style={{ marginRight: 6 }}
               />
               <Text
-                style={{ color: userVote.action === 'approved' ? colors.success : colors.error }}
+                style={{ color: voteAction === 'rejected' ? colors.error : colors.success }}
                 className="font-bold text-xs"
               >
-                You already voted ({userVote.action === 'approved' ? 'Approved' : 'Rejected'})
+                You already voted ({voteAction === 'rejected' ? 'Rejected' : 'Approved'})
               </Text>
             </View>
           ) : (
@@ -353,14 +362,24 @@ export default function ApprovalsScreen() {
   const userWallet = user?.walletAddress?.toLowerCase();
 
   const isSignedByMe = (tx: any) => {
-    return tx.approvals?.some((a: any) => {
+    if (tx.hasVoted) return true;
+    if (tx.approvedBy?.some((a: any) => {
+      const aId = a._id || a.id;
+      const aWallet = a.walletAddress?.toLowerCase();
+      return (
+        (currentUserId && aId && aId.toString() === currentUserId.toString()) ||
+        (userWallet && aWallet && aWallet === userWallet)
+      );
+    })) return true;
+    if (tx.approvals?.some((a: any) => {
       const approverId = a.approver?._id || a.approver?.id || a.approver;
       const approverWallet = a.walletAddress?.toLowerCase();
       return (
-        (currentUserId && approverId === currentUserId) ||
-        (userWallet && approverWallet === userWallet)
+        (currentUserId && approverId && approverId.toString() === currentUserId.toString()) ||
+        (userWallet && approverWallet && approverWallet === userWallet)
       );
-    });
+    })) return true;
+    return false;
   };
 
   const isUrgent = (tx: any) => {
