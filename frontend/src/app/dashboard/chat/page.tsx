@@ -4,7 +4,8 @@ import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { io, Socket } from "socket.io-client";
 import {
-  Send, Pin, PinOff, Trash2, Copy, Check, MessageSquare, RefreshCw
+  Send, Pin, PinOff, Trash2, Copy, Check, MessageSquare, RefreshCw,
+  Smile, CheckCheck
 } from "lucide-react";
 import toast from "react-hot-toast";
 import api from "@/lib/api";
@@ -12,18 +13,29 @@ import Image from "next/image";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "https://chainbudget-api.fly.dev";
 
-interface Sender {
+const REACTION_EMOJIS = ["👍", "❤️", "🥰", "😆", "👎", "😡"];
+
+interface UserRef {
   _id: string;
   displayName?: string;
   avatarUrl?: string;
-  walletAddress?: string;
-  email?: string;
+}
+
+interface ReactionGroup {
+  emoji: string;
+  users: UserRef[];
 }
 
 interface ChatMessage {
   _id: string;
   organization: string;
-  sender: Sender;
+  sender: {
+    _id: string;
+    displayName?: string;
+    avatarUrl?: string;
+    walletAddress?: string;
+    email?: string;
+  };
   content: string;
   messageType: "text" | "image" | "system";
   roleLevel: number;
@@ -34,6 +46,8 @@ interface ChatMessage {
     displayName?: string;
   };
   pinnedAt?: string;
+  reactions?: ReactionGroup[];
+  seenBy?: UserRef[];
   createdAt: string;
 }
 
@@ -83,10 +97,13 @@ export default function OrgChatPage() {
   const [isSending, setIsSending] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isSocketConnected, setIsSocketConnected] = useState(false);
+  const [activeReactingMessageId, setActiveReactingMessageId] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const socketRef = useRef<Socket | null>(null);
+
+  const currentUserId = user?.id || (user as { _id?: string })?._id;
 
   const currentMembership = useMemo(() => {
     return user?.memberships?.find(
@@ -108,6 +125,16 @@ export default function OrgChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior });
   };
 
+  // Mark all unread messages in current org as seen
+  const markMessagesAsSeen = useCallback(async () => {
+    if (!activeOrgId) return;
+    try {
+      await api.post(`/chat/${activeOrgId}/seen`, {});
+    } catch {
+      // non-blocking
+    }
+  }, [activeOrgId]);
+
   // 1. Fetch initial chat history and pinned messages
   const fetchChatData = useCallback(async (showLoadingSpinner = false) => {
     if (!activeOrgId) return;
@@ -121,13 +148,14 @@ export default function OrgChatPage() {
       setMessages(msgRes.data.messages || []);
       setPinnedMessages(pinRes.data.pinned || []);
       setTimeout(() => scrollToBottom("auto"), 100);
+      void markMessagesAsSeen();
     } catch (err: unknown) {
       console.error("[Chat] Failed to load messages:", err);
       toast.error("Could not load organization chat history");
     } finally {
       setIsLoading(false);
     }
-  }, [activeOrgId]);
+  }, [activeOrgId, markMessagesAsSeen]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -145,6 +173,7 @@ export default function OrgChatPage() {
             setPinnedMessages(pinRes.data.pinned || []);
             setIsLoading(false);
             setTimeout(() => scrollToBottom("auto"), 100);
+            void markMessagesAsSeen();
           }
         } catch (err: unknown) {
           console.error("[Chat] Failed to load messages:", err);
@@ -159,7 +188,7 @@ export default function OrgChatPage() {
     return () => {
       isCancelled = true;
     };
-  }, [activeOrgId]);
+  }, [activeOrgId, markMessagesAsSeen]);
 
   // 2. Connect to Socket.IO for real-time chat updates
   useEffect(() => {
@@ -187,6 +216,27 @@ export default function OrgChatPage() {
           return [...prev, data.message];
         });
         scrollToBottom("smooth");
+        void markMessagesAsSeen();
+      }
+    });
+
+    socket.on("org_message_reacted", (data: { orgId: string; messageId: string; reactions: ReactionGroup[] }) => {
+      if (data.orgId === activeOrgId) {
+        setMessages((prev) =>
+          prev.map((m) => (m._id === data.messageId ? { ...m, reactions: data.reactions } : m))
+        );
+      }
+    });
+
+    socket.on("org_messages_seen", (data: { orgId: string; userId: string; user: UserRef }) => {
+      if (data.orgId === activeOrgId && data.userId !== currentUserId) {
+        setMessages((prev) =>
+          prev.map((m) => {
+            const alreadySeen = m.seenBy?.some((u) => u._id === data.userId);
+            if (alreadySeen) return m;
+            return { ...m, seenBy: [...(m.seenBy || []), data.user] };
+          })
+        );
       }
     });
 
@@ -214,7 +264,7 @@ export default function OrgChatPage() {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [activeOrgId]);
+  }, [activeOrgId, currentUserId, markMessagesAsSeen]);
 
   // 3. Send message handler
   const handleSendMessage = async (e?: React.FormEvent) => {
@@ -248,30 +298,44 @@ export default function OrgChatPage() {
     }
   };
 
-  // 4. Pin / Unpin message handler
+  // 4. Toggle Reaction Handler
+  const handleToggleReaction = async (messageId: string, emoji: string) => {
+    setActiveReactingMessageId(null);
+    try {
+      const res = await api.post<{ reactions: ReactionGroup[] }>(
+        `/chat/${activeOrgId}/messages/${messageId}/react`,
+        { emoji }
+      );
+      setMessages((prev) =>
+        prev.map((m) => (m._id === messageId ? { ...m, reactions: res.data.reactions } : m))
+      );
+    } catch {
+      toast.error("Failed to update reaction");
+    }
+  };
+
+  // 5. Pin / Unpin message handler
   const handleTogglePin = async (message: ChatMessage) => {
     try {
       await api.post(`/chat/${activeOrgId}/messages/${message._id}/pin`);
       toast.success(message.isPinned ? "Message unpinned" : "Message pinned to announcements");
-    } catch (err: unknown) {
-      console.error("[Chat] Pin failed:", err);
+    } catch {
       toast.error("Failed to update pin state");
     }
   };
 
-  // 5. Delete message handler
+  // 6. Delete message handler
   const handleDeleteMessage = async (messageId: string) => {
     if (!confirm("Are you sure you want to delete this message?")) return;
     try {
       await api.delete(`/chat/${activeOrgId}/messages/${messageId}`);
       toast.success("Message deleted");
-    } catch (err: unknown) {
-      console.error("[Chat] Delete failed:", err);
+    } catch {
       toast.error("Failed to delete message");
     }
   };
 
-  // 6. Copy text helper
+  // 7. Copy text helper
   const handleCopyText = async (id: string, text: string) => {
     await navigator.clipboard.writeText(text);
     setCopiedId(id);
@@ -361,7 +425,7 @@ export default function OrgChatPage() {
       )}
 
       {/* ── MESSAGES CHAT STREAM ── */}
-      <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-zinc-950/60 backdrop-blur-md border border-white/8 rounded-2xl mb-4 space-y-4 shadow-inner [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+      <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-zinc-950/60 backdrop-blur-md border border-white/8 rounded-2xl mb-4 space-y-5 shadow-inner [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center h-full text-zinc-400 text-sm gap-3">
             <RefreshCw className="w-6 h-6 animate-spin text-purple-400" />
@@ -378,30 +442,46 @@ export default function OrgChatPage() {
             </p>
           </div>
         ) : (
-          messages.map((msg) => {
-            const isMe = msg.sender?._id === user?.id || msg.sender?._id === (user as { _id?: string })?._id;
+          messages.map((msg, index) => {
+            const isMe = msg.sender?._id === currentUserId;
             const badge = getRoleBadge(msg.roleLevel, msg.roleLabel);
             const senderName = msg.sender?.displayName || "Member";
+            const avatarUrl =
+              msg.sender?.avatarUrl ||
+              `https://ui-avatars.com/api/?name=${encodeURIComponent(senderName)}&background=9333ea&color=fff&size=100`;
+
+            const isLastInSequence =
+              index === messages.length - 1 ||
+              messages[index + 1]?.sender?._id !== msg.sender?._id;
+
+            const otherSeenUsers = (msg.seenBy || []).filter((u) => u._id !== currentUserId && u._id !== msg.sender?._id);
 
             return (
               <div
                 key={msg._id}
-                className={`group flex items-start gap-3 ${isMe ? "flex-row-reverse" : "flex-row"}`}
+                className={`group flex items-end gap-2.5 ${isMe ? "flex-row-reverse" : "flex-row"}`}
               >
-                {/* Avatar */}
-                {!isMe && (
-                  <div className="w-8 h-8 rounded-full bg-purple-600/30 border border-purple-500/30 flex items-center justify-center text-xs font-bold text-purple-200 shrink-0 overflow-hidden mt-0.5">
-                    {msg.sender?.avatarUrl ? (
-                      <Image src={msg.sender.avatarUrl} alt="Avatar" width={32} height={32} className="w-full h-full object-cover" unoptimized />
-                    ) : (
-                      senderName.charAt(0).toUpperCase()
-                    )}
-                  </div>
-                )}
+                {/* ── SENDER AVATAR (Messenger Style: Beside message bubble) ── */}
+                <div className="w-8 h-8 shrink-0 flex items-center justify-center">
+                  {isLastInSequence ? (
+                    <div className="w-8 h-8 rounded-full bg-purple-600/30 border border-purple-500/30 overflow-hidden shadow-sm">
+                      <Image
+                        src={avatarUrl}
+                        alt="Avatar"
+                        width={32}
+                        height={32}
+                        className="w-full h-full object-cover"
+                        unoptimized
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-8 h-8" />
+                  )}
+                </div>
 
-                {/* Message Content Container */}
-                <div className={`max-w-[78%] md:max-w-[65%] flex flex-col ${isMe ? "items-end" : "items-start"}`}>
-                  {/* Sender Name & Role Badge */}
+                {/* ── MESSAGE CONTENT CONTAINER ── */}
+                <div className={`max-w-[80%] md:max-w-[65%] flex flex-col ${isMe ? "items-end" : "items-start"}`}>
+                  {/* Sender Name & Role Badge (shown on first/lone messages) */}
                   {!isMe && (
                     <div className="flex items-center gap-2 mb-1 px-1">
                       <span className="text-xs font-bold text-zinc-200">{senderName}</span>
@@ -411,13 +491,13 @@ export default function OrgChatPage() {
                     </div>
                   )}
 
-                  {/* Message Bubble */}
+                  {/* Message Bubble + Floating Toolbar */}
                   <div className="relative group/bubble">
                     <div
                       className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
                         isMe
-                          ? "bg-linear-to-r from-purple-600 to-indigo-600 text-white rounded-tr-xs shadow-md shadow-purple-900/20"
-                          : "bg-zinc-900/90 border border-white/8 text-zinc-100 rounded-tl-xs shadow-sm"
+                          ? "bg-linear-to-r from-purple-600 to-indigo-600 text-white rounded-br-xs shadow-md shadow-purple-900/20"
+                          : "bg-zinc-900/90 border border-white/8 text-zinc-100 rounded-bl-xs shadow-sm"
                       } ${msg.isPinned ? "border-amber-500/50 ring-1 ring-amber-500/30" : ""}`}
                     >
                       {msg.isPinned && (
@@ -427,20 +507,42 @@ export default function OrgChatPage() {
                       )}
                       <p className="whitespace-pre-wrap break-words">{msg.content}</p>
                       <div
-                        className={`text-[10px] mt-1 font-mono flex items-center gap-1 ${
+                        className={`text-[10px] mt-1 font-mono flex items-center gap-1.5 ${
                           isMe ? "text-purple-200/70 justify-end" : "text-zinc-500 justify-end"
                         }`}
                       >
-                        {formatChatTime(msg.createdAt)}
+                        <span>{formatChatTime(msg.createdAt)}</span>
+                        {isMe && (
+                          <span title={otherSeenUsers.length > 0 ? "Seen" : "Delivered"}>
+                            {otherSeenUsers.length > 0 ? (
+                              <CheckCheck className="w-3.5 h-3.5 text-cyan-300 inline" />
+                            ) : (
+                              <Check className="w-3 h-3 text-purple-200/70 inline" />
+                            )}
+                          </span>
+                        )}
                       </div>
                     </div>
 
-                    {/* Hover Action Toolbar */}
+                    {/* ── HOVER ACTION TOOLBAR (Quick Reactions & Options) ── */}
                     <div
-                      className={`absolute top-0 -translate-y-1/2 hidden group-hover/bubble:flex items-center gap-1 p-1 bg-zinc-900 border border-white/15 rounded-xl shadow-lg z-10 ${
+                      className={`absolute top-0 -translate-y-1/2 hidden group-hover/bubble:flex items-center gap-1 p-1 bg-zinc-900 border border-white/15 rounded-xl shadow-xl z-20 ${
                         isMe ? "right-2" : "left-2"
                       }`}
                     >
+                      {/* React Emoji Selector Trigger */}
+                      <button
+                        onClick={() =>
+                          setActiveReactingMessageId(
+                            activeReactingMessageId === msg._id ? null : msg._id
+                          )
+                        }
+                        className="p-1.5 hover:bg-white/10 text-zinc-400 hover:text-amber-300 rounded-lg transition"
+                        title="React with emoji"
+                      >
+                        <Smile className="w-3.5 h-3.5" />
+                      </button>
+
                       <button
                         onClick={() => void handleCopyText(msg._id, msg.content)}
                         className="p-1.5 hover:bg-white/10 text-zinc-400 hover:text-white rounded-lg transition"
@@ -469,7 +571,77 @@ export default function OrgChatPage() {
                         </button>
                       )}
                     </div>
+
+                    {/* ── QUICK REACTION EMOJI POPUP (Messenger Style) ── */}
+                    {activeReactingMessageId === msg._id && (
+                      <div
+                        className={`absolute -top-10 flex items-center gap-1.5 p-1.5 bg-zinc-900/95 border border-purple-500/40 rounded-full shadow-2xl z-30 animate-fade-in ${
+                          isMe ? "right-0" : "left-0"
+                        }`}
+                      >
+                        {REACTION_EMOJIS.map((emoji) => (
+                          <button
+                            key={emoji}
+                            onClick={() => void handleToggleReaction(msg._id, emoji)}
+                            className="text-lg hover:scale-125 transition-transform p-1 rounded-full hover:bg-white/10"
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
+
+                  {/* ── REACTION PILLS UNDER BUBBLE (Messenger Style) ── */}
+                  {msg.reactions && msg.reactions.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-1.5">
+                      {msg.reactions.map((r) => {
+                        const hasReacted = r.users?.some((u) => u._id === currentUserId);
+                        return (
+                          <button
+                            key={r.emoji}
+                            onClick={() => void handleToggleReaction(msg._id, r.emoji)}
+                            className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition ${
+                              hasReacted
+                                ? "bg-purple-600/25 border-purple-500/50 text-purple-200"
+                                : "bg-zinc-900 border-white/10 text-zinc-400 hover:border-white/20"
+                            }`}
+                            title={`Reacted by: ${r.users?.map((u) => u.displayName || "Member").join(", ")}`}
+                          >
+                            <span>{r.emoji}</span>
+                            <span className="text-[10px] font-bold font-mono">{r.users.length}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* ── SEEN BY AVATARS (Messenger Style: Mini profile icons below message) ── */}
+                  {isMe && otherSeenUsers.length > 0 && isLastInSequence && (
+                    <div className="flex items-center gap-1 mt-1.5 pr-1 self-end" title={`Seen by ${otherSeenUsers.map(u => u.displayName).join(", ")}`}>
+                      <span className="text-[10px] text-zinc-500 font-medium mr-1">Seen</span>
+                      <div className="flex -space-x-1.5 overflow-hidden">
+                        {otherSeenUsers.slice(0, 4).map((u) => (
+                          <div
+                            key={u._id}
+                            className="w-4 h-4 rounded-full border border-zinc-900 bg-purple-600 overflow-hidden"
+                            title={u.displayName || "Member"}
+                          >
+                            {u.avatarUrl ? (
+                              <Image src={u.avatarUrl} alt="Seen" width={16} height={16} className="w-full h-full object-cover" unoptimized />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-[8px] font-bold text-white">
+                                {(u.displayName || "M").charAt(0).toUpperCase()}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      {otherSeenUsers.length > 4 && (
+                        <span className="text-[9px] text-zinc-400">+{otherSeenUsers.length - 4}</span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             );

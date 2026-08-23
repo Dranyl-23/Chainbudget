@@ -53,6 +53,12 @@ const chatMessageSchema = new mongoose.Schema(
         users: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
       },
     ],
+    seenBy: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
     replyTo: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "ChatMessage",

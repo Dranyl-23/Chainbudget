@@ -12,7 +12,7 @@ async function requireOrgMembership(req, res, next) {
     const { orgId } = req.params;
     if (!orgId) return res.status(400).json({ error: "orgId is required" });
 
-    const user = await User.findById(req.user.id).select("memberships displayName").lean();
+    const user = await User.findById(req.user.id).select("memberships displayName avatarUrl").lean();
     if (!user) return res.status(404).json({ error: "User not found" });
 
     const membership = user.memberships?.find(
@@ -24,6 +24,7 @@ async function requireOrgMembership(req, res, next) {
     }
 
     req.membership = membership;
+    req.fullUser = user;
     next();
   } catch (err) {
     console.error("[chat middleware]", err);
@@ -51,6 +52,8 @@ router.get("/:orgId/messages", authenticate, requireOrgMembership, async (req, r
       .sort({ createdAt: -1 })
       .limit(limit)
       .populate("sender", "displayName avatarUrl walletAddress email")
+      .populate("seenBy", "displayName avatarUrl")
+      .populate("reactions.users", "displayName avatarUrl")
       .populate("replyTo", "content sender createdAt roleLabel")
       .lean();
 
@@ -116,11 +119,13 @@ router.post("/:orgId/messages", authenticate, requireOrgMembership, async (req, 
       messageType,
       roleLevel,
       roleLabel,
+      seenBy: [req.user.id],
       replyTo: replyTo || null,
     });
 
     await message.save();
     await message.populate("sender", "displayName avatarUrl walletAddress email");
+    await message.populate("seenBy", "displayName avatarUrl");
     if (replyTo) {
       await message.populate("replyTo", "content sender createdAt roleLabel");
     }
@@ -168,6 +173,113 @@ router.post("/:orgId/messages", authenticate, requireOrgMembership, async (req, 
   } catch (err) {
     console.error("[chat:send-message]", err);
     res.status(500).json({ error: "Failed to send message" });
+  }
+});
+
+/**
+ * @route   POST /api/chat/:orgId/messages/:messageId/react
+ * @desc    Add or toggle reaction emoji on a message
+ * @access  Private (Org Members)
+ */
+router.post("/:orgId/messages/:messageId/react", authenticate, requireOrgMembership, async (req, res) => {
+  try {
+    const { orgId, messageId } = req.params;
+    const { emoji } = req.body;
+
+    if (!emoji || typeof emoji !== "string") {
+      return res.status(400).json({ error: "Valid emoji string is required" });
+    }
+
+    const message = await ChatMessage.findOne({ _id: messageId, organization: orgId });
+    if (!message) return res.status(404).json({ error: "Message not found" });
+
+    if (!Array.isArray(message.reactions)) {
+      message.reactions = [];
+    }
+
+    const currentUserId = (req.user.id || req.user._id || "").toString();
+
+    let reactionGroup = message.reactions.find((r) => r.emoji === emoji);
+    if (!reactionGroup) {
+      message.reactions.push({ emoji, users: [currentUserId] });
+    } else {
+      if (!Array.isArray(reactionGroup.users)) {
+        reactionGroup.users = [];
+      }
+      const userIndex = reactionGroup.users.findIndex((u) => u.toString() === currentUserId);
+      if (userIndex > -1) {
+        // Toggle OFF (remove user reaction)
+        reactionGroup.users.splice(userIndex, 1);
+        if (reactionGroup.users.length === 0) {
+          message.reactions = message.reactions.filter((r) => r.emoji !== emoji);
+        }
+      } else {
+        // Toggle ON
+        reactionGroup.users.push(currentUserId);
+      }
+    }
+
+    message.markModified("reactions");
+    await message.save();
+    await message.populate("reactions.users", "displayName avatarUrl");
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(`org:${orgId}`).emit("org_message_reacted", {
+        orgId,
+        messageId,
+        reactions: message.reactions,
+      });
+    }
+
+    res.json({ reactions: message.reactions });
+  } catch (err) {
+    console.error("[chat:react]", err);
+    res.status(500).json({ error: "Failed to react to message" });
+  }
+});
+
+/**
+ * @route   POST /api/chat/:orgId/seen
+ * @desc    Mark chat messages as seen by current user (Messenger read-receipt)
+ * @access  Private (Org Members)
+ */
+router.post("/:orgId/seen", authenticate, requireOrgMembership, async (req, res) => {
+  try {
+    const { orgId } = req.params;
+    const { messageIds } = req.body;
+
+    const filter = {
+      organization: orgId,
+      sender: { $ne: req.user.id },
+      seenBy: { $ne: req.user.id },
+    };
+
+    if (Array.isArray(messageIds) && messageIds.length > 0) {
+      filter._id = { $in: messageIds };
+    }
+
+    await ChatMessage.updateMany(filter, {
+      $addToSet: { seenBy: req.user.id },
+    });
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(`org:${orgId}`).emit("org_messages_seen", {
+        orgId,
+        userId: req.user.id,
+        user: {
+          _id: req.user.id,
+          displayName: req.fullUser?.displayName || req.user.displayName || "Member",
+          avatarUrl: req.fullUser?.avatarUrl || null,
+        },
+      });
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[chat:seen]", err);
+    res.status(500).json({ error: "Failed to mark seen" });
   }
 });
 

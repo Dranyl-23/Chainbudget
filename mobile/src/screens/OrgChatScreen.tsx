@@ -2,8 +2,8 @@
  * OrgChatScreen.tsx
  *
  * Real-time Organization Group Chat for all members (Levels 1, 2, 3, 4).
- * Features live WebSockets, role-level badges, pinned announcements,
- * and responsive chat bubbles.
+ * Messenger-style layout with side avatars, seen receipts, emoji reactions,
+ * role-level badges, and keyboard-aware responsive view.
  */
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
@@ -19,6 +19,7 @@ import {
   Platform,
   Image,
   Alert,
+  Modal,
   StyleSheet,
   StatusBar,
 } from 'react-native';
@@ -32,6 +33,19 @@ import { useOrg } from '../context/OrgContext';
 import { useSocket } from '../context/SocketContext';
 import { useTheme } from '../context/ThemeContext';
 import { triggerLightHaptic, triggerSuccessHaptic } from '../lib/biometrics';
+
+const REACTION_EMOJIS = ['👍', '❤️', '🥰', '😆', '👎', '😡'];
+
+interface UserRef {
+  _id: string;
+  displayName?: string;
+  avatarUrl?: string;
+}
+
+interface ReactionGroup {
+  emoji: string;
+  users: UserRef[];
+}
 
 interface ChatMessageItem {
   _id: string;
@@ -53,6 +67,8 @@ interface ChatMessageItem {
     displayName?: string;
   };
   pinnedAt?: string;
+  reactions?: ReactionGroup[];
+  seenBy?: UserRef[];
   replyTo?: {
     _id: string;
     content: string;
@@ -97,6 +113,7 @@ export default function OrgChatScreen() {
 
   const targetOrgId = route.params?.orgId || activeOrgId;
   const currentOrg = organizations.find((o) => (o._id || o.id) === targetOrgId) || organizations[0];
+  const currentUserId = user?.id || (user as any)?._id;
 
   const currentMembership = user?.memberships?.find(
     (m: any) => (m.organization?._id || m.organization) === targetOrgId
@@ -110,6 +127,7 @@ export default function OrgChatScreen() {
   const [isSending, setIsSending] = useState(false);
   const [showPinnedBanner, setShowPinnedBanner] = useState(true);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const [selectedMessageForAction, setSelectedMessageForAction] = useState<ChatMessageItem | null>(null);
 
   const flatListRef = useRef<FlatList>(null);
 
@@ -137,6 +155,16 @@ export default function OrgChatScreen() {
     };
   }, []);
 
+  // Mark all unread messages in current org as seen
+  const markMessagesAsSeen = useCallback(async () => {
+    if (!targetOrgId) return;
+    try {
+      await api.post(`/chat/${targetOrgId}/seen`, {});
+    } catch {
+      // non-blocking
+    }
+  }, [targetOrgId]);
+
   // Fetch initial chat messages and pinned announcements
   const loadChatHistory = useCallback(async () => {
     if (!targetOrgId) return;
@@ -155,27 +183,48 @@ export default function OrgChatScreen() {
       } else {
         setPinnedMessage(null);
       }
+      void markMessagesAsSeen();
     } catch (err) {
       console.warn('[OrgChat] Failed to load messages:', err);
     } finally {
       setLoadingInitial(false);
     }
-  }, [targetOrgId]);
+  }, [targetOrgId, markMessagesAsSeen]);
 
   useEffect(() => {
     loadChatHistory();
   }, [loadChatHistory]);
 
-  // Live WebSocket subscriptions for real-time messages
+  // Live WebSocket subscriptions for real-time messages, reactions, and seen receipts
   useEffect(() => {
     const unsubNewMsg = on('new_org_message', (data: { orgId: string; message: ChatMessageItem }) => {
       if (data.orgId === targetOrgId && data.message) {
         setMessages((prev) => {
-          // Prevent duplicates
           if (prev.some((m) => m._id === data.message._id)) return prev;
           return [...prev, data.message];
         });
         triggerLightHaptic();
+        void markMessagesAsSeen();
+      }
+    });
+
+    const unsubReaction = on('org_message_reacted', (data: { orgId: string; messageId: string; reactions: ReactionGroup[] }) => {
+      if (data.orgId === targetOrgId) {
+        setMessages((prev) =>
+          prev.map((m) => (m._id === data.messageId ? { ...m, reactions: data.reactions } : m))
+        );
+      }
+    });
+
+    const unsubSeen = on('org_messages_seen', (data: { orgId: string; userId: string; user: UserRef }) => {
+      if (data.orgId === targetOrgId && data.userId !== currentUserId) {
+        setMessages((prev) =>
+          prev.map((m) => {
+            const alreadySeen = m.seenBy?.some((u) => u._id === data.userId);
+            if (alreadySeen) return m;
+            return { ...m, seenBy: [...(m.seenBy || []), data.user] };
+          })
+        );
       }
     });
 
@@ -204,10 +253,12 @@ export default function OrgChatScreen() {
 
     return () => {
       unsubNewMsg();
+      unsubReaction();
+      unsubSeen();
       unsubPin();
       unsubDelete();
     };
-  }, [targetOrgId, pinnedMessage, on]);
+  }, [targetOrgId, pinnedMessage, currentUserId, on, markMessagesAsSeen]);
 
   // Send a message
   const handleSendMessage = async () => {
@@ -233,76 +284,51 @@ export default function OrgChatScreen() {
       }
     } catch (err: any) {
       Alert.alert('Error', err.response?.data?.error || 'Failed to send message.');
-      setInputText(trimmed); // Restore text on failure
+      setInputText(trimmed);
     } finally {
       setIsSending(false);
     }
   };
 
-  // Message actions on long-press
-  const handleMessageLongPress = (item: ChatMessageItem) => {
-    const currentUserId = user?.id || (user as any)?._id;
-    const isMyMessage = item.sender?._id === currentUserId;
-    const canPin = userRoleLevel <= 2; // Level 1 (President) or Level 2 (Auditor)
-    const canDelete = isMyMessage || userRoleLevel === 1;
-
-    const options: { text: string; onPress: () => void; style?: 'destructive' | 'cancel' }[] = [
-      {
-        text: 'Copy Text',
-        onPress: async () => {
-          await Clipboard.setStringAsync(item.content);
-          await triggerSuccessHaptic();
-        },
-      },
-    ];
-
-    if (canPin) {
-      options.push({
-        text: item.isPinned ? 'Unpin Announcement' : 'Pin as Announcement',
-        onPress: async () => {
-          try {
-            await api.post(`/chat/${targetOrgId}/messages/${item._id}/pin`);
-            await triggerSuccessHaptic();
-          } catch (err: any) {
-            Alert.alert('Error', err.response?.data?.error || 'Failed to update pin status.');
-          }
-        },
-      });
+  // Toggle emoji reaction on message
+  const handleToggleReaction = async (messageId: string, emoji: string) => {
+    setSelectedMessageForAction(null);
+    await triggerLightHaptic();
+    try {
+      const res = await api.post(`/chat/${targetOrgId}/messages/${messageId}/react`, { emoji });
+      setMessages((prev) =>
+        prev.map((m) => (m._id === messageId ? { ...m, reactions: res.data?.reactions } : m))
+      );
+    } catch (err: any) {
+      console.warn('[chat:react error]', err?.response?.data || err.message);
+      Alert.alert('Error', err?.response?.data?.error || 'Failed to update reaction.');
     }
-
-    if (canDelete) {
-      options.push({
-        text: 'Delete Message',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await api.delete(`/chat/${targetOrgId}/messages/${item._id}`);
-            await triggerLightHaptic();
-          } catch (err: any) {
-            Alert.alert('Error', err.response?.data?.error || 'Failed to delete message.');
-          }
-        },
-      });
-    }
-
-    options.push({ text: 'Cancel', style: 'cancel', onPress: () => {} });
-
-    Alert.alert('Message Options', item.content.slice(0, 60), options);
   };
 
-  // Render individual message bubble
-  const renderMessageItem = ({ item }: { item: ChatMessageItem }) => {
-    const currentUserId = user?.id || (user as any)?._id;
+  // Render individual message bubble (Messenger style)
+  const renderMessageItem = ({ item, index }: { item: ChatMessageItem; index: number }) => {
     const isMyMessage = item.sender?._id === currentUserId;
     const senderName = item.sender?.displayName || 'Member';
     const badge = getRoleBadge(item.roleLevel, item.roleLabel);
 
+    const isLastInSequence =
+      index === messages.length - 1 ||
+      messages[index + 1]?.sender?._id !== item.sender?._id;
+
+    const avatarUrl =
+      item.sender?.avatarUrl ||
+      `https://ui-avatars.com/api/?name=${encodeURIComponent(senderName)}&background=9333ea&color=fff&size=100`;
+
+    const otherSeenUsers = (item.seenBy || []).filter(
+      (u) => u._id !== currentUserId && u._id !== item.sender?._id
+    );
+
     if (isMyMessage) {
       return (
-        <View style={{ alignItems: 'flex-end', marginBottom: 12, paddingHorizontal: 12 }}>
+        <View style={{ alignItems: 'flex-end', marginBottom: 10, paddingHorizontal: 14 }}>
           <TouchableOpacity
             activeOpacity={0.85}
-            onLongPress={() => handleMessageLongPress(item)}
+            onLongPress={() => setSelectedMessageForAction(item)}
             style={{
               backgroundColor: '#9333EA',
               borderRadius: 18,
@@ -324,27 +350,88 @@ export default function OrgChatScreen() {
               </View>
             )}
             <Text style={{ color: '#FFFFFF', fontSize: 14, lineHeight: 20 }}>{item.content}</Text>
-            <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10, alignSelf: 'flex-end', marginTop: 4 }}>
-              {formatChatTime(item.createdAt)}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4, marginTop: 4 }}>
+              <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10 }}>
+                {formatChatTime(item.createdAt)}
+              </Text>
+              <Ionicons
+                name={otherSeenUsers.length > 0 ? "checkmark-done" : "checkmark"}
+                size={13}
+                color={otherSeenUsers.length > 0 ? "#67E8F9" : "rgba(255,255,255,0.7)"}
+              />
+            </View>
           </TouchableOpacity>
+
+          {/* ── REACTIONS PILLS UNDER BUBBLE ── */}
+          {item.reactions && item.reactions.length > 0 && (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+              {item.reactions.map((r) => {
+                const hasReacted = r.users?.some((u) => u._id === currentUserId);
+                return (
+                  <TouchableOpacity
+                    key={r.emoji}
+                    onPress={() => handleToggleReaction(item._id, r.emoji)}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      backgroundColor: hasReacted ? 'rgba(147, 51, 234, 0.25)' : isDark ? '#1E293B' : '#F1F5F9',
+                      borderColor: hasReacted ? '#A855F7' : isDark ? '#334155' : '#CBD5E1',
+                      borderWidth: 1,
+                      borderRadius: 12,
+                      paddingHorizontal: 6,
+                      paddingVertical: 2,
+                      gap: 3,
+                    }}
+                  >
+                    <Text style={{ fontSize: 12 }}>{r.emoji}</Text>
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: colors.textPrimary }}>{r.users.length}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+
+          {/* ── SEEN BY AVATARS (Messenger Style: Bottom of sent message) ── */}
+          {otherSeenUsers.length > 0 && isLastInSequence && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3, paddingRight: 2 }}>
+              <Text style={{ fontSize: 9.5, color: colors.textMuted, fontWeight: '500' }}>Seen by</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                {otherSeenUsers.slice(0, 4).map((u, i) => (
+                  <Image
+                    key={u._id}
+                    source={{ uri: u.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.displayName || 'M')}&background=9333ea&color=fff&size=50` }}
+                    style={{
+                      width: 14,
+                      height: 14,
+                      borderRadius: 7,
+                      borderWidth: 1,
+                      borderColor: isDark ? colors.surface : '#FFFFFF',
+                      marginLeft: i > 0 ? -4 : 0,
+                    }}
+                  />
+                ))}
+              </View>
+            </View>
+          )}
         </View>
       );
     }
 
-    const avatarUrl =
-      item.sender?.avatarUrl ||
-      `https://ui-avatars.com/api/?name=${encodeURIComponent(senderName)}&background=9333ea&color=fff&size=100`;
-
     return (
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 14, paddingHorizontal: 12, gap: 8 }}>
-        <Image
-          source={{ uri: avatarUrl }}
-          style={{ width: 34, height: 34, borderRadius: 17, marginTop: 2 }}
-        />
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginBottom: 12, paddingHorizontal: 14, gap: 8 }}>
+        {/* ── SENDER AVATAR (Messenger Style: Beside message bubble) ── */}
+        <View style={{ width: 32, height: 32, justifyContent: 'center', alignItems: 'center' }}>
+          {isLastInSequence ? (
+            <Image
+              source={{ uri: avatarUrl }}
+              style={{ width: 32, height: 32, borderRadius: 16 }}
+            />
+          ) : null}
+        </View>
+
         <View style={{ flex: 1, alignItems: 'flex-start' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
-            <Text style={{ color: colors.textPrimary, fontWeight: '700', fontSize: 12.5 }} numberOfLines={1}>
+            <Text style={{ color: colors.textPrimary, fontWeight: '700', fontSize: 12 }} numberOfLines={1}>
               {senderName}
             </Text>
             <View
@@ -357,19 +444,19 @@ export default function OrgChatScreen() {
                 paddingVertical: 1.5,
               }}
             >
-              <Text style={{ color: badge.color, fontSize: 10, fontWeight: '800' }}>{badge.label}</Text>
+              <Text style={{ color: badge.color, fontSize: 9.5, fontWeight: '800' }}>{badge.label}</Text>
             </View>
           </View>
 
           <TouchableOpacity
             activeOpacity={0.85}
-            onLongPress={() => handleMessageLongPress(item)}
+            onLongPress={() => setSelectedMessageForAction(item)}
             style={{
               backgroundColor: isDark ? colors.surface : '#FFFFFF',
               borderColor: isDark ? 'rgba(255,255,255,0.08)' : '#E2E8F0',
               borderWidth: 1,
               borderRadius: 18,
-              borderTopLeftRadius: 4,
+              borderBottomLeftRadius: 4,
               paddingHorizontal: 14,
               paddingVertical: 10,
               maxWidth: '88%',
@@ -391,6 +478,35 @@ export default function OrgChatScreen() {
               {formatChatTime(item.createdAt)}
             </Text>
           </TouchableOpacity>
+
+          {/* ── REACTIONS PILLS UNDER BUBBLE ── */}
+          {item.reactions && item.reactions.length > 0 && (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+              {item.reactions.map((r) => {
+                const hasReacted = r.users?.some((u) => u._id === currentUserId);
+                return (
+                  <TouchableOpacity
+                    key={r.emoji}
+                    onPress={() => handleToggleReaction(item._id, r.emoji)}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      backgroundColor: hasReacted ? 'rgba(147, 51, 234, 0.25)' : isDark ? '#1E293B' : '#F1F5F9',
+                      borderColor: hasReacted ? '#A855F7' : isDark ? '#334155' : '#CBD5E1',
+                      borderWidth: 1,
+                      borderRadius: 12,
+                      paddingHorizontal: 6,
+                      paddingVertical: 2,
+                      gap: 3,
+                    }}
+                  >
+                    <Text style={{ fontSize: 12 }}>{r.emoji}</Text>
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: colors.textPrimary }}>{r.users.length}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
         </View>
       </View>
     );
@@ -630,6 +746,161 @@ export default function OrgChatScreen() {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      {/* ── MESSENGER-STYLE QUICK REACTION & ACTION MODAL ── */}
+      {selectedMessageForAction && (
+        <Modal
+          transparent={true}
+          animationType="fade"
+          visible={true}
+          onRequestClose={() => setSelectedMessageForAction(null)}
+        >
+          <TouchableOpacity
+            style={{
+              flex: 1,
+              backgroundColor: 'rgba(0,0,0,0.6)',
+              justifyContent: 'center',
+              alignItems: 'center',
+              padding: 20,
+            }}
+            activeOpacity={1}
+            onPress={() => setSelectedMessageForAction(null)}
+          >
+            <View
+              style={{
+                width: '100%',
+                maxWidth: 320,
+                backgroundColor: isDark ? '#1E1B2E' : '#FFFFFF',
+                borderRadius: 24,
+                padding: 18,
+                borderWidth: 1,
+                borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#E2E8F0',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 10 },
+                shadowOpacity: 0.3,
+                shadowRadius: 20,
+                elevation: 10,
+              }}
+            >
+              {/* Emoji Reaction Bar */}
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-around',
+                  paddingVertical: 8,
+                  paddingHorizontal: 4,
+                  backgroundColor: isDark ? 'rgba(0,0,0,0.3)' : '#F8FAFC',
+                  borderRadius: 20,
+                  marginBottom: 16,
+                }}
+              >
+                {REACTION_EMOJIS.map((emoji) => (
+                  <TouchableOpacity
+                    key={emoji}
+                    onPress={() => handleToggleReaction(selectedMessageForAction._id, emoji)}
+                    style={{ padding: 6 }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={{ fontSize: 24 }}>{emoji}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Message Content Preview */}
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: 12,
+                  marginBottom: 14,
+                  fontStyle: 'italic',
+                }}
+                numberOfLines={2}
+              >
+                "{selectedMessageForAction.content}"
+              </Text>
+
+              {/* Action Buttons */}
+              <View style={{ gap: 8 }}>
+                <TouchableOpacity
+                  onPress={async () => {
+                    await Clipboard.setStringAsync(selectedMessageForAction.content);
+                    setSelectedMessageForAction(null);
+                    await triggerSuccessHaptic();
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingVertical: 10,
+                    paddingHorizontal: 12,
+                    borderRadius: 12,
+                    backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F1F5F9',
+                    gap: 10,
+                  }}
+                >
+                  <Ionicons name="copy-outline" size={18} color={colors.textPrimary} />
+                  <Text style={{ color: colors.textPrimary, fontWeight: '600', fontSize: 13 }}>Copy Text</Text>
+                </TouchableOpacity>
+
+                {userRoleLevel <= 2 && (
+                  <TouchableOpacity
+                    onPress={async () => {
+                      const msgId = selectedMessageForAction._id;
+                      setSelectedMessageForAction(null);
+                      try {
+                        await api.post(`/chat/${targetOrgId}/messages/${msgId}/pin`);
+                        await triggerSuccessHaptic();
+                      } catch {
+                        Alert.alert('Error', 'Failed to update pin state.');
+                      }
+                    }}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingVertical: 10,
+                      paddingHorizontal: 12,
+                      borderRadius: 12,
+                      backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F1F5F9',
+                      gap: 10,
+                    }}
+                  >
+                    <Ionicons name="pin-outline" size={18} color="#EAB308" />
+                    <Text style={{ color: colors.textPrimary, fontWeight: '600', fontSize: 13 }}>
+                      {selectedMessageForAction.isPinned ? 'Unpin Announcement' : 'Pin Announcement'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
+                {(selectedMessageForAction.sender?._id === currentUserId || userRoleLevel === 1) && (
+                  <TouchableOpacity
+                    onPress={async () => {
+                      const msgId = selectedMessageForAction._id;
+                      setSelectedMessageForAction(null);
+                      try {
+                        await api.delete(`/chat/${targetOrgId}/messages/${msgId}`);
+                        await triggerLightHaptic();
+                      } catch {
+                        Alert.alert('Error', 'Failed to delete message.');
+                      }
+                    }}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingVertical: 10,
+                      paddingHorizontal: 12,
+                      borderRadius: 12,
+                      backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                      gap: 10,
+                    }}
+                  >
+                    <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                    <Text style={{ color: '#EF4444', fontWeight: '600', fontSize: 13 }}>Delete Message</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+          </TouchableOpacity>
+        </Modal>
+      )}
     </View>
   );
 }
