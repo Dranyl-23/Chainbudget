@@ -680,15 +680,15 @@ export default function OrgChatScreen() {
         {/* ── MESSAGE COMPOSER BAR ── */}
         <View
           style={{
-            paddingHorizontal: 12,
-            paddingTop: 8,
-            paddingBottom: isKeyboardVisible ? 8 : Math.max(insets.bottom, 10),
+            paddingHorizontal: 14,
+            paddingTop: 10,
+            paddingBottom: isKeyboardVisible ? 10 : Math.max(insets.bottom + 10, 28),
             backgroundColor: isDark ? colors.surface : '#FFFFFF',
             borderTopWidth: 1,
             borderTopColor: colors.borderSubtle,
             flexDirection: 'row',
             alignItems: 'center',
-            gap: 8,
+            gap: 10,
           }}
         >
           <View
