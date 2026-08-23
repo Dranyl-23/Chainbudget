@@ -19,6 +19,22 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Verify no .env or sensitive keystores committed
+        run: |
+          if git ls-files | grep -E '(^|/)\.env(\.|$)'; then
+            echo "ERROR: .env file committed to repository!"
+            exit 1
+          fi
+          if git ls-files | grep -E '\.jks$'; then
+            echo "ERROR: Android keystore (.jks) file committed!"
+            exit 1
+          fi
+          if git ls-files | grep -E 'credentials\.json$'; then
+            echo "ERROR: credentials.json file committed!"
+            exit 1
+          fi
+          echo "✅ No sensitive files detected in working tree."
+
       - name: Run Gitleaks Secret Scanner
         uses: gitleaks/gitleaks-action@v2
         env:
