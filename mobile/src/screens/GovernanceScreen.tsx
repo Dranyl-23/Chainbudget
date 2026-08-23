@@ -8,6 +8,7 @@ import { useToast } from '../context/ToastContext';
 import { useSocket } from '../context/SocketContext';
 import { useTheme } from '../context/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { authenticateWithBiometrics, triggerSuccessHaptic, triggerErrorHaptic, triggerLightHaptic } from '../lib/biometrics';
 import ScaleButton from '../components/ScaleButton';
 import SuccessCelebrationModal from '../components/SuccessCelebrationModal';
@@ -16,6 +17,7 @@ import { formatStatusLabel, humanizeText } from '../lib/formatters';
 
 export default function GovernanceScreen() {
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation<any>();
   const { user } = useAuth();
   const { organizations, activeOrgId, setActiveOrgId } = useOrg();
   const { showToast } = useToast();
@@ -453,18 +455,42 @@ export default function GovernanceScreen() {
               {activeOrg && (
                 <View 
                   style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-                  className="flex-row items-center p-3 rounded-2xl border mb-3 shadow-sm"
+                  className="flex-row items-center p-3 rounded-2xl border mb-3 shadow-sm justify-between"
                 >
-                  <View 
-                    style={{ backgroundColor: colors.primaryMuted, borderColor: colors.primary + '40' }}
-                    className="w-9 h-9 rounded-xl items-center justify-center mr-3 border"
+                  <View className="flex-row items-center flex-1 mr-2">
+                    <View 
+                      style={{ backgroundColor: colors.primaryMuted, borderColor: colors.primary + '40' }}
+                      className="w-9 h-9 rounded-xl items-center justify-center mr-3 border"
+                    >
+                      <Ionicons name="library" size={16} color={colors.primary} />
+                    </View>
+                    <View className="flex-1">
+                      <Text style={{ color: colors.textMuted }} className="text-[10px] uppercase font-bold">Active Organization</Text>
+                      <Text style={{ color: colors.textPrimary }} className="text-sm font-bold" numberOfLines={1}>{activeOrg.name}</Text>
+                    </View>
+                  </View>
+
+                  <TouchableOpacity
+                    onPress={() => {
+                      triggerLightHaptic();
+                      navigation.navigate('OrgChat', { orgId: activeOrgId });
+                    }}
+                    activeOpacity={0.7}
+                    style={{
+                      backgroundColor: colors.primaryMuted,
+                      borderColor: colors.primary + '40',
+                      borderWidth: 1,
+                      borderRadius: 12,
+                      paddingHorizontal: 10,
+                      paddingVertical: 6,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 5,
+                    }}
                   >
-                    <Ionicons name="library" size={16} color={colors.primary} />
-                  </View>
-                  <View className="flex-1">
-                    <Text style={{ color: colors.textMuted }} className="text-[10px] uppercase font-bold">Active Organization</Text>
-                    <Text style={{ color: colors.textPrimary }} className="text-sm font-bold">{activeOrg.name}</Text>
-                  </View>
+                    <Ionicons name="chatbubbles-outline" size={14} color={colors.primary} />
+                    <Text style={{ color: colors.primary, fontSize: 11.5, fontWeight: '700' }}>Org Chat</Text>
+                  </TouchableOpacity>
                 </View>
               )}
 

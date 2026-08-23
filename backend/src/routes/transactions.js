@@ -264,7 +264,7 @@ router.post("/", authenticate, requireRole(3), requireIdempotency, async (req, r
         if (approverIds.length > 0) {
           sendPushNotifications(
             approverIds,
-            "🔔 New Approval Request",
+            "New Approval Request",
             `${req.user.displayName || "A member"} submitted a ₱${txn.amount} request: "${txn.description.slice(0, 40)}"`,
             { txId: txn._id.toString(), screen: "Approvals", channelId: "chainbudget-approvals" }
           );

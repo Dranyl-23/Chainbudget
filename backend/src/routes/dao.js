@@ -136,14 +136,30 @@ router.post("/proposals", authenticate, async (req, res) => {
       console.error("[dao] Notification creation warning:", notifErr.message);
     }
     
-    // Send Email to all members of the organization (non-fatal)
+    // Send Push & Email to all members of the organization (non-fatal)
     try {
       const orgUsers = await User.find({
         "memberships": {
           $elemMatch: { organization: targetOrgId, isActive: true }
         },
-        email: { $exists: true, $ne: "" }
-      });
+      }).select("_id email").lean();
+
+      // 1. Push notifications to all members except creator
+      const memberIds = orgUsers
+        .map(u => u._id.toString())
+        .filter(id => id !== req.user._id.toString());
+
+      if (memberIds.length > 0) {
+        const { sendPushNotifications } = require("./users");
+        sendPushNotifications(
+          memberIds,
+          "New DAO Proposal for Voting",
+          `${req.user.displayName || 'A member'} proposed ₱${amount.toLocaleString()} for "${title.slice(0, 40)}"`,
+          { proposalId: newProposal._id.toString(), screen: "DAO", channelId: "chainbudget-dao" }
+        );
+      }
+
+      // 2. Email notifications
       const emails = orgUsers.map(u => u.email).filter(Boolean);
       if (emails.length > 0) {
         sendEmail(
@@ -164,8 +180,8 @@ router.post("/proposals", authenticate, async (req, res) => {
           `
         ).catch(console.error);
       }
-    } catch (emailErr) {
-      console.error("[dao] Email sending warning:", emailErr.message);
+    } catch (notifyErr) {
+      console.error("[dao] Push/Email notification warning:", notifyErr.message);
     }
     
     res.status(201).json({ proposal: newProposal });

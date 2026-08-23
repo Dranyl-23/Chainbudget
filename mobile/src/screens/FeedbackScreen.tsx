@@ -253,13 +253,18 @@ export default function FeedbackScreen() {
             alignItems: 'center',
             justifyContent: 'space-between',
             marginBottom: 20,
+            gap: 10,
           }}
         >
-          <View>
-            <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '700' }}>Overall Rating</Text>
-            <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Tap stars to set score ({rating}/5)</Text>
+          <View style={{ flex: 1, marginRight: 6 }}>
+            <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '700' }} numberOfLines={1}>
+              Overall Rating
+            </Text>
+            <Text style={{ color: colors.textSecondary, fontSize: 12 }} numberOfLines={1}>
+              Tap stars ({rating}/5)
+            </Text>
           </View>
-          <View style={{ flexDirection: 'row', gap: 6 }}>
+          <View style={{ flexDirection: 'row', gap: 4, alignItems: 'center' }}>
             {[1, 2, 3, 4, 5].map((star) => (
               <TouchableOpacity
                 key={star}
@@ -267,11 +272,12 @@ export default function FeedbackScreen() {
                   triggerLightHaptic();
                   setRating(star);
                 }}
-                style={{ padding: 4 }}
+                style={{ padding: 3 }}
+                activeOpacity={0.7}
               >
                 <Ionicons
                   name={star <= rating ? 'star' : 'star-outline'}
-                  size={26}
+                  size={24}
                   color={star <= rating ? '#F59E0B' : colors.textMuted}
                 />
               </TouchableOpacity>

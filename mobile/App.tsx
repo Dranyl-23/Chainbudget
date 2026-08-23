@@ -112,6 +112,7 @@ const linking = {
       Audit: 'audit',
       Reports: 'reports',
       Treasury: 'treasury',
+      OrgChat: 'chat/:orgId',
       HelpFaq: 'help',
       DataPrivacy: 'privacy',
     },
@@ -209,6 +210,8 @@ export default function App() {
           navigationRef.current.dispatch(CommonActions.navigate('MainTabs', { screen: 'Inbox' }));
         } else if (data?.screen === 'DAO') {
           navigationRef.current.dispatch(CommonActions.navigate('MainTabs', { screen: 'DAO' }));
+        } else if (data?.screen === 'OrgChat') {
+          navigationRef.current.dispatch(CommonActions.navigate('OrgChat', { orgId: data.orgId }));
         }
       });
     }

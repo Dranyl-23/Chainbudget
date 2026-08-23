@@ -254,21 +254,42 @@ router.post("/:txId", authenticate, requireRole(2), requireIdempotency, async (r
     const io = req.app.get("io");
     if (io) {
       io.to(`org:${org._id}`).emit("transaction_updated", { orgId: org._id });
-      io.to(`org:${org._id}`).emit("new_notification", {
-        orgId: org._id,
-        id: txn._id,
-        title: "Approval Granted",
-        message: `${req.user.displayName || 'An Executive'} approved a transaction for ${txn.amount}.`,
-        type: "system",
-        timestamp: new Date().toISOString()
+    }
+
+    // ── In-App Notifications (Persisted to MongoDB) ───────────────────────────
+    try {
+      const Notification = require("../models/Notification");
+      const notifTitle = txn.status === "approved" ? "Transaction Approved" : txn.status === "rejected" ? "Transaction Rejected" : "Approval Granted";
+      const notifMessage = `${req.user.displayName || 'An Executive'} ${action}d request "${txn.description.slice(0, 40)}" for ₱${txn.amount.toLocaleString()}.`;
+      const newNotif = await Notification.create({
+        organization: org._id,
+        title: notifTitle,
+        message: notifMessage,
+        type: txn.status === "approved" ? "success" : txn.status === "rejected" ? "error" : "info",
+        targetId: txn._id,
+        targetType: "Transaction",
+        readBy: [req.user.id],
       });
+
+      if (io) {
+        io.to(`org:${org._id}`).emit("new_notification", {
+          orgId: org._id,
+          id: newNotif._id,
+          title: notifTitle,
+          message: notifMessage,
+          type: newNotif.type,
+          timestamp: newNotif.createdAt,
+        });
+      }
+    } catch (notifErr) {
+      console.warn("[approvals] In-app notification creation warning:", notifErr.message);
     }
 
     // ── Push Notifications ────────────────────────────────────────────────────
     // Notify the transaction submitter when threshold is reached (approved/rejected).
     // Fire-and-forget: failures are logged in sendPushNotifications, never block response.
     if (txn.submittedBy && (txn.status === "approved" || txn.status === "rejected")) {
-      const notifTitle = txn.status === "approved" ? "✅ Transaction Approved" : "❌ Transaction Rejected";
+      const notifTitle = txn.status === "approved" ? "Transaction Approved" : "Transaction Rejected";
       const notifBody = `Your ₱${txn.amount} request for "${txn.description.slice(0, 40)}" was ${txn.status}.`;
       sendPushNotifications(
         [txn.submittedBy.toString()],

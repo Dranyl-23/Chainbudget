@@ -103,7 +103,7 @@ export default function NetworkStatusScreen() {
         }}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, marginRight: 8 }}>
             <View
               style={{
                 width: 44,
@@ -118,11 +118,11 @@ export default function NetworkStatusScreen() {
             >
               <Ionicons name="cube" size={24} color="#9333EA" />
             </View>
-            <View>
-              <Text style={{ color: colors.textPrimary, fontSize: 16, fontWeight: '800' }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: colors.textPrimary, fontSize: 16, fontWeight: '800' }} numberOfLines={1}>
                 {network.name}
               </Text>
-              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+              <Text style={{ color: colors.textSecondary, fontSize: 12 }} numberOfLines={1}>
                 Chain ID: {network.chainId} • Proof-of-Stake (PoS)
               </Text>
             </View>
@@ -177,7 +177,7 @@ export default function NetworkStatusScreen() {
       >
         {[
           { label: 'Blockchain Network', value: network.name },
-          { label: 'Network Chain ID', value: `${network.chainId} (Hex: ${network.hexChainId})` },
+          { label: 'Network Chain ID', value: `${network.chainId} (${network.hexChainId})` },
           { label: 'Native Currency', value: network.currency },
           { label: 'Gasless Relayer', value: `${relayer.status} (${relayer.type})` },
           { label: 'Consensus Mechanism', value: network.consensus },
@@ -187,14 +187,17 @@ export default function NetworkStatusScreen() {
             style={{
               flexDirection: 'row',
               justifyContent: 'space-between',
-              alignItems: 'center',
+              alignItems: 'flex-start',
               borderBottomColor: colors.borderSubtle,
               borderBottomWidth: idx < 4 ? 1 : 0,
               paddingBottom: idx < 4 ? 10 : 0,
+              gap: 12,
             }}
           >
-            <Text style={{ color: colors.textSecondary, fontSize: 13 }}>{item.label}</Text>
-            <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '700' }}>{item.value}</Text>
+            <Text style={{ color: colors.textSecondary, fontSize: 13, flex: 1 }}>{item.label}</Text>
+            <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '700', flex: 1.3, textAlign: 'right' }}>
+              {item.value}
+            </Text>
           </View>
         ))}
       </View>

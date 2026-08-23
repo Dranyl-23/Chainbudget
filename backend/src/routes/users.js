@@ -319,7 +319,7 @@ router.post("/push-token", authenticate, async (req, res) => {
     if (!["ios", "android"].includes(platform)) {
       return res.status(400).json({ error: "platform must be 'ios' or 'android'" });
     }
-    if (!token.startsWith("ExponentPushToken[")) {
+    if (typeof token !== "string" || (!token.startsWith("ExponentPushToken[") && !token.startsWith("ExpoPushToken[") && token.length < 15)) {
       return res.status(400).json({ error: "Invalid Expo push token format" });
     }
 
@@ -330,12 +330,14 @@ router.post("/push-token", authenticate, async (req, res) => {
     const existingIdx = user.pushTokens?.findIndex((t) => t.token === token);
     if (existingIdx !== undefined && existingIdx >= 0) {
       user.pushTokens[existingIdx].updatedAt = new Date();
+      user.pushTokens[existingIdx].platform = platform;
     } else {
       user.pushTokens = user.pushTokens || [];
-      user.pushTokens.push({ token, platform });
+      user.pushTokens.push({ token, platform, updatedAt: new Date() });
     }
 
     await user.save();
+    console.log(`[push-token] Registered push token for user ${user._id} (${user.displayName || user.email})`);
     res.json({ success: true });
   } catch (err) {
     console.error("[push-token]", err);
@@ -355,9 +357,6 @@ router.post("/push-token", authenticate, async (req, res) => {
  * @param {object}   data          - Extra data payload (e.g. { txId, screen })
  */
 async function sendPushNotifications(userIds, title, body, data = {}) {
-  // MED-1 FIX: The Expo Push API enforces a maximum of 100 messages per request.
-  // Sending more than 100 in a single call causes partial or full rejection.
-  // Chunk all messages into batches of 100 and send each batch sequentially.
   const EXPO_CHUNK_SIZE = 100;
 
   try {
@@ -367,7 +366,10 @@ async function sendPushNotifications(userIds, title, body, data = {}) {
       .lean();
 
     const tokens = users.flatMap((u) => u.pushTokens?.map((t) => t.token) || []);
-    if (tokens.length === 0) return;
+    if (tokens.length === 0) {
+      console.log(`[Push] No push tokens found for users: ${userIds.join(', ')}`);
+      return;
+    }
 
     const messages = tokens.map((to) => ({
       to,
@@ -375,7 +377,9 @@ async function sendPushNotifications(userIds, title, body, data = {}) {
       title,
       body,
       data,
+      priority: "high",
       channelId: data.channelId || "chainbudget-default",
+      _displayInForeground: true,
     }));
 
     // Chunk into batches of EXPO_CHUNK_SIZE and send each batch

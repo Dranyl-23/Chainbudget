@@ -1,0 +1,509 @@
+"use client";
+
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useAuth } from "@/context/AuthContext";
+import { io, Socket } from "socket.io-client";
+import {
+  Send, Pin, PinOff, Trash2, Copy, Check, MessageSquare, RefreshCw
+} from "lucide-react";
+import toast from "react-hot-toast";
+import api from "@/lib/api";
+import Image from "next/image";
+
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "https://chainbudget-api.fly.dev";
+
+interface Sender {
+  _id: string;
+  displayName?: string;
+  avatarUrl?: string;
+  walletAddress?: string;
+  email?: string;
+}
+
+interface ChatMessage {
+  _id: string;
+  organization: string;
+  sender: Sender;
+  content: string;
+  messageType: "text" | "image" | "system";
+  roleLevel: number;
+  roleLabel: string;
+  isPinned: boolean;
+  pinnedBy?: {
+    _id: string;
+    displayName?: string;
+  };
+  pinnedAt?: string;
+  createdAt: string;
+}
+
+function getRoleBadge(roleLevel: number, roleLabel?: string) {
+  const label = roleLabel || (roleLevel === 1 ? "President" : roleLevel === 2 ? "Auditor" : roleLevel === 3 ? "Treasurer" : "Member");
+
+  switch (roleLevel) {
+    case 1:
+      return {
+        label: `👑 ${label}`,
+        bg: "bg-fuchsia-500/15 border-fuchsia-500/30 text-fuchsia-300",
+      };
+    case 2:
+      return {
+        label: `🛡️ ${label}`,
+        bg: "bg-cyan-500/15 border-cyan-500/30 text-cyan-300",
+      };
+    case 3:
+      return {
+        label: `💼 ${label}`,
+        bg: "bg-emerald-500/15 border-emerald-500/30 text-emerald-300",
+      };
+    default:
+      return {
+        label: `👤 ${label}`,
+        bg: "bg-zinc-800/60 border-zinc-700/40 text-zinc-400",
+      };
+  }
+}
+
+function formatChatTime(dateString: string) {
+  const date = new Date(dateString);
+  const now = new Date();
+  const isToday = date.toDateString() === now.toDateString();
+
+  const timeStr = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  if (isToday) return timeStr;
+  return `${date.toLocaleDateString([], { month: "short", day: "numeric" })} ${timeStr}`;
+}
+
+export default function OrgChatPage() {
+  const { user, activeOrgId, isConnected } = useAuth();
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [pinnedMessages, setPinnedMessages] = useState<ChatMessage[]>([]);
+  const [inputText, setInputText] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSending, setIsSending] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [isSocketConnected, setIsSocketConnected] = useState(false);
+
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const socketRef = useRef<Socket | null>(null);
+
+  const currentMembership = useMemo(() => {
+    return user?.memberships?.find(
+      (m) =>
+        (typeof m.organization === "object" ? m.organization?._id : m.organization) === activeOrgId
+    );
+  }, [user, activeOrgId]);
+
+  const currentOrg = useMemo(() => {
+    if (!currentMembership?.organization) return null;
+    return typeof currentMembership.organization === "object"
+      ? currentMembership.organization
+      : { _id: currentMembership.organization, name: "Organization", logoUrl: undefined };
+  }, [currentMembership]);
+
+  const userRoleLevel = currentMembership?.roleLevel || 4;
+
+  const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
+    messagesEndRef.current?.scrollIntoView({ behavior });
+  };
+
+  // 1. Fetch initial chat history and pinned messages
+  const fetchChatData = useCallback(async (showLoadingSpinner = false) => {
+    if (!activeOrgId) return;
+    if (showLoadingSpinner) setIsLoading(true);
+    try {
+      const [msgRes, pinRes] = await Promise.all([
+        api.get<{ messages: ChatMessage[] }>(`/chat/${activeOrgId}/messages?limit=50`),
+        api.get<{ pinned: ChatMessage[] }>(`/chat/${activeOrgId}/pinned`),
+      ]);
+
+      setMessages(msgRes.data.messages || []);
+      setPinnedMessages(pinRes.data.pinned || []);
+      setTimeout(() => scrollToBottom("auto"), 100);
+    } catch (err: unknown) {
+      console.error("[Chat] Failed to load messages:", err);
+      toast.error("Could not load organization chat history");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [activeOrgId]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    if (activeOrgId) {
+      void (async () => {
+        try {
+          const [msgRes, pinRes] = await Promise.all([
+            api.get<{ messages: ChatMessage[] }>(`/chat/${activeOrgId}/messages?limit=50`),
+            api.get<{ pinned: ChatMessage[] }>(`/chat/${activeOrgId}/pinned`),
+          ]);
+
+          if (!isCancelled) {
+            setMessages(msgRes.data.messages || []);
+            setPinnedMessages(pinRes.data.pinned || []);
+            setIsLoading(false);
+            setTimeout(() => scrollToBottom("auto"), 100);
+          }
+        } catch (err: unknown) {
+          console.error("[Chat] Failed to load messages:", err);
+          if (!isCancelled) {
+            toast.error("Could not load organization chat history");
+            setIsLoading(false);
+          }
+        }
+      })();
+    }
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [activeOrgId]);
+
+  // 2. Connect to Socket.IO for real-time chat updates
+  useEffect(() => {
+    if (!activeOrgId) return;
+
+    const token = typeof window !== "undefined" ? (localStorage.getItem("cb_token") || localStorage.getItem("token")) : null;
+    const socket = io(BACKEND_URL, {
+      auth: { token },
+      transports: ["websocket", "polling"],
+    });
+    socketRef.current = socket;
+
+    socket.on("connect", () => {
+      setIsSocketConnected(true);
+    });
+
+    socket.on("disconnect", () => {
+      setIsSocketConnected(false);
+    });
+
+    socket.on("new_org_message", (data: { orgId: string; message: ChatMessage }) => {
+      if (data.orgId === activeOrgId && data.message) {
+        setMessages((prev) => {
+          if (prev.some((m) => m._id === data.message._id)) return prev;
+          return [...prev, data.message];
+        });
+        scrollToBottom("smooth");
+      }
+    });
+
+    socket.on("org_message_pinned", (data: { orgId: string; message: ChatMessage }) => {
+      if (data.orgId === activeOrgId && data.message) {
+        setMessages((prev) =>
+          prev.map((m) => (m._id === data.message._id ? data.message : m))
+        );
+        if (data.message.isPinned) {
+          setPinnedMessages((prev) => [data.message, ...prev.filter((p) => p._id !== data.message._id)]);
+        } else {
+          setPinnedMessages((prev) => prev.filter((p) => p._id !== data.message._id));
+        }
+      }
+    });
+
+    socket.on("org_message_deleted", (data: { orgId: string; messageId: string }) => {
+      if (data.orgId === activeOrgId) {
+        setMessages((prev) => prev.filter((m) => m._id !== data.messageId));
+        setPinnedMessages((prev) => prev.filter((p) => p._id !== data.messageId));
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, [activeOrgId]);
+
+  // 3. Send message handler
+  const handleSendMessage = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const trimmed = inputText.trim();
+    if (!trimmed || isSending || !activeOrgId) return;
+
+    setInputText("");
+    setIsSending(true);
+
+    try {
+      const res = await api.post<{ message: ChatMessage }>(`/chat/${activeOrgId}/messages`, {
+        content: trimmed,
+        messageType: "text",
+      });
+
+      const sentMsg = res.data.message;
+      if (sentMsg) {
+        setMessages((prev) => {
+          if (prev.some((m) => m._id === sentMsg._id)) return prev;
+          return [...prev, sentMsg];
+        });
+        scrollToBottom("smooth");
+      }
+    } catch (err: unknown) {
+      console.error("[Chat] Send failed:", err);
+      toast.error("Failed to send message");
+      setInputText(trimmed);
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  // 4. Pin / Unpin message handler
+  const handleTogglePin = async (message: ChatMessage) => {
+    try {
+      await api.post(`/chat/${activeOrgId}/messages/${message._id}/pin`);
+      toast.success(message.isPinned ? "Message unpinned" : "Message pinned to announcements");
+    } catch (err: unknown) {
+      console.error("[Chat] Pin failed:", err);
+      toast.error("Failed to update pin state");
+    }
+  };
+
+  // 5. Delete message handler
+  const handleDeleteMessage = async (messageId: string) => {
+    if (!confirm("Are you sure you want to delete this message?")) return;
+    try {
+      await api.delete(`/chat/${activeOrgId}/messages/${messageId}`);
+      toast.success("Message deleted");
+    } catch (err: unknown) {
+      console.error("[Chat] Delete failed:", err);
+      toast.error("Failed to delete message");
+    }
+  };
+
+  // 6. Copy text helper
+  const handleCopyText = async (id: string, text: string) => {
+    await navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    toast.success("Copied to clipboard");
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      void handleSendMessage();
+    }
+  };
+
+  if (!isConnected || !activeOrgId) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[65vh] p-8 text-center">
+        <div className="w-14 h-14 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 mb-4">
+          <MessageSquare className="w-7 h-7" />
+        </div>
+        <h2 className="text-xl font-bold text-white mb-2">Organization Chat</h2>
+        <p className="text-sm text-zinc-400 max-w-md">
+          Please select an active organization in the top navigation bar to open the organization group chat.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col h-[calc(100vh-5.5rem)] max-w-7xl mx-auto">
+      {/* ── HEADER BAR ── */}
+      <div className="flex items-center justify-between px-6 py-4 bg-zinc-900/60 backdrop-blur-xl border border-white/8 rounded-2xl mb-4 shadow-sm">
+        <div className="flex items-center gap-3.5">
+          <div className="relative">
+            <div className="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/30 flex items-center justify-center text-purple-300 font-bold overflow-hidden">
+              {currentOrg?.logoUrl ? (
+                <Image src={currentOrg.logoUrl} alt="Org" width={40} height={40} className="w-full h-full object-cover" unoptimized />
+              ) : (
+                <MessageSquare className="w-5 h-5 text-purple-400" />
+              )}
+            </div>
+            <span
+              className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-zinc-900 ${
+                isSocketConnected ? "bg-emerald-500" : "bg-amber-500"
+              }`}
+              title={isSocketConnected ? "Live Connected" : "Connecting..."}
+            />
+          </div>
+
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-base font-bold text-white">{currentOrg?.name || "Organization Group Chat"}</h1>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                All Roles (L1-L4)
+              </span>
+            </div>
+            <p className="text-xs text-zinc-400 flex items-center gap-1.5 mt-0.5">
+              <span className={`inline-block w-1.5 h-1.5 rounded-full ${isSocketConnected ? "bg-emerald-400" : "bg-amber-400"}`} />
+              {isSocketConnected ? "Real-time stream active" : "Reconnecting to live channel..."}
+            </p>
+          </div>
+        </div>
+
+        <button
+          onClick={() => void fetchChatData()}
+          className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition border border-white/5"
+          title="Refresh Messages"
+        >
+          <RefreshCw className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* ── PINNED ANNOUNCEMENTS BANNER ── */}
+      {pinnedMessages.length > 0 && (
+        <div className="mb-4 p-3.5 bg-amber-500/10 border border-amber-500/25 rounded-2xl flex items-center justify-between gap-3 text-amber-200 text-xs shadow-sm">
+          <div className="flex items-center gap-2.5 flex-1 min-w-0">
+            <Pin className="w-4 h-4 text-amber-400 shrink-0" />
+            <div className="truncate">
+              <span className="font-bold text-amber-300 mr-2">PINNED ANNOUNCEMENT:</span>
+              <span className="text-amber-100">{pinnedMessages[0].content}</span>
+            </div>
+          </div>
+          <span className="text-[10px] text-amber-400/80 font-mono shrink-0">
+            {pinnedMessages[0].sender?.displayName || "Executive"}
+          </span>
+        </div>
+      )}
+
+      {/* ── MESSAGES CHAT STREAM ── */}
+      <div className="flex-1 overflow-y-auto px-4 py-4 bg-zinc-950/40 border border-white/6 rounded-2xl mb-4 space-y-4 shadow-inner">
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center h-full text-zinc-400 text-sm gap-3">
+            <RefreshCw className="w-6 h-6 animate-spin text-purple-400" />
+            <span>Loading organization messages...</span>
+          </div>
+        ) : messages.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-center p-8">
+            <div className="w-14 h-14 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 mb-3">
+              <MessageSquare className="w-7 h-7" />
+            </div>
+            <h3 className="text-base font-bold text-white mb-1">Welcome to {currentOrg?.name || "Org"} Chat!</h3>
+            <p className="text-xs text-zinc-400 max-w-sm">
+              Start the discussion! Send proposals, clarify fund liquidation questions, or share updates with your organization members.
+            </p>
+          </div>
+        ) : (
+          messages.map((msg) => {
+            const isMe = msg.sender?._id === user?.id || msg.sender?._id === (user as { _id?: string })?._id;
+            const badge = getRoleBadge(msg.roleLevel, msg.roleLabel);
+            const senderName = msg.sender?.displayName || "Member";
+
+            return (
+              <div
+                key={msg._id}
+                className={`group flex items-start gap-3 ${isMe ? "flex-row-reverse" : "flex-row"}`}
+              >
+                {/* Avatar */}
+                {!isMe && (
+                  <div className="w-8 h-8 rounded-full bg-purple-600/30 border border-purple-500/30 flex items-center justify-center text-xs font-bold text-purple-200 shrink-0 overflow-hidden mt-0.5">
+                    {msg.sender?.avatarUrl ? (
+                      <Image src={msg.sender.avatarUrl} alt="Avatar" width={32} height={32} className="w-full h-full object-cover" unoptimized />
+                    ) : (
+                      senderName.charAt(0).toUpperCase()
+                    )}
+                  </div>
+                )}
+
+                {/* Message Content Container */}
+                <div className={`max-w-[78%] md:max-w-[65%] flex flex-col ${isMe ? "items-end" : "items-start"}`}>
+                  {/* Sender Name & Role Badge */}
+                  {!isMe && (
+                    <div className="flex items-center gap-2 mb-1 px-1">
+                      <span className="text-xs font-bold text-zinc-200">{senderName}</span>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${badge.bg}`}>
+                        {badge.label}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Message Bubble */}
+                  <div className="relative group/bubble">
+                    <div
+                      className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
+                        isMe
+                          ? "bg-linear-to-r from-purple-600 to-indigo-600 text-white rounded-tr-xs shadow-md shadow-purple-900/20"
+                          : "bg-zinc-900/90 border border-white/8 text-zinc-100 rounded-tl-xs shadow-sm"
+                      } ${msg.isPinned ? "border-amber-500/50 ring-1 ring-amber-500/30" : ""}`}
+                    >
+                      {msg.isPinned && (
+                        <div className="flex items-center gap-1 text-[10px] font-bold text-amber-300 mb-1 pb-1 border-b border-white/10">
+                          <Pin className="w-3 h-3" /> Pinned Announcement
+                        </div>
+                      )}
+                      <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                      <div
+                        className={`text-[10px] mt-1 font-mono flex items-center gap-1 ${
+                          isMe ? "text-purple-200/70 justify-end" : "text-zinc-500 justify-end"
+                        }`}
+                      >
+                        {formatChatTime(msg.createdAt)}
+                      </div>
+                    </div>
+
+                    {/* Hover Action Toolbar */}
+                    <div
+                      className={`absolute top-0 -translate-y-1/2 hidden group-hover/bubble:flex items-center gap-1 p-1 bg-zinc-900 border border-white/15 rounded-xl shadow-lg z-10 ${
+                        isMe ? "right-2" : "left-2"
+                      }`}
+                    >
+                      <button
+                        onClick={() => void handleCopyText(msg._id, msg.content)}
+                        className="p-1.5 hover:bg-white/10 text-zinc-400 hover:text-white rounded-lg transition"
+                        title="Copy text"
+                      >
+                        {copiedId === msg._id ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                      </button>
+
+                      {userRoleLevel <= 2 && (
+                        <button
+                          onClick={() => void handleTogglePin(msg)}
+                          className="p-1.5 hover:bg-white/10 text-zinc-400 hover:text-amber-300 rounded-lg transition"
+                          title={msg.isPinned ? "Unpin message" : "Pin message"}
+                        >
+                          {msg.isPinned ? <PinOff className="w-3.5 h-3.5 text-amber-400" /> : <Pin className="w-3.5 h-3.5" />}
+                        </button>
+                      )}
+
+                      {(isMe || userRoleLevel === 1) && (
+                        <button
+                          onClick={() => void handleDeleteMessage(msg._id)}
+                          className="p-1.5 hover:bg-rose-500/20 text-zinc-400 hover:text-rose-400 rounded-lg transition"
+                          title="Delete message"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* ── INPUT COMPOSER ── */}
+      <form onSubmit={(e) => void handleSendMessage(e)} className="relative flex items-center gap-3">
+        <div className="flex-1 relative">
+          <textarea
+            ref={textareaRef}
+            rows={1}
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={`Message #${currentOrg?.name || "general"}... (Enter to send, Shift+Enter for new line)`}
+            className="w-full px-4 py-3.5 pr-12 bg-zinc-900/80 border border-white/10 rounded-2xl text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 resize-none max-h-32 shadow-sm transition"
+          />
+        </div>
+
+        <button
+          type="submit"
+          disabled={!inputText.trim() || isSending}
+          className="h-12 w-12 rounded-2xl bg-linear-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white flex items-center justify-center shadow-lg shadow-purple-900/30 transition shrink-0"
+        >
+          {isSending ? (
+            <RefreshCw className="w-4 h-4 animate-spin" />
+          ) : (
+            <Send className="w-4 h-4" />
+          )}
+        </button>
+      </form>
+    </div>
+  );
+}

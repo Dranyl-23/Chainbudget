@@ -341,30 +341,30 @@ export default function TransactionDetailScreen() {
 
           {tx.category && (
             <View 
-              style={{ borderBottomColor: colors.borderSubtle }}
+              style={{ borderBottomColor: colors.borderSubtle, gap: 10 }}
               className="flex-row justify-between py-3 border-b"
             >
-              <Text style={{ color: colors.textSecondary }}>Category</Text>
-              <Text style={{ color: colors.textPrimary }} className="font-semibold">{tx.category}</Text>
+              <Text style={{ color: colors.textSecondary, flex: 1 }}>Category</Text>
+              <Text style={{ color: colors.textPrimary, flex: 1.5, textAlign: 'right' }} className="font-semibold">{tx.category}</Text>
             </View>
           )}
 
           <View 
-            style={{ borderBottomColor: colors.borderSubtle }}
+            style={{ borderBottomColor: colors.borderSubtle, gap: 10 }}
             className="flex-row justify-between py-3 border-b"
           >
-            <Text style={{ color: colors.textSecondary }}>Date</Text>
-            <Text style={{ color: colors.textPrimary }} className="font-semibold">
+            <Text style={{ color: colors.textSecondary, flex: 1 }}>Date</Text>
+            <Text style={{ color: colors.textPrimary, flex: 1.5, textAlign: 'right' }} className="font-semibold">
               {new Date(tx.createdAt).toLocaleString()}
             </Text>
           </View>
 
           <View 
-            style={{ borderBottomColor: colors.borderSubtle }}
+            style={{ borderBottomColor: colors.borderSubtle, gap: 10 }}
             className="flex-row justify-between py-3 border-b"
           >
-            <Text style={{ color: colors.textSecondary }}>Initiated By</Text>
-            <Text style={{ color: colors.textPrimary }} className="font-semibold">
+            <Text style={{ color: colors.textSecondary, flex: 1 }}>Initiated By</Text>
+            <Text style={{ color: colors.textPrimary, flex: 1.5, textAlign: 'right' }} className="font-semibold">
               {tx.submittedBy?.displayName || 'Unknown'}
             </Text>
           </View>

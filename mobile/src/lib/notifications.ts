@@ -54,9 +54,17 @@ export async function setupAndroidNotificationChannel() {
   if (IS_EXPO_GO) return;
 
   if (Platform.OS === 'android') {
+    await Notifications.setNotificationChannelAsync('default', {
+      name: 'General Alerts',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: '#a21caf',
+      sound: 'default',
+    });
+
     await Notifications.setNotificationChannelAsync('chainbudget-default', {
       name: 'ChainBudget Alerts',
-      importance: Notifications.AndroidImportance.HIGH,
+      importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: '#a21caf', // ChainBudget fuchsia accent
       sound: 'default',
@@ -69,6 +77,15 @@ export async function setupAndroidNotificationChannel() {
       lightColor: '#22c55e',
       sound: 'default',
       description: 'High-priority notifications for pending transaction approvals',
+    });
+
+    await Notifications.setNotificationChannelAsync('chainbudget-dao', {
+      name: 'DAO Governance & Voting',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 400, 200, 400],
+      lightColor: '#8b5cf6',
+      sound: 'default',
+      description: 'Alerts for new DAO proposals and voting rounds',
     });
   }
 }
@@ -111,17 +128,20 @@ export async function registerForPushNotifications(): Promise<string | null> {
     finalStatus = requestedSettings.status || (requestedSettings.granted ? 'granted' : 'denied');
   }
 
-
-
   if (finalStatus !== 'granted') {
     console.log('[Notifications] Push notification permission denied.');
     return null;
   }
 
-  // Get the Expo push token
+  // Get the Expo push token with the official EAS Project ID
   try {
+    const projectId =
+      Constants.expoConfig?.extra?.eas?.projectId ||
+      Constants.easConfig?.projectId ||
+      '85dd7732-5fd7-438e-8e34-6d2246d7426a';
+
     const tokenData = await Notifications.getExpoPushTokenAsync({
-      projectId: 'chainbudget-mobile', // matches app.json slug
+      projectId,
     });
     const expoPushToken = tokenData.data;
 

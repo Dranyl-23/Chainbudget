@@ -8,7 +8,7 @@ import Image from "next/image";
 import {
   LayoutDashboard, ArrowLeftRight, PiggyBank,
   ClipboardCheck, FileText, BookOpen, Settings,
-  LogOut, Users, Menu, X, AlertTriangle, Copy, Vote, ChevronLeft, ChevronRight, UserCircle, ShieldCheck, Box, Crown, CheckCircle2, User as UserIcon, Eye, HelpCircle, LifeBuoy, Shield
+  LogOut, Users, Menu, X, AlertTriangle, Copy, Vote, ChevronLeft, ChevronRight, UserCircle, ShieldCheck, Box, Crown, CheckCircle2, User as UserIcon, Eye, HelpCircle, LifeBuoy, Shield, MessageSquare
 } from "lucide-react";
 
 import toast from "react-hot-toast";
@@ -65,6 +65,7 @@ function getShortNetworkName(chainId?: string): string {
 
 const navItems = [
   { href: "/dashboard",              icon: <LayoutDashboard className="w-4 h-4" />, label: "Dashboard",    minRole: 4 },
+  { href: "/dashboard/chat",         icon: <MessageSquare   className="w-4 h-4" />, label: "Org Chat",     minRole: 4 },
   { href: "/dashboard/transactions", icon: <ArrowLeftRight  className="w-4 h-4" />, label: "Transactions", minRole: 4 },
   { href: "/dashboard/budget",       icon: <PiggyBank       className="w-4 h-4" />, label: "Budget",       minRole: 3 }, // RBAC Fix: Level 3 can view budgets
   { href: "/dashboard/approvals",    icon: <ClipboardCheck  className="w-4 h-4" />, label: "Approvals",    minRole: 2 }, // Treasurer (Level 2) can approve

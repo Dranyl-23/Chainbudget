@@ -357,46 +357,100 @@ export default function ReportsScreen() {
                     </View>
                   ) : forecast ? (
                     <View>
-                      {/* Health Badge */}
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                        <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: '600' }}>Treasury Health:</Text>
-                        <View style={{
-                          backgroundColor: healthColor + '20',
-                          borderColor: healthColor + '60',
-                          borderWidth: 1,
-                          borderRadius: 20,
-                          paddingHorizontal: 12,
-                          paddingVertical: 3,
-                        }}>
-                          <Text style={{ color: healthColor, fontWeight: '800', textTransform: 'uppercase', fontSize: 11 }}>
-                            {healthStatus}
-                          </Text>
+                      {/* Health Badge & AI Indicator */}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: '600' }}>Treasury Health:</Text>
+                          <View style={{
+                            backgroundColor: healthColor + '20',
+                            borderColor: healthColor + '60',
+                            borderWidth: 1,
+                            borderRadius: 20,
+                            paddingHorizontal: 12,
+                            paddingVertical: 3,
+                          }}>
+                            <Text style={{ color: healthColor, fontWeight: '800', textTransform: 'uppercase', fontSize: 11 }}>
+                              {healthStatus}
+                            </Text>
+                          </View>
                         </View>
+                        {forecast.isAiGenerated && (
+                          <View style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 4,
+                            backgroundColor: 'rgba(147, 51, 234, 0.15)',
+                            borderColor: '#9333EA40',
+                            borderWidth: 1,
+                            borderRadius: 12,
+                            paddingHorizontal: 8,
+                            paddingVertical: 2,
+                          }}>
+                            <Ionicons name="sparkles" size={10} color="#9333EA" />
+                            <Text style={{ color: '#9333EA', fontSize: 10, fontWeight: '700' }}>Gemini AI</Text>
+                          </View>
+                        )}
                       </View>
 
                       {/* Forecast Summary Body */}
-                      <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 18, marginBottom: 12 }}>
-                        {forecast.summary}
-                      </Text>
+                      {(forecast.forecast || forecast.summary) && (
+                        <View style={{
+                          backgroundColor: isDark ? 'rgba(0,0,0,0.3)' : colors.backgroundSecondary,
+                          borderRadius: 16,
+                          padding: 14,
+                          marginBottom: 14,
+                          borderWidth: 1,
+                          borderColor: colors.borderSubtle,
+                        }}>
+                          <Text style={{ color: colors.textPrimary, fontSize: 13, lineHeight: 20 }}>
+                            {forecast.forecast || forecast.summary}
+                          </Text>
+                        </View>
+                      )}
 
-                      {forecast.risks && forecast.risks.length > 0 && (
-                        <View style={{ marginBottom: 12 }}>
-                          <Text style={{ color: colors.error, fontSize: 12, fontWeight: '700', marginBottom: 4 }}>Risks Identified:</Text>
-                          {forecast.risks.map((r: string, idx: number) => (
-                            <Text key={idx} style={{ color: colors.textSecondary, fontSize: 12, marginLeft: 8, marginBottom: 2 }}>
-                              • {r}
-                            </Text>
+                      {/* Actionable Insights & Warnings */}
+                      {((forecast.insights && forecast.insights.length > 0) || (forecast.recommendations && forecast.recommendations.length > 0)) && (
+                        <View style={{ marginBottom: 10 }}>
+                          <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>
+                            Actionable Strategic Insights:
+                          </Text>
+                          {(forecast.insights || forecast.recommendations || []).map((item: string, idx: number) => (
+                            <View key={idx} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 6 }}>
+                              <View style={{
+                                width: 6,
+                                height: 6,
+                                borderRadius: 3,
+                                backgroundColor: colors.primary,
+                                marginTop: 6,
+                                flexShrink: 0,
+                              }} />
+                              <Text style={{ color: colors.textSecondary, fontSize: 12.5, lineHeight: 18, flex: 1 }}>
+                                {item}
+                              </Text>
+                            </View>
                           ))}
                         </View>
                       )}
 
-                      {forecast.recommendations && forecast.recommendations.length > 0 && (
-                        <View>
-                          <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '700', marginBottom: 4 }}>Recommendations:</Text>
-                          {forecast.recommendations.map((rec: string, idx: number) => (
-                            <Text key={idx} style={{ color: colors.textSecondary, fontSize: 12, marginLeft: 8, marginBottom: 2 }}>
-                              • {rec}
-                            </Text>
+                      {forecast.risks && forecast.risks.length > 0 && (
+                        <View style={{ marginTop: 4 }}>
+                          <Text style={{ color: colors.error, fontSize: 12, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>
+                            Identified Risk Factors:
+                          </Text>
+                          {forecast.risks.map((r: string, idx: number) => (
+                            <View key={idx} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 6 }}>
+                              <View style={{
+                                width: 6,
+                                height: 6,
+                                borderRadius: 3,
+                                backgroundColor: colors.error,
+                                marginTop: 6,
+                                flexShrink: 0,
+                              }} />
+                              <Text style={{ color: colors.textSecondary, fontSize: 12.5, lineHeight: 18, flex: 1 }}>
+                                {r}
+                              </Text>
+                            </View>
                           ))}
                         </View>
                       )}

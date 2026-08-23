@@ -25,6 +25,7 @@ import AboutScreen from '../screens/AboutScreen';
 import NetworkStatusScreen from '../screens/NetworkStatusScreen';
 import SecurityKeysScreen from '../screens/SecurityKeysScreen';
 import CreateOrganizationScreen from '../screens/CreateOrganizationScreen';
+import OrgChatScreen from '../screens/OrgChatScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -151,6 +152,11 @@ export default function RootStackNavigator() {
         name="CreateOrganization"
         component={CreateOrganizationScreen}
         options={{ title: 'Create Organization' }}
+      />
+      <Stack.Screen
+        name="OrgChat"
+        component={OrgChatScreen}
+        options={{ headerShown: false }}
       />
     </Stack.Navigator>
   );

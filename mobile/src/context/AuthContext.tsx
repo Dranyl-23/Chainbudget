@@ -17,6 +17,7 @@ import { AppState, AppStateStatus } from 'react-native';
 import { fetchCurrentUser, loginWithWallet, logout as authLogout, AuthUser } from '../lib/auth';
 import { hasWallet, getWalletAddress, clearAll } from '../lib/secureStorage';
 import api, { setSessionExpiredHandler } from '../lib/api';
+import { registerForPushNotifications } from '../lib/notifications';
 
 // ── Context types ──────────────────────────────────────────────────────────────
 
@@ -130,6 +131,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (currentUser) {
         setUser(currentUser);
         isLoggedInRef.current = true;
+        registerForPushNotifications().catch(() => {});
       } else {
         // JWT expired or missing — user needs to re-authenticate
         // Keep hasLocalWallet true so LoginScreen shows "Sign In" not "Register"
@@ -154,6 +156,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const loggedInUser = await loginWithWallet(walletAddress);
     setUser(loggedInUser);
     isLoggedInRef.current = true;
+    registerForPushNotifications().catch(() => {});
   };
 
   const logout = async () => {

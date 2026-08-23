@@ -215,6 +215,22 @@ export default function DashboardScreen() {
           </View>
 
           <View className="flex-row items-center gap-2">
+            {/* Org Group Chat Button */}
+            <TouchableOpacity 
+              onPress={() => {
+                triggerLightHaptic();
+                navigation.navigate('OrgChat', { orgId: activeOrgId });
+              }}
+              style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+              className="w-10 h-10 rounded-full border items-center justify-center shadow-sm relative"
+              accessible={true}
+              accessibilityRole="button"
+              accessibilityLabel="Open Organization Group Chat"
+            >
+              <Ionicons name="chatbubbles-outline" size={20} color={colors.primary} />
+            </TouchableOpacity>
+
+            {/* Notifications Button */}
             <TouchableOpacity 
               onPress={() => {
                 triggerLightHaptic();
@@ -703,12 +719,12 @@ export default function DashboardScreen() {
                   onPress: () => navigation.navigate('Receive', { orgId: activeOrgId }),
                 },
                 {
-                  id: 'scan',
-                  label: 'Scan QR',
-                  icon: 'scan',
-                  color: '#9333EA',
-                  bgColor: isDark ? 'rgba(147, 51, 234, 0.15)' : '#F5EEFC',
-                  onPress: () => navigation.navigate('MainTabs', { screen: 'Scanner', params: { orgId: activeOrgId } }),
+                  id: 'reports',
+                  label: 'Reports',
+                  icon: 'bar-chart',
+                  color: '#8B5CF6',
+                  bgColor: isDark ? 'rgba(139, 92, 246, 0.15)' : '#EDE9FE',
+                  onPress: () => navigation.navigate('Reports', { orgId: activeOrgId }),
                 },
                 {
                   id: 'history',
@@ -786,6 +802,15 @@ export default function DashboardScreen() {
                     route: 'Budget',
                   },
                   {
+                    id: 'audit',
+                    title: 'Audit Trail',
+                    subtitle: 'On-chain proof & logs',
+                    icon: 'shield-checkmark-outline',
+                    color: '#2563EB',
+                    bgColor: isDark ? 'rgba(37, 99, 235, 0.15)' : '#DBEAFE',
+                    route: 'Audit',
+                  },
+                  {
                     id: 'members',
                     title: 'DAO Members',
                     subtitle: 'Soulbound IDs & roles',
@@ -802,15 +827,6 @@ export default function DashboardScreen() {
                     color: '#EA580C',
                     bgColor: isDark ? 'rgba(234, 88, 12, 0.15)' : '#FFEDD5',
                     route: 'Treasury',
-                  },
-                  {
-                    id: 'audit',
-                    title: 'Audit & Reports',
-                    subtitle: 'On-chain proof & logs',
-                    icon: 'shield-checkmark-outline',
-                    color: '#2563EB',
-                    bgColor: isDark ? 'rgba(37, 99, 235, 0.15)' : '#DBEAFE',
-                    route: 'Audit',
                   },
                 ].map((item) => (
                   <TouchableOpacity

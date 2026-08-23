@@ -305,13 +305,16 @@ router.get("/forecast", authenticate, async (req, res) => {
 
         const parsed = safeParseAiJson(response.text, null);
         if (parsed && parsed.forecast) {
+          const insightsList = parsed.insights || [
+            "Maintain active treasury monitoring.",
+            "Track recurring expenses across categories.",
+            "Ensure liquidation compliance for upcoming milestones."
+          ];
           return res.json({
             forecast: parsed.forecast,
-            insights: parsed.insights || [
-              "Maintain active treasury monitoring.",
-              "Track recurring expenses across categories.",
-              "Ensure liquidation compliance for upcoming milestones."
-            ],
+            summary: parsed.forecast,
+            insights: insightsList,
+            recommendations: insightsList,
             healthStatus: parsed.healthStatus || healthStatus,
             isAiGenerated: true,
           });
@@ -338,7 +341,9 @@ router.get("/forecast", authenticate, async (req, res) => {
 
     res.json({
       forecast: deterministicForecast,
+      summary: deterministicForecast,
       insights: deterministicInsights,
+      recommendations: deterministicInsights,
       healthStatus,
       isAiGenerated: false,
     });
