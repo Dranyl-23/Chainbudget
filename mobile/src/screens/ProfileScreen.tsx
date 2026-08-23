@@ -32,6 +32,7 @@ export default function ProfileScreen() {
   const [showThemeModal, setShowThemeModal] = useState(false);
   const [mintingSbt, setMintingSbt] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [showAllMemberships, setShowAllMemberships] = useState(false);
 
   const copyToClipboard = async (text: string, label: string) => {
     await Clipboard.setStringAsync(text);
@@ -227,19 +228,19 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Organization Memberships Section */}
+      {/* Organization Memberships Section (Option 2: Compact Top 2 Preview + View All Toggle) */}
       <View 
         style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-        className="border rounded-3xl p-5 mb-6 shadow-sm"
+        className="border rounded-3xl p-4 mb-6 shadow-sm"
       >
-        <View className="flex-row items-center justify-between mb-4">
+        <View className="flex-row items-center justify-between mb-3 px-1">
           <View className="flex-row items-center gap-2">
-            <Ionicons name="ribbon-outline" size={22} color={colors.primary} />
+            <Ionicons name="ribbon-outline" size={20} color={colors.primary} />
             <Text style={{ color: colors.textPrimary }} className="font-bold text-base">Memberships</Text>
           </View>
           <View 
             style={{ backgroundColor: colors.primaryMuted, borderColor: colors.primary + '40' }}
-            className="px-2.5 py-1 rounded-full border"
+            className="px-2.5 py-0.5 rounded-full border"
           >
             <Text style={{ color: colors.primary }} className="text-xs font-bold">
               {user?.memberships?.length || 0} Active
@@ -248,82 +249,103 @@ export default function ProfileScreen() {
         </View>
 
         {user?.memberships && user.memberships.length > 0 ? (
-          user.memberships.map((m: any, idx: number) => {
-            const badge = getRoleBadge(m.roleLevel || 3);
-            const orgName = m.organization?.name || m.organizationName || 'Organization Member';
+          <>
+            {(showAllMemberships ? user.memberships : user.memberships.slice(0, 2)).map((m: any, idx: number) => {
+              const badge = getRoleBadge(m.roleLevel || 3);
+              const orgName = m.organization?.name || m.organizationName || 'Organization Member';
 
-            return (
-              <LinearGradient
-                key={m._id || idx}
-                colors={isDark ? ['#1a1a24', '#0d0d12'] : ['#ffffff', '#f1f5f9']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={{
-                  borderRadius: 16,
-                  padding: 16,
-                  marginBottom: 12,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                }}
-              >
-                <View className="flex-row justify-between items-start mb-4">
-                  {/* Left: Avatar & Text */}
-                  <View className="flex-row flex-1 mr-2">
+              return (
+                <View
+                  key={m._id || idx}
+                  style={{
+                    backgroundColor: isDark ? 'rgba(0,0,0,0.3)' : colors.backgroundSecondary,
+                    borderColor: colors.border,
+                  }}
+                  className="p-3.5 rounded-2xl border mb-2.5 flex-row items-center justify-between"
+                >
+                  {/* Left: Compact Squircle Avatar + Org Name & Role */}
+                  <View className="flex-row items-center flex-1 mr-3">
                     <View 
                       style={{ backgroundColor: colors.primaryMuted, borderColor: colors.primary + '40' }}
-                      className="w-12 h-12 rounded-2xl items-center justify-center mr-3 shadow-sm border"
+                      className="w-10 h-10 rounded-xl items-center justify-center mr-3 border"
                     >
-                      <Text style={{ color: colors.primary }} className="font-extrabold text-xl">
+                      <Text style={{ color: colors.primary }} className="font-black text-base">
                         {orgName.charAt(0).toUpperCase()}
                       </Text>
                     </View>
-                    <View className="flex-1 justify-center">
-                      <Text style={{ color: colors.textPrimary }} className="font-extrabold text-lg tracking-wide" numberOfLines={1}>{orgName}</Text>
-                      <Text style={{ color: colors.textSecondary }} className="text-xs mt-0.5 font-medium">{m.roleLabel || 'Member'}</Text>
+                    <View className="flex-1">
+                      <Text style={{ color: colors.textPrimary }} className="font-bold text-sm" numberOfLines={1}>
+                        {orgName}
+                      </Text>
+                      <View className="flex-row items-center gap-1.5 mt-0.5">
+                        <Text style={{ color: badge.color }} className="text-[11px] font-bold">
+                          {m.roleLabel || 'Member'}
+                        </Text>
+                        <Text style={{ color: colors.textMuted }} className="text-[10px]">•</Text>
+                        <Text style={{ color: colors.textSecondary }} className="text-[11px] font-medium">
+                          {m.roleLevel === 1 ? 'Founder' : m.roleLevel === 2 ? 'Manager' : 'Core'} (L{m.roleLevel || 3})
+                        </Text>
+                      </View>
                     </View>
                   </View>
 
-                  {/* Right: SBT Verified Pill or Mint Button */}
+                  {/* Right: SBT Pill or Mint ID */}
                   {m.hasSBT ? (
                     <View 
                       style={{ backgroundColor: colors.successBg, borderColor: colors.successBorder }}
-                      className="flex-row items-center px-2 py-1.5 rounded-lg border"
+                      className="flex-row items-center px-2 py-1 rounded-full border"
                     >
-                      <Ionicons name="shield-checkmark" size={12} color={colors.success} />
-                      <Text style={{ color: colors.success }} className="text-[9px] font-bold ml-1 uppercase tracking-widest">SBT Verified</Text>
+                      <Ionicons name="shield-checkmark" size={11} color={colors.success} />
+                      <Text style={{ color: colors.success }} className="text-[9px] font-extrabold ml-1 uppercase">SBT</Text>
                     </View>
                   ) : (
                     <TouchableOpacity
                       onPress={handleMintSbt}
                       disabled={mintingSbt}
-                      style={{ backgroundColor: colors.primaryMuted, borderColor: colors.primary }}
-                      className="flex-row items-center px-2.5 py-1.5 rounded-lg border"
+                      style={{ backgroundColor: colors.primaryMuted, borderColor: colors.primary + '60' }}
+                      className="flex-row items-center px-2.5 py-1 rounded-full border"
                     >
                       {mintingSbt ? (
                         <ActivityIndicator size="small" color={colors.primary} />
                       ) : (
                         <>
-                          <Ionicons name="sparkles-outline" size={12} color={colors.primary} />
-                          <Text style={{ color: colors.primary }} className="text-[9px] font-bold ml-1 uppercase tracking-wider">Mint ID</Text>
+                          <Ionicons name="sparkles-outline" size={11} color={colors.primary} />
+                          <Text style={{ color: colors.primary }} className="text-[9px] font-extrabold ml-1 uppercase">Mint</Text>
                         </>
                       )}
                     </TouchableOpacity>
                   )}
                 </View>
+              );
+            })}
 
-                {/* Role Badge (Bottom Full Width) */}
-                <View 
-                  style={{ backgroundColor: badge.bg, borderColor: colors.borderSubtle }}
-                  className="px-3 py-2.5 rounded-xl border flex-row items-center justify-center"
-                >
-                  <Ionicons name="star" size={14} color={badge.color} />
-                  <Text style={{ color: badge.color }} className="text-xs font-bold ml-2 tracking-wide uppercase">
-                    {badge.label}
-                  </Text>
-                </View>
-              </LinearGradient>
-            );
-          })
+            {/* Toggle Show All / Show Less Button if > 2 orgs */}
+            {user.memberships.length > 2 && (
+              <TouchableOpacity
+                onPress={() => {
+                  triggerLightHaptic();
+                  setShowAllMemberships(!showAllMemberships);
+                }}
+                activeOpacity={0.7}
+                style={{
+                  backgroundColor: colors.cardGlass,
+                  borderColor: colors.borderSubtle,
+                }}
+                className="py-2.5 px-4 rounded-xl border flex-row items-center justify-center mt-1"
+              >
+                <Text style={{ color: colors.primary }} className="font-bold text-xs mr-1.5">
+                  {showAllMemberships 
+                    ? 'Show Less' 
+                    : `View All (${user.memberships.length}) Organizations`}
+                </Text>
+                <Ionicons 
+                  name={showAllMemberships ? 'chevron-up' : 'chevron-down'} 
+                  size={14} 
+                  color={colors.primary} 
+                />
+              </TouchableOpacity>
+            )}
+          </>
         ) : (
           <Text style={{ color: colors.textMuted }} className="text-xs text-center py-3">
             No active organization memberships found.
