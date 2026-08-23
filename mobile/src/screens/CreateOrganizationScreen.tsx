@@ -438,12 +438,9 @@ export default function CreateOrganizationScreen() {
                 </Text>
               </View>
             ) : (
-              <View className="flex-row items-center justify-center gap-2">
-                <Ionicons name="sparkles" size={20} color="#ffffff" />
-                <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 15, letterSpacing: 0.2 }}>
-                  Deploy & Create Organization
-                </Text>
-              </View>
+              <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 16, letterSpacing: 0.3 }}>
+                Deploy & Create Organization
+              </Text>
             )}
           </LinearGradient>
         </TouchableOpacity>
