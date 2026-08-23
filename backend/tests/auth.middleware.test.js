@@ -315,4 +315,34 @@ describe("JWT Authentication Middleware — checkJwt", () => {
     assert.equal(nextCalled, false, "Must not trust an unsigned / forged token");
     assert.equal(statusCode, 401);
   });
+
+  it("authenticates a valid token passed via cb_session cookie in Cookie header", async () => {
+    const token = makeToken(privateKey);
+    const req = {
+      headers: {
+        cookie: `cb_session=${token}; theme=dark`,
+      },
+    };
+    let nextCalled = false;
+    let statusCode = null;
+    let responseBody = null;
+    const res = {
+      status(code) {
+        statusCode = code;
+        return this;
+      },
+      json(body) {
+        responseBody = body;
+        return this;
+      },
+    };
+
+    await checkJwtMiddleware(req, res, () => {
+      nextCalled = true;
+    });
+
+    assert.equal(nextCalled, true, "Should authenticate token extracted from cb_session cookie header");
+    assert.equal(statusCode, null);
+    assert.ok(req.auth);
+  });
 });

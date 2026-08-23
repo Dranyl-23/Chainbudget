@@ -105,17 +105,36 @@ function verifyInternalJWT(token) {
   }
 }
 
+// Helper to extract JWT token from Authorization header or HttpOnly session cookie
+function extractToken(req) {
+  const authHeader = req.headers?.authorization;
+  if (authHeader && typeof authHeader === "string" && authHeader.startsWith("Bearer ")) {
+    return authHeader.split(" ")[1].trim();
+  }
+
+  if (req.cookies && (req.cookies.cb_session || req.cookies.jwt)) {
+    return (req.cookies.cb_session || req.cookies.jwt).trim();
+  }
+
+  if (req.headers?.cookie) {
+    const match = req.headers.cookie.match(/(?:^|;\s*)(?:cb_session|jwt)=([^;]+)/);
+    if (match) {
+      return decodeURIComponent(match[1]).trim();
+    }
+  }
+
+  return null;
+}
+
 // ── Middleware: verify token (ChainBudget mobile JWT OR Asgardeo browser JWT) ──
 const checkJwt = async (req, res, next) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    const token = extractToken(req);
+    if (!token) {
       return res
         .status(401)
-        .json({ error: "Missing or invalid authorization header" });
+        .json({ error: "Missing or invalid authorization header or session cookie" });
     }
-
-    const token = authHeader.split(" ")[1];
 
     // ── Strategy 1: ChainBudget mobile JWT (HS256) ──────────────────────────
     // Issued after wallet challenge-response. Fast — no network call.
@@ -294,7 +313,8 @@ const authenticate = [checkJwt, attachUser];
 
 /** Optional authentication: attaches req.user if a valid token is provided, otherwise proceeds as guest */
 const optionalAuthenticate = async (req, res, next) => {
-  if (!req.headers.authorization) {
+  const token = extractToken(req);
+  if (!token) {
     return next();
   }
   checkJwt(req, res, (jwtErr) => {
