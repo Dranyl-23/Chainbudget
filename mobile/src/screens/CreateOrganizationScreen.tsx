@@ -403,46 +403,38 @@ export default function CreateOrganizationScreen() {
           />
         </View>
 
-        {/* Create Submit Button */}
+        {/* Create Submit Button (Option 3 Monochrome Obsidian) */}
         <TouchableOpacity
           onPress={handleCreateOrg}
           disabled={creating || !orgName.trim()}
           activeOpacity={0.85}
           style={{
-            opacity: creating || !orgName.trim() ? 0.6 : 1,
-            shadowColor: colors.primary,
-            shadowOffset: { width: 0, height: 6 },
-            shadowOpacity: 0.35,
+            backgroundColor: isDark ? '#FFFFFF' : '#0F172A',
+            borderRadius: 18,
+            paddingVertical: 16,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            opacity: creating || !orgName.trim() ? 0.5 : 1,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: isDark ? 0.15 : 0.25,
             shadowRadius: 10,
-            elevation: 5,
+            elevation: 4,
           }}
         >
-          <LinearGradient
-            colors={['#1e40af', '#2563eb']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={{
-              borderRadius: 18,
-              paddingVertical: 16,
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 8,
-            }}
-          >
-            {creating ? (
-              <View className="flex-row items-center justify-center gap-2">
-                <ActivityIndicator size="small" color="#ffffff" />
-                <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 15 }}>
-                  Creating Organization...
-                </Text>
-              </View>
-            ) : (
-              <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 16, letterSpacing: 0.3 }}>
-                Deploy & Create Organization
+          {creating ? (
+            <View className="flex-row items-center justify-center gap-2">
+              <ActivityIndicator size="small" color={isDark ? '#09090B' : '#FFFFFF'} />
+              <Text style={{ color: isDark ? '#09090B' : '#FFFFFF', fontWeight: '800', fontSize: 15 }}>
+                Creating Organization...
               </Text>
-            )}
-          </LinearGradient>
+            </View>
+          ) : (
+            <Text style={{ color: isDark ? '#09090B' : '#FFFFFF', fontWeight: '800', fontSize: 16, letterSpacing: 0.2 }}>
+              Deploy & Create Organization
+            </Text>
+          )}
         </TouchableOpacity>
       </KeyboardAwareScrollView>
 
@@ -567,28 +559,23 @@ export default function CreateOrganizationScreen() {
                 navigation.goBack();
               }}
               activeOpacity={0.85}
-              style={{ width: '100%' }}
+              style={{
+                width: '100%',
+                backgroundColor: isDark ? '#FFFFFF' : '#0F172A',
+                borderRadius: 16,
+                paddingVertical: 14,
+                alignItems: 'center',
+                justifyContent: 'center',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: isDark ? 0.15 : 0.25,
+                shadowRadius: 8,
+                elevation: 4,
+              }}
             >
-              <LinearGradient
-                colors={['#1e40af', '#2563eb']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={{
-                  paddingVertical: 14,
-                  borderRadius: 16,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  shadowColor: '#2563eb',
-                  shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.3,
-                  shadowRadius: 8,
-                  elevation: 4,
-                }}
-              >
-                <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 14 }}>
-                  Open Organization Dashboard
-                </Text>
-              </LinearGradient>
+              <Text style={{ color: isDark ? '#09090B' : '#FFFFFF', fontWeight: '800', fontSize: 14 }}>
+                Open Organization Dashboard
+              </Text>
             </TouchableOpacity>
           </Animated.View>
         </View>

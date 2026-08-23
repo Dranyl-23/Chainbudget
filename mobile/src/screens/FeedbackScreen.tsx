@@ -414,7 +414,7 @@ export default function FeedbackScreen() {
           disabled={submitting || uploadingImage}
           activeOpacity={0.85}
           style={{
-            backgroundColor: colors.primary,
+            backgroundColor: isDark ? '#FFFFFF' : '#0F172A',
             borderRadius: 18,
             paddingVertical: 16,
             flexDirection: 'row',
@@ -422,24 +422,24 @@ export default function FeedbackScreen() {
             justifyContent: 'center',
             gap: 8,
             opacity: submitting ? 0.7 : 1,
-            shadowColor: colors.primary,
-            shadowOffset: { width: 0, height: 6 },
-            shadowOpacity: 0.35,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: isDark ? 0.15 : 0.25,
             shadowRadius: 10,
-            elevation: 5,
+            elevation: 4,
           }}
         >
           {submitting ? (
             <View className="flex-row items-center justify-center gap-2">
-              <ActivityIndicator size="small" color="#ffffff" />
-              <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 15, includeFontPadding: false }}>
+              <ActivityIndicator size="small" color={isDark ? '#09090B' : '#FFFFFF'} />
+              <Text style={{ color: isDark ? '#09090B' : '#FFFFFF', fontWeight: '800', fontSize: 15, includeFontPadding: false }}>
                 {uploadingImage ? 'Uploading screenshot...' : 'Submitting feedback...'}
               </Text>
             </View>
           ) : (
             <View className="flex-row items-center justify-center gap-2">
-              <Ionicons name="paper-plane" size={20} color="#ffffff" />
-              <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 15, includeFontPadding: false }}>
+              <Ionicons name="paper-plane" size={20} color={isDark ? '#09090B' : '#FFFFFF'} />
+              <Text style={{ color: isDark ? '#09090B' : '#FFFFFF', fontWeight: '800', fontSize: 15, includeFontPadding: false }}>
                 Send Feedback Report
               </Text>
             </View>
@@ -585,28 +585,23 @@ export default function FeedbackScreen() {
                 navigation.goBack();
               }}
               activeOpacity={0.85}
-              style={{ width: '100%' }}
+              style={{
+                width: '100%',
+                backgroundColor: isDark ? '#FFFFFF' : '#0F172A',
+                borderRadius: 16,
+                paddingVertical: 14,
+                alignItems: 'center',
+                justifyContent: 'center',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: isDark ? 0.15 : 0.25,
+                shadowRadius: 8,
+                elevation: 4,
+              }}
             >
-              <LinearGradient
-                colors={['#1e40af', '#2563eb']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={{
-                  paddingVertical: 14,
-                  borderRadius: 16,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  shadowColor: '#2563eb',
-                  shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.3,
-                  shadowRadius: 8,
-                  elevation: 4,
-                }}
-              >
-                <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 14 }}>
-                  Done & Return
-                </Text>
-              </LinearGradient>
+              <Text style={{ color: isDark ? '#09090B' : '#FFFFFF', fontWeight: '800', fontSize: 14 }}>
+                Done & Return
+              </Text>
             </TouchableOpacity>
           </Animated.View>
         </View>

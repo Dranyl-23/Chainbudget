@@ -149,7 +149,7 @@ export default function NoOrganizationScreen() {
         <TouchableOpacity
           onPress={() => setCreateModalVisible(true)}
           style={{
-            backgroundColor: colors.primary,
+            backgroundColor: isDark ? '#FFFFFF' : '#0F172A',
             borderRadius: 20,
             paddingVertical: 16,
             paddingHorizontal: 24,
@@ -159,16 +159,16 @@ export default function NoOrganizationScreen() {
             justifyContent: 'center',
             gap: 8,
             marginBottom: 20,
-            shadowColor: colors.primary,
+            shadowColor: '#000',
             shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.3,
+            shadowOpacity: isDark ? 0.15 : 0.25,
             shadowRadius: 8,
-            elevation: 6,
+            elevation: 4,
           }}
           activeOpacity={0.8}
         >
-          <Ionicons name="add-circle-outline" size={22} color="#fff" />
-          <Text style={{ color: '#fff', fontWeight: '800', fontSize: 16 }}>Create an Organization</Text>
+          <Ionicons name="add-circle-outline" size={22} color={isDark ? '#09090B' : '#FFFFFF'} />
+          <Text style={{ color: isDark ? '#09090B' : '#FFFFFF', fontWeight: '800', fontSize: 16 }}>Create an Organization</Text>
         </TouchableOpacity>
 
         <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%', marginBottom: 20 }}>
