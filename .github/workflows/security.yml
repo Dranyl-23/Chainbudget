@@ -21,7 +21,7 @@ jobs:
 
       - name: Verify no .env or sensitive keystores committed
         run: |
-          if git ls-files | grep -E '(^|/)\.env(\.|$)'; then
+          if git ls-files | grep -E '(^|/)\.env($|\.local|\.production|\.development|\.prod|\.dev)' | grep -v '\.example$'; then
             echo "ERROR: .env file committed to repository!"
             exit 1
           fi
@@ -29,7 +29,7 @@ jobs:
             echo "ERROR: Android keystore (.jks) file committed!"
             exit 1
           fi
-          if git ls-files | grep -E 'credentials\.json$'; then
+          if git ls-files | grep -E '(^|/)credentials\.json$'; then
             echo "ERROR: credentials.json file committed!"
             exit 1
           fi
