@@ -27,6 +27,7 @@ import {
   triggerLightHaptic,
 } from '../lib/biometrics';
 import { signEscrowRelease } from '../lib/wallet';
+import { formatStatusLabel, humanizeText } from '../lib/formatters';
 import { RefreshControl } from 'react-native';
 
 const DEFAULT_CHAIN_ID = 80002; // Polygon Amoy testnet
@@ -261,7 +262,7 @@ export default function TransactionDetailScreen() {
   }
 
   const isExpense = tx.type === 'expense';
-  const isEscrowTx = Boolean(tx.isEscrow || tx.escrowStatus);
+  const isEscrowTx = Boolean(tx.isEscrow === true || (tx.escrowStatus && tx.escrowStatus !== 'none'));
 
   return (
     <ScrollView 
@@ -311,17 +312,19 @@ export default function TransactionDetailScreen() {
         <View className="flex-row gap-2">
           <View 
             style={{ backgroundColor: colors.cardGlass, borderColor: colors.border }}
-            className="px-3 py-1 rounded-full border"
+            className="px-3.5 py-1 rounded-full border"
           >
-            <Text style={{ color: colors.textPrimary }} className="font-bold text-xs uppercase">{tx.status}</Text>
+            <Text style={{ color: colors.textPrimary }} className="font-bold text-xs uppercase tracking-wider">
+              {formatStatusLabel(tx.status)}
+            </Text>
           </View>
           {isEscrowTx && (
             <View 
               style={{ backgroundColor: colors.primaryMuted, borderColor: colors.primary + '40' }}
-              className="px-3 py-1 rounded-full border"
+              className="px-3.5 py-1 rounded-full border"
             >
-              <Text style={{ color: colors.primary }} className="font-bold text-xs uppercase">
-                Escrow: {tx.escrowStatus || 'Locked'}
+              <Text style={{ color: colors.primary }} className="font-bold text-xs uppercase tracking-wider">
+                Escrow: {formatStatusLabel(tx.escrowStatus || 'Locked')}
               </Text>
             </View>
           )}

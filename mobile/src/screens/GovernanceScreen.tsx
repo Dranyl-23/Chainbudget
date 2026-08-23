@@ -12,6 +12,7 @@ import { authenticateWithBiometrics, triggerSuccessHaptic, triggerErrorHaptic, t
 import ScaleButton from '../components/ScaleButton';
 import SuccessCelebrationModal from '../components/SuccessCelebrationModal';
 import { getCachedProposals, setCachedProposals } from '../lib/cache';
+import { formatStatusLabel, humanizeText } from '../lib/formatters';
 
 export default function GovernanceScreen() {
   const insets = useSafeAreaInsets();
@@ -245,7 +246,7 @@ export default function GovernanceScreen() {
           </View>
           <View style={{ backgroundColor: isClosed ? colors.cardGlass : colors.successBg, borderColor: isClosed ? colors.border : colors.successBorder }} className="px-2.5 py-1 rounded-full border">
             <Text style={{ color: isClosed ? colors.textMuted : colors.success, fontSize: 10, fontWeight: '800', textTransform: 'uppercase' }}>
-              {proposal.status || 'Active'}
+              {formatStatusLabel(proposal.status || 'Active')}
             </Text>
           </View>
         </View>

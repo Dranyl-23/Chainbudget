@@ -282,7 +282,7 @@ export default function ApprovalsScreen() {
                 style={{ color: userVote.action === 'approved' ? colors.success : colors.error }}
                 className="font-bold text-xs"
               >
-                You already voted ({userVote.action})
+                You already voted ({userVote.action === 'approved' ? 'Approved' : 'Rejected'})
               </Text>
             </View>
           ) : (
