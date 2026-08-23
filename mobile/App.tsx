@@ -2,12 +2,19 @@ import React, { useEffect, useRef, useState } from 'react';
 import 'react-native-get-random-values';
 import { NavigationContainer, NavigationContainerRef, CommonActions } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { View, ActivityIndicator, Alert } from 'react-native';
+import { View, ActivityIndicator, Alert, LogBox } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
+
+// Ignore informational Expo Go SDK 53 push notification advisory
+LogBox.ignoreLogs([
+  'expo-notifications',
+  '`expo-notifications` functionality is not fully supported in Expo Go',
+  'Android Push notifications (remote notifications) functionality provided by expo-notifications was removed from Expo Go',
+]);
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { OrgProvider } from './src/context/OrgContext';
