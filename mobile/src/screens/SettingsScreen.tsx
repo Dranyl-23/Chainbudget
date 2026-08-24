@@ -16,7 +16,6 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
-  Switch,
   Alert,
   Platform,
   Linking,
@@ -42,6 +41,7 @@ import { useAppLock, LockTimeoutOption } from '../context/AppLockContext';
 import { triggerLightHaptic, triggerSuccessHaptic, triggerErrorHaptic } from '../lib/biometrics';
 import SetPinModal from '../components/SetPinModal';
 import ThemeSelectorModal from '../components/ThemeSelectorModal';
+import AnimatedToggleSwitch from '../components/AnimatedToggleSwitch';
 import appConfig from '../../app.json';
 
 const APP_VERSION = appConfig.expo.version;
@@ -541,10 +541,11 @@ export default function SettingsScreen() {
                 </Text>
               </View>
             </View>
-            <Switch
+            <AnimatedToggleSwitch
               value={isAppLockEnabled && hasPinSet}
               onValueChange={handleToggleAppLock}
-              trackColor={{ false: colors.border, true: '#6366f1' }}
+              activeColor="#6366f1"
+              inactiveColor={colors.border}
               thumbColor="#FFFFFF"
             />
           </View>
@@ -641,12 +642,13 @@ export default function SettingsScreen() {
                   </Text>
                 </View>
               </View>
-              <Switch
+              <AnimatedToggleSwitch
                 value={isBiometricEnabled}
                 onValueChange={async (val) => {
                   await setBiometricEnabled(val);
                 }}
-                trackColor={{ false: colors.border, true: '#22d3ee' }}
+                activeColor="#22d3ee"
+                inactiveColor={colors.border}
                 thumbColor="#FFFFFF"
               />
             </View>
@@ -804,12 +806,13 @@ export default function SettingsScreen() {
                 </Text>
               </View>
             </View>
-            <Switch
+            <AnimatedToggleSwitch
               value={maskBalance}
               onValueChange={async (val) => {
                 await setMaskBalanceOption(val);
               }}
-              trackColor={{ false: colors.border, true: '#10b981' }}
+              activeColor="#10b981"
+              inactiveColor={colors.border}
               thumbColor="#FFFFFF"
             />
           </View>
@@ -965,7 +968,7 @@ export default function SettingsScreen() {
                 </Text>
               </View>
             </View>
-            <Switch
+            <AnimatedToggleSwitch
               value={cameraPermission?.granted ?? false}
               onValueChange={async (enable) => {
                 if (enable) {
@@ -981,7 +984,8 @@ export default function SettingsScreen() {
                   );
                 }
               }}
-              trackColor={{ false: colors.border, true: '#3b82f6' }}
+              activeColor="#3b82f6"
+              inactiveColor={colors.border}
               thumbColor="#FFFFFF"
             />
           </View>
@@ -1021,7 +1025,7 @@ export default function SettingsScreen() {
                 </Text>
               </View>
             </View>
-            <Switch
+            <AnimatedToggleSwitch
               value={notifStatus === 'granted'}
               onValueChange={async (enable) => {
                 if (enable) {
@@ -1037,7 +1041,8 @@ export default function SettingsScreen() {
                   );
                 }
               }}
-              trackColor={{ false: colors.border, true: '#ec4899' }}
+              activeColor="#ec4899"
+              inactiveColor={colors.border}
               thumbColor="#FFFFFF"
             />
           </View>
@@ -1077,7 +1082,7 @@ export default function SettingsScreen() {
                 </Text>
               </View>
             </View>
-            <Switch
+            <AnimatedToggleSwitch
               value={photosStatus === 'granted'}
               onValueChange={async (enable) => {
                 if (enable) {
@@ -1093,7 +1098,8 @@ export default function SettingsScreen() {
                   );
                 }
               }}
-              trackColor={{ false: colors.border, true: '#8b5cf6' }}
+              activeColor="#8b5cf6"
+              inactiveColor={colors.border}
               thumbColor="#FFFFFF"
             />
           </View>

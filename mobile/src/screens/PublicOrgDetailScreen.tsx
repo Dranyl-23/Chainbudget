@@ -45,6 +45,25 @@ function getOrgTypeInfo(type?: string) {
   return ORG_TYPE_MAP[type] || { label: type.replace('_', ' '), icon: 'business-outline' as const, color: '#A855F7' };
 }
 
+const BACKEND_BASE = 'https://chainbudget-api.fly.dev';
+
+function formatMobileAvatarUrl(uri?: string) {
+  if (!uri || typeof uri !== 'string') return undefined;
+  if (uri.startsWith('data:image/') || uri.startsWith('blob:')) {
+    return uri;
+  }
+  if (uri.startsWith('/uploads')) {
+    return `${BACKEND_BASE}${uri}`;
+  }
+  if (uri.includes('localhost:5001') || uri.includes('127.0.0.1:5001')) {
+    return uri.replace(/http:\/\/(localhost|127\.0\.0\.1):5001/, BACKEND_BASE);
+  }
+  if (uri.startsWith('http://') || uri.startsWith('https://')) {
+    return uri;
+  }
+  return undefined;
+}
+
 function timeAgo(dateString: string) {
   try {
     const date = new Date(dateString);
@@ -235,9 +254,9 @@ export default function PublicOrgDetailScreen() {
                     overflow: 'hidden',
                   }}
                 >
-                  {org?.logoUrl ? (
+                  {formatMobileAvatarUrl(org?.logoUrl) ? (
                     <Image
-                      source={{ uri: org.logoUrl }}
+                      source={{ uri: formatMobileAvatarUrl(org?.logoUrl) }}
                       style={{ width: '100%', height: '100%' }}
                       resizeMode="cover"
                     />
@@ -255,22 +274,44 @@ export default function PublicOrgDetailScreen() {
                     {org?.name || 'Organization'}
                   </Text>
                   
-                  {/* Category Tag */}
-                  <View
-                    style={{
-                      backgroundColor: typeInfo.color + '15',
-                      borderColor: typeInfo.color + '30',
-                      borderWidth: 1,
-                      paddingHorizontal: 8,
-                      paddingVertical: 2.5,
-                      borderRadius: 10,
-                      alignSelf: 'flex-start',
-                      marginTop: 4,
-                    }}
-                  >
-                    <Text style={{ color: typeInfo.color, fontSize: 10.5, fontWeight: '700' }}>
-                      {typeInfo.label}
-                    </Text>
+                  {/* Category & Private Tags */}
+                  <View className="flex-row items-center gap-2 mt-1">
+                    <View
+                      style={{
+                        backgroundColor: typeInfo.color + '15',
+                        borderColor: typeInfo.color + '30',
+                        borderWidth: 1,
+                        paddingHorizontal: 8,
+                        paddingVertical: 2.5,
+                        borderRadius: 10,
+                        alignSelf: 'flex-start',
+                      }}
+                    >
+                      <Text style={{ color: typeInfo.color, fontSize: 10.5, fontWeight: '700' }}>
+                        {typeInfo.label}
+                      </Text>
+                    </View>
+
+                    {org?.isPrivate && (
+                      <View
+                        style={{
+                          backgroundColor: 'rgba(192, 132, 252, 0.15)',
+                          borderColor: 'rgba(192, 132, 252, 0.35)',
+                          borderWidth: 1,
+                          paddingHorizontal: 8,
+                          paddingVertical: 2.5,
+                          borderRadius: 10,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 4,
+                        }}
+                      >
+                        <Ionicons name="lock-closed" size={11} color="#C084FC" />
+                        <Text style={{ color: '#C084FC', fontSize: 10, fontWeight: '800', textTransform: 'uppercase' }}>
+                          Private
+                        </Text>
+                      </View>
+                    )}
                   </View>
                 </View>
               </View>
@@ -282,7 +323,7 @@ export default function PublicOrgDetailScreen() {
                 </Text>
               ) : (
                 <Text style={{ color: colors.textMuted }} className="text-xs italic mb-4">
-                  Public decentralized autonomous organization on ChainBudget.
+                  {org?.isPrivate ? 'Confidential organization on ChainBudget.' : 'Public decentralized autonomous organization on ChainBudget.'}
                 </Text>
               )}
 
@@ -346,217 +387,287 @@ export default function PublicOrgDetailScreen() {
               </View>
             </View>
 
-            {/* ── Smart Contract Explorer Card ── */}
-            <View
-              style={{
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-                borderWidth: 1,
-                borderRadius: 22,
-                padding: 16,
-                marginBottom: 20,
-              }}
-            >
-              <View className="flex-row justify-between items-center mb-2">
-                <Text
-                  style={{
-                    color: colors.textMuted,
-                    fontSize: 10.5,
-                    fontWeight: '700',
-                    letterSpacing: 0.5,
-                    textTransform: 'uppercase',
-                  }}
-                >
-                  Smart Contract Ledger
-                </Text>
-                {org?.contractAddress && (
-                  <TouchableOpacity
-                    onPress={() => handleCopyContract(org.contractAddress)}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  >
-                    <Text style={{ color: colors.primary, fontSize: 11, fontWeight: '700' }}>
-                      Copy
-                    </Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-
-              {org?.contractAddress ? (
-                <>
-                  <Text
-                    style={{
-                      color: colors.textPrimary,
-                      fontFamily: 'monospace',
-                      fontSize: 12,
-                      lineHeight: 18,
-                    }}
-                  >
-                    {org.contractAddress}
-                  </Text>
-
-                  <TouchableOpacity
-                    onPress={() => handleOpenPolygonscan(org.contractAddress, false)}
-                    activeOpacity={0.8}
-                    style={{
-                      backgroundColor: colors.primaryMuted,
-                      borderColor: colors.primary + '40',
-                      borderWidth: 1,
-                    }}
-                    className="flex-row items-center justify-center py-2.5 rounded-xl mt-3 gap-1.5"
-                  >
-                    <Ionicons name="open-outline" size={14} color={colors.primary} />
-                    <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '700' }}>
-                      Verify on PolygonScan Explorer
-                    </Text>
-                  </TouchableOpacity>
-                </>
-              ) : (
-                <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>
-                  Smart contract not yet linked to this organization.
-                </Text>
-              )}
-            </View>
-
-            {/* ── Public Transactions Section ── */}
-            <View className="flex-row justify-between items-center mb-3 px-1">
-              <Text style={{ color: colors.textPrimary, fontWeight: '800', fontSize: 16 }}>
-                Public Transactions
-              </Text>
-              <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: '600' }}>
-                {transactions.length} record{transactions.length === 1 ? '' : 's'}
-              </Text>
-            </View>
-
-            {transactions.length === 0 ? (
+            {/* ── If Private: Show Confidential Organization Lock Card ── */}
+            {org?.isPrivate ? (
               <View
                 style={{
                   backgroundColor: colors.surface,
                   borderColor: colors.border,
                   borderWidth: 1,
-                  borderRadius: 20,
+                  borderRadius: 24,
                   padding: 24,
                   alignItems: 'center',
+                  marginTop: 4,
+                  marginBottom: 24,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: isDark ? 0.2 : 0.05,
+                  shadowRadius: 6,
+                  elevation: 2,
                 }}
               >
-                <Ionicons name="receipt-outline" size={40} color={colors.textMuted} />
-                <Text style={{ color: colors.textSecondary, fontWeight: '700', fontSize: 13, marginTop: 10 }}>
-                  No public transactions yet
+                <View
+                  style={{
+                    width: 60,
+                    height: 60,
+                    borderRadius: 20,
+                    backgroundColor: 'rgba(192, 132, 252, 0.15)',
+                    borderColor: 'rgba(192, 132, 252, 0.35)',
+                    borderWidth: 1.5,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginBottom: 14,
+                  }}
+                >
+                  <Ionicons name="lock-closed" size={28} color="#C084FC" />
+                </View>
+
+                <Text
+                  style={{ color: colors.textPrimary, fontWeight: '800', fontSize: 17, textAlign: 'center', marginBottom: 8 }}
+                >
+                  Confidential / Private Organization
                 </Text>
-                <Text style={{ color: colors.textMuted, fontSize: 11, textAlign: 'center', marginTop: 4 }}>
-                  Approved transactions from this organization will be listed here.
+
+                <Text
+                  style={{ color: colors.textSecondary, fontSize: 12.5, lineHeight: 20, textAlign: 'center', marginBottom: 18 }}
+                >
+                  This organization has restricted public ledger visibility. Transactions, budgets, and operational expenditures are strictly confidential and visible only to authenticated, authorized members.
                 </Text>
+
+                <View
+                  style={{
+                    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : colors.backgroundSecondary,
+                    borderColor: colors.borderSubtle,
+                    borderWidth: 1,
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    borderRadius: 20,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}
+                >
+                  <Ionicons name="shield-checkmark" size={14} color="#38BDF8" />
+                  <Text style={{ color: colors.textMuted, fontSize: 11, fontWeight: '700' }}>
+                    Member Access Only
+                  </Text>
+                </View>
               </View>
             ) : (
-              transactions.map((tx: any, idx) => {
-                const isExpense = tx.type === 'expense';
+              <>
+                {/* ── Smart Contract Explorer Card ── */}
+                <View
+                  style={{
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
+                    borderWidth: 1,
+                    borderRadius: 22,
+                    padding: 16,
+                    marginBottom: 20,
+                  }}
+                >
+                  <View className="flex-row justify-between items-center mb-2">
+                    <Text
+                      style={{
+                        color: colors.textMuted,
+                        fontSize: 10.5,
+                        fontWeight: '700',
+                        letterSpacing: 0.5,
+                        textTransform: 'uppercase',
+                      }}
+                    >
+                      Smart Contract Ledger
+                    </Text>
+                    {org?.contractAddress && (
+                      <TouchableOpacity
+                        onPress={() => handleCopyContract(org.contractAddress)}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      >
+                        <Text style={{ color: colors.primary, fontSize: 11, fontWeight: '700' }}>
+                          Copy
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
 
-                return (
+                  {org?.contractAddress ? (
+                    <>
+                      <Text
+                        style={{
+                          color: colors.textPrimary,
+                          fontFamily: 'monospace',
+                          fontSize: 12,
+                          lineHeight: 18,
+                        }}
+                      >
+                        {org.contractAddress}
+                      </Text>
+
+                      <TouchableOpacity
+                        onPress={() => handleOpenPolygonscan(org.contractAddress, false)}
+                        activeOpacity={0.8}
+                        style={{
+                          backgroundColor: colors.primaryMuted,
+                          borderColor: colors.primary + '40',
+                          borderWidth: 1,
+                        }}
+                        className="flex-row items-center justify-center py-2.5 rounded-xl mt-3 gap-1.5"
+                      >
+                        <Ionicons name="open-outline" size={14} color={colors.primary} />
+                        <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '700' }}>
+                          Verify on PolygonScan Explorer
+                        </Text>
+                      </TouchableOpacity>
+                    </>
+                  ) : (
+                    <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>
+                      Smart contract not yet linked to this organization.
+                    </Text>
+                  )}
+                </View>
+
+                {/* ── Public Transactions Section ── */}
+                <View className="flex-row justify-between items-center mb-3 px-1">
+                  <Text style={{ color: colors.textPrimary, fontWeight: '800', fontSize: 16 }}>
+                    Public Transactions
+                  </Text>
+                  <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: '600' }}>
+                    {transactions.length} record{transactions.length === 1 ? '' : 's'}
+                  </Text>
+                </View>
+
+                {transactions.length === 0 ? (
                   <View
-                    key={tx._id || idx}
                     style={{
                       backgroundColor: colors.surface,
                       borderColor: colors.border,
                       borderWidth: 1,
-                      borderRadius: 18,
-                      padding: 14,
-                      marginBottom: 10,
-                      shadowColor: '#000',
-                      shadowOffset: { width: 0, height: 1 },
-                      shadowOpacity: isDark ? 0.15 : 0.04,
-                      shadowRadius: 3,
-                      elevation: 1,
+                      borderRadius: 20,
+                      padding: 24,
+                      alignItems: 'center',
                     }}
                   >
-                    <View className="flex-row justify-between items-start mb-1.5">
-                      <View className="flex-row items-center flex-1 mr-2">
-                        <View
-                          style={{
-                            backgroundColor: isExpense ? colors.errorBg : colors.successBg,
-                            borderColor: isExpense ? colors.errorBorder : colors.successBorder,
-                            borderWidth: 1,
-                            width: 32,
-                            height: 32,
-                            borderRadius: 10,
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            marginRight: 10,
-                          }}
-                        >
-                          <Ionicons
-                            name={isExpense ? 'arrow-up' : 'arrow-down'}
-                            size={16}
-                            color={isExpense ? colors.error : colors.success}
-                          />
-                        </View>
-                        <View className="flex-1">
-                          <Text
-                            style={{ color: colors.textPrimary, fontWeight: '700', fontSize: 13 }}
-                            numberOfLines={1}
-                          >
-                            {tx.description || 'Disbursement'}
-                          </Text>
-                          <Text style={{ color: colors.textMuted, fontSize: 10.5, marginTop: 1 }}>
-                            {timeAgo(tx.createdAt)}
-                          </Text>
-                        </View>
-                      </View>
-                      <Text
-                        style={{
-                          color: isExpense ? colors.textPrimary : colors.success,
-                          fontWeight: '800',
-                          fontSize: 14,
-                        }}
-                      >
-                        {isExpense ? '-' : '+'}₱{tx.amount?.toLocaleString() || '0'}
-                      </Text>
-                    </View>
-
-                    {/* Blockchain Proof Link */}
-                    {tx.blockchainTxHash && (
-                      <TouchableOpacity
-                        onPress={() => handleOpenPolygonscan(tx.blockchainTxHash, true)}
-                        activeOpacity={0.7}
-                        style={{
-                          backgroundColor: colors.infoBg,
-                          borderColor: colors.infoBorder,
-                          borderWidth: 1,
-                          alignSelf: 'flex-start',
-                          paddingHorizontal: 8,
-                          paddingVertical: 4,
-                          borderRadius: 8,
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          marginTop: 6,
-                        }}
-                      >
-                        <Ionicons
-                          name="checkmark-circle"
-                          size={11}
-                          color={colors.accentBlue}
-                          style={{ marginRight: 4 }}
-                        />
-                        <Text
-                          style={{
-                            color: colors.accentBlue,
-                            fontSize: 10,
-                            fontFamily: 'monospace',
-                            fontWeight: '700',
-                          }}
-                        >
-                          On-Chain: {tx.blockchainTxHash.substring(0, 8)}...
-                          {tx.blockchainTxHash.substring(tx.blockchainTxHash.length - 4)}
-                        </Text>
-                        <Ionicons
-                          name="open-outline"
-                          size={10}
-                          color={colors.accentBlue}
-                          style={{ marginLeft: 4 }}
-                        />
-                      </TouchableOpacity>
-                    )}
+                    <Ionicons name="receipt-outline" size={40} color={colors.textMuted} />
+                    <Text style={{ color: colors.textSecondary, fontWeight: '700', fontSize: 13, marginTop: 10 }}>
+                      No public transactions yet
+                    </Text>
+                    <Text style={{ color: colors.textMuted, fontSize: 11, textAlign: 'center', marginTop: 4 }}>
+                      Approved transactions from this organization will be listed here.
+                    </Text>
                   </View>
-                );
-              })
+                ) : (
+                  transactions.map((tx: any, idx) => {
+                    const isExpense = tx.type === 'expense';
+
+                    return (
+                      <View
+                        key={tx._id || idx}
+                        style={{
+                          backgroundColor: colors.surface,
+                          borderColor: colors.border,
+                          borderWidth: 1,
+                          borderRadius: 18,
+                          padding: 14,
+                          marginBottom: 10,
+                          shadowColor: '#000',
+                          shadowOffset: { width: 0, height: 1 },
+                          shadowOpacity: isDark ? 0.15 : 0.04,
+                          shadowRadius: 3,
+                          elevation: 1,
+                        }}
+                      >
+                        <View className="flex-row justify-between items-start mb-1.5">
+                          <View className="flex-row items-center flex-1 mr-2">
+                            <View
+                              style={{
+                                backgroundColor: isExpense ? colors.errorBg : colors.successBg,
+                                borderColor: isExpense ? colors.errorBorder : colors.successBorder,
+                                borderWidth: 1,
+                                width: 32,
+                                height: 32,
+                                borderRadius: 10,
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                marginRight: 10,
+                              }}
+                            >
+                              <Ionicons
+                                name={isExpense ? 'arrow-up' : 'arrow-down'}
+                                size={16}
+                                color={isExpense ? colors.error : colors.success}
+                              />
+                            </View>
+                            <View className="flex-1">
+                              <Text
+                                style={{ color: colors.textPrimary, fontWeight: '700', fontSize: 13 }}
+                                numberOfLines={1}
+                              >
+                                {tx.description || 'Disbursement'}
+                              </Text>
+                              <Text style={{ color: colors.textMuted, fontSize: 10.5, marginTop: 1 }}>
+                                {timeAgo(tx.createdAt)}
+                              </Text>
+                            </View>
+                          </View>
+                          <Text
+                            style={{
+                              color: isExpense ? colors.textPrimary : colors.success,
+                              fontWeight: '800',
+                              fontSize: 14,
+                            }}
+                          >
+                            {isExpense ? '-' : '+'}₱{tx.amount?.toLocaleString() || '0'}
+                          </Text>
+                        </View>
+
+                        {/* Blockchain Proof Link */}
+                        {tx.blockchainTxHash && (
+                          <TouchableOpacity
+                            onPress={() => handleOpenPolygonscan(tx.blockchainTxHash, true)}
+                            activeOpacity={0.7}
+                            style={{
+                              backgroundColor: colors.infoBg,
+                              borderColor: colors.infoBorder,
+                              borderWidth: 1,
+                              alignSelf: 'flex-start',
+                              paddingHorizontal: 8,
+                              paddingVertical: 4,
+                              borderRadius: 8,
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              marginTop: 6,
+                            }}
+                          >
+                            <Ionicons
+                              name="checkmark-circle"
+                              size={11}
+                              color={colors.accentBlue}
+                              style={{ marginRight: 4 }}
+                            />
+                            <Text
+                              style={{
+                                color: colors.accentBlue,
+                                fontSize: 10,
+                                fontFamily: 'monospace',
+                                fontWeight: '700',
+                              }}
+                            >
+                              On-Chain: {tx.blockchainTxHash.substring(0, 8)}...
+                              {tx.blockchainTxHash.substring(tx.blockchainTxHash.length - 4)}
+                            </Text>
+                            <Ionicons
+                              name="open-outline"
+                              size={10}
+                              color={colors.accentBlue}
+                              style={{ marginLeft: 4 }}
+                            />
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    );
+                  })
+                )}
+              </>
             )}
           </View>
         )}

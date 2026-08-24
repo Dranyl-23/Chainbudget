@@ -7,7 +7,7 @@
  */
 
 import React, { useEffect, useRef } from 'react';
-import { TouchableOpacity, Animated, StyleSheet, View } from 'react-native';
+import { TouchableOpacity, Animated, StyleSheet, Easing } from 'react-native';
 import { triggerLightHaptic } from '../lib/biometrics';
 
 interface AnimatedToggleSwitchProps {
@@ -28,30 +28,16 @@ export default function AnimatedToggleSwitch({
   disabled = false,
 }: AnimatedToggleSwitchProps) {
   const animatedValue = useRef(new Animated.Value(value ? 1 : 0)).current;
-  const thumbScale = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.spring(animatedValue, {
-        toValue: value ? 1 : 0,
-        friction: 6,
-        tension: 100,
-        useNativeDriver: false,
-      }),
-      Animated.sequence([
-        Animated.timing(thumbScale, {
-          toValue: 1.15,
-          duration: 90,
-          useNativeDriver: false,
-        }),
-        Animated.spring(thumbScale, {
-          toValue: 1,
-          friction: 4,
-          tension: 120,
-          useNativeDriver: false,
-        }),
-      ]),
-    ]).start();
+    Animated.spring(animatedValue, {
+      toValue: value ? 1 : 0,
+      damping: 16,
+      stiffness: 200,
+      mass: 0.7,
+      overshootClamping: false,
+      useNativeDriver: false,
+    }).start();
   }, [value]);
 
   const handlePress = () => {
@@ -84,7 +70,7 @@ export default function AnimatedToggleSwitch({
             styles.thumb,
             {
               backgroundColor: thumbColor,
-              transform: [{ translateX }, { scale: thumbScale }],
+              transform: [{ translateX }],
             },
           ]}
         />

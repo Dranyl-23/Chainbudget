@@ -139,7 +139,10 @@ function formatChatTime(dateString: string) {
 const BACKEND_BASE = 'https://chainbudget-api.fly.dev';
 
 function formatMobileAvatarUrl(uri?: string) {
-  if (!uri) return undefined;
+  if (!uri || typeof uri !== 'string') return undefined;
+  if (uri.startsWith('data:image/') || uri.startsWith('blob:')) {
+    return uri;
+  }
   if (uri.startsWith('/uploads')) {
     return `${BACKEND_BASE}${uri}`;
   }
@@ -150,6 +153,51 @@ function formatMobileAvatarUrl(uri?: string) {
     return uri;
   }
   return undefined;
+}
+
+function OrgHeaderAvatar({
+  uri,
+  name,
+  size = 32,
+}: {
+  uri?: string;
+  name?: string;
+  size?: number;
+}) {
+  const [error, setError] = useState(false);
+  const initial = (name || 'O').trim().charAt(0).toUpperCase();
+  const resolvedUri = formatMobileAvatarUrl(uri);
+
+  useEffect(() => {
+    setError(false);
+  }, [uri]);
+
+  if (!resolvedUri || error) {
+    return (
+      <View
+        style={{
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor: '#9333EA',
+          justifyContent: 'center',
+          alignItems: 'center',
+          borderWidth: 1,
+          borderColor: 'rgba(255,255,255,0.2)',
+        }}
+      >
+        <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: size * 0.44 }}>{initial}</Text>
+      </View>
+    );
+  }
+
+  return (
+    <Image
+      source={{ uri: resolvedUri }}
+      style={{ width: size, height: size, borderRadius: size / 2 }}
+      onError={() => setError(true)}
+    />
+  );
 }
 
 function ChatMobileAvatar({
@@ -164,6 +212,10 @@ function ChatMobileAvatar({
   const [error, setError] = useState(false);
   const initial = (name || 'M').trim().charAt(0).toUpperCase();
   const resolvedUri = formatMobileAvatarUrl(uri);
+
+  useEffect(() => {
+    setError(false);
+  }, [uri]);
 
   if (!resolvedUri || error) {
     return (
@@ -198,7 +250,7 @@ export default function OrgChatScreen() {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
   const { user } = useAuth();
-  const { organizations, activeOrgId } = useOrg();
+  const { organizations, activeOrgId, refreshOrgs } = useOrg();
   const { on, emit, isConnected } = useSocket();
   const { colors, isDark } = useTheme();
 
@@ -629,6 +681,7 @@ export default function OrgChatScreen() {
       if (uploadedUrl) {
         await api.patch(`/organizations/${targetOrgId}`, { logoUrl: uploadedUrl });
         setOrgLogoUrl(uploadedUrl);
+        await refreshOrgs();
         await triggerSuccessHaptic();
         Alert.alert('Success', 'Organization profile picture updated successfully!');
       }
@@ -1118,13 +1171,10 @@ export default function OrgChatScreen() {
                   <ActivityIndicator size="small" color={colors.primary} />
                 </View>
               ) : (
-                <Image
-                  source={{
-                    uri:
-                      formatMobileAvatarUrl(orgLogoUrl || (currentOrg as any)?.logoUrl || currentOrg?.logo) ||
-                      `https://ui-avatars.com/api/?name=${encodeURIComponent(currentOrg?.name || 'Org')}&background=9333ea&color=fff`,
-                  }}
-                  style={{ width: 32, height: 32, borderRadius: 16 }}
+                <OrgHeaderAvatar
+                  uri={orgLogoUrl || (currentOrg as any)?.logoUrl || currentOrg?.logo}
+                  name={currentOrg?.name}
+                  size={32}
                 />
               )}
               <View

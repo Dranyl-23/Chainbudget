@@ -27,6 +27,25 @@ import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { triggerLightHaptic } from '../lib/biometrics';
 
+const BACKEND_BASE = 'https://chainbudget-api.fly.dev';
+
+function formatMobileAvatarUrl(uri?: string) {
+  if (!uri || typeof uri !== 'string') return undefined;
+  if (uri.startsWith('data:image/') || uri.startsWith('blob:')) {
+    return uri;
+  }
+  if (uri.startsWith('/uploads')) {
+    return `${BACKEND_BASE}${uri}`;
+  }
+  if (uri.includes('localhost:5001') || uri.includes('127.0.0.1:5001')) {
+    return uri.replace(/http:\/\/(localhost|127\.0\.0\.1):5001/, BACKEND_BASE);
+  }
+  if (uri.startsWith('http://') || uri.startsWith('https://')) {
+    return uri;
+  }
+  return undefined;
+}
+
 function timeAgo(dateString: string) {
   try {
     const date = new Date(dateString);
@@ -488,9 +507,9 @@ export default function PublicLedgerScreen() {
                         overflow: 'hidden',
                       }}
                     >
-                      {org.logoUrl ? (
+                      {formatMobileAvatarUrl(org.logoUrl) ? (
                         <Image
-                          source={{ uri: org.logoUrl }}
+                          source={{ uri: formatMobileAvatarUrl(org.logoUrl) }}
                           style={{ width: '100%', height: '100%' }}
                           resizeMode="cover"
                         />
@@ -515,25 +534,47 @@ export default function PublicLedgerScreen() {
                       </Text>
                     </View>
 
-                    {/* Formatted Category Tag */}
-                    <View
-                      style={{
-                        backgroundColor: typeInfo.color + '15',
-                        borderColor: typeInfo.color + '30',
-                        borderWidth: 1,
-                        paddingHorizontal: 8,
-                        paddingVertical: 3,
-                        borderRadius: 12,
-                        marginBottom: 10,
-                        maxWidth: '100%',
-                      }}
-                    >
-                      <Text
-                        style={{ color: typeInfo.color, fontSize: 10, fontWeight: '700' }}
-                        numberOfLines={1}
+                    {/* Formatted Category Tag & Private Indicator */}
+                    <View className="flex-row items-center gap-1.5 mb-2.5 flex-wrap justify-center">
+                      <View
+                        style={{
+                          backgroundColor: typeInfo.color + '15',
+                          borderColor: typeInfo.color + '30',
+                          borderWidth: 1,
+                          paddingHorizontal: 8,
+                          paddingVertical: 3,
+                          borderRadius: 12,
+                          maxWidth: '100%',
+                        }}
                       >
-                        {typeInfo.label}
-                      </Text>
+                        <Text
+                          style={{ color: typeInfo.color, fontSize: 10, fontWeight: '700' }}
+                          numberOfLines={1}
+                        >
+                          {typeInfo.label}
+                        </Text>
+                      </View>
+
+                      {org.isPrivate && (
+                        <View
+                          style={{
+                            backgroundColor: 'rgba(192, 132, 252, 0.15)',
+                            borderColor: 'rgba(192, 132, 252, 0.35)',
+                            borderWidth: 1,
+                            paddingHorizontal: 6,
+                            paddingVertical: 2.5,
+                            borderRadius: 10,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 3,
+                          }}
+                        >
+                          <Ionicons name="lock-closed" size={9} color="#C084FC" />
+                          <Text style={{ color: '#C084FC', fontSize: 9, fontWeight: '800', textTransform: 'uppercase' }}>
+                            Private
+                          </Text>
+                        </View>
+                      )}
                     </View>
 
                     {/* Transparency Score Card */}

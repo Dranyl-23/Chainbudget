@@ -15,10 +15,45 @@ interface Organization {
   name: string;
   type: string;
   description: string;
-  logoUrl: string;
+  logoUrl?: string;
   contractAddress: string;
   transparencyScore: number;
   isPrivate?: boolean;
+}
+
+function DetailOrgLogo({ logoUrl, name, size = "large" }: { logoUrl?: string; name?: string; size?: "small" | "large" }) {
+  const [error, setError] = useState(false);
+
+  let src = "/images/logo.png";
+  if (logoUrl && !error) {
+    if (logoUrl.startsWith("http") || logoUrl.startsWith("data:")) {
+      src = logoUrl;
+    } else if (logoUrl.startsWith("/")) {
+      src = `${BACKEND_URL}${logoUrl}`;
+    } else {
+      src = `${BACKEND_URL}/${logoUrl}`;
+    }
+  }
+
+  const initial = (name || "O").trim().charAt(0).toUpperCase();
+
+  if (error || !logoUrl) {
+    return (
+      <div className={`w-full h-full bg-linear-to-br from-purple-600/30 to-cyan-600/30 flex items-center justify-center text-white font-extrabold ${size === "small" ? "text-sm rounded-lg" : "text-3xl rounded-xl"} shadow-inner`}>
+        <span className="drop-shadow-md">{initial}</span>
+      </div>
+    );
+  }
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt={name || "Organization"}
+      onError={() => setError(true)}
+      className={`w-full h-full object-contain p-1 ${size === "small" ? "rounded-lg" : "rounded-xl"}`}
+    />
+  );
 }
 
 interface Transaction {
@@ -135,14 +170,9 @@ export default function PublicDashboardPage() {
           <span className="font-bold tracking-tight hidden sm:inline">Back to Explorer</span>
         </Link>
         <div className="flex items-center gap-3">
-          <Image 
-            src={org.logoUrl ? (org.logoUrl.startsWith('http') ? org.logoUrl : `${backendUrl}${org.logoUrl}`) : "/images/logo.png"} 
-            alt={org.name || "Organization"} 
-            width={32}
-            height={32}
-            className="w-8 h-8 rounded-lg object-contain bg-white/5" 
-            unoptimized
-          />
+          <div className="w-8 h-8 rounded-lg overflow-hidden bg-white/5 border border-white/10 shrink-0">
+            <DetailOrgLogo logoUrl={org.logoUrl} name={org.name} size="small" />
+          </div>
           <span className="font-bold tracking-tight text-white">{org.name}</span>
         </div>
       </nav>
@@ -151,15 +181,8 @@ export default function PublicDashboardPage() {
         {/* ── Header Profile ── */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 mb-12">
           <div className="flex items-center gap-6">
-            <div className="w-24 h-24 md:w-32 md:h-32 rounded-2xl bg-white/5 border border-white/10 p-2 shrink-0">
-              <Image 
-                src={org.logoUrl ? (org.logoUrl.startsWith('http') ? org.logoUrl : `${backendUrl}${org.logoUrl}`) : "/images/logo.png"} 
-                alt={org.name || "Organization"} 
-                width={128}
-                height={128}
-                className="w-full h-full object-contain rounded-xl" 
-                unoptimized
-              />
+            <div className="w-24 h-24 md:w-32 md:h-32 rounded-2xl bg-white/5 border border-white/10 p-2 shrink-0 overflow-hidden">
+              <DetailOrgLogo logoUrl={org.logoUrl} name={org.name} size="large" />
             </div>
             <div>
               <div className="flex items-center gap-2 mb-2">

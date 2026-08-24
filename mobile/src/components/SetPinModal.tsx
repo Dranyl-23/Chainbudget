@@ -31,16 +31,22 @@ import {
 const { width } = Dimensions.get('window');
 const PIN_LENGTH = 6;
 
-const KEYPAD_KEYS = [
-  { digit: '1', letters: '' },
-  { digit: '2', letters: 'ABC' },
-  { digit: '3', letters: 'DEF' },
-  { digit: '4', letters: 'GHI' },
-  { digit: '5', letters: 'JKL' },
-  { digit: '6', letters: 'MNO' },
-  { digit: '7', letters: 'PQRS' },
-  { digit: '8', letters: 'TUV' },
-  { digit: '9', letters: 'WXYZ' },
+const KEYPAD_ROWS = [
+  [
+    { digit: '1', letters: '' },
+    { digit: '2', letters: 'ABC' },
+    { digit: '3', letters: 'DEF' },
+  ],
+  [
+    { digit: '4', letters: 'GHI' },
+    { digit: '5', letters: 'JKL' },
+    { digit: '6', letters: 'MNO' },
+  ],
+  [
+    { digit: '7', letters: 'PQRS' },
+    { digit: '8', letters: 'TUV' },
+    { digit: '9', letters: 'WXYZ' },
+  ],
 ];
 
 interface SetPinModalProps {
@@ -331,35 +337,54 @@ export default function SetPinModal({
           </View>
 
           {/* Custom Numeric Keypad */}
-          <View style={{ width: '100%', maxWidth: 320, alignItems: 'center' }}>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12 }}>
-              {KEYPAD_KEYS.map((key) => (
-                <TouchableOpacity
-                  key={key.digit}
-                  onPress={() => handleKeyPress(key.digit)}
-                  activeOpacity={0.65}
-                  style={{
-                    width: buttonSize,
-                    height: buttonSize,
-                    borderRadius: buttonSize / 2,
-                    backgroundColor: 'rgba(255, 255, 255, 0.07)',
-                    borderColor: 'rgba(255, 255, 255, 0.14)',
-                    borderWidth: 1,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Text style={{ color: '#FFFFFF', fontSize: 24, fontWeight: '700', includeFontPadding: false }}>
-                    {key.digit}
-                  </Text>
-                  {key.letters ? (
-                    <Text style={{ color: '#64748B', fontSize: 9, fontWeight: '800', letterSpacing: 1.1, marginTop: 1, includeFontPadding: false }}>
-                      {key.letters}
+          <View style={{ width: '100%', maxWidth: 290, alignItems: 'center' }}>
+            {KEYPAD_ROWS.map((row, rowIdx) => (
+              <View
+                key={rowIdx}
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  width: '100%',
+                  marginBottom: 12,
+                }}
+              >
+                {row.map((key) => (
+                  <TouchableOpacity
+                    key={key.digit}
+                    onPress={() => handleKeyPress(key.digit)}
+                    activeOpacity={0.65}
+                    style={{
+                      width: buttonSize,
+                      height: buttonSize,
+                      borderRadius: buttonSize / 2,
+                      backgroundColor: 'rgba(255, 255, 255, 0.07)',
+                      borderColor: 'rgba(255, 255, 255, 0.14)',
+                      borderWidth: 1,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Text style={{ color: '#FFFFFF', fontSize: 24, fontWeight: '700', includeFontPadding: false }}>
+                      {key.digit}
                     </Text>
-                  ) : null}
-                </TouchableOpacity>
-              ))}
+                    {key.letters ? (
+                      <Text style={{ color: '#64748B', fontSize: 9, fontWeight: '800', letterSpacing: 1.1, marginTop: 1, includeFontPadding: false }}>
+                        {key.letters}
+                      </Text>
+                    ) : null}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ))}
 
+            {/* Bottom Row: Empty, 0, Backspace */}
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                width: '100%',
+              }}
+            >
               {/* Empty placeholder on Left */}
               <View style={{ width: buttonSize, height: buttonSize }} />
 

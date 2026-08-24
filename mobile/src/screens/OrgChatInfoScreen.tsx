@@ -38,7 +38,10 @@ import { triggerLightHaptic, triggerSuccessHaptic } from '../lib/biometrics';
 const BACKEND_BASE = 'https://chainbudget-api.fly.dev';
 
 function formatAvatarUrl(uri?: string) {
-  if (!uri) return undefined;
+  if (!uri || typeof uri !== 'string') return undefined;
+  if (uri.startsWith('data:image/') || uri.startsWith('blob:')) {
+    return uri;
+  }
   if (uri.startsWith('/uploads')) {
     return `${BACKEND_BASE}${uri}`;
   }
@@ -56,7 +59,7 @@ export default function OrgChatInfoScreen() {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
   const { user } = useAuth();
-  const { organizations } = useOrg();
+  const { organizations, refreshOrgs } = useOrg();
   const { on } = useSocket();
   const { colors, isDark } = useTheme();
 
@@ -255,6 +258,7 @@ export default function OrgChatInfoScreen() {
       if (uploadedUrl) {
         await api.patch(`/organizations/${orgId}`, { logoUrl: uploadedUrl });
         setOrgLogoUrl(uploadedUrl);
+        await refreshOrgs();
         await triggerSuccessHaptic();
         triggerEmblemSuccessModal(uploadedUrl);
       }

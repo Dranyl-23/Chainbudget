@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { Search, Globe, ShieldCheck, ArrowRight, ArrowUpRight, ArrowDownRight, Activity } from "lucide-react";
+import { Search, Globe, ShieldCheck, ArrowRight, ArrowUpRight, Activity, Lock } from "lucide-react";
 import api from "@/lib/api";
 import { BACKEND_URL } from "@/lib/config";
 
@@ -11,8 +11,46 @@ interface Organization {
   name: string;
   type: string;
   description: string;
-  logoUrl: string;
+  logoUrl?: string;
   transparencyScore: number;
+  isPrivate?: boolean;
+}
+
+function ExplorerOrgLogo({ logoUrl, name }: { logoUrl?: string; name: string }) {
+  const [error, setError] = useState(false);
+
+  let src = "/images/logo.png";
+  if (logoUrl && !error) {
+    if (logoUrl.startsWith("http") || logoUrl.startsWith("data:")) {
+      src = logoUrl;
+    } else if (logoUrl.startsWith("/")) {
+      src = `${BACKEND_URL}${logoUrl}`;
+    } else {
+      src = `${BACKEND_URL}/${logoUrl}`;
+    }
+  }
+
+  const initial = (name || "O").trim().charAt(0).toUpperCase();
+
+  if (error || !logoUrl) {
+    return (
+      <div className="w-16 h-16 rounded-xl bg-linear-to-br from-purple-600/30 to-cyan-600/30 border border-white/10 flex items-center justify-center text-white font-extrabold text-2xl shrink-0 shadow-inner">
+        <span className="drop-shadow-md">{initial}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-16 h-16 rounded-xl overflow-hidden bg-white/5 border border-white/10 flex items-center justify-center shrink-0 p-1">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src}
+        alt={name}
+        onError={() => setError(true)}
+        className="w-full h-full object-contain rounded-lg"
+      />
+    </div>
+  );
 }
 
 interface FeedTx {
@@ -154,16 +192,18 @@ export default function ExplorerPage() {
                   <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/0 via-transparent to-purple-500/0 group-hover:from-cyan-500/5 group-hover:to-purple-500/5 transition-colors duration-500 pointer-events-none" />
                   
                   <div className="flex items-start justify-between mb-6 relative z-10">
-                    <img 
-                      src={org.logoUrl ? (org.logoUrl.startsWith('http') ? org.logoUrl : `${backendUrl}${org.logoUrl}`) : "/images/logo.png"} 
-                      alt={org.name}
-                      className="w-16 h-16 rounded-xl object-contain bg-white/5 border border-white/10"
-                    />
-                    <div className={`flex flex-col items-end`}>
-                      <span className="text-[10px] uppercase tracking-widest text-white/50 font-bold mb-1">Score</span>
-                      <span className={`px-2 py-1 rounded-md text-xs font-bold font-mono border ${getScoreColor(org.transparencyScore)} shadow-inner`}>
-                        {org.transparencyScore}%
-                      </span>
+                    <ExplorerOrgLogo logoUrl={org.logoUrl} name={org.name} />
+                    <div className="flex flex-col items-end gap-1.5">
+                      <div className="flex items-center gap-1.5">
+                        {org.isPrivate && (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-fuchsia-500/15 text-fuchsia-300 border border-fuchsia-500/30 flex items-center gap-1">
+                            <Lock className="w-2.5 h-2.5" /> Private
+                          </span>
+                        )}
+                        <span className={`px-2 py-1 rounded-md text-xs font-bold font-mono border ${getScoreColor(org.transparencyScore)} shadow-inner`}>
+                          {org.transparencyScore}%
+                        </span>
+                      </div>
                     </div>
                   </div>
 
@@ -180,7 +220,7 @@ export default function ExplorerPage() {
                       {org.type ? org.type.replace('_', ' ').toUpperCase() : 'ORG'}
                     </div>
                     <div className="flex items-center gap-1 text-sm font-bold text-fuchsia-400 group-hover:text-fuchsia-300 transition-colors">
-                      View Ledger <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                      {org.isPrivate ? "View Info" : "View Ledger"} <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                     </div>
                   </div>
                 </div>
