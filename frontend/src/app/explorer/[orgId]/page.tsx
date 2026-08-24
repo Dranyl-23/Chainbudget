@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import Image from "next/image";
 import { ArrowLeft, ShieldCheck, Activity, Link as LinkIcon, AlertTriangle, ExternalLink, Lock } from "lucide-react";
 import api from "@/lib/api";
 import { ethers } from "ethers";
