@@ -429,7 +429,7 @@ export default function DashboardPage() {
           <h3 className="text-base font-bold text-white mb-6 flex items-center gap-2 drop-shadow-md">
             <BarChart2 className="w-5 h-5 text-cyan-400" /> Cash Flow
           </h3>
-          <div className="h-[300px] w-full">
+          <div className="h-75 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={cashFlow} margin={{ top: 20, right: 0, left: 0, bottom: 0 }}>
                 <defs>

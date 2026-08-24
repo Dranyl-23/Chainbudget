@@ -131,14 +131,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   );
   const roleLevel = user?.isSuperAdmin ? 1 : (currentMembership?.roleLevel || 4); 
 
-  const backendUrl = "http://127.0.0.1:5001";
-  const orgObj = typeof currentMembership?.organization === "object" ? currentMembership.organization : null;
-  const displayLogo = orgObj?.logoUrl 
-    ? (orgObj.logoUrl.startsWith("http") 
-        ? orgObj.logoUrl 
-        : `${backendUrl}${orgObj.logoUrl}`)
-    : "/images/logo.png"; 
-
   const visibleNavItems = useMemo(() => {
     return navItems.filter((item) => {
       if (user?.isSuperAdmin) return true;
@@ -249,206 +241,207 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* ── Sidebar ── */}
       <aside 
         className={`
-          fixed md:static inset-y-0 left-0 z-40 flex flex-col border-r transform transition-all duration-300 ease-in-out
-          ${isCollapsed ? "w-20" : "w-64"}
+          fixed md:static inset-y-0 left-0 z-40 flex flex-col border-r h-screen max-h-screen transform transition-all duration-300 ease-in-out shrink-0
+          ${isCollapsed ? "w-20" : "w-60"}
           ${isMobileOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0
         `} 
-        style={{ background: "#ffffff", minHeight: "100vh", borderRight: "1px solid var(--color-border)" }}
+        style={{ background: "#ffffff", borderRight: "1px solid var(--color-border)" }}
       >
         {/* Floating Sidebar Toggle Button on the Right Border */}
         <button 
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className="hidden md:flex absolute -right-3.5 top-6 w-7 h-7 rounded-full bg-[#121215] border border-white/20 text-gray-300 hover:text-white hover:border-fuchsia-500/60 hover:bg-[#1a1a22] shadow-md items-center justify-center transition-all z-50 cursor-pointer active:scale-95"
+          className="hidden md:flex absolute -right-3 top-5 w-6 h-6 rounded-full bg-[#121215] border border-white/20 text-gray-300 hover:text-white hover:border-fuchsia-500/60 hover:bg-[#1a1a22] shadow-md items-center justify-center transition-all z-50 cursor-pointer active:scale-95"
           aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
-          {isCollapsed ? <ChevronRight className="w-3.5 h-3.5 text-fuchsia-400" /> : <ChevronLeft className="w-3.5 h-3.5" />}
+          {isCollapsed ? <ChevronRight className="w-3 h-3 text-fuchsia-400" /> : <ChevronLeft className="w-3 h-3" />}
         </button>
 
         {/* Brand Header */}
-        <div className={`h-16 mt-2 mb-4 hidden md:flex items-center transition-all duration-300 ${isCollapsed ? "justify-center px-2" : "justify-start px-5"}`}>
-          <div className="flex items-center gap-3">
+        <div className={`h-14 shrink-0 hidden md:flex items-center transition-all duration-300 ${isCollapsed ? "justify-center px-2" : "justify-start px-4"}`}>
+          <div className="flex items-center gap-2.5">
             <Image 
               src="/3D-Chainbudget.png" 
               alt="ChainBudget logo" 
-              width={52} 
-              height={52} 
+              width={40} 
+              height={40} 
               unoptimized 
-              className="w-12 h-12 object-contain drop-shadow-md shrink-0 transition-transform hover:scale-105 cursor-pointer"
+              className="w-10 h-10 object-contain drop-shadow-md shrink-0 transition-transform hover:scale-105 cursor-pointer"
               onClick={() => isCollapsed && setIsCollapsed(false)}
             />
-            <span className={`font-extrabold text-2xl tracking-tight transition-all duration-300 overflow-hidden whitespace-nowrap ${isCollapsed ? "max-w-0 opacity-0 hidden" : "max-w-40 opacity-100"}`}>
+            <span className={`font-extrabold text-xl tracking-tight transition-all duration-300 overflow-hidden whitespace-nowrap ${isCollapsed ? "max-w-0 opacity-0 hidden" : "max-w-40 opacity-100"}`}>
               Chain<span className="gradient-text">Budget</span>
             </span>
           </div>
         </div>
 
         {/* Org selector component */}
-        <div className={`transition-all duration-300 ${isCollapsed ? "overflow-hidden max-h-0 opacity-0 m-0 p-0" : "max-h-[500px] opacity-100 z-50 relative"}`}>
+        <div className={`shrink-0 transition-all duration-300 px-2 ${isCollapsed ? "overflow-hidden max-h-0 opacity-0 m-0 p-0" : "max-h-125 opacity-100 z-30 relative mb-2"}`}>
           <OrgSelector />
         </div>
 
-        {/* Nav */}
-        <nav className="flex-1 px-3 space-y-0.5 mt-2 overflow-hidden">
-          <p className={`px-3 text-xs font-semibold text-gray-600 uppercase tracking-widest mb-2 transition-all duration-300 overflow-hidden whitespace-nowrap ${isCollapsed ? "max-h-0 opacity-0 m-0" : "max-h-10 opacity-100 mt-2"}`}>Main</p>
-          {visibleNavItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={handleNavClick}
-              title={isCollapsed ? item.label : ""}
-              id={`nav-${item.label.toLowerCase().replace(" ", "-")}`}
-              className={`nav-item flex justify-between ${
-                item.href === "/dashboard"
-                  ? pathname === "/dashboard" ? "active" : ""
-                  : pathname.startsWith(item.href) ? "active" : ""
-              } ${isCollapsed ? "justify-center px-0" : ""}`}
-            >
-              <div className="flex items-center gap-3 overflow-hidden">
-                <div className="shrink-0">{item.icon}</div>
-                <span className={`transition-all duration-300 whitespace-nowrap ${isCollapsed ? "max-w-0 opacity-0" : "max-w-37.5 opacity-100"}`}>
-                  {item.label}
-                </span>
-              </div>
-              {item.label === "Approvals" && visiblePendingCount > 0 && (
-                <>
-                  <span className={`bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 shadow-sm animate-pulse transition-all duration-300 ${isCollapsed ? "max-w-0 max-h-0 opacity-0 p-0 m-0 border-0 overflow-hidden" : "max-w-10 opacity-100"}`}>
-                    {visiblePendingCount}
+        {/* Scrollable Nav Items & Footer Container */}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden px-2.5 py-1 space-y-0.5 custom-scrollbar flex flex-col justify-between">
+          <nav className="space-y-0.5">
+            <p className={`px-2 text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1 transition-all duration-300 overflow-hidden whitespace-nowrap ${isCollapsed ? "max-h-0 opacity-0 m-0" : "max-h-6 opacity-100"}`}>Main</p>
+            {visibleNavItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={handleNavClick}
+                title={isCollapsed ? item.label : ""}
+                id={`nav-${item.label.toLowerCase().replace(" ", "-")}`}
+                className={`nav-item flex justify-between ${
+                  item.href === "/dashboard"
+                    ? pathname === "/dashboard" ? "active" : ""
+                    : pathname.startsWith(item.href) ? "active" : ""
+                } ${isCollapsed ? "justify-center px-0" : ""}`}
+              >
+                <div className="flex items-center gap-2.5 overflow-hidden">
+                  <div className="shrink-0">{item.icon}</div>
+                  <span className={`transition-all duration-300 whitespace-nowrap ${isCollapsed ? "max-w-0 opacity-0" : "max-w-37.5 opacity-100"}`}>
+                    {item.label}
                   </span>
-                  {isCollapsed && (
-                    <span className="absolute top-2 right-2 bg-red-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full shrink-0 shadow-sm animate-pulse">
+                </div>
+                {item.label === "Approvals" && visiblePendingCount > 0 && (
+                  <>
+                    <span className={`bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0 shadow-sm animate-pulse transition-all duration-300 ${isCollapsed ? "max-w-0 max-h-0 opacity-0 p-0 m-0 border-0 overflow-hidden" : "max-w-8 opacity-100"}`}>
                       {visiblePendingCount}
                     </span>
-                  )}
-                </>
-              )}
-            </Link>
-          ))}
-
-          {user?.isSuperAdmin && (
-            <>
-              <p className={`px-3 text-xs font-semibold text-gray-600 uppercase tracking-widest transition-all duration-300 overflow-hidden whitespace-nowrap ${isCollapsed ? "max-h-0 opacity-0 m-0" : "max-h-10 opacity-100 mt-4 mb-2"}`}>Admin</p>
-              <Link 
-                title={isCollapsed ? "Platform Admin" : ""}
-                href="/admin" 
-                onClick={handleNavClick}
-                className={`nav-item flex items-center gap-3 transition-all duration-300 ${isCollapsed ? "justify-center px-0" : ""} ${pathname.startsWith("/admin") ? "active" : ""}`}
-              >
-                <div className="shrink-0"><Settings className="w-4 h-4" /></div>
-                <span className={`transition-all duration-300 whitespace-nowrap ${isCollapsed ? "max-w-0 opacity-0" : "max-w-37.5 opacity-100"}`}>
-                  Platform Admin
-                </span>
-              </Link>
-            </>
-          )}
-        </nav>
-
-        {/* Wallet info & Bottom Links */}
-        <div className="px-3 mt-auto mb-4 flex flex-col gap-1">
-          {/* Mobile Profile Card */}
-          <div className={`md:hidden transition-all duration-300 overflow-hidden ${isCollapsed ? "max-h-0 opacity-0 m-0 p-0 border-0" : "max-h-[200px] opacity-100 px-3 py-3 mb-2 rounded-lg sidebar-card"}`}>
-            <div 
-              className="flex items-center justify-between mb-2 group cursor-pointer hover:bg-white/5 rounded px-1 -mx-1 transition-colors"
-              onClick={() => {
-                if (walletAddress) {
-                  navigator.clipboard.writeText(walletAddress);
-                  toast.success("Wallet address copied!");
-                }
-              }}
-              title="Copy full wallet address"
-            >
-              <div className="flex items-center gap-2">
-                <div className="nft-avatar-wrapper scale-[0.7] origin-left">
-                  <div className="w-10 h-10 nft-avatar border border-purple-500/30 shadow-[inset_0_0_10px_rgba(139,92,246,0.2)] overflow-hidden">
-                    <UserAvatar src={user?.avatarUrl} name={user?.displayName} size={40} />
-                  </div>
-                </div>
-                <div className="flex flex-col -ml-2 gap-0.5">
-                  <div className="flex items-center gap-1.5">
-                    {user?.displayName && (
-                      <span className="text-xs font-bold text-gray-100 flex items-center gap-1">
-                        {user.displayName}
-                        {currentMembership?.hasSBT && (
-                          <span title="SBT Verified Member" className="flex items-center">
-                            <ShieldCheck className="w-3 h-3 text-cyan-400 drop-shadow-[0_0_5px_rgba(34,211,238,0.8)]" />
-                          </span>
-                        )}
+                    {isCollapsed && (
+                      <span className="absolute top-2 right-2 bg-red-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full shrink-0 shadow-sm animate-pulse">
+                        {visiblePendingCount}
                       </span>
                     )}
+                  </>
+                )}
+              </Link>
+            ))}
+
+            {user?.isSuperAdmin && (
+              <>
+                <p className={`px-2 text-[10px] font-bold text-gray-500 uppercase tracking-widest transition-all duration-300 overflow-hidden whitespace-nowrap ${isCollapsed ? "max-h-0 opacity-0 m-0" : "max-h-6 opacity-100 mt-3 mb-1"}`}>Admin</p>
+                <Link 
+                  title={isCollapsed ? "Platform Admin" : ""}
+                  href="/admin" 
+                  onClick={handleNavClick}
+                  className={`nav-item flex items-center gap-2.5 transition-all duration-300 ${isCollapsed ? "justify-center px-0" : ""} ${pathname.startsWith("/admin") ? "active" : ""}`}
+                >
+                  <div className="shrink-0"><Settings className="w-4 h-4" /></div>
+                  <span className={`transition-all duration-300 whitespace-nowrap ${isCollapsed ? "max-w-0 opacity-0" : "max-w-37.5 opacity-100"}`}>
+                    Platform Admin
+                  </span>
+                </Link>
+              </>
+            )}
+          </nav>
+
+          {/* Bottom Links & Mobile Info */}
+          <div className="pt-2 mt-2 border-t border-gray-100 dark:border-white/5 space-y-0.5">
+            {/* Mobile Profile Card */}
+            <div className={`md:hidden transition-all duration-300 overflow-hidden ${isCollapsed ? "max-h-0 opacity-0 m-0 p-0 border-0" : "max-h-50 opacity-100 px-3 py-3 mb-2 rounded-lg sidebar-card"}`}>
+              <div 
+                className="flex items-center justify-between mb-2 group cursor-pointer hover:bg-white/5 rounded px-1 -mx-1 transition-colors"
+                onClick={() => {
+                  if (walletAddress) {
+                    navigator.clipboard.writeText(walletAddress);
+                    toast.success("Wallet address copied!");
+                  }
+                }}
+                title="Copy full wallet address"
+              >
+                <div className="flex items-center gap-2">
+                  <div className="nft-avatar-wrapper scale-[0.7] origin-left">
+                    <div className="w-10 h-10 nft-avatar border border-purple-500/30 shadow-[inset_0_0_10px_rgba(139,92,246,0.2)] overflow-hidden">
+                      <UserAvatar src={user?.avatarUrl} name={user?.displayName} size={40} />
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className={`px-1.5 py-[1px] rounded-sm text-[8px] uppercase tracking-widest font-bold flex items-center gap-1 w-fit ${
-                      roleLevel === 1 ? "role-badge-superadmin" :
-                      roleLevel === 2 ? "role-badge-approver" :
-                      roleLevel === 3 ? "role-badge-member" : "role-badge-readonly"
-                    }`}>
-                      {roleLevel === 1 ? <><Crown className="w-2.5 h-2.5" /> Exec</> : 
-                       roleLevel === 2 ? <><CheckCircle2 className="w-2.5 h-2.5" /> Apprv</> : 
-                       roleLevel === 3 ? <><UserIcon className="w-2.5 h-2.5" /> Mem</> : 
-                       <><Eye className="w-2.5 h-2.5" /> Pub</>}
-                    </span>
-                    <span className="text-[10px] font-mono text-cyan-400/70 group-hover:text-cyan-300 transition-colors">{shortAddress}</span>
+                  <div className="flex flex-col -ml-2 gap-0.5">
+                    <div className="flex items-center gap-1.5">
+                      {user?.displayName && (
+                        <span className="text-xs font-bold text-gray-100 flex items-center gap-1">
+                          {user.displayName}
+                          {currentMembership?.hasSBT && (
+                            <span title="SBT Verified Member" className="flex items-center">
+                              <ShieldCheck className="w-3 h-3 text-cyan-400 drop-shadow-[0_0_5px_rgba(34,211,238,0.8)]" />
+                            </span>
+                          )}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className={`px-1.5 py-px rounded-sm text-[8px] uppercase tracking-widest font-bold flex items-center gap-1 w-fit ${
+                        roleLevel === 1 ? "role-badge-superadmin" :
+                        roleLevel === 2 ? "role-badge-approver" :
+                        roleLevel === 3 ? "role-badge-member" : "role-badge-readonly"
+                      }`}>
+                        {roleLevel === 1 ? <><Crown className="w-2.5 h-2.5" /> Exec</> : 
+                         roleLevel === 2 ? <><CheckCircle2 className="w-2.5 h-2.5" /> Apprv</> : 
+                         roleLevel === 3 ? <><UserIcon className="w-2.5 h-2.5" /> Mem</> : 
+                         <><Eye className="w-2.5 h-2.5" /> Pub</>}
+                      </span>
+                      <span className="text-[10px] font-mono text-cyan-400/70 group-hover:text-cyan-300 transition-colors">{shortAddress}</span>
+                    </div>
                   </div>
                 </div>
+                <Copy className="w-3.5 h-3.5 text-white/30 opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
-              <Copy className="w-3.5 h-3.5 text-white/30 opacity-0 group-hover:opacity-100 transition-opacity" />
+              <div className="flex items-center gap-1.5">
+                <span className="chain-dot" />
+                <span className="text-xs text-gray-600">
+                  {networkName}
+                </span>
+              </div>
             </div>
-            <div className="flex items-center gap-1.5">
-              <span className="chain-dot" />
-              <span className="text-xs text-gray-600">
-                {networkName}
+
+            <Link
+              href="/help"
+              onClick={handleNavClick}
+              title={isCollapsed ? "Help & FAQs" : ""}
+              className={`nav-item flex items-center gap-2.5 w-full transition-all duration-300 text-gray-500 hover:text-primary ${isCollapsed ? "justify-center px-0" : ""}`}
+            >
+              <div className="shrink-0"><LifeBuoy className="w-4 h-4" /></div>
+              <span className={`transition-all duration-300 whitespace-nowrap ${isCollapsed ? "max-w-0 opacity-0" : "max-w-37.5 opacity-100"}`}>
+                Help & FAQs
               </span>
-            </div>
+            </Link>
+
+            <Link
+              href="/privacy"
+              onClick={handleNavClick}
+              title={isCollapsed ? "Data Privacy (RA 10173)" : ""}
+              className={`nav-item flex items-center gap-2.5 w-full transition-all duration-300 text-gray-500 hover:text-primary ${isCollapsed ? "justify-center px-0" : ""}`}
+            >
+              <div className="shrink-0"><Shield className="w-4 h-4" /></div>
+              <span className={`transition-all duration-300 whitespace-nowrap ${isCollapsed ? "max-w-0 opacity-0" : "max-w-37.5 opacity-100"}`}>
+                Privacy & DPA
+              </span>
+            </Link>
+
+            <Link
+              href="/tutorials"
+              onClick={handleNavClick}
+              title={isCollapsed ? "Tutorials" : ""}
+              className={`nav-item flex items-center gap-2.5 w-full transition-all duration-300 text-gray-500 hover:text-primary ${isCollapsed ? "justify-center px-0" : ""}`}
+            >
+              <div className="shrink-0"><HelpCircle className="w-4 h-4" /></div>
+              <span className={`transition-all duration-300 whitespace-nowrap ${isCollapsed ? "max-w-0 opacity-0" : "max-w-37.5 opacity-100"}`}>
+                Tutorials
+              </span>
+            </Link>
+
+            <button
+              title={isCollapsed ? "Disconnect" : ""}
+              onClick={() => setShowDisconnectModal(true)}
+              id="logout-btn"
+              className={`md:hidden nav-item flex items-center gap-2.5 w-full transition-all duration-300 text-gray-500 hover:text-danger ${isCollapsed ? "justify-center px-0" : ""}`}
+            >
+              <div className="shrink-0"><LogOut className="w-4 h-4" /></div>
+              <span className={`transition-all duration-300 whitespace-nowrap ${isCollapsed ? "max-w-0 opacity-0" : "max-w-37.5 opacity-100"}`}>
+                Disconnect
+              </span>
+            </button>
           </div>
-
-          <Link
-            href="/help"
-            onClick={handleNavClick}
-            title={isCollapsed ? "Help & FAQs" : ""}
-            className={`nav-item flex items-center gap-3 w-full transition-all duration-300 text-gray-500 hover:text-primary ${isCollapsed ? "justify-center px-0" : ""}`}
-          >
-            <div className="shrink-0"><LifeBuoy className="w-4 h-4" /></div>
-            <span className={`transition-all duration-300 whitespace-nowrap ${isCollapsed ? "max-w-0 opacity-0" : "max-w-37.5 opacity-100"}`}>
-              Help & FAQs
-            </span>
-          </Link>
-
-          <Link
-            href="/privacy"
-            onClick={handleNavClick}
-            title={isCollapsed ? "Data Privacy (RA 10173)" : ""}
-            className={`nav-item flex items-center gap-3 w-full transition-all duration-300 text-gray-500 hover:text-primary ${isCollapsed ? "justify-center px-0" : ""}`}
-          >
-            <div className="shrink-0"><Shield className="w-4 h-4" /></div>
-            <span className={`transition-all duration-300 whitespace-nowrap ${isCollapsed ? "max-w-0 opacity-0" : "max-w-37.5 opacity-100"}`}>
-              Privacy & DPA
-            </span>
-          </Link>
-
-          <Link
-            href="/tutorials"
-            onClick={handleNavClick}
-            title={isCollapsed ? "Tutorials" : ""}
-            className={`nav-item flex items-center gap-3 w-full transition-all duration-300 text-gray-500 hover:text-primary ${isCollapsed ? "justify-center px-0" : ""}`}
-          >
-            <div className="shrink-0"><HelpCircle className="w-4 h-4" /></div>
-            <span className={`transition-all duration-300 whitespace-nowrap ${isCollapsed ? "max-w-0 opacity-0" : "max-w-37.5 opacity-100"}`}>
-              Tutorials
-            </span>
-          </Link>
-
-
-          <button
-            title={isCollapsed ? "Disconnect" : ""}
-            onClick={() => setShowDisconnectModal(true)}
-            id="logout-btn"
-            className={`md:hidden nav-item flex items-center gap-3 w-full transition-all duration-300 text-gray-500 hover:text-danger ${isCollapsed ? "justify-center px-0" : ""}`}
-          >
-            <div className="shrink-0"><LogOut className="w-4 h-4" /></div>
-            <span className={`transition-all duration-300 whitespace-nowrap ${isCollapsed ? "max-w-0 opacity-0" : "max-w-37.5 opacity-100"}`}>
-              Disconnect
-            </span>
-          </button>
         </div>
       </aside>
 
@@ -456,7 +449,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <main className="flex-1 overflow-auto w-full md:w-auto relative flex flex-col">
         
         {/* Desktop Top Navigation Bar */}
-        <div className="hidden md:flex items-center justify-end px-8 py-4 sticky top-0 z-40 bg-[var(--color-bg)]/80 backdrop-blur-xl border-b border-white/5 gap-4">
+        <div className="hidden md:flex items-center justify-end px-8 py-4 sticky top-0 z-40 bg-bg/80 backdrop-blur-xl border-b border-white/5 gap-4">
           <NotificationsCenter />
 
           {/* Top Nav Profile Pill */}
