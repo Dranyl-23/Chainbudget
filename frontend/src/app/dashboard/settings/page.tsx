@@ -513,20 +513,20 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-8 animate-fade-in">
+    <div className="p-4 md:p-8 pb-24 w-full space-y-8 animate-fade-in">
       <div>
-        <h1 className="text-3xl font-bold text-gray-800 tracking-tight flex items-center gap-3">
+        <h1 className="text-2xl md:text-3xl font-bold text-gray-800 dark:text-white tracking-tight flex items-center gap-3">
           <UserIcon className="w-8 h-8 text-primary" />
           Profile & Settings
         </h1>
-        <p className="text-gray-500 mt-2">
-          Manage your personal details and linked wallets.
+        <p className="text-gray-500 mt-1 text-sm">
+          Manage your personal details, Web3 security keys, notification preferences, and organization branding.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        <div className="md:col-span-2 space-y-6">
+        <div className="lg:col-span-2 space-y-6">
           <div className="glass p-6 rounded-2xl">
             <h2 className="text-xl font-bold text-gray-800 mb-6 border-b pb-2">Personal Information</h2>
             
@@ -857,98 +857,128 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        <div className="glass p-6 rounded-2xl border border-primary/20 md:col-span-2">
-          <div className="flex items-center justify-between mb-4 border-b pb-3">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center">
-                <Bell className="w-5 h-5 text-purple-400" />
-              </div>
-              <div>
-                <h2 className="text-lg font-bold text-gray-800 dark:text-white">Notification Preferences</h2>
-                <p className="text-xs text-gray-500">Configure which notifications you receive on Web, Mobile, and Email.</p>
-              </div>
-            </div>
-          </div>
+      </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
-            {[
-              { key: "push", label: "Mobile Push Notifications", desc: "Receive alerts on your iOS / Android devices" },
-              { key: "email", label: "Email Notifications", desc: "Important transaction summaries and receipts" },
-              { key: "approvals", label: "Approval Requests", desc: "Alerts when a transaction requires your review" },
-              { key: "transactions", label: "Transaction Updates", desc: "Status changes, payouts, and confirmations" },
-              { key: "daoProposals", label: "DAO Proposals & Voting", desc: "New governance ballots and voting deadlines" },
-              { key: "chatMentions", label: "Chat Mentions", desc: "Notifications when tagged in organization channels" },
-            ].map(({ key, label, desc }) => {
-              const isEnabled = notificationPrefs[key] !== false;
-              return (
-                <div
-                  key={key}
-                  onClick={() => handleTogglePreference(key, isEnabled)}
-                  className={`p-4 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 select-none ${
-                    isEnabled
-                      ? "bg-purple-500/10 border-purple-500/30 shadow-sm"
-                      : "bg-white/5 border-white/10 opacity-70 hover:opacity-100"
-                  }`}
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-bold text-gray-800 dark:text-white truncate">{label}</p>
-                    <p className="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-1">{desc}</p>
-                  </div>
-                  <div
-                    className={`w-10 h-5 rounded-full transition-colors relative flex items-center p-0.5 shrink-0 ${
-                      isEnabled ? "bg-purple-600" : "bg-gray-400 dark:bg-gray-600"
-                    }`}
-                  >
-                    <div
-                      className={`w-4 h-4 rounded-full bg-white transition-transform ${
-                        isEnabled ? "translate-x-5" : "translate-x-0"
-                      }`}
-                    />
-                  </div>
-                </div>
-              );
-            })}
+      {/* ── Notification Preferences (Full-Width Section) ── */}
+      <div className="glass p-6 rounded-2xl border border-primary/20 w-full shadow-sm">
+        <div className="flex items-center justify-between mb-4 border-b pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center">
+              <Bell className="w-5 h-5 text-purple-400" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-gray-800 dark:text-white">Notification Preferences</h2>
+              <p className="text-xs text-gray-500">Configure which notifications you receive on Web, Mobile, and Email.</p>
+            </div>
           </div>
         </div>
 
-        {roleLevel <= 2 && orgDetails && (
-          <div className="glass p-6 rounded-2xl border border-purple-500/20 md:col-span-2 shadow-[0_0_30px_rgba(168,85,247,0.08)] relative overflow-hidden">
-            <div className="flex items-center justify-between mb-4 border-b border-purple-500/10 pb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center">
-                  <Building className="w-5 h-5 text-purple-400" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
+          {[
+            { key: "push", label: "Mobile Push Notifications", desc: "Receive alerts on your iOS / Android devices" },
+            { key: "email", label: "Email Notifications", desc: "Important transaction summaries and receipts" },
+            { key: "approvals", label: "Approval Requests", desc: "Alerts when a transaction requires your review" },
+            { key: "transactions", label: "Transaction Updates", desc: "Status changes, payouts, and confirmations" },
+            { key: "daoProposals", label: "DAO Proposals & Voting", desc: "New governance ballots and voting deadlines" },
+            { key: "chatMentions", label: "Chat Mentions", desc: "Notifications when tagged in organization channels" },
+          ].map(({ key, label, desc }) => {
+            const isEnabled = notificationPrefs[key] !== false;
+            return (
+              <div
+                key={key}
+                onClick={() => handleTogglePreference(key, isEnabled)}
+                className={`p-4 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 select-none ${
+                  isEnabled
+                    ? "bg-purple-500/10 border-purple-500/30 shadow-sm"
+                    : "bg-white/5 border-white/10 opacity-70 hover:opacity-100"
+                }`}
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold text-gray-800 dark:text-white truncate">{label}</p>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-1">{desc}</p>
                 </div>
-                <div>
-                  <h2 className="text-lg font-bold text-gray-800 dark:text-white">Organization Branding & Emblem</h2>
-                  <p className="text-xs text-gray-500">Rebrand or update your custom organization logo across Web, Mobile & Public Ledger.</p>
+                <div
+                  className={`w-10 h-5 rounded-full transition-colors relative flex items-center p-0.5 shrink-0 ${
+                    isEnabled ? "bg-purple-600" : "bg-gray-400 dark:bg-gray-600"
+                  }`}
+                >
+                  <div
+                    className={`w-4 h-4 rounded-full bg-white transition-transform ${
+                      isEnabled ? "translate-x-5" : "translate-x-0"
+                    }`}
+                  />
                 </div>
               </div>
-              <span className="text-[10px] uppercase font-mono font-bold px-2.5 py-1 rounded-full bg-purple-500/10 border border-purple-500/30 text-purple-400">
-                Officer Tool
-              </span>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Organization Branding & Emblem (Full-Width Section) ── */}
+      {roleLevel <= 2 && orgDetails && (
+        <div className="glass p-6 rounded-2xl border border-purple-500/20 w-full shadow-[0_0_30px_rgba(168,85,247,0.08)] relative overflow-hidden">
+          <div className="flex items-center justify-between mb-4 border-b border-purple-500/10 pb-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center">
+                <Building className="w-5 h-5 text-purple-400" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-gray-800 dark:text-white">Organization Branding & Emblem</h2>
+                <p className="text-xs text-gray-500">Rebrand or update your custom organization logo across Web, Mobile & Public Ledger.</p>
+              </div>
+            </div>
+            <span className="text-[10px] uppercase font-mono font-bold px-2.5 py-1 rounded-full bg-purple-500/10 border border-purple-500/30 text-purple-400">
+              Officer Tool
+            </span>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center gap-6 pt-2">
+            <div className="relative group">
+              <div className="w-24 h-24 rounded-2xl bg-white/5 border-2 border-dashed border-purple-500/40 p-1.5 flex items-center justify-center overflow-hidden shadow-inner">
+                {orgLogoPreview ? (
+                  <Image 
+                    src={orgLogoPreview} 
+                    alt="Org Emblem" 
+                    width={96}
+                    height={96}
+                    unoptimized
+                    className="w-full h-full object-cover rounded-xl"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center text-purple-400">
+                    <Building className="w-8 h-8 opacity-60 mb-1" />
+                    <span className="text-[10px] text-white/40 font-bold">No Emblem</span>
+                  </div>
+                )}
+              </div>
+              <label className="absolute -bottom-2 -right-2 p-2 rounded-full bg-purple-600 hover:bg-purple-500 text-white cursor-pointer shadow-lg transition-all hover:scale-105 border border-purple-400/50">
+                <Camera className="w-4 h-4" />
+                <input 
+                  type="file" 
+                  accept="image/png, image/jpeg, image/webp" 
+                  onChange={handleOrgLogoFileChange}
+                  className="hidden" 
+                />
+              </label>
             </div>
 
-            <div className="flex flex-col sm:flex-row items-center gap-6 pt-2">
-              <div className="relative group">
-                <div className="w-24 h-24 rounded-2xl bg-white/5 border-2 border-dashed border-purple-500/40 p-1.5 flex items-center justify-center overflow-hidden shadow-inner">
-                  {orgLogoPreview ? (
-                    <Image 
-                      src={orgLogoPreview} 
-                      alt="Org Emblem" 
-                      width={96}
-                      height={96}
-                      unoptimized
-                      className="w-full h-full object-cover rounded-xl"
-                    />
-                  ) : (
-                    <div className="flex flex-col items-center justify-center text-purple-400">
-                      <Building className="w-8 h-8 opacity-60 mb-1" />
-                      <span className="text-[10px] text-white/40 font-bold">No Emblem</span>
-                    </div>
-                  )}
-                </div>
-                <label className="absolute -bottom-2 -right-2 p-2 rounded-full bg-purple-600 hover:bg-purple-500 text-white cursor-pointer shadow-lg transition-all hover:scale-105 border border-purple-400/50">
-                  <Camera className="w-4 h-4" />
+            <div className="flex-1 w-full space-y-3 text-center sm:text-left">
+              <div>
+                <h3 className="text-sm font-bold text-gray-800 dark:text-white flex items-center justify-center sm:justify-start gap-2">
+                  {orgDetails.name}
+                  <span className="text-[11px] font-normal text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-md border border-purple-500/20">
+                    {orgDetails.type ? orgDetails.type.replace('_', ' ') : 'DAO'}
+                  </span>
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Upload a high-resolution square image (PNG, JPG, WebP) to establish your organization&apos;s Web3 emblem and on-chain identity.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3 pt-1">
+                <label className="btn-secondary py-2 px-4 text-xs font-bold flex items-center justify-center gap-2 cursor-pointer">
+                  <Upload className="w-3.5 h-3.5" />
+                  Choose New File
                   <input 
                     type="file" 
                     accept="image/png, image/jpeg, image/webp" 
@@ -956,57 +986,29 @@ export default function SettingsPage() {
                     className="hidden" 
                   />
                 </label>
-              </div>
 
-              <div className="flex-1 w-full space-y-3 text-center sm:text-left">
-                <div>
-                  <h3 className="text-sm font-bold text-gray-800 dark:text-white flex items-center justify-center sm:justify-start gap-2">
-                    {orgDetails.name}
-                    <span className="text-[11px] font-normal text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-md border border-purple-500/20">
-                      {orgDetails.type ? orgDetails.type.replace('_', ' ') : 'DAO'}
-                    </span>
-                  </h3>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Upload a high-resolution square image (PNG, JPG, WebP) to establish your organization&apos;s Web3 emblem and on-chain identity.
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-3 pt-1">
-                  <label className="btn-secondary py-2 px-4 text-xs font-bold flex items-center justify-center gap-2 cursor-pointer">
-                    <Upload className="w-3.5 h-3.5" />
-                    Choose New File
-                    <input 
-                      type="file" 
-                      accept="image/png, image/jpeg, image/webp" 
-                      onChange={handleOrgLogoFileChange}
-                      className="hidden" 
-                    />
-                  </label>
-
-                  <button
-                    onClick={handleRebrandOrgLogo}
-                    disabled={isUploadingOrgLogo || !orgLogoFile}
-                    className="btn-primary py-2 px-5 text-xs font-bold flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(168,85,247,0.3)] hover:shadow-[0_0_25px_rgba(168,85,247,0.5)] disabled:opacity-50"
-                  >
-                    {isUploadingOrgLogo ? (
-                      <>
-                        <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        <span>Publishing to IPFS...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Save className="w-3.5 h-3.5" />
-                        <span>Save & Publish Rebrand</span>
-                      </>
-                    )}
-                  </button>
-                </div>
+                <button
+                  onClick={handleRebrandOrgLogo}
+                  disabled={isUploadingOrgLogo || !orgLogoFile}
+                  className="btn-primary py-2 px-5 text-xs font-bold flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(168,85,247,0.3)] hover:shadow-[0_0_25px_rgba(168,85,247,0.5)] disabled:opacity-50"
+                >
+                  {isUploadingOrgLogo ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Publishing to IPFS...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-3.5 h-3.5" />
+                      <span>Save & Publish Rebrand</span>
+                    </>
+                  )}
+                </button>
               </div>
             </div>
           </div>
-        )}
-
-      </div>
+        </div>
+      )}
 
       {user?.isSuperAdmin && (
         <div className="mt-8 glass p-6 rounded-2xl border border-primary/20">
