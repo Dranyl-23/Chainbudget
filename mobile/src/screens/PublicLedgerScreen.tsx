@@ -78,6 +78,20 @@ const ORG_TYPE_MAP: Record<string, { label: string; icon: any; color: string }> 
   fundraising: { label: 'Charity Drive', icon: 'gift-outline', color: '#A3E635' },
 };
 
+const MOBILE_CATEGORIES = [
+  { id: 'all', label: 'All', icon: 'globe-outline' },
+  { id: 'cooperative', label: 'Cooperatives', icon: 'people-outline' },
+  { id: 'barangay', label: 'Barangays', icon: 'business-outline' },
+  { id: 'student_org', label: 'Student Orgs', icon: 'school-outline' },
+  { id: 'homeowners_association', label: 'HOA', icon: 'key-outline' },
+  { id: 'ngo', label: 'NGO / Non-Profit', icon: 'heart-outline' },
+  { id: 'church', label: 'Church', icon: 'home-outline' },
+  { id: 'sports_club', label: 'Sports', icon: 'trophy-outline' },
+  { id: 'startup', label: 'Startups', icon: 'rocket-outline' },
+  { id: 'family', label: 'Family', icon: 'people-circle-outline' },
+  { id: 'fundraising', label: 'Charity', icon: 'gift-outline' },
+];
+
 function getOrgTypeInfo(type?: string) {
   if (!type) return { label: 'DAO Workspace', icon: 'cube-outline', color: '#C084FC' };
   return ORG_TYPE_MAP[type.toLowerCase()] || {
@@ -99,6 +113,7 @@ export default function PublicLedgerScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'feed' | 'directory'>('feed');
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedOrgFilter, setSelectedOrgFilter] = useState<string | null>(null);
 
   const fetchData = async () => {
@@ -141,6 +156,16 @@ export default function PublicLedgerScreen() {
     });
   };
 
+  // Category counts
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: organizations.length };
+    organizations.forEach((o) => {
+      const typeKey = (o.type || '').toLowerCase();
+      counts[typeKey] = (counts[typeKey] || 0) + 1;
+    });
+    return counts;
+  }, [organizations]);
+
   // Filtered Feed
   const filteredFeed = useMemo(() => {
     return feed.filter((tx) => {
@@ -148,6 +173,12 @@ export default function PublicLedgerScreen() {
         ? tx.organization?._id === selectedOrgFilter || tx.organization === selectedOrgFilter
         : true;
       if (!matchesOrg) return false;
+
+      const orgType = (tx.organization?.type || '').toLowerCase();
+      const matchesCategory =
+        selectedCategory === 'all' || orgType === selectedCategory.toLowerCase();
+      if (!matchesCategory) return false;
+
       if (!searchQuery.trim()) return true;
 
       const q = searchQuery.toLowerCase();
@@ -156,19 +187,22 @@ export default function PublicLedgerScreen() {
       const amountStr = String(tx.amount || '');
       return desc.includes(q) || orgName.includes(q) || amountStr.includes(q);
     });
-  }, [feed, searchQuery, selectedOrgFilter]);
+  }, [feed, searchQuery, selectedOrgFilter, selectedCategory]);
 
   // Filtered Directory
   const filteredOrgs = useMemo(() => {
-    if (!searchQuery.trim()) return organizations;
-    const q = searchQuery.toLowerCase();
     return organizations.filter((org) => {
-      const name = (org.name || '').toLowerCase();
-      const type = (org.type || '').toLowerCase();
-      const desc = (org.description || '').toLowerCase();
-      return name.includes(q) || type.includes(q) || desc.includes(q);
+      const q = searchQuery.toLowerCase().trim();
+      const matchesSearch = !q ||
+        (org.name || '').toLowerCase().includes(q) ||
+        (org.type || '').toLowerCase().includes(q) ||
+        (org.description || '').toLowerCase().includes(q);
+      const matchesCategory =
+        selectedCategory === 'all' ||
+        (org.type || '').toLowerCase() === selectedCategory.toLowerCase();
+      return matchesSearch && matchesCategory;
     });
-  }, [organizations, searchQuery]);
+  }, [organizations, searchQuery, selectedCategory]);
 
   return (
     <View style={{ backgroundColor: colors.background, flex: 1 }}>
@@ -282,6 +316,85 @@ export default function PublicLedgerScreen() {
               <Ionicons name="close-circle" size={16} color={colors.textMuted} />
             </TouchableOpacity>
           )}
+        </View>
+
+        {/* Category Horizontal Filter Pills */}
+        <View style={{ marginTop: 10 }}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingHorizontal: 2, gap: 8 }}
+          >
+            {MOBILE_CATEGORIES.map((cat) => {
+              const count = categoryCounts[cat.id] || 0;
+              const isSelected = selectedCategory === cat.id;
+
+              if (cat.id !== 'all' && count === 0) return null;
+
+              return (
+                <TouchableOpacity
+                  key={cat.id}
+                  onPress={() => {
+                    triggerLightHaptic();
+                    setSelectedCategory(cat.id);
+                  }}
+                  activeOpacity={0.75}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    paddingHorizontal: 12,
+                    paddingVertical: 7,
+                    borderRadius: 14,
+                    backgroundColor: isSelected
+                      ? colors.primary
+                      : isDark
+                      ? 'rgba(255, 255, 255, 0.06)'
+                      : colors.backgroundSecondary,
+                    borderColor: isSelected ? colors.primary : colors.borderSubtle,
+                    borderWidth: 1,
+                  }}
+                >
+                  <Ionicons
+                    name={cat.icon as any}
+                    size={13}
+                    color={isSelected ? '#ffffff' : colors.textSecondary}
+                  />
+                  <Text
+                    style={{
+                      color: isSelected ? '#ffffff' : colors.textSecondary,
+                      fontSize: 12,
+                      fontWeight: isSelected ? '700' : '600',
+                    }}
+                  >
+                    {cat.label}
+                  </Text>
+                  <View
+                    style={{
+                      backgroundColor: isSelected
+                        ? 'rgba(0, 0, 0, 0.25)'
+                        : isDark
+                        ? 'rgba(255, 255, 255, 0.1)'
+                        : 'rgba(0, 0, 0, 0.06)',
+                      paddingHorizontal: 5,
+                      paddingVertical: 1,
+                      borderRadius: 8,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: isSelected ? '#ffffff' : colors.textMuted,
+                        fontSize: 10,
+                        fontWeight: '700',
+                      }}
+                    >
+                      {count}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
         </View>
 
         {/* Active Filter Pill */}
@@ -455,6 +568,24 @@ export default function PublicLedgerScreen() {
         ) : (
           /* ── DIRECTORY ────────────────────────────────────────── */
           <View style={{ padding: 16, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+            {/* Category Directory Header */}
+            <View style={{ width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, paddingHorizontal: 2 }}>
+              <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: '600' }}>
+                Showing <Text style={{ color: colors.primary, fontWeight: '800' }}>{filteredOrgs.length}</Text> organization{filteredOrgs.length === 1 ? '' : 's'}
+                {selectedCategory !== 'all' ? ` in ${selectedCategory.replace(/_/g, ' ')}` : ''}
+              </Text>
+              {selectedCategory !== 'all' && (
+                <TouchableOpacity
+                  onPress={() => {
+                    triggerLightHaptic();
+                    setSelectedCategory('all');
+                  }}
+                >
+                  <Text style={{ color: colors.primary, fontSize: 11, fontWeight: '700' }}>Reset Filter</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
             {filteredOrgs.length === 0 ? (
               <View className="w-full py-16 items-center justify-center">
                 <Ionicons name="business-outline" size={48} color={colors.textMuted} />
@@ -462,7 +593,7 @@ export default function PublicLedgerScreen() {
                   No organizations found
                 </Text>
                 <Text style={{ color: colors.textMuted }} className="text-xs mt-1 text-center">
-                  Try searching for another name or organizational type.
+                  Try selecting another category or clearing your search.
                 </Text>
               </View>
             ) : (

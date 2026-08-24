@@ -53,6 +53,33 @@ function ExplorerOrgLogo({ logoUrl, name }: { logoUrl?: string; name: string }) 
   );
 }
 
+const ORG_TYPE_LABELS: Record<string, { label: string; color: string; badgeBg: string; border: string }> = {
+  cooperative: { label: "Cooperative", color: "text-emerald-400", badgeBg: "bg-emerald-500/10", border: "border-emerald-500/20" },
+  barangay: { label: "Barangay LGU", color: "text-sky-400", badgeBg: "bg-sky-500/10", border: "border-sky-500/20" },
+  student_org: { label: "Student Org", color: "text-purple-400", badgeBg: "bg-purple-500/10", border: "border-purple-500/20" },
+  homeowners_association: { label: "Homeowners (HOA)", color: "text-amber-400", badgeBg: "bg-amber-500/10", border: "border-amber-500/20" },
+  ngo: { label: "Non-Profit / NGO", color: "text-rose-400", badgeBg: "bg-rose-500/10", border: "border-rose-500/20" },
+  church: { label: "Church / Religious", color: "text-indigo-400", badgeBg: "bg-indigo-500/10", border: "border-indigo-500/20" },
+  sports_club: { label: "Sports & Club", color: "text-yellow-400", badgeBg: "bg-yellow-500/10", border: "border-yellow-500/20" },
+  startup: { label: "Startup / Company", color: "text-cyan-400", badgeBg: "bg-cyan-500/10", border: "border-cyan-500/20" },
+  family: { label: "Family / Estate", color: "text-lime-400", badgeBg: "bg-lime-500/10", border: "border-lime-500/20" },
+  fundraising: { label: "Fundraising Campaign", color: "text-pink-400", badgeBg: "bg-pink-500/10", border: "border-pink-500/20" },
+};
+
+const CATEGORIES = [
+  { id: "all", label: "All Categories" },
+  { id: "cooperative", label: "Cooperatives" },
+  { id: "barangay", label: "Barangay LGUs" },
+  { id: "student_org", label: "Student Orgs" },
+  { id: "homeowners_association", label: "HOA / Communities" },
+  { id: "ngo", label: "Non-Profit / NGO" },
+  { id: "church", label: "Church / Religious" },
+  { id: "sports_club", label: "Sports & Clubs" },
+  { id: "startup", label: "Startups & Companies" },
+  { id: "family", label: "Family & Estates" },
+  { id: "fundraising", label: "Fundraising & Charity" },
+];
+
 interface FeedTx {
   _id: string;
   amount: number;
@@ -67,6 +94,7 @@ export default function ExplorerPage() {
   const [orgs, setOrgs] = useState<Organization[]>([]);
   const [feed, setFeed] = useState<FeedTx[]>([]);
   const [search, setSearch] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("all");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -87,7 +115,25 @@ export default function ExplorerPage() {
     fetchData();
   }, []);
 
-  const filteredOrgs = orgs.filter(o => o.name.toLowerCase().includes(search.toLowerCase()));
+  // Category counts
+  const categoryCounts = React.useMemo(() => {
+    const counts: Record<string, number> = { all: orgs.length };
+    orgs.forEach((o) => {
+      const typeKey = o.type?.toLowerCase() || 'other';
+      counts[typeKey] = (counts[typeKey] || 0) + 1;
+    });
+    return counts;
+  }, [orgs]);
+
+  const filteredOrgs = orgs.filter((o) => {
+    const q = search.toLowerCase().trim();
+    const matchesSearch = !q ||
+      o.name.toLowerCase().includes(q) ||
+      (o.description && o.description.toLowerCase().includes(q)) ||
+      (o.type && o.type.toLowerCase().includes(q));
+    const matchesCategory = selectedCategory === "all" || o.type?.toLowerCase() === selectedCategory.toLowerCase();
+    return matchesSearch && matchesCategory;
+  });
 
   const getScoreColor = (score: number) => {
     if (score >= 90) return "text-green-400 bg-green-400/10 border-green-400/30";
@@ -164,68 +210,139 @@ export default function ExplorerPage() {
             <Search className="w-6 h-6 text-white/40 ml-5" />
             <input
               type="text"
-              placeholder="Search for an organization..."
+              placeholder="Search by name, category, or description..."
               className="w-full bg-transparent !border-none !outline-none !ring-0 focus:!border-transparent focus:!ring-0 focus:!outline-none text-white placeholder-white/40 px-4 py-4 text-lg rounded-r-xl shadow-none"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
         </div>
+
+        {/* ── Category Filter Pills ── */}
+        <div className="mt-8 flex items-center justify-center gap-2 flex-wrap max-w-5xl mx-auto">
+          {CATEGORIES.map((cat) => {
+            const count = categoryCounts[cat.id] || 0;
+            const isSelected = selectedCategory === cat.id;
+
+            // Only show categories that have at least 1 org OR if it's "all"
+            if (cat.id !== "all" && count === 0) return null;
+
+            return (
+              <button
+                key={cat.id}
+                onClick={() => setSelectedCategory(cat.id)}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all duration-200 flex items-center gap-2 cursor-pointer ${
+                  isSelected
+                    ? "bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white shadow-[0_0_20px_rgba(34,211,238,0.35)] scale-105"
+                    : "bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/10"
+                }`}
+              >
+                <span>{cat.label}</span>
+                <span
+                  className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono ${
+                    isSelected ? "bg-black/30 text-white" : "bg-white/10 text-white/50"
+                  }`}
+                >
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </header>
 
       {/* ── Org Grid ── */}
       <section className="px-6 pb-32 max-w-7xl mx-auto">
+        <div className="flex items-center justify-between mb-6">
+          <p className="text-sm text-white/50">
+            Showing <span className="font-bold text-cyan-400">{filteredOrgs.length}</span> organization{filteredOrgs.length === 1 ? '' : 's'}
+            {selectedCategory !== 'all' && (
+              <> in <span className="font-bold text-white capitalize">{selectedCategory.replace('_', ' ')}</span></>
+            )}
+          </p>
+          {selectedCategory !== 'all' && (
+            <button
+              onClick={() => setSelectedCategory('all')}
+              className="text-xs text-fuchsia-400 hover:text-fuchsia-300 underline font-medium cursor-pointer"
+            >
+              Reset filter
+            </button>
+          )}
+        </div>
+
         {loading ? (
           <div className="flex justify-center py-20">
             <div className="w-10 h-10 border-4 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin" />
           </div>
         ) : filteredOrgs.length === 0 ? (
-          <div className="text-center py-20 text-white/40">
-            <p>No organizations found matching your search.</p>
+          <div className="text-center py-20 text-white/40 glass rounded-3xl border border-white/5 p-12">
+            <Globe className="w-12 h-12 text-white/20 mx-auto mb-4" />
+            <p className="text-lg font-bold text-white mb-1">No organizations found</p>
+            <p className="text-sm text-white/40 max-w-md mx-auto mb-6">
+              No organizations match the selected category &ldquo;{selectedCategory}&rdquo; and search query.
+            </p>
+            <button
+              onClick={() => {
+                setSelectedCategory('all');
+                setSearch('');
+              }}
+              className="px-4 py-2 rounded-xl bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-xs font-bold hover:bg-cyan-500/30 transition-colors cursor-pointer"
+            >
+              Clear filters
+            </button>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredOrgs.map((org) => (
-              <Link href={`/explorer/${org._id}`} key={org._id} className="block group">
-                <div className="glass p-6 rounded-2xl border border-white/5 hover:border-cyan-500/30 transition-all duration-300 hover:-translate-y-1 shadow-[0_10px_30px_rgba(0,0,0,0.5)] hover:shadow-[0_15px_40px_rgba(34,211,238,0.15)] relative overflow-hidden h-full flex flex-col">
-                  {/* Subtle background glow on hover */}
-                  <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/0 via-transparent to-purple-500/0 group-hover:from-cyan-500/5 group-hover:to-purple-500/5 transition-colors duration-500 pointer-events-none" />
-                  
-                  <div className="flex items-start justify-between mb-6 relative z-10">
-                    <ExplorerOrgLogo logoUrl={org.logoUrl} name={org.name} />
-                    <div className="flex flex-col items-end gap-1.5">
-                      <div className="flex items-center gap-1.5">
-                        {org.isPrivate && (
-                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-fuchsia-500/15 text-fuchsia-300 border border-fuchsia-500/30 flex items-center gap-1">
-                            <Lock className="w-2.5 h-2.5" /> Private
+            {filteredOrgs.map((org) => {
+              const typeConfig = ORG_TYPE_LABELS[org.type?.toLowerCase()] || {
+                label: org.type ? org.type.replace('_', ' ').toUpperCase() : 'ORG',
+                color: 'text-cyan-400',
+                badgeBg: 'bg-cyan-500/10',
+                border: 'border-cyan-500/20',
+              };
+
+              return (
+                <Link href={`/explorer/${org._id}`} key={org._id} className="block group">
+                  <div className="glass p-6 rounded-2xl border border-white/5 hover:border-cyan-500/30 transition-all duration-300 hover:-translate-y-1 shadow-[0_10px_30px_rgba(0,0,0,0.5)] hover:shadow-[0_15px_40px_rgba(34,211,238,0.15)] relative overflow-hidden h-full flex flex-col">
+                    {/* Subtle background glow on hover */}
+                    <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/0 via-transparent to-purple-500/0 group-hover:from-cyan-500/5 group-hover:to-purple-500/5 transition-colors duration-500 pointer-events-none" />
+                    
+                    <div className="flex items-start justify-between mb-6 relative z-10">
+                      <ExplorerOrgLogo logoUrl={org.logoUrl} name={org.name} />
+                      <div className="flex flex-col items-end gap-1.5">
+                        <div className="flex items-center gap-1.5">
+                          {org.isPrivate && (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-fuchsia-500/15 text-fuchsia-300 border border-fuchsia-500/30 flex items-center gap-1">
+                              <Lock className="w-2.5 h-2.5" /> Private
+                            </span>
+                          )}
+                          <span className={`px-2 py-1 rounded-md text-xs font-bold font-mono border ${getScoreColor(org.transparencyScore)} shadow-inner`}>
+                            {org.transparencyScore}%
                           </span>
-                        )}
-                        <span className={`px-2 py-1 rounded-md text-xs font-bold font-mono border ${getScoreColor(org.transparencyScore)} shadow-inner`}>
-                          {org.transparencyScore}%
-                        </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <h3 className="text-xl font-bold text-white mb-2 group-hover:text-cyan-300 transition-colors relative z-10">
+                      {org.name}
+                    </h3>
+                    <p className="text-sm text-white/50 line-clamp-2 mb-6 flex-1 relative z-10">
+                      {org.description || `A registered ${typeConfig.label} organization on ChainBudget.`}
+                    </p>
+
+                    <div className="flex items-center justify-between pt-4 border-t border-white/5 mt-auto relative z-10">
+                      <div className={`flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-lg border ${typeConfig.badgeBg} ${typeConfig.border} ${typeConfig.color}`}>
+                        <ShieldCheck className="w-3.5 h-3.5 opacity-80" />
+                        {typeConfig.label}
+                      </div>
+                      <div className="flex items-center gap-1 text-sm font-bold text-fuchsia-400 group-hover:text-fuchsia-300 transition-colors">
+                        {org.isPrivate ? "View Info" : "View Ledger"} <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                       </div>
                     </div>
                   </div>
-
-                  <h3 className="text-xl font-bold text-white mb-2 group-hover:text-cyan-300 transition-colors relative z-10">
-                    {org.name}
-                  </h3>
-                  <p className="text-sm text-white/50 line-clamp-2 mb-6 flex-1 relative z-10">
-                    {org.description || `A ${org.type ? org.type.replace('_', ' ') : 'registered'} organization on ChainBudget.`}
-                  </p>
-
-                  <div className="flex items-center justify-between pt-4 border-t border-white/5 mt-auto relative z-10">
-                    <div className="flex items-center gap-1.5 text-xs text-white/40">
-                      <ShieldCheck className="w-4 h-4 text-cyan-500/50" />
-                      {org.type ? org.type.replace('_', ' ').toUpperCase() : 'ORG'}
-                    </div>
-                    <div className="flex items-center gap-1 text-sm font-bold text-fuchsia-400 group-hover:text-fuchsia-300 transition-colors">
-                      {org.isPrivate ? "View Info" : "View Ledger"} <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                    </div>
-                  </div>
-                </div>
-              </Link>
-            ))}
+                </Link>
+              );
+            })}
           </div>
         )}
       </section>
