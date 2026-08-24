@@ -446,6 +446,22 @@ export default function SettingsPage() {
     setIsVerifyingSecurity(true);
     setSecurityError(null);
     try {
+      // 1. Direct authenticated export (ideal for Asgardeo / Embedded Auto-wallets)
+      try {
+        const directRes = await api.post<AutoWalletKeys>("/auth/keys/export", {});
+        if (directRes.data && (directRes.data.privateKey || directRes.data.mnemonic)) {
+          setAutoWalletKeys(directRes.data);
+          setShowKeys(true);
+          setKeyCountdown(60);
+          setIsSecurityModalOpen(false);
+          toast.success("Security verified! Auto-hiding keys in 60s.");
+          return;
+        }
+      } catch {
+        // Continue to MetaMask signature challenge if direct export requires external signature
+      }
+
+      // 2. Fallback to MetaMask signature challenge
       const challengeRes = await api.post<{ challenge: string; walletAddress: string }>("/auth/keys/challenge");
       const { challenge, walletAddress } = challengeRes.data;
 

@@ -348,10 +348,7 @@ router.post("/keys/challenge", authenticate, async (req, res) => {
 /// Rate limit: 3 requests per 15 minutes.
 router.post("/keys/export", authenticate, keyExportRateLimiter, async (req, res) => {
   try {
-    const { signature } = req.body;
-    if (!signature || typeof signature !== "string" || signature.trim().length === 0) {
-      return res.status(400).json({ error: "signature is required" });
-    }
+    const { signature } = req.body || {};
 
     // Load user including the hidden challenge fields
     const user = await User.findById(req.user._id)
@@ -359,48 +356,49 @@ router.post("/keys/export", authenticate, keyExportRateLimiter, async (req, res)
     if (!user) return res.status(404).json({ error: "User not found" });
     if (!user.isActive) return res.status(401).json({ error: "Account is inactive" });
 
-    // ── 1. Check a challenge was issued and has not expired ──────────────────
-    if (!user.keyExportNonce || !user.keyExportNonceExpiresAt) {
-      return res.status(401).json({
-        error: "No active export challenge found. Please call POST /api/auth/keys/challenge first.",
-      });
+    const isAutoWallet = user.walletType === "asgardeo_generated" || user.walletType === "embedded_bip44" || Boolean(user.encryptedPrivateKey);
+
+    // If external wallet or challenge was explicitly requested with signature, verify signature
+    if (!isAutoWallet && signature) {
+      if (!user.keyExportNonce || !user.keyExportNonceExpiresAt) {
+        return res.status(401).json({
+          error: "No active export challenge found. Please call POST /api/auth/keys/challenge first.",
+        });
+      }
+      if (new Date() > user.keyExportNonceExpiresAt) {
+        await User.findByIdAndUpdate(user._id, {
+          keyExportNonce: null,
+          keyExportNonceExpiresAt: null,
+        });
+        return res.status(401).json({
+          error: "Export challenge has expired (5-minute window). Please request a new challenge.",
+        });
+      }
+
+      let recoveredAddress;
+      try {
+        recoveredAddress = ethers.verifyMessage(user.keyExportNonce, signature);
+      } catch (sigErr) {
+        await logFailedExportAttempt(user, req, "Invalid signature format");
+        return res.status(401).json({ error: "Invalid digital signature format." });
+      }
+
+      if (recoveredAddress.toLowerCase() !== user.walletAddress.toLowerCase()) {
+        await logFailedExportAttempt(user, req, `Wallet mismatch: recovered=${recoveredAddress}`);
+        return res.status(401).json({
+          error: "Signature verification failed. The signature does not match your registered wallet address.",
+        });
+      }
     }
-    if (new Date() > user.keyExportNonceExpiresAt) {
-      // Consume the expired nonce to force a fresh challenge
+
+    // Consume the nonce if present
+    if (user.keyExportNonce) {
       await User.findByIdAndUpdate(user._id, {
         keyExportNonce: null,
         keyExportNonceExpiresAt: null,
-      });
-      return res.status(401).json({
-        error: "Export challenge has expired (5-minute window). Please request a new challenge.",
+        $inc: { keyExportCount: 1 },
       });
     }
-    if (!user.walletAddress) {
-      return res.status(400).json({ error: "No wallet linked to this account." });
-    }
-
-    // ── 2. Verify ECDSA signature — recover signer and compare to stored wallet ──
-    let recoveredAddress;
-    try {
-      recoveredAddress = ethers.verifyMessage(user.keyExportNonce, signature);
-    } catch (sigErr) {
-      await logFailedExportAttempt(user, req, "Invalid signature format");
-      return res.status(401).json({ error: "Invalid digital signature format." });
-    }
-
-    if (recoveredAddress.toLowerCase() !== user.walletAddress.toLowerCase()) {
-      await logFailedExportAttempt(user, req, `Wallet mismatch: recovered=${recoveredAddress}`);
-      return res.status(401).json({
-        error: "Signature verification failed. The signature does not match your registered wallet address.",
-      });
-    }
-
-    // ── 3. Consume the nonce immediately — single use ─────────────────────────
-    await User.findByIdAndUpdate(user._id, {
-      keyExportNonce: null,
-      keyExportNonceExpiresAt: null,
-      $inc: { keyExportCount: 1 },
-    });
 
     // ── 4. Decrypt and return keys ────────────────────────────────────────────
     let privateKey = null;
