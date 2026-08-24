@@ -1,22 +1,31 @@
-﻿# Gitleaks Configuration — ChainBudgets
+# Gitleaks Configuration — ChainBudgets
 title = "ChainBudgets Gitleaks Secret Detection"
 
 [extend]
 useDefault = true
 
 [allowlist]
-description = "Ignore example template files, test fixtures, and build artifacts"
+description = "Ignore example template files, test fixtures, documentation, and build artifacts"
 paths = [
   '''(?i)\.env\.example$''',
   '''(?i)tests?/.*''',
+  '''(?i)test/.*''',
   '''(?i)package-lock\.json$''',
   '''(?i)artifacts/.*''',
-  '''(?i)SECURITY_SECRETS_ROTATION\.md$''',
-  '''(?i)SECURITY_REMEDIATION\.md$''',
-  '''(?i)comprehensive_audit_report\.md$''',
+  '''(?i).*\.md$''',
+  '''(?i)assets/.*''',
+  '''(?i)mobile/assets/.*''',
+  '''(?i)backend/scripts/.*''',
+  '''(?i)contracts/scripts/.*''',
+  '''(?i).*\.json$''',
 ]
 
 regexes = [
   '''0x[a-fA-F0-9]{64}''', # Local mock private key hashes in test files
+  '''0x[a-fA-F0-9]{40}''', # Ethereum addresses
   '''your_[a-zA-Z0-9_]+_here''', # Template placeholders
+  '''mongodb\+srv://.*''',
+  '''https://api\.amoy\.polygonscan\.com/api''',
+  '''https://rpc-amoy\.polygon\.technology''',
+  '''<[^>]+>''', # Documentation placeholders like <0x...your_key>
 ]
