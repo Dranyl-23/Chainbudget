@@ -19,7 +19,8 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
 import { useOrg } from '../context/OrgContext';
-import { triggerLightHaptic, triggerSuccessHaptic } from '../lib/biometrics';
+import { useToast } from '../context/ToastContext';
+import { triggerLightHaptic, triggerSuccessHaptic, triggerErrorHaptic } from '../lib/biometrics';
 import api from '../lib/api';
 
 type FeedbackType = 'bug' | 'suggestion' | 'usability' | 'general';
@@ -28,15 +29,16 @@ const CATEGORIES: { id: FeedbackType; label: string; icon: keyof typeof Ionicons
   { id: 'bug', label: 'Bug Report', icon: 'bug-outline', color: '#EF4444', desc: 'Broken feature or glitch' },
   { id: 'suggestion', label: 'Feature Idea', icon: 'bulb-outline', color: '#10B981', desc: 'New functionality request' },
   { id: 'usability', label: 'UI / UX', icon: 'color-palette-outline', color: '#6366F1', desc: 'Design or layout feedback' },
-  { id: 'general', label: 'General', icon: 'chatbox-ellipses-outline', color: '#F59E0B', desc: 'Questions or overall review' },
+  { id: 'general', label: 'General Feedback', icon: 'chatbox-ellipses-outline', color: '#F59E0B', desc: 'General thoughts or compliments' },
 ];
 
 export default function FeedbackScreen() {
   const navigation = useNavigation<any>();
   const { colors, isDark } = useTheme();
   const { activeOrgId } = useOrg();
+  const { showToast } = useToast();
 
-  const [type, setType] = useState<FeedbackType>('bug');
+  const [type, setType] = useState<FeedbackType>('suggestion');
   const [rating, setRating] = useState<number>(5);
   const [title, setTitle] = useState<string>('');
   const [message, setMessage] = useState<string>('');
@@ -55,7 +57,7 @@ export default function FeedbackScreen() {
     try {
       await triggerLightHaptic();
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         quality: 0.8,
       });
@@ -75,7 +77,7 @@ export default function FeedbackScreen() {
 
   const handleSubmit = async () => {
     if (!message.trim()) {
-      Alert.alert('Message Required', 'Please provide a description of your feedback or issue.');
+      showToast('Please provide a description of your feedback or issue.', 'warning');
       return;
     }
 
@@ -146,7 +148,8 @@ export default function FeedbackScreen() {
 
     } catch (err: any) {
       console.error('Feedback submit error:', err);
-      Alert.alert('Submission Error', err.response?.data?.error || 'Failed to submit feedback. Please try again.');
+      await triggerErrorHaptic();
+      showToast(err.response?.data?.error || 'Failed to submit feedback. Please try again.', 'error');
     } finally {
       setSubmitting(false);
       setUploadingImage(false);

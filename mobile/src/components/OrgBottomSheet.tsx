@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   TouchableWithoutFeedback,
   ScrollView,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -121,13 +122,21 @@ function OrgBottomSheet({
                           backgroundColor: isActive ? colors.primaryMuted : (isDark ? 'rgba(0,0,0,0.4)' : colors.backgroundSecondary),
                           borderColor: isActive ? colors.primary : colors.border,
                         }}
-                        className="w-12 h-12 rounded-2xl items-center justify-center mr-4 border"
+                        className="w-12 h-12 rounded-2xl items-center justify-center mr-4 border overflow-hidden"
                       >
-                        <Ionicons
-                          name="business"
-                          size={22}
-                          color={isActive ? colors.primary : colors.textMuted}
-                        />
+                        {org.logoUrl ? (
+                          <Image
+                            source={{ uri: org.logoUrl }}
+                            style={{ width: '100%', height: '100%' }}
+                            resizeMode="cover"
+                          />
+                        ) : (
+                          <Ionicons
+                            name="business"
+                            size={22}
+                            color={isActive ? colors.primary : colors.textMuted}
+                          />
+                        )}
                       </View>
 
                       {/* Org Details */}

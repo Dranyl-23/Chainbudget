@@ -20,6 +20,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Clipboard from 'expo-clipboard';
 import { useTheme } from '../context/ThemeContext';
 import { useOrg } from '../context/OrgContext';
+import { useToast } from '../context/ToastContext';
 import { triggerLightHaptic, triggerSuccessHaptic } from '../lib/biometrics';
 import {
   fetchLiveProtocolConfig,
@@ -31,6 +32,7 @@ import {
 export default function NetworkStatusScreen() {
   const { colors, isDark } = useTheme();
   const { organizations, activeOrgId } = useOrg();
+  const { showToast } = useToast();
   const activeOrg = organizations.find((o) => o._id === activeOrgId);
 
   const [protocolInfo, setProtocolInfo] = useState<LiveProtocolResponse | null>(null);
@@ -38,13 +40,36 @@ export default function NetworkStatusScreen() {
   const [checkingPing, setCheckingPing] = useState<boolean>(false);
 
   useEffect(() => {
-    async function loadProtocol() {
-      const data = await fetchLiveProtocolConfig();
-      setProtocolInfo(data);
-    }
-    loadProtocol();
-    checkLatency();
+    loadProtocolConfig();
+    measureRpcPing();
   }, []);
+
+  const loadProtocolConfig = async () => {
+    const data = await fetchLiveProtocolConfig();
+    setProtocolInfo(data);
+  };
+
+  const measureRpcPing = async () => {
+    setCheckingPing(true);
+    const start = Date.now();
+    try {
+      const rpcUrl = protocolInfo?.network.rpcUrl || PROTOCOL_CONFIG.network.rpcUrl;
+      const res = await fetch(rpcUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', method: 'eth_blockNumber', params: [], id: 1 }),
+      });
+      if (res.ok) {
+        setPingLatency(Date.now() - start);
+      } else {
+        setPingLatency(Date.now() - start);
+      }
+    } catch {
+      setPingLatency(Date.now() - start);
+    } finally {
+      setCheckingPing(false);
+    }
+  };
 
   const network = protocolInfo?.network || PROTOCOL_CONFIG.network;
   const contracts = protocolInfo?.contracts || PROTOCOL_CONFIG.contracts;
@@ -57,27 +82,10 @@ export default function NetworkStatusScreen() {
       ? activeOrg.vaultAddress
       : contracts.masterTreasury;
 
-  const checkLatency = async () => {
-    setCheckingPing(true);
-    const start = Date.now();
-    try {
-      await fetch(network.rpcUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jsonrpc: '2.0', method: 'eth_blockNumber', params: [], id: 1 }),
-      });
-      setPingLatency(Date.now() - start);
-    } catch {
-      setPingLatency(Date.now() - start);
-    } finally {
-      setCheckingPing(false);
-    }
-  };
-
   const copyText = async (text: string, label: string) => {
     await Clipboard.setStringAsync(text);
     await triggerSuccessHaptic();
-    Alert.alert('Copied!', `${label} copied to clipboard.`);
+    showToast(`${label} copied to clipboard!`, 'info');
   };
 
   return (
@@ -236,7 +244,7 @@ export default function NetworkStatusScreen() {
           <TouchableOpacity
             onPress={() => {
               triggerLightHaptic();
-              checkLatency();
+              measureRpcPing();
             }}
             disabled={checkingPing}
             style={{

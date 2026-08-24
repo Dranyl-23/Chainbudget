@@ -13,12 +13,12 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  Alert,
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { useTheme } from '../context/ThemeContext';
+import { useToast } from '../context/ToastContext';
 import { triggerLightHaptic, triggerSuccessHaptic } from '../lib/biometrics';
 import ScaleButton from '../components/ScaleButton';
 
@@ -28,46 +28,57 @@ function formatFullDate(dateString?: string) {
   if (isNaN(date.getTime())) return dateString;
 
   return date.toLocaleDateString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
+    weekday: 'short',
+    month: 'short',
     day: 'numeric',
-    hour: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
     minute: '2-digit',
-    hour12: true,
   });
 }
 
 export default function NotificationDetailScreen() {
-  const { colors, isDark } = useTheme();
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
+  const { colors, isDark } = useTheme();
+  const { showToast } = useToast();
 
-  const notif = route.params?.notif || {};
+  const notif = route.params?.notification;
+  if (!notif) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+        <Ionicons name="notifications-off-outline" size={48} color={colors.textMuted} />
+        <Text style={{ color: colors.textSecondary, marginTop: 12, fontSize: 14 }}>
+          No notification details available.
+        </Text>
+      </View>
+    );
+  }
+
   const title = notif.title || 'Notification';
-  const message = notif.message || 'No message details available.';
-  const timestamp = notif.timestamp || notif.createdAt;
+  const message = notif.message || '';
+  const dateFormatted = formatFullDate(notif.createdAt);
 
-  // Smart Category Detection
+  // Category Tag Resolution
   const lowerTitle = title.toLowerCase();
   const lowerMsg = message.toLowerCase();
 
   let categoryName = 'SYSTEM ANNOUNCEMENT';
-  let categoryIcon: any = 'information-circle';
+  let categoryIcon: keyof typeof Ionicons.glyphMap = 'information-circle';
   let categoryColor = '#38BDF8';
   let categoryBg = 'rgba(56, 189, 248, 0.15)';
-  let actionType: 'dao' | 'approvals' | 'history' | null = null;
+  let actionType: 'dao' | 'approvals' | 'history' | 'default' = 'default';
   let actionLabel = 'Back to Notifications';
 
-  if (lowerTitle.includes('proposal') || lowerMsg.includes('proposal') || lowerMsg.includes('proposed')) {
+  if (lowerTitle.includes('dao') || lowerTitle.includes('proposal') || lowerMsg.includes('proposal') || notif.type === 'dao_proposal') {
     categoryName = 'DAO GOVERNANCE';
-    categoryIcon = 'library';
-    categoryColor = '#C084FC';
-    categoryBg = 'rgba(192, 132, 252, 0.15)';
+    categoryIcon = 'planet';
+    categoryColor = '#A855F7';
+    categoryBg = 'rgba(168, 85, 247, 0.15)';
     actionType = 'dao';
     actionLabel = 'Go to DAO Proposals';
-  } else if (lowerTitle.includes('approval') || lowerMsg.includes('approval') || notif.type === 'urgent') {
-    categoryName = 'APPROVAL REQUIRED';
+  } else if (lowerTitle.includes('approval') || lowerMsg.includes('approval') || lowerTitle.includes('pending') || notif.type === 'approval_request') {
+    categoryName = 'TREASURY APPROVAL';
     categoryIcon = 'shield-checkmark';
     categoryColor = '#F59E0B';
     categoryBg = 'rgba(245, 158, 11, 0.15)';
@@ -85,7 +96,7 @@ export default function NotificationDetailScreen() {
   const handleCopyMessage = async () => {
     await Clipboard.setStringAsync(message);
     await triggerSuccessHaptic();
-    Alert.alert('Copied', 'Notification message copied to clipboard.');
+    showToast('Notification message copied to clipboard!', 'info');
   };
 
   const handleAction = () => {
@@ -146,7 +157,7 @@ export default function NotificationDetailScreen() {
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20, gap: 6 }}>
           <Ionicons name="time-outline" size={14} color={colors.textMuted} />
           <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: '600' }}>
-            {formatFullDate(timestamp)}
+            {dateFormatted}
           </Text>
         </View>
 

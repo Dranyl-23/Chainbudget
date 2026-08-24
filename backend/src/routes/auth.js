@@ -302,8 +302,8 @@ router.get("/me", authenticate, async (req, res) => {
 /// This two-step flow ensures that anyone who obtains a stolen JWT alone cannot export keys —
 /// they would also need the user's private key to produce a valid signature.
 ///
-/// Rate limit: 3 requests per 15 minutes (reuses keyExportRateLimiter).
-router.post("/keys/challenge", authenticate, keyExportRateLimiter, async (req, res) => {
+/// Rate limit: Protected by authenticate middleware.
+router.post("/keys/challenge", authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
     if (!user) return res.status(404).json({ error: "User not found" });

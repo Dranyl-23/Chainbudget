@@ -6,7 +6,7 @@
  * expandable accordions for Chat Info, Members, Pinned Announcements, and Governance.
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -19,7 +19,10 @@ import {
   StyleSheet,
   Linking,
   Platform,
+  Modal,
+  Animated,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute, useNavigation } from '@react-navigation/native';
@@ -71,6 +74,31 @@ export default function OrgChatInfoScreen() {
   const [loading, setLoading] = useState(true);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [orgLogoUrl, setOrgLogoUrl] = useState<string | undefined>(currentOrg?.logo);
+
+  // Custom Success Confirmation Modal State
+  const [showEmblemSuccessModal, setShowEmblemSuccessModal] = useState(false);
+  const [uploadedEmblemUrl, setUploadedEmblemUrl] = useState<string | null>(null);
+  const emblemScaleAnim = useRef(new Animated.Value(0)).current;
+  const emblemPulseAnim = useRef(new Animated.Value(1)).current;
+
+  const triggerEmblemSuccessModal = (url: string) => {
+    setUploadedEmblemUrl(url);
+    setShowEmblemSuccessModal(true);
+    emblemScaleAnim.setValue(0);
+    Animated.spring(emblemScaleAnim, {
+      toValue: 1,
+      friction: 6,
+      tension: 40,
+      useNativeDriver: true,
+    }).start();
+
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(emblemPulseAnim, { toValue: 1.18, duration: 900, useNativeDriver: true }),
+        Animated.timing(emblemPulseAnim, { toValue: 1, duration: 900, useNativeDriver: true }),
+      ])
+    ).start();
+  };
 
   // Accordion toggle states (Messenger style)
   const [openSection, setOpenSection] = useState<{ [key: string]: boolean }>({
@@ -228,7 +256,7 @@ export default function OrgChatInfoScreen() {
         await api.patch(`/organizations/${orgId}`, { logoUrl: uploadedUrl });
         setOrgLogoUrl(uploadedUrl);
         await triggerSuccessHaptic();
-        Alert.alert('Success', 'Organization profile picture updated successfully!');
+        triggerEmblemSuccessModal(uploadedUrl);
       }
     } catch (err: any) {
       console.warn('[uploadPhoto error]', err?.response?.data || err.message);
@@ -665,6 +693,186 @@ export default function OrgChatInfoScreen() {
           )}
         </View>
       </ScrollView>
+
+      {/* ── CUSTOM EMBLEM REBRAND CONFIRMATION MODAL ── */}
+      <Modal
+        visible={showEmblemSuccessModal}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setShowEmblemSuccessModal(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0, 0, 0, 0.75)',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 24,
+          }}
+        >
+          <Animated.View
+            style={{
+              transform: [{ scale: emblemScaleAnim }],
+              backgroundColor: isDark ? '#13121d' : '#ffffff',
+              borderColor: colors.border,
+              borderWidth: 1.5,
+              borderRadius: 28,
+              padding: 24,
+              width: '100%',
+              maxWidth: 340,
+              alignItems: 'center',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.35,
+              shadowRadius: 20,
+              elevation: 10,
+            }}
+          >
+            {/* Glowing Pulse Ring + Emblem Avatar */}
+            <View style={{ alignItems: 'center', justifyContent: 'center', marginBottom: 18, marginTop: 4 }}>
+              <Animated.View
+                style={{
+                  position: 'absolute',
+                  width: 96,
+                  height: 96,
+                  borderRadius: 48,
+                  backgroundColor: colors.successBg || 'rgba(34, 197, 94, 0.15)',
+                  borderWidth: 1.5,
+                  borderColor: colors.successBorder || 'rgba(34, 197, 94, 0.3)',
+                  transform: [{ scale: emblemPulseAnim }],
+                }}
+              />
+              <View
+                style={{
+                  width: 76,
+                  height: 76,
+                  borderRadius: 26,
+                  backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+                  borderColor: '#10B981',
+                  borderWidth: 2.5,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  overflow: 'hidden',
+                  position: 'relative',
+                  shadowColor: '#10B981',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 10,
+                  elevation: 6,
+                }}
+              >
+                {uploadedEmblemUrl || orgLogoUrl ? (
+                  <Image
+                    source={{ uri: uploadedEmblemUrl || orgLogoUrl }}
+                    style={{ width: '100%', height: '100%' }}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <Ionicons name="business" size={36} color="#10B981" />
+                )}
+              </View>
+
+              {/* Success Green Check Badge */}
+              <View
+                style={{
+                  position: 'absolute',
+                  bottom: -4,
+                  right: -4,
+                  backgroundColor: '#10B981',
+                  width: 26,
+                  height: 26,
+                  borderRadius: 13,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderWidth: 2,
+                  borderColor: isDark ? '#13121d' : '#ffffff',
+                }}
+              >
+                <Ionicons name="checkmark" size={16} color="#ffffff" />
+              </View>
+            </View>
+
+            {/* Title & Org Name */}
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontSize: 19,
+                fontWeight: '900',
+                textAlign: 'center',
+                marginBottom: 4,
+              }}
+            >
+              Emblem Rebranded!
+            </Text>
+
+            <View
+              style={{
+                backgroundColor: colors.primaryMuted,
+                borderColor: colors.primary + '30',
+                borderWidth: 1,
+                paddingHorizontal: 12,
+                paddingVertical: 3,
+                borderRadius: 12,
+                marginBottom: 14,
+              }}
+            >
+              <Text
+                style={{
+                  color: colors.primary,
+                  fontSize: 12,
+                  fontWeight: '800',
+                }}
+              >
+                {orgDetails?.name || currentOrg?.name || 'Organization'}
+              </Text>
+            </View>
+
+            {/* Customized Message */}
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontSize: 13,
+                textAlign: 'center',
+                lineHeight: 18,
+                marginBottom: 22,
+                paddingHorizontal: 6,
+              }}
+            >
+              Your new organization logo and custom emblem have been published to IPFS and synchronized across the Public Ledger, Group Chats, and Member Dashboards.
+            </Text>
+
+            {/* Confirm / Continue Button */}
+            <TouchableOpacity
+              onPress={async () => {
+                await triggerSuccessHaptic();
+                setShowEmblemSuccessModal(false);
+              }}
+              activeOpacity={0.85}
+              style={{ width: '100%' }}
+            >
+              <LinearGradient
+                colors={['#10B981', '#059669']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={{
+                  borderRadius: 16,
+                  paddingVertical: 14,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexDirection: 'row',
+                  gap: 8,
+                }}
+              >
+                <Ionicons name="checkmark-circle" size={18} color="#ffffff" />
+                <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 15 }}>
+                  Done & Synchronized
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </Animated.View>
+        </View>
+      </Modal>
     </View>
   );
 }

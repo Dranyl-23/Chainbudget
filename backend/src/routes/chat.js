@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const mongoose = require("mongoose");
 const ChatMessage = require("../models/ChatMessage");
 const Organization = require("../models/Organization");
 const User = require("../models/User");
@@ -12,11 +13,14 @@ async function requireOrgMembership(req, res, next) {
     const { orgId } = req.params;
     if (!orgId) return res.status(400).json({ error: "orgId is required" });
 
-    const user = await User.findById(req.user.id).select("memberships displayName avatarUrl").lean();
+    const currentUserId = (req.user?._id || req.user?.id || req.user?.sub || req.auth?.sub || "").toString();
+    if (!currentUserId) return res.status(401).json({ error: "Authentication required" });
+
+    const user = await User.findById(currentUserId).select("memberships displayName avatarUrl").lean();
     if (!user) return res.status(404).json({ error: "User not found" });
 
     const membership = user.memberships?.find(
-      (m) => m.organization.toString() === orgId && m.isActive !== false
+      (m) => (m.organization?._id || m.organization || "").toString() === orgId && m.isActive !== false
     );
 
     if (!membership) {
@@ -224,6 +228,10 @@ router.post("/:orgId/messages/:messageId/react", authenticate, requireOrgMembers
       return res.status(400).json({ error: "Valid emoji string is required" });
     }
 
+    if (!mongoose.Types.ObjectId.isValid(messageId) || !mongoose.Types.ObjectId.isValid(orgId)) {
+      return res.status(400).json({ error: "Invalid message or organization ID" });
+    }
+
     const message = await ChatMessage.findOne({ _id: messageId, organization: orgId });
     if (!message) return res.status(404).json({ error: "Message not found" });
 
@@ -231,16 +239,24 @@ router.post("/:orgId/messages/:messageId/react", authenticate, requireOrgMembers
       message.reactions = [];
     }
 
-    const currentUserId = (req.user.id || req.user._id || "").toString();
+    const currentUserId = (req.user?._id || req.user?.id || req.user?.sub || req.auth?.sub || "").toString();
+    if (!currentUserId) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+
+    const userObjId = new mongoose.Types.ObjectId(currentUserId);
 
     let reactionGroup = message.reactions.find((r) => r.emoji === emoji);
     if (!reactionGroup) {
-      message.reactions.push({ emoji, users: [currentUserId] });
+      message.reactions.push({ emoji, users: [userObjId] });
     } else {
       if (!Array.isArray(reactionGroup.users)) {
         reactionGroup.users = [];
       }
-      const userIndex = reactionGroup.users.findIndex((u) => u.toString() === currentUserId);
+      const userIndex = reactionGroup.users.findIndex((u) => {
+        const uid = (u && u._id ? u._id : u || "").toString();
+        return uid === currentUserId;
+      });
       if (userIndex > -1) {
         // Toggle OFF (remove user reaction)
         reactionGroup.users.splice(userIndex, 1);
@@ -249,13 +265,13 @@ router.post("/:orgId/messages/:messageId/react", authenticate, requireOrgMembers
         }
       } else {
         // Toggle ON
-        reactionGroup.users.push(currentUserId);
+        reactionGroup.users.push(userObjId);
       }
     }
 
     message.markModified("reactions");
     await message.save();
-    await message.populate("reactions.users", "displayName avatarUrl");
+    await message.populate({ path: "reactions.users", select: "displayName avatarUrl" });
 
     const io = req.app.get("io");
     if (io) {
@@ -269,7 +285,7 @@ router.post("/:orgId/messages/:messageId/react", authenticate, requireOrgMembers
     res.json({ reactions: message.reactions });
   } catch (err) {
     console.error("[chat:react]", err);
-    res.status(500).json({ error: "Failed to react to message" });
+    res.status(500).json({ error: err?.message || "Failed to react to message" });
   }
 });
 

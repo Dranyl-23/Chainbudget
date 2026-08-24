@@ -70,9 +70,6 @@ export default function RestoreWalletScreen({ navigation }: any) {
         >
           {/* Header */}
           <View style={styles.header}>
-            <View style={styles.iconWrap}>
-              <Ionicons name="refresh-circle" size={36} color="#38bdf8" />
-            </View>
             <Text style={styles.title}>Restore Account</Text>
             <Text style={styles.subtitle}>
               Enter your 12-word recovery phrase to restore access to your account on this device.

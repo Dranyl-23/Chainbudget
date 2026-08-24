@@ -14,12 +14,14 @@ type SocketContextType = {
   socket: Socket | null;
   isConnected: boolean;
   on: (event: string, callback: (...args: any[]) => void) => () => void;
+  emit: (event: string, ...args: any[]) => void;
 };
 
 const SocketContext = createContext<SocketContextType>({
   socket: null,
   isConnected: false,
   on: () => () => {},
+  emit: () => {},
 });
 
 export function useSocket() {
@@ -92,12 +94,28 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     };
   }, [socketInstance]);
 
+  /**
+   * Helper to emit socket events reliably
+   */
+  const emit = useCallback((event: string, ...args: any[]) => {
+    if (socketInstance && socketInstance.connected) {
+      socketInstance.emit(event, ...args);
+    } else {
+      getSocket().then((s) => {
+        if (s && s.connected) {
+          s.emit(event, ...args);
+        }
+      });
+    }
+  }, [socketInstance]);
+
   return (
     <SocketContext.Provider
       value={{
         socket: socketInstance,
         isConnected,
         on,
+        emit,
       }}
     >
       {children}

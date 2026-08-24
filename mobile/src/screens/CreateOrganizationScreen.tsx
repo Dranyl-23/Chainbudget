@@ -8,7 +8,9 @@ import {
   Modal,
   Animated,
   Alert,
+  Image,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
@@ -16,6 +18,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useOrg } from '../context/OrgContext';
+import { useToast } from '../context/ToastContext';
 import { triggerLightHaptic, triggerSuccessHaptic, triggerErrorHaptic } from '../lib/biometrics';
 import AnimatedToggleSwitch from '../components/AnimatedToggleSwitch';
 import api from '../lib/api';
@@ -38,6 +41,7 @@ export default function CreateOrganizationScreen() {
   const { colors, isDark } = useTheme();
   const { refreshUser } = useAuth();
   const { refreshOrgs, setActiveOrgId } = useOrg();
+  const { showToast } = useToast();
 
   const [orgName, setOrgName] = useState('');
   const [orgType, setOrgType] = useState('student_org');
@@ -47,15 +51,74 @@ export default function CreateOrganizationScreen() {
   const [isPrivate, setIsPrivate] = useState(false);
   const [creating, setCreating] = useState(false);
 
+  // Logo / Emblem State
+  const [logoUri, setLogoUri] = useState<string | null>(null);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+
   // Success Modal State
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [createdOrgData, setCreatedOrgData] = useState<any>(null);
   const scaleAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
+  const handlePickLogo = async () => {
+    await triggerLightHaptic();
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      showToast('Gallery access is needed to upload your custom organization logo.', 'warning');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      const selectedUri = result.assets[0].uri;
+      setLogoUri(selectedUri);
+      await uploadLogoImage(selectedUri);
+    }
+  };
+
+  const uploadLogoImage = async (uri: string) => {
+    setUploadingLogo(true);
+    try {
+      const formData = new FormData();
+      const filename = uri.split('/').pop() || 'org_logo.jpg';
+      const match = /\.(\w+)$/.exec(filename);
+      const ext = match ? match[1].toLowerCase() : 'jpeg';
+      const type = ext === 'jpg' ? 'image/jpeg' : `image/${ext}`;
+
+      formData.append('file', {
+        uri,
+        name: filename,
+        type,
+      } as any);
+
+      const res = await api.post('/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      if (res.data?.documentUrl) {
+        setLogoUrl(res.data.documentUrl);
+        await triggerSuccessHaptic();
+        showToast('Emblem uploaded to IPFS successfully!', 'success');
+      }
+    } catch (err: any) {
+      console.error('[OrgLogoUpload] Error:', err);
+      showToast('Could not upload emblem image. Please try another picture.', 'error');
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
   const handleCreateOrg = async () => {
     if (!orgName.trim()) {
-      Alert.alert('Required', 'Please enter an organization name.');
+      showToast('Please enter an organization name.', 'warning');
       return;
     }
 
@@ -67,6 +130,7 @@ export default function CreateOrganizationScreen() {
         name: orgName.trim(),
         type: orgType,
         description: orgDesc.trim() || undefined,
+        logoUrl: logoUrl || undefined,
         highValueThreshold: Number(threshold) || 10000,
         requiredApprovals: Number(approvals) || 2,
         isPrivate,
@@ -104,7 +168,7 @@ export default function CreateOrganizationScreen() {
 
     } catch (err: any) {
       await triggerErrorHaptic();
-      Alert.alert('Creation Error', err.response?.data?.error || 'Failed to create organization. Please try again.');
+      showToast(err.response?.data?.error || 'Failed to create organization. Please try again.', 'error');
     } finally {
       setCreating(false);
     }
@@ -158,6 +222,78 @@ export default function CreateOrganizationScreen() {
             </Text>
           </View>
         </LinearGradient>
+
+        {/* Organization Emblem / Logo Picker */}
+        <View style={{ alignItems: 'center', marginBottom: 24 }}>
+          <TouchableOpacity
+            onPress={handlePickLogo}
+            disabled={uploadingLogo}
+            activeOpacity={0.8}
+            style={{
+              width: 90,
+              height: 90,
+              borderRadius: 28,
+              borderWidth: 2,
+              borderColor: logoUri ? colors.primary : colors.border,
+              borderStyle: logoUri ? 'solid' : 'dashed',
+              backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
+              alignItems: 'center',
+              justifyContent: 'center',
+              overflow: 'hidden',
+              position: 'relative',
+            }}
+          >
+            {uploadingLogo ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : logoUri ? (
+              <Image source={{ uri: logoUri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+            ) : (
+              <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name="camera-outline" size={28} color={colors.textMuted} />
+                <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '700', marginTop: 4 }}>
+                  Add Logo
+                </Text>
+              </View>
+            )}
+
+            {logoUri && !uploadingLogo && (
+              <View
+                style={{
+                  position: 'absolute',
+                  bottom: 4,
+                  right: 4,
+                  backgroundColor: colors.primary,
+                  width: 24,
+                  height: 24,
+                  borderRadius: 12,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderWidth: 2,
+                  borderColor: colors.surface,
+                }}
+              >
+                <Ionicons name="pencil" size={12} color="#FFFFFF" />
+              </View>
+            )}
+          </TouchableOpacity>
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 }}>
+            <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: '600' }}>
+              {logoUri ? 'Custom Emblem Selected' : 'Organization Emblem / Logo (Optional)'}
+            </Text>
+            {logoUri && (
+              <TouchableOpacity
+                onPress={() => {
+                  setLogoUri(null);
+                  setLogoUrl(null);
+                }}
+                style={{ padding: 2 }}
+              >
+                <Ionicons name="close-circle" size={16} color={colors.error || '#EF4444'} />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
 
         {/* Section 1: Organization Name */}
         <Text style={{ color: colors.textMuted, fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>

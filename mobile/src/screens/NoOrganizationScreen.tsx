@@ -11,14 +11,16 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, ActivityIndicator,
-  Alert, RefreshControl, ScrollView, Modal, TextInput,
+  Alert, RefreshControl, ScrollView, Modal, TextInput, Image,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Clipboard from 'expo-clipboard';
 import api from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { useToast } from '../context/ToastContext';
 import { triggerSuccessHaptic, triggerErrorHaptic, triggerLightHaptic } from '../lib/biometrics';
 import AnimatedToggleSwitch from '../components/AnimatedToggleSwitch';
 
@@ -38,6 +40,7 @@ const ORG_TYPES = [
 export default function NoOrganizationScreen() {
   const { user, logout, refreshUser } = useAuth();
   const { colors, isDark } = useTheme();
+  const { showToast } = useToast();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
 
@@ -51,13 +54,73 @@ export default function NoOrganizationScreen() {
   const [isPrivate, setIsPrivate] = useState(false);
   const [creating, setCreating] = useState(false);
 
+  // Logo / Emblem state
+  const [logoUri, setLogoUri] = useState<string | null>(null);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+
   const identifier = user?.email || user?.walletAddress || '';
   const identifierLabel = user?.email ? 'Email' : 'Wallet Address';
+
+  const handlePickLogo = async () => {
+    await triggerLightHaptic();
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      showToast('Gallery access is needed to upload your custom organization logo.', 'warning');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      const selectedUri = result.assets[0].uri;
+      setLogoUri(selectedUri);
+      await uploadLogoImage(selectedUri);
+    }
+  };
+
+  const uploadLogoImage = async (uri: string) => {
+    setUploadingLogo(true);
+    try {
+      const formData = new FormData();
+      const filename = uri.split('/').pop() || 'org_logo.jpg';
+      const match = /\.(\w+)$/.exec(filename);
+      const ext = match ? match[1].toLowerCase() : 'jpeg';
+      const type = ext === 'jpg' ? 'image/jpeg' : `image/${ext}`;
+
+      formData.append('file', {
+        uri,
+        name: filename,
+        type,
+      } as any);
+
+      const res = await api.post('/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      if (res.data?.documentUrl) {
+        setLogoUrl(res.data.documentUrl);
+        await triggerSuccessHaptic();
+        showToast('Emblem uploaded successfully!', 'success');
+      }
+    } catch (err: any) {
+      console.error('[OrgLogoUpload] Error:', err);
+      showToast('Could not upload emblem image.', 'error');
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
 
   const copyIdentifier = async () => {
     await Clipboard.setStringAsync(identifier);
     await triggerSuccessHaptic();
     setIsCopied(true);
+    showToast(`${identifierLabel} copied to clipboard!`, 'info');
     setTimeout(() => setIsCopied(false), 2500);
   };
 
@@ -73,7 +136,7 @@ export default function NoOrganizationScreen() {
 
   const handleCreateOrg = async () => {
     if (!orgName.trim()) {
-      Alert.alert('Required', 'Please enter an organization name.');
+      showToast('Please enter an organization name.', 'warning');
       return;
     }
 
@@ -83,17 +146,18 @@ export default function NoOrganizationScreen() {
         name: orgName.trim(),
         type: orgType,
         description: orgDesc.trim() || undefined,
+        logoUrl: logoUrl || undefined,
         highValueThreshold: Number(threshold) || 10000,
         requiredApprovals: Number(approvals) || 2,
         isPrivate,
       });
       await triggerSuccessHaptic();
-      Alert.alert('Success', 'Organization created! Redirecting to dashboard...');
+      showToast('Organization created! Redirecting to dashboard...', 'success');
       setCreateModalVisible(false);
       await refreshUser();
     } catch (err: any) {
       await triggerErrorHaptic();
-      Alert.alert('Error', err.response?.data?.error || 'Failed to create organization.');
+      showToast(err.response?.data?.error || 'Failed to create organization.', 'error');
     } finally {
       setCreating(false);
     }
@@ -146,7 +210,7 @@ export default function NoOrganizationScreen() {
           Create your own organization or get invited to an existing one.
         </Text>
 
-        {/* Action: Create Organization (Option 2 Web3 Indigo/Violet) */}
+        {/* Action: Create Organization */}
         <TouchableOpacity
           onPress={() => setCreateModalVisible(true)}
           style={{
@@ -171,17 +235,22 @@ export default function NoOrganizationScreen() {
               flexDirection: 'row',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: 8,
+              gap: 10,
             }}
           >
             <Ionicons name="add-circle-outline" size={22} color="#FFFFFF" />
-            <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 16 }}>Create an Organization</Text>
+            <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 16, textAlign: 'center', includeFontPadding: false }}>
+              Create an Organization
+            </Text>
           </LinearGradient>
         </TouchableOpacity>
 
+        {/* Divider */}
         <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%', marginBottom: 20 }}>
           <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
-          <Text style={{ color: colors.textMuted, marginHorizontal: 12, fontSize: 12, fontWeight: '700' }}>OR JOIN EXISTING</Text>
+          <Text style={{ color: colors.textMuted, marginHorizontal: 14, fontSize: 11, fontWeight: '800', letterSpacing: 0.8, textTransform: 'uppercase' }}>
+            OR JOIN EXISTING
+          </Text>
           <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
         </View>
 
@@ -190,16 +259,24 @@ export default function NoOrganizationScreen() {
           style={{ backgroundColor: colors.surface, borderColor: colors.border }}
           className="w-full border rounded-3xl p-5 mb-4 shadow-sm"
         >
-          <View className="flex-row items-center gap-3 mb-2.5">
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 }}>
             <View 
-              style={{ backgroundColor: colors.primaryMuted }}
-              className="w-7 h-7 rounded-full items-center justify-center"
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 14,
+                backgroundColor: colors.primaryMuted,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
             >
-              <Text style={{ color: colors.primary }} className="font-extrabold text-xs">1</Text>
+              <Text style={{ color: colors.primary, fontWeight: '900', fontSize: 13, includeFontPadding: false }}>1</Text>
             </View>
-            <Text style={{ color: colors.textPrimary }} className="font-bold text-base">Share your {identifierLabel}</Text>
+            <Text style={{ color: colors.textPrimary, fontWeight: '800', fontSize: 16 }}>
+              Share your {identifierLabel}
+            </Text>
           </View>
-          <Text style={{ color: colors.textSecondary }} className="text-xs leading-5 mb-3.5">
+          <Text style={{ color: colors.textSecondary, fontSize: 12.5, lineHeight: 18, marginBottom: 14 }}>
             Give this to your organization admin so they can add you:
           </Text>
           <TouchableOpacity 
@@ -208,10 +285,16 @@ export default function NoOrganizationScreen() {
             style={{
               backgroundColor: isDark ? 'rgba(0,0,0,0.5)' : colors.backgroundSecondary,
               borderColor: colors.primary + '40',
+              borderWidth: 1,
+              borderRadius: 16,
+              paddingVertical: 13,
+              paddingHorizontal: 16,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
             }}
-            className="flex-row items-center justify-between border rounded-2xl p-3.5"
           >
-            <Text style={{ color: colors.primary }} className="flex-1 font-mono text-xs mr-2 font-bold" numberOfLines={1}>
+            <Text style={{ color: colors.primary, flex: 1, fontFamily: 'monospace', fontSize: 12, fontWeight: '700', marginRight: 8 }} numberOfLines={1}>
               {identifier}
             </Text>
             <Ionicons
@@ -221,7 +304,9 @@ export default function NoOrganizationScreen() {
             />
           </TouchableOpacity>
           {isCopied && (
-            <Text style={{ color: colors.success }} className="text-xs mt-2 text-center font-bold">Copied to clipboard!</Text>
+            <Text style={{ color: colors.success, fontSize: 12, marginTop: 8, textAlign: 'center', fontWeight: '700' }}>
+              ✓ Copied to clipboard!
+            </Text>
           )}
         </View>
 
@@ -230,16 +315,24 @@ export default function NoOrganizationScreen() {
           style={{ backgroundColor: colors.surface, borderColor: colors.border }}
           className="w-full border rounded-3xl p-5 mb-4 shadow-sm"
         >
-          <View className="flex-row items-center gap-3 mb-2.5">
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 }}>
             <View 
-              style={{ backgroundColor: colors.primaryMuted }}
-              className="w-7 h-7 rounded-full items-center justify-center"
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 14,
+                backgroundColor: colors.primaryMuted,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
             >
-              <Text style={{ color: colors.primary }} className="font-extrabold text-xs">2</Text>
+              <Text style={{ color: colors.primary, fontWeight: '900', fontSize: 13, includeFontPadding: false }}>2</Text>
             </View>
-            <Text style={{ color: colors.textPrimary }} className="font-bold text-base">Wait for your invite</Text>
+            <Text style={{ color: colors.textPrimary, fontWeight: '800', fontSize: 16 }}>
+              Wait for your invite
+            </Text>
           </View>
-          <Text style={{ color: colors.textSecondary }} className="text-xs leading-5 mb-4">
+          <Text style={{ color: colors.textSecondary, fontSize: 12.5, lineHeight: 18, marginBottom: 14 }}>
             Once the admin adds you, pull down to refresh and your organization dashboard will appear automatically.
           </Text>
 
@@ -247,8 +340,16 @@ export default function NoOrganizationScreen() {
             style={{
               backgroundColor: colors.primaryMuted,
               borderColor: colors.primary + '50',
+              borderWidth: 1,
+              borderRadius: 16,
+              paddingVertical: 13,
+              paddingHorizontal: 18,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              width: '100%',
             }}
-            className="flex-row items-center justify-center gap-2 border py-3.5 rounded-2xl"
             onPress={handleRefresh}
             disabled={isRefreshing}
             activeOpacity={0.8}
@@ -256,10 +357,12 @@ export default function NoOrganizationScreen() {
             {isRefreshing ? (
               <ActivityIndicator color={colors.primary} size="small" />
             ) : (
-              <View className="flex-row items-center gap-2">
-                <Ionicons name="refresh" size={16} color={colors.primary} />
-                <Text style={{ color: colors.primary }} className="font-bold text-sm">Check for membership</Text>
-              </View>
+              <>
+                <Ionicons name="refresh-outline" size={17} color={colors.primary} />
+                <Text style={{ color: colors.primary, fontWeight: '800', fontSize: 14, textAlign: 'center', includeFontPadding: false }}>
+                  Check for membership
+                </Text>
+              </>
             )}
           </TouchableOpacity>
         </View>
@@ -308,6 +411,78 @@ export default function NoOrganizationScreen() {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
+              {/* Organization Emblem / Logo Picker */}
+              <View style={{ alignItems: 'center', marginBottom: 20 }}>
+                <TouchableOpacity
+                  onPress={handlePickLogo}
+                  disabled={uploadingLogo}
+                  activeOpacity={0.8}
+                  style={{
+                    width: 80,
+                    height: 80,
+                    borderRadius: 24,
+                    borderWidth: 2,
+                    borderColor: logoUri ? colors.primary : colors.border,
+                    borderStyle: logoUri ? 'solid' : 'dashed',
+                    backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    overflow: 'hidden',
+                    position: 'relative',
+                  }}
+                >
+                  {uploadingLogo ? (
+                    <ActivityIndicator size="small" color={colors.primary} />
+                  ) : logoUri ? (
+                    <Image source={{ uri: logoUri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                  ) : (
+                    <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                      <Ionicons name="camera-outline" size={24} color={colors.textMuted} />
+                      <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '700', marginTop: 2 }}>
+                        Add Logo
+                      </Text>
+                    </View>
+                  )}
+
+                  {logoUri && !uploadingLogo && (
+                    <View
+                      style={{
+                        position: 'absolute',
+                        bottom: 3,
+                        right: 3,
+                        backgroundColor: colors.primary,
+                        width: 22,
+                        height: 22,
+                        borderRadius: 11,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderWidth: 2,
+                        borderColor: colors.surface,
+                      }}
+                    >
+                      <Ionicons name="pencil" size={10} color="#FFFFFF" />
+                    </View>
+                  )}
+                </TouchableOpacity>
+
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 }}>
+                  <Text style={{ color: colors.textSecondary, fontSize: 11.5, fontWeight: '600' }}>
+                    {logoUri ? 'Custom Emblem Selected' : 'Organization Emblem / Logo (Optional)'}
+                  </Text>
+                  {logoUri && (
+                    <TouchableOpacity
+                      onPress={() => {
+                        setLogoUri(null);
+                        setLogoUrl(null);
+                      }}
+                      style={{ padding: 2 }}
+                    >
+                      <Ionicons name="close-circle" size={15} color={colors.error || '#EF4444'} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+
               {/* Organization Name */}
               <Text style={{ color: colors.textSecondary, fontWeight: '600', marginBottom: 6 }}>Organization Name *</Text>
               <TextInput

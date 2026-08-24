@@ -3,25 +3,30 @@
  * Treasury settings: governance rules, live on-chain balance.
  * Level 1 (Executive) only.
  */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  TextInput, ActivityIndicator, Alert, RefreshControl,
+  TextInput, ActivityIndicator, Alert, RefreshControl, Image,
+  Modal, Animated,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute } from '@react-navigation/native';
 import { ethers } from 'ethers';
 import api from '../lib/api';
 import { useAuth } from '../context/AuthContext';
+import { useOrg } from '../context/OrgContext';
 import { useTheme } from '../context/ThemeContext';
-import { triggerSuccessHaptic, triggerErrorHaptic } from '../lib/biometrics';
+import { triggerSuccessHaptic, triggerErrorHaptic, triggerLightHaptic } from '../lib/biometrics';
 
 const AMOY_RPC = 'https://rpc-amoy.polygon.technology';
 
 export default function TreasuryScreen() {
   const route = useRoute<any>();
-  const { user } = useAuth();
-  const { colors } = useTheme();
+  const { user, refreshUser } = useAuth();
+  const { refreshOrgs } = useOrg();
+  const { colors, isDark } = useTheme();
   const orgId: string = route.params?.orgId;
 
   const [org, setOrg] = useState<any>(null);
@@ -30,6 +35,32 @@ export default function TreasuryScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+
+  // Custom Success Confirmation Modal State
+  const [showEmblemSuccessModal, setShowEmblemSuccessModal] = useState(false);
+  const [uploadedEmblemUrl, setUploadedEmblemUrl] = useState<string | null>(null);
+  const emblemScaleAnim = useRef(new Animated.Value(0)).current;
+  const emblemPulseAnim = useRef(new Animated.Value(1)).current;
+
+  const triggerEmblemSuccessModal = (url: string) => {
+    setUploadedEmblemUrl(url);
+    setShowEmblemSuccessModal(true);
+    emblemScaleAnim.setValue(0);
+    Animated.spring(emblemScaleAnim, {
+      toValue: 1,
+      friction: 6,
+      tension: 40,
+      useNativeDriver: true,
+    }).start();
+
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(emblemPulseAnim, { toValue: 1.18, duration: 900, useNativeDriver: true }),
+        Animated.timing(emblemPulseAnim, { toValue: 1, duration: 900, useNativeDriver: true }),
+      ])
+    ).start();
+  };
 
   // Form
   const [threshold, setThreshold] = useState('');
@@ -80,6 +111,96 @@ export default function TreasuryScreen() {
   const onRefresh = () => {
     setRefreshing(true);
     fetchOrg().then(() => setRefreshing(false));
+  };
+
+  const handlePickAndChangeLogo = async () => {
+    await triggerLightHaptic();
+    Alert.alert(
+      'Rebrand Organization Emblem',
+      'Upload a new emblem or official logo for this organization',
+      [
+        {
+          text: 'Choose from Gallery',
+          onPress: async () => {
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== 'granted') {
+              Alert.alert('Permission Denied', 'Gallery access is needed to pick an emblem.');
+              return;
+            }
+
+            const result = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              allowsEditing: true,
+              aspect: [1, 1],
+              quality: 0.7,
+            });
+
+            if (!result.canceled && result.assets[0]?.uri) {
+              await uploadPhoto(result.assets[0].uri);
+            }
+          },
+        },
+        {
+          text: 'Take Photo',
+          onPress: async () => {
+            const { status } = await ImagePicker.requestCameraPermissionsAsync();
+            if (status !== 'granted') {
+              Alert.alert('Permission Denied', 'Camera access is needed to take a picture.');
+              return;
+            }
+
+            const result = await ImagePicker.launchCameraAsync({
+              allowsEditing: true,
+              aspect: [1, 1],
+              quality: 0.7,
+            });
+
+            if (!result.canceled && result.assets[0]?.uri) {
+              await uploadPhoto(result.assets[0].uri);
+            }
+          },
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  };
+
+  const uploadPhoto = async (uri: string) => {
+    setUploadingLogo(true);
+    await triggerLightHaptic();
+    try {
+      const formData = new FormData();
+      const filename = uri.split('/').pop() || 'org-logo.jpg';
+      const match = /\.(\w+)$/.exec(filename);
+      const ext = match ? match[1].toLowerCase() : 'jpeg';
+      const type = ext === 'jpg' ? 'image/jpeg' : `image/${ext}`;
+
+      formData.append('file', {
+        uri,
+        name: filename,
+        type,
+      } as any);
+
+      const uploadRes = await api.post('/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      const uploadedUrl = uploadRes.data?.documentUrl;
+      if (uploadedUrl) {
+        await api.patch(`/organizations/${orgId}`, { logoUrl: uploadedUrl });
+        setOrg((prev: any) => ({ ...prev, logoUrl: uploadedUrl }));
+        await triggerSuccessHaptic();
+        if (refreshOrgs) await refreshOrgs();
+        if (refreshUser) await refreshUser();
+        triggerEmblemSuccessModal(uploadedUrl);
+      }
+    } catch (err: any) {
+      console.warn('[uploadPhoto error]', err?.response?.data || err.message);
+      await triggerErrorHaptic();
+      Alert.alert('Error', err?.response?.data?.error || 'Failed to update organization emblem.');
+    } finally {
+      setUploadingLogo(false);
+    }
   };
 
   const handleSave = async () => {
@@ -171,6 +292,106 @@ export default function TreasuryScreen() {
         )}
       </View>
 
+      {/* Organization Emblem & Rebranding */}
+      <Text style={{ color: colors.textPrimary, fontWeight: '800', fontSize: 18, marginBottom: 16 }}>
+        Organization Branding & Emblem
+      </Text>
+
+      <View
+        style={{
+          backgroundColor: colors.surface,
+          borderColor: colors.border,
+          borderWidth: 1,
+          borderRadius: 20,
+          padding: 20,
+          marginBottom: 20,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 16,
+        }}
+      >
+        <TouchableOpacity
+          onPress={handlePickAndChangeLogo}
+          disabled={uploadingLogo}
+          activeOpacity={0.8}
+          style={{
+            width: 68,
+            height: 68,
+            borderRadius: 22,
+            backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+            borderColor: colors.primary,
+            borderWidth: 2,
+            alignItems: 'center',
+            justifyContent: 'center',
+            overflow: 'hidden',
+            position: 'relative',
+          }}
+        >
+          {uploadingLogo ? (
+            <ActivityIndicator size="small" color={colors.primary} />
+          ) : org?.logoUrl ? (
+            <Image
+              source={{ uri: org.logoUrl }}
+              style={{ width: '100%', height: '100%' }}
+              resizeMode="cover"
+            />
+          ) : (
+            <Ionicons name="business" size={32} color={colors.primary} />
+          )}
+
+          {!uploadingLogo && (
+            <View
+              style={{
+                position: 'absolute',
+                bottom: 2,
+                right: 2,
+                backgroundColor: colors.primary,
+                width: 20,
+                height: 20,
+                borderRadius: 10,
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderWidth: 1.5,
+                borderColor: colors.surface,
+              }}
+            >
+              <Ionicons name="camera" size={10} color="#FFFFFF" />
+            </View>
+          )}
+        </TouchableOpacity>
+
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: colors.textPrimary, fontWeight: '800', fontSize: 15, marginBottom: 3 }}>
+            {org?.name || 'Organization Emblem'}
+          </Text>
+          <Text style={{ color: colors.textSecondary, fontSize: 12, marginBottom: 8, lineHeight: 16 }}>
+            Update official emblem for public ledger, group chats, and directory.
+          </Text>
+
+          <TouchableOpacity
+            onPress={handlePickAndChangeLogo}
+            disabled={uploadingLogo}
+            style={{
+              backgroundColor: colors.primaryMuted,
+              borderColor: colors.primary + '40',
+              borderWidth: 1,
+              paddingHorizontal: 12,
+              paddingVertical: 6,
+              borderRadius: 10,
+              alignSelf: 'flex-start',
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 6,
+            }}
+          >
+            <Ionicons name="image-outline" size={14} color={colors.primary} />
+            <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '700' }}>
+              {org?.logoUrl ? 'Rebrand / Change Logo' : 'Upload Official Logo'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
       {/* Governance Settings */}
       <Text style={{ color: colors.textPrimary, fontWeight: '800', fontSize: 18, marginBottom: 16 }}>
         Governance Rules
@@ -238,6 +459,186 @@ export default function TreasuryScreen() {
           )
         }
       </TouchableOpacity>
+
+      {/* ── CUSTOM EMBLEM REBRAND CONFIRMATION MODAL ── */}
+      <Modal
+        visible={showEmblemSuccessModal}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setShowEmblemSuccessModal(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0, 0, 0, 0.75)',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 24,
+          }}
+        >
+          <Animated.View
+            style={{
+              transform: [{ scale: emblemScaleAnim }],
+              backgroundColor: isDark ? '#13121d' : '#ffffff',
+              borderColor: colors.border,
+              borderWidth: 1.5,
+              borderRadius: 28,
+              padding: 24,
+              width: '100%',
+              maxWidth: 340,
+              alignItems: 'center',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.35,
+              shadowRadius: 20,
+              elevation: 10,
+            }}
+          >
+            {/* Glowing Pulse Ring + Emblem Avatar */}
+            <View style={{ alignItems: 'center', justifyContent: 'center', marginBottom: 18, marginTop: 4 }}>
+              <Animated.View
+                style={{
+                  position: 'absolute',
+                  width: 96,
+                  height: 96,
+                  borderRadius: 48,
+                  backgroundColor: colors.successBg || 'rgba(34, 197, 94, 0.15)',
+                  borderWidth: 1.5,
+                  borderColor: colors.successBorder || 'rgba(34, 197, 94, 0.3)',
+                  transform: [{ scale: emblemPulseAnim }],
+                }}
+              />
+              <View
+                style={{
+                  width: 76,
+                  height: 76,
+                  borderRadius: 26,
+                  backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+                  borderColor: '#10B981',
+                  borderWidth: 2.5,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  overflow: 'hidden',
+                  position: 'relative',
+                  shadowColor: '#10B981',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 10,
+                  elevation: 6,
+                }}
+              >
+                {uploadedEmblemUrl || org?.logoUrl ? (
+                  <Image
+                    source={{ uri: uploadedEmblemUrl || org?.logoUrl }}
+                    style={{ width: '100%', height: '100%' }}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <Ionicons name="business" size={36} color="#10B981" />
+                )}
+              </View>
+
+              {/* Success Green Check Badge */}
+              <View
+                style={{
+                  position: 'absolute',
+                  bottom: -4,
+                  right: -4,
+                  backgroundColor: '#10B981',
+                  width: 26,
+                  height: 26,
+                  borderRadius: 13,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderWidth: 2,
+                  borderColor: isDark ? '#13121d' : '#ffffff',
+                }}
+              >
+                <Ionicons name="checkmark" size={16} color="#ffffff" />
+              </View>
+            </View>
+
+            {/* Title & Org Name */}
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontSize: 19,
+                fontWeight: '900',
+                textAlign: 'center',
+                marginBottom: 4,
+              }}
+            >
+              Emblem Rebranded!
+            </Text>
+
+            <View
+              style={{
+                backgroundColor: colors.primaryMuted,
+                borderColor: colors.primary + '30',
+                borderWidth: 1,
+                paddingHorizontal: 12,
+                paddingVertical: 3,
+                borderRadius: 12,
+                marginBottom: 14,
+              }}
+            >
+              <Text
+                style={{
+                  color: colors.primary,
+                  fontSize: 12,
+                  fontWeight: '800',
+                }}
+              >
+                {org?.name || 'Organization'}
+              </Text>
+            </View>
+
+            {/* Customized Message */}
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontSize: 13,
+                textAlign: 'center',
+                lineHeight: 18,
+                marginBottom: 22,
+                paddingHorizontal: 6,
+              }}
+            >
+              Your new organization logo and custom emblem have been published to IPFS and synchronized across the Public Ledger, Group Chats, and Member Dashboards.
+            </Text>
+
+            {/* Confirm / Continue Button */}
+            <TouchableOpacity
+              onPress={async () => {
+                await triggerSuccessHaptic();
+                setShowEmblemSuccessModal(false);
+              }}
+              activeOpacity={0.85}
+              style={{ width: '100%' }}
+            >
+              <LinearGradient
+                colors={['#10B981', '#059669']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={{
+                  borderRadius: 16,
+                  paddingVertical: 14,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexDirection: 'row',
+                  gap: 8,
+                }}
+              >
+                <Ionicons name="checkmark-circle" size={18} color="#ffffff" />
+                <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 15 }}>
+                  Done & Synchronized
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </Animated.View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }

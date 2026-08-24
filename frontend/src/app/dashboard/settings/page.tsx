@@ -14,7 +14,7 @@ import {
   Save, Wallet, Upload, User as UserIcon, ShieldCheck, 
   ExternalLink, Copy, Check, Smartphone, CheckCircle2, 
   Sparkles, X, Lock, Key, Clock, ShieldAlert,
-  Bell
+  Bell, Building, Camera
 } from "lucide-react";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -53,9 +53,23 @@ interface UploadResponse {
   documentHash?: string;
 }
 
-
+interface OrganizationDetails {
+  _id: string;
+  name: string;
+  type?: string;
+  logoUrl?: string;
+  description?: string;
+}
 
 function formatAvatarUrl(url?: string) {
+  if (!url) return null;
+  if (url.startsWith("data:")) return url;
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  const backendBase = process.env.NEXT_PUBLIC_API_URL?.replace("/api", "") || "https://chainbudget-api.fly.dev";
+  return `${backendBase}${url.startsWith("/") ? "" : "/"}${url}`;
+}
+
+function formatOrgLogo(url?: string) {
   if (!url) return null;
   if (url.startsWith("data:")) return url;
   if (url.startsWith("http://") || url.startsWith("https://")) return url;
@@ -91,6 +105,14 @@ export default function SettingsPage() {
   const [securityError, setSecurityError] = useState<string | null>(null);
   const [keyCountdown, setKeyCountdown] = useState<number | null>(null);
 
+  // Organization Branding & Emblem Rebranding State
+  const [orgDetails, setOrgDetails] = useState<OrganizationDetails | null>(null);
+  const [orgLogoFile, setOrgLogoFile] = useState<File | null>(null);
+  const [orgLogoPreview, setOrgLogoPreview] = useState<string | null>(null);
+  const [isUploadingOrgLogo, setIsUploadingOrgLogo] = useState(false);
+  const [showEmblemSuccessModal, setShowEmblemSuccessModal] = useState(false);
+  const [uploadedEmblemUrl, setUploadedEmblemUrl] = useState<string | null>(null);
+
   // User Notification Preferences State
   const [notificationPrefs, setNotificationPrefs] = useState<Record<string, boolean>>({
     email: true,
@@ -102,6 +124,89 @@ export default function SettingsPage() {
     securityAlerts: true,
   });
 
+  // Fetch active org details
+  useEffect(() => {
+    let isCancelled = false;
+    if (!activeOrgId) return;
+
+    const fetchOrg = async () => {
+      try {
+        const res = await api.get<OrganizationDetails>(`/organizations/${activeOrgId}`);
+        if (!isCancelled) {
+          setOrgDetails(res.data);
+          if (res.data?.logoUrl) {
+            setOrgLogoPreview(formatOrgLogo(res.data.logoUrl));
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load organization details:", err);
+      }
+    };
+    fetchOrg();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [activeOrgId]);
+
+  const handleOrgLogoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error("Emblem image must be under 5MB");
+        return;
+      }
+      setOrgLogoFile(file);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setOrgLogoPreview(event.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleRebrandOrgLogo = async () => {
+    if (!activeOrgId) {
+      toast.error("No active organization selected.");
+      return;
+    }
+    if (!orgLogoFile && !orgLogoPreview) {
+      toast.error("Please choose a new emblem image.");
+      return;
+    }
+
+    try {
+      setIsUploadingOrgLogo(true);
+      let newLogoUrl = orgLogoPreview;
+
+      if (orgLogoFile) {
+        const formData = new FormData();
+        formData.append("file", orgLogoFile);
+        const uploadRes = await api.post<UploadResponse>("/upload", formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+        if (uploadRes.data?.documentUrl) {
+          newLogoUrl = uploadRes.data.documentUrl;
+        }
+      }
+
+      if (newLogoUrl) {
+        await api.patch(`/organizations/${activeOrgId}`, {
+          logoUrl: newLogoUrl,
+        });
+
+        setUploadedEmblemUrl(formatOrgLogo(newLogoUrl));
+        setOrgLogoFile(null);
+        setShowEmblemSuccessModal(true);
+        await refreshUser();
+      }
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, "Failed to update organization emblem"));
+    } finally {
+      setIsUploadingOrgLogo(false);
+    }
+  };
+
   const handleTogglePreference = async (key: string, currentValue: boolean) => {
     const updated = !currentValue;
     setNotificationPrefs((prev) => ({ ...prev, [key]: updated }));
@@ -110,7 +215,6 @@ export default function SettingsPage() {
       await api.put("/users/preferences", { [key]: updated });
       toast.success("Notification preference saved");
     } catch (err: unknown) {
-      // Revert on error
       setNotificationPrefs((prev) => ({ ...prev, [key]: currentValue }));
       toast.error(getErrorMessage(err, "Failed to update preference"));
     }
@@ -188,7 +292,6 @@ export default function SettingsPage() {
     fetchBalance();
     fetchLiquidations();
 
-    // Fetch user notification preferences
     const fetchPreferences = async () => {
       try {
         const res = await api.get<{ preferences: Record<string, boolean> }>("/users/preferences");
@@ -206,13 +309,13 @@ export default function SettingsPage() {
     };
   }, [user?.walletAddress, user?.isSuperAdmin]);
 
-  // Get active role
   const memberships = (user?.memberships || []) as UserMembership[];
   const activeMembership = memberships.find((m) => {
     const orgId = typeof m.organization === "object" ? m.organization?._id : m.organization;
     return String(orgId) === String(activeOrgId);
   });
   const roleLabel = activeMembership?.roleLabel || "Member";
+  const roleLevel = activeMembership?.roleLevel ?? (user?.isSuperAdmin ? 1 : 4);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -255,7 +358,6 @@ export default function SettingsPage() {
       setIsSaving(true);
       let avatarUrl = avatarPreview || user?.avatarUrl;
 
-      // 1. If a new avatar file was chosen, try uploading to cloud storage / Pinata IPFS first
       if (avatarFile) {
         try {
           const formData = new FormData();
@@ -267,17 +369,14 @@ export default function SettingsPage() {
             avatarUrl = uploadRes.data.documentUrl;
           }
         } catch {
-          // If server upload failed, avatarUrl uses the reliable 256x256 Base64 data URL
         }
       }
 
-      // 2. Update user profile directly in MongoDB Atlas
       const updateRes = await api.put("/users/me", {
         displayName: currentDisplayName,
         avatarUrl
       });
 
-      // 3. Update localStorage and React Auth state immediately
       const updatedUser = updateRes.data?.user || updateRes.data;
       if (updatedUser && typeof window !== "undefined") {
         localStorage.setItem("cb_user", JSON.stringify(updatedUser));
@@ -347,11 +446,9 @@ export default function SettingsPage() {
     setIsVerifyingSecurity(true);
     setSecurityError(null);
     try {
-      // 1. Request one-time challenge from backend
       const challengeRes = await api.post<{ challenge: string; walletAddress: string }>("/auth/keys/challenge");
       const { challenge, walletAddress } = challengeRes.data;
 
-      // 2. Sign challenge with connected MetaMask/Web3 wallet
       const provider = getProvider();
       if (!provider) {
         throw new Error("MetaMask is required to sign the security verification challenge.");
@@ -359,25 +456,28 @@ export default function SettingsPage() {
 
       await provider.send("eth_requestAccounts", []);
       const signer = await provider.getSigner();
-      const currentAddress = (await signer.getAddress()).toLowerCase();
+      const userAddress = await signer.getAddress();
 
-      if (walletAddress && currentAddress !== walletAddress.toLowerCase()) {
-        throw new Error(
-          `Connected wallet (${currentAddress.slice(0, 6)}...${currentAddress.slice(-4)}) does not match your registered account wallet (${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}). Please switch accounts in MetaMask.`
-        );
+      if (userAddress.toLowerCase() !== walletAddress.toLowerCase()) {
+        throw new Error(`Connected wallet (${userAddress.slice(0, 6)}...${userAddress.slice(-4)}) does not match your registered auto-wallet (${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}).`);
       }
 
       const signature = await signer.signMessage(challenge);
 
-      // 3. Send signature to backend for cryptographic verification and decryption
-      const res = await api.post<AutoWalletKeys>("/auth/keys/export", { signature });
-      setAutoWalletKeys(res.data);
+      const keysRes = await api.post<AutoWalletKeys>("/auth/keys/export", {
+        challenge,
+        signature,
+      });
+
+      setAutoWalletKeys(keysRes.data);
       setShowKeys(true);
-      setKeyCountdown(60); // 60s auto-hide countdown
+      setKeyCountdown(60);
       setIsSecurityModalOpen(false);
-      toast.success("Identity cryptographically verified! Keys will auto-hide in 60s.");
+      toast.success("Security verified! Auto-hiding keys in 60s.");
     } catch (err: unknown) {
-      setSecurityError(getErrorMessage(err, "Failed to verify identity and export keys."));
+      const msg = getErrorMessage(err, "Security verification failed.");
+      setSecurityError(msg);
+      toast.error(msg);
     } finally {
       setIsVerifyingSecurity(false);
     }
@@ -386,9 +486,9 @@ export default function SettingsPage() {
   const handleApproveLiquidation = async (orgId: string) => {
     try {
       setApprovingLiquidationId(orgId);
-      await api.post(`/organizations/${orgId}/approve-liquidation`);
-      toast.success("Liquidation approved and budget replenished!");
-      setPendingLiquidations((prev) => prev.filter((org) => org._id !== orgId));
+      await api.post(`/organizations/${orgId}/liquidate/approve`);
+      toast.success("Liquidation approved! Budget replenished.");
+      setPendingLiquidations((prev) => prev.filter((o) => o._id !== orgId));
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, "Failed to approve liquidation"));
     } finally {
@@ -410,7 +510,6 @@ export default function SettingsPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         
-        {/* Profile Card */}
         <div className="md:col-span-2 space-y-6">
           <div className="glass p-6 rounded-2xl">
             <h2 className="text-xl font-bold text-gray-800 mb-6 border-b pb-2">Personal Information</h2>
@@ -466,7 +565,6 @@ export default function SettingsPage() {
                   </label>
                 </div>
                 
-                {/* Role Badge */}
                 <div className="bg-indigo-50 text-indigo-700 text-[10px] uppercase tracking-wider font-bold px-3 py-1 rounded-full border border-indigo-100 flex items-center gap-1 shadow-sm">
                   <ShieldCheck className="w-3 h-3" />
                   {roleLabel}
@@ -498,41 +596,40 @@ export default function SettingsPage() {
                       </a>
                     )}
                   </div>
-                  <input
-                    type="text"
-                    readOnly
-                    value={user?.walletAddress || ""}
-                    className="w-full px-4 py-2 bg-gray-100 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-500 dark:text-gray-400 font-mono text-sm cursor-not-allowed mb-4"
-                  />
-                  
-                  {/* Live Wallet Balance */}
-                  {user?.walletAddress && (
-                    <div className="bg-primary/5 border border-primary/10 p-3 rounded-lg flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
-                          <Wallet className="w-4 h-4 text-primary" />
-                        </div>
-                        <div>
-                          <p className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Testnet Balance</p>
-                          <p className="text-sm font-bold text-gray-800">
-                            {walletBalance !== null ? `${walletBalance} POL` : "Fetching..."}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      disabled
+                      value={user?.walletAddress || "No wallet linked"}
+                      className="w-full px-4 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-500 font-mono text-xs"
+                    />
+                    {user?.walletAddress && (
+                      <button
+                        onClick={() => handleCopy(user.walletAddress!, "wallet")}
+                        className="p-2 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-500 transition-colors shrink-0"
+                        title="Copy Address"
+                      >
+                        {copiedField === "wallet" ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+                      </button>
+                    )}
+                  </div>
+                  {walletBalance && (
+                    <p className="text-xs text-gray-400 mt-1 font-mono">
+                      Balance: <span className="text-primary font-bold">{walletBalance} POL</span> (Polygon Amoy)
+                    </p>
                   )}
                 </div>
               </div>
             </div>
 
-            <div className="flex justify-end mt-6">
-              <button 
+            <div className="flex justify-end pt-4 border-t">
+              <button
                 onClick={handleSaveProfile}
                 disabled={isSaving}
-                className="btn-primary w-full md:w-auto flex items-center justify-center gap-2 px-8 py-2.5 rounded-xl shadow-md hover:shadow-lg transition-all"
+                className="btn-primary py-2 px-6 flex items-center gap-2"
               >
                 {isSaving ? (
-                  <span className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 ) : (
                   <Save className="w-4 h-4" />
                 )}
@@ -541,212 +638,162 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* ── Auto-Wallet Security & Backup ── */}
-          <div className="glass rounded-xl p-6 md:p-8 border border-(--color-border) mb-8">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center">
-                <ShieldCheck className="w-5 h-5 text-orange-400" />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold">Security & Backup</h2>
-                <p className="text-sm text-gray-500">Manage your auto-generated Web3 wallet.</p>
-              </div>
-            </div>
-
-            <div className="bg-orange-500/5 border border-orange-500/20 rounded-lg p-5">
-              <h3 className="text-orange-200 font-bold mb-2">Your Web3 Identity</h3>
-              <p className="text-sm text-gray-400 mb-4">
-                ChainBudget automatically generated a secure Ethereum wallet for you when you signed up. 
-                This wallet is used to interact with smart contracts on your behalf. You can backup your keys below and import them into MetaMask if you wish to self-custody.
-              </p>
-
-              <div className="flex flex-wrap items-center gap-3">
-                <button 
-                  onClick={handleRevealKeys}
-                  disabled={isVerifyingSecurity}
-                  className="btn-secondary py-2 border-orange-500/30 hover:border-orange-500 text-orange-300 flex items-center gap-2"
-                >
-                  <Lock className="w-4 h-4 text-orange-400" />
-                  {isVerifyingSecurity ? "Verifying..." : showKeys ? "Hide Recovery Phrase & Private Key" : "Reveal Recovery Phrase & Private Key"}
-                </button>
-
-                {showKeys && keyCountdown !== null && (
-                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-orange-500/15 border border-orange-500/30 text-orange-300 text-xs font-bold animate-pulse">
-                    <Clock className="w-3.5 h-3.5 text-orange-400" />
-                    <span>Auto-hiding in {keyCountdown}s</span>
+          {user?.walletAddress && (
+            <div className="glass p-6 rounded-2xl border border-orange-500/20 bg-gradient-to-br from-orange-500/5 via-transparent to-transparent">
+              <div className="flex items-center justify-between mb-4 border-b border-orange-500/10 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-orange-500/10 border border-orange-500/30 flex items-center justify-center">
+                    <Lock className="w-4 h-4 text-orange-400" />
                   </div>
-                )}
+                  <div>
+                    <h2 className="text-base font-bold text-gray-800 dark:text-white">Web3 Security & Auto-Wallet Keys</h2>
+                    <p className="text-xs text-gray-500">Non-custodial account credentials & recovery backup</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {showKeys && keyCountdown !== null && (
+                    <span className="text-[11px] font-mono font-bold text-orange-400 bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
+                      <Clock className="w-3 h-3 animate-spin" />
+                      {keyCountdown}s
+                    </span>
+                  )}
+                  <button
+                    onClick={handleRevealKeys}
+                    className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-all flex items-center gap-1.5 ${
+                      showKeys
+                        ? "bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700"
+                        : "bg-orange-600/20 hover:bg-orange-600/30 border-orange-500/40 text-orange-300 shadow-sm"
+                    }`}
+                  >
+                    <Key className="w-3.5 h-3.5" />
+                    {showKeys ? "Hide Keys" : "Export / View Keys"}
+                  </button>
+                </div>
               </div>
 
-              {showKeys && autoWalletKeys && (
-                <div className="mt-6 space-y-4 animate-fade-in">
-                  {/* Security Alert Header */}
-                  <div className="flex items-center justify-between p-3.5 rounded-xl bg-orange-500/10 border border-orange-500/30 text-xs">
-                    <div className="flex items-center gap-2 text-orange-300 font-medium">
-                      <ShieldCheck className="w-4 h-4 text-orange-400 shrink-0" />
-                      <span>Security Session Active: Keys will automatically blur and hide after 60 seconds.</span>
-                    </div>
-                    <button
-                      onClick={() => {
-                        setShowKeys(false);
-                        setAutoWalletKeys(null);
-                        setKeyCountdown(null);
-                      }}
-                      className="px-2.5 py-1 rounded-lg bg-orange-500/20 hover:bg-orange-500/30 text-orange-300 text-[11px] font-bold transition-colors shrink-0"
-                    >
-                      Hide Now
-                    </button>
-                  </div>
-
-                  <div className="bg-black/60 p-5 rounded-2xl border border-orange-500/25 shadow-xl">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-orange-500/15">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-lg bg-orange-500/15 border border-orange-500/30 flex items-center justify-center">
-                          <Smartphone className="w-4 h-4 text-orange-400" />
-                        </div>
-                        <div>
-                          <h4 className="text-xs font-bold text-orange-400 uppercase tracking-wider">
-                            Mobile Login Recovery Phrase
-                          </h4>
-                          <p className="text-[11px] text-gray-400">12-word BIP-39 mnemonic seed phrase</p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => handleCopy(autoWalletKeys.mnemonic || "", "mnemonic")}
-                        className="text-xs flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-lg bg-orange-500/15 hover:bg-orange-500/25 active:scale-95 text-orange-300 border border-orange-500/30 transition-all font-medium cursor-pointer shadow-sm"
-                      >
-                        {copiedField === "mnemonic" ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-orange-300" />}
-                        <span>{copiedField === "mnemonic" ? "Copied All Words!" : "Copy 12 Words"}</span>
-                      </button>
-                    </div>
-                    
-                    {/* 12-Word Numbered Grid with clean fixed-width badges */}
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-3 mb-4">
-                      {autoWalletKeys.mnemonic?.trim().split(/\s+/).map((word, idx) => (
-                        <div 
-                          key={idx} 
-                          className="bg-white/5 border border-white/10 hover:border-orange-500/40 rounded-xl px-3.5 py-2.5 flex items-center gap-3 transition-colors group min-w-0 shadow-sm"
-                        >
-                          <span className="w-6 h-6 rounded-md bg-black/40 border border-white/10 flex items-center justify-center text-[11px] font-mono font-medium text-gray-400 select-none shrink-0 group-hover:text-orange-400 group-hover:border-orange-500/30 transition-colors">
-                            {idx + 1}
-                          </span>
-                          <span className="text-sm font-mono font-semibold text-orange-100 tracking-normal select-all truncate">
-                            {word}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl p-3.5 flex items-start gap-2.5 text-xs text-orange-200/90 leading-relaxed">
-                      <span className="text-base leading-none mt-0.5">📲</span>
-                      <div>
-                        <strong className="text-orange-300 font-semibold">How to log in on Mobile:</strong> Open the ChainBudget app on your phone &rarr; click <strong className="text-cyan-300">Log In with Recovery Phrase</strong> &rarr; paste or enter these 12 words.
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="bg-black/60 p-4 rounded-xl border border-white/10">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Private Key</p>
-                      <button
-                        onClick={() => handleCopy(autoWalletKeys.privateKey || "", "privkey")}
-                        className="text-xs flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white/5 hover:bg-white/10 text-gray-300 border border-white/10 transition-colors cursor-pointer"
-                      >
-                        {copiedField === "privkey" ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                        {copiedField === "privkey" ? "Copied!" : "Copy Key"}
-                      </button>
-                    </div>
-                    <p className="text-xs font-mono text-gray-300 break-all bg-black/40 p-2.5 rounded-lg border border-white/5">{autoWalletKeys.privateKey}</p>
-                  </div>
-
-                  <p className="text-xs text-red-400 font-medium">
-                    ⚠️ WARNING: Never share your recovery phrase with anyone. Anyone with these 12 words has full control over your wallet.
+              {!showKeys ? (
+                <div className="text-xs text-gray-500 dark:text-gray-400 space-y-2">
+                  <p>
+                    Your wallet is cryptographically registered on Polygon Amoy. Your credentials are fully non-custodial and protected with zero-knowledge server challenge signing.
                   </p>
+                  <div className="p-3 bg-slate-900/50 rounded-xl border border-slate-800 flex items-center gap-2 text-slate-400">
+                    <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>Keys are hidden. Click <strong>Export / View Keys</strong> to reveal with MetaMask verification.</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4 animate-in fade-in-50 duration-200">
+                  <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-300 text-xs flex items-start gap-2">
+                    <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
+                    <div>
+                      <strong>Never share your private key or recovery phrase.</strong> Anyone with these credentials has full control over your funds and SBT credentials.
+                    </div>
+                  </div>
+
+                  {autoWalletKeys?.privateKey && (
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="text-xs font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider">Private Key</label>
+                        <button
+                          onClick={() => handleCopy(autoWalletKeys.privateKey!, "pk")}
+                          className="text-xs text-orange-400 hover:text-orange-300 flex items-center gap-1 font-mono font-semibold"
+                        >
+                          {copiedField === "pk" ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                          {copiedField === "pk" ? "Copied!" : "Copy"}
+                        </button>
+                      </div>
+                      <div className="p-2.5 bg-slate-950 border border-slate-800 rounded-lg font-mono text-xs text-orange-300 break-all select-all">
+                        {autoWalletKeys.privateKey}
+                      </div>
+                    </div>
+                  )}
+
+                  {autoWalletKeys?.mnemonic && (
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="text-xs font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider">12-Word Recovery Phrase</label>
+                        <button
+                          onClick={() => handleCopy(autoWalletKeys.mnemonic!, "mnemonic")}
+                          className="text-xs text-orange-400 hover:text-orange-300 flex items-center gap-1 font-mono font-semibold"
+                        >
+                          {copiedField === "mnemonic" ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                          {copiedField === "mnemonic" ? "Copied!" : "Copy"}
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5 p-3 bg-slate-950 border border-slate-800 rounded-xl">
+                        {autoWalletKeys.mnemonic.split(" ").map((word, idx) => (
+                          <div key={idx} className="flex items-center gap-1.5 bg-slate-900/80 px-2 py-1 rounded-md border border-slate-800">
+                            <span className="text-[10px] text-slate-500 font-mono w-4">{idx + 1}.</span>
+                            <span className="text-xs text-emerald-300 font-mono font-bold">{word}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
-          </div>
-
+          )}
+        </div>
+        
+        <div className="space-y-6">
           <div className="glass p-6 rounded-2xl">
-            <h2 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2 flex justify-between items-center">
-              <span>Linked Wallets</span>
-              <button 
-                onClick={handleLinkWallet}
-                disabled={isLinking}
-                className="btn-outline flex items-center gap-2 text-sm py-1.5 px-3"
-              >
-                {isLinking ? (
-                  <span className="animate-spin w-3 h-3 border-2 border-primary border-t-transparent rounded-full" />
-                ) : (
-                  <Wallet className="w-3 h-3" />
-                )}
-                Link New Wallet
-              </button>
+            <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+              <Wallet className="w-5 h-5 text-primary" />
+              Connected Wallets
             </h2>
-            <p className="text-sm text-gray-500 mb-4">
-              Link additional wallets to use them interchangeably. Ensure you switch your MetaMask to the desired account before linking.
+            <p className="text-xs text-gray-500 mb-4">
+              Link additional Web3 wallets for multi-device login and multi-sig approvals.
             </p>
-            
-            <div className="space-y-3">
+
+            <div className="space-y-2 mb-4">
               {user?.linkedWallets && user.linkedWallets.length > 0 ? (
-                user.linkedWallets.map((w) => (
-                  <div key={w} className="flex items-center justify-between bg-gray-50 dark:bg-gray-800/30 p-3 rounded-lg border border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center">
-                        <Wallet className="w-4 h-4 text-indigo-600" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-mono text-gray-700">{w}</p>
-                        <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Secondary</p>
-                      </div>
-                    </div>
+                user.linkedWallets.map((wallet, idx) => (
+                  <div key={idx} className="p-2.5 bg-gray-50 dark:bg-gray-800/40 rounded-lg border border-gray-100 dark:border-gray-700/50 flex items-center justify-between text-xs font-mono">
+                    <span className="truncate pr-2">{wallet}</span>
+                    <button onClick={() => handleCopy(wallet, `linked_${idx}`)} className="text-gray-400 hover:text-primary shrink-0">
+                      {copiedField === `linked_${idx}` ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                    </button>
                   </div>
                 ))
               ) : (
-                <div className="text-center py-6 text-gray-400 bg-gray-50 dark:bg-gray-800/30 rounded-lg border border-dashed border-gray-200 dark:border-gray-700">
-                  No additional wallets linked.
-                </div>
+                <p className="text-xs text-gray-400 italic">No secondary wallets linked.</p>
               )}
             </div>
+
+            <button
+              onClick={handleLinkWallet}
+              disabled={isLinking}
+              className="btn-secondary w-full text-xs py-2 px-3 flex items-center justify-center gap-1.5"
+            >
+              {isLinking ? (
+                <span className="w-3.5 h-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <Wallet className="w-3.5 h-3.5" />
+              )}
+              Link Secondary Wallet
+            </button>
           </div>
-        </div>
-        
-        {/* Info Card */}
-        <div className="space-y-6">
-          <div className="glass p-6 rounded-2xl bg-linear-to-br from-primary/5 to-purple-500/5 border border-primary/20 relative overflow-hidden">
-            {/* Background design */}
-            <div className="absolute -top-10 -right-10 w-32 h-32 bg-primary/10 rounded-full blur-2xl pointer-events-none"></div>
-            
-            <h3 className="font-bold text-gray-800 mb-2 flex items-center gap-2">
-              <ShieldCheck className="w-5 h-5 text-primary" />
-              Digital Member ID
-            </h3>
+
+          <div className="glass p-6 rounded-2xl border border-primary/20 bg-gradient-to-b from-primary/5 to-transparent">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center">
+                <ShieldCheck className="w-5 h-5 text-purple-400" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-gray-800 dark:text-white">Soulbound ID (SBT)</h3>
+                <p className="text-[11px] text-gray-500">Polygon Amoy Testnet</p>
+              </div>
+            </div>
             
             {activeMembership?.hasSBT ? (
-              <div className="mt-4 animate-fade-in">
-                <div className="bg-linear-to-r from-indigo-600 to-purple-600 p-1 rounded-xl shadow-lg">
-                  <div className="bg-gray-900 rounded-lg p-4 text-white relative overflow-hidden">
-                    <div className="absolute opacity-10 -right-5 -top-5">
-                      <ShieldCheck className="w-32 h-32" />
-                    </div>
-                    <p className="text-xs text-indigo-300 font-mono tracking-widest uppercase mb-1">ChainBudget</p>
-                    <p className="font-bold text-lg mb-4 leading-tight">Verified Member</p>
-                    
-                    <div className="flex justify-between items-end">
-                      <div>
-                        <p className="text-[10px] text-gray-400 uppercase tracking-wider">Soulbound ID</p>
-                        <p className="font-mono font-medium text-sm text-indigo-200">
-                          #{activeMembership.sbtTokenId?.substring(0, 8) || "0001"}...
-                        </p>
-                      </div>
-                      <div className="bg-green-500/20 text-green-400 text-[10px] font-bold px-2 py-1 rounded border border-green-500/30 uppercase tracking-wider">
-                        Active
-                      </div>
-                    </div>
-                  </div>
+              <div className="mt-4 p-4 rounded-xl bg-purple-500/10 border border-purple-500/30 text-center">
+                <div className="inline-flex p-2 rounded-full bg-purple-500/20 text-purple-300 mb-2">
+                  <Check className="w-4 h-4" />
                 </div>
-                <p className="text-xs text-gray-500 mt-3 text-center flex items-center justify-center gap-1">
-                  <ExternalLink className="w-3 h-3" /> Polygon Amoy Testnet
+                <p className="text-xs font-bold text-purple-300">Verified Member</p>
+                <p className="text-[10px] text-purple-400 font-mono mt-0.5">
+                  Token ID: #{activeMembership.sbtTokenId || "1"}
                 </p>
               </div>
             ) : (
@@ -769,7 +816,7 @@ export default function SettingsPage() {
                       }
                     }}
                     disabled={isLinking}
-                    className="btn-primary w-full text-sm font-semibold py-3 px-4 rounded-xl flex justify-center items-center gap-2 bg-linear-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-lg whitespace-nowrap transition-all hover:scale-[1.02]"
+                    className="btn-primary w-full text-sm font-semibold py-3 px-4 rounded-xl flex justify-center items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-lg whitespace-nowrap transition-all hover:scale-[1.02]"
                   >
                     {isLinking ? (
                       <span className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
@@ -794,7 +841,6 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* ── Notification Preferences Card ── */}
         <div className="glass p-6 rounded-2xl border border-primary/20 md:col-span-2">
           <div className="flex items-center justify-between mb-4 border-b pb-3">
             <div className="flex items-center gap-2.5">
@@ -849,9 +895,103 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        {roleLevel <= 2 && orgDetails && (
+          <div className="glass p-6 rounded-2xl border border-purple-500/20 md:col-span-2 shadow-[0_0_30px_rgba(168,85,247,0.08)] relative overflow-hidden">
+            <div className="flex items-center justify-between mb-4 border-b border-purple-500/10 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center">
+                  <Building className="w-5 h-5 text-purple-400" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-gray-800 dark:text-white">Organization Branding & Emblem</h2>
+                  <p className="text-xs text-gray-500">Rebrand or update your custom organization logo across Web, Mobile & Public Ledger.</p>
+                </div>
+              </div>
+              <span className="text-[10px] uppercase font-mono font-bold px-2.5 py-1 rounded-full bg-purple-500/10 border border-purple-500/30 text-purple-400">
+                Officer Tool
+              </span>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center gap-6 pt-2">
+              <div className="relative group">
+                <div className="w-24 h-24 rounded-2xl bg-white/5 border-2 border-dashed border-purple-500/40 p-1.5 flex items-center justify-center overflow-hidden shadow-inner">
+                  {orgLogoPreview ? (
+                    <Image 
+                      src={orgLogoPreview} 
+                      alt="Org Emblem" 
+                      width={96}
+                      height={96}
+                      unoptimized
+                      className="w-full h-full object-cover rounded-xl"
+                    />
+                  ) : (
+                    <div className="flex flex-col items-center justify-center text-purple-400">
+                      <Building className="w-8 h-8 opacity-60 mb-1" />
+                      <span className="text-[10px] text-white/40 font-bold">No Emblem</span>
+                    </div>
+                  )}
+                </div>
+                <label className="absolute -bottom-2 -right-2 p-2 rounded-full bg-purple-600 hover:bg-purple-500 text-white cursor-pointer shadow-lg transition-all hover:scale-105 border border-purple-400/50">
+                  <Camera className="w-4 h-4" />
+                  <input 
+                    type="file" 
+                    accept="image/png, image/jpeg, image/webp" 
+                    onChange={handleOrgLogoFileChange}
+                    className="hidden" 
+                  />
+                </label>
+              </div>
+
+              <div className="flex-1 w-full space-y-3 text-center sm:text-left">
+                <div>
+                  <h3 className="text-sm font-bold text-gray-800 dark:text-white flex items-center justify-center sm:justify-start gap-2">
+                    {orgDetails.name}
+                    <span className="text-[11px] font-normal text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-md border border-purple-500/20">
+                      {orgDetails.type ? orgDetails.type.replace('_', ' ') : 'DAO'}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Upload a high-resolution square image (PNG, JPG, WebP) to establish your organization&apos;s Web3 emblem and on-chain identity.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3 pt-1">
+                  <label className="btn-secondary py-2 px-4 text-xs font-bold flex items-center justify-center gap-2 cursor-pointer">
+                    <Upload className="w-3.5 h-3.5" />
+                    Choose New File
+                    <input 
+                      type="file" 
+                      accept="image/png, image/jpeg, image/webp" 
+                      onChange={handleOrgLogoFileChange}
+                      className="hidden" 
+                    />
+                  </label>
+
+                  <button
+                    onClick={handleRebrandOrgLogo}
+                    disabled={isUploadingOrgLogo || !orgLogoFile}
+                    className="btn-primary py-2 px-5 text-xs font-bold flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(168,85,247,0.3)] hover:shadow-[0_0_25px_rgba(168,85,247,0.5)] disabled:opacity-50"
+                  >
+                    {isUploadingOrgLogo ? (
+                      <>
+                        <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span>Publishing to IPFS...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-3.5 h-3.5" />
+                        <span>Save & Publish Rebrand</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
 
-      {/* SuperAdmin: Pending Liquidations */}
       {user?.isSuperAdmin && (
         <div className="mt-8 glass p-6 rounded-2xl border border-primary/20">
           <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
@@ -883,6 +1023,57 @@ export default function SettingsPage() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {showEmblemSuccessModal && (
+        <div className="fixed inset-0 z-9999 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fade-in">
+          <div className="relative bg-[#13121d] border border-purple-500/40 rounded-3xl shadow-[0_0_50px_rgba(168,85,247,0.3)] w-full max-w-sm p-6 text-center animate-modal-pop">
+            
+            <div className="relative mx-auto w-24 h-24 mb-5 flex items-center justify-center">
+              <div className="absolute inset-0 rounded-3xl bg-emerald-500/20 border-2 border-emerald-500/40 animate-ping opacity-60" />
+              <div className="relative w-20 h-20 rounded-2xl bg-white/5 border-2 border-emerald-400 overflow-hidden flex items-center justify-center shadow-[0_0_20px_rgba(16,185,129,0.4)]">
+                {uploadedEmblemUrl || orgLogoPreview ? (
+                  <Image 
+                    src={uploadedEmblemUrl || orgLogoPreview || ''} 
+                    alt="Rebranded Emblem" 
+                    width={80}
+                    height={80}
+                    unoptimized
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <Building className="w-10 h-10 text-emerald-400" />
+                )}
+              </div>
+              <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center border-2 border-[#13121d] shadow-md">
+                <Check className="w-4 h-4" />
+              </div>
+            </div>
+
+            <h3 className="text-xl font-black text-white tracking-tight mb-1">
+              Emblem Rebranded!
+            </h3>
+
+            <div className="inline-block bg-purple-500/10 border border-purple-500/30 px-3 py-1 rounded-full mb-3">
+              <span className="text-xs font-bold text-purple-300">
+                {orgDetails?.name || "Organization"}
+              </span>
+            </div>
+
+            <p className="text-xs text-white/60 leading-relaxed mb-6 px-2">
+              Your new organization logo and custom emblem have been published to IPFS and synchronized across the Public Ledger, Group Chats, and Member Dashboards.
+            </p>
+
+            <button
+              type="button"
+              onClick={() => setShowEmblemSuccessModal(false)}
+              className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white font-bold text-sm shadow-[0_0_20px_rgba(16,185,129,0.4)] transition-all hover:scale-[1.02] flex items-center justify-center gap-2"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              Done & Synchronized
+            </button>
+          </div>
         </div>
       )}
 

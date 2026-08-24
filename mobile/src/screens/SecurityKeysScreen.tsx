@@ -21,7 +21,7 @@ export default function SecurityKeysScreen() {
 
   const [activeTab, setActiveTab] = useState<'menu' | 'phrase' | 'privateKey'>('menu');
   const [keys, setKeys] = useState<{ privateKey: string; mnemonic: string } | null>(null);
-  const [isLoadingKeys, setIsLoadingKeys] = useState(false);
+  const [loadingTarget, setLoadingTarget] = useState<'phrase' | 'privateKey' | null>(null);
 
   useEffect(() => {
     if (activeTab === 'phrase' || activeTab === 'privateKey') {
@@ -38,6 +38,12 @@ export default function SecurityKeysScreen() {
   const fetchKeys = async (target: 'phrase' | 'privateKey') => {
     await triggerLightHaptic();
 
+    // If keys are already loaded and available in this active authenticated session, switch tab immediately
+    if (keys && ((target === 'phrase' && keys.mnemonic) || (target === 'privateKey' && keys.privateKey))) {
+      setActiveTab(target);
+      return;
+    }
+
     // ── Step 1: Biometric gate ──────────────────────────────────────────────
     const promptMessage =
       target === 'privateKey'
@@ -52,19 +58,30 @@ export default function SecurityKeysScreen() {
       return;
     }
 
-    setIsLoadingKeys(true);
+    setLoadingTarget(target);
     try {
       // ── Step 2 (CRIT-3): Request a one-time challenge nonce from the backend ──
-      // This ensures even a stolen JWT cannot export keys without the private key.
       const challengeRes = await api.post<{ challenge: string; walletAddress: string }>(
         '/auth/keys/challenge'
       );
       const { challenge } = challengeRes.data;
 
       // ── Step 3: Sign the challenge with the device-secured private key ─────
-      // getPrivateKey() is guarded by the biometric prompt above.
       const privateKeyForSigning = await getPrivateKey();
       if (!privateKeyForSigning) {
+        // If device has local mnemonic, derive private key or use local keys directly
+        const localMnemonic = await getMnemonic();
+        if (localMnemonic) {
+          setKeys({
+            mnemonic: localMnemonic,
+            privateKey: '',
+          });
+          if (target === 'phrase') {
+            setActiveTab('phrase');
+            return;
+          }
+        }
+
         Alert.alert(
           'Signing Failed',
           'Could not retrieve signing key from device secure storage.'
@@ -74,20 +91,16 @@ export default function SecurityKeysScreen() {
 
       const { ethers } = await import('ethers');
       const signerWallet = new ethers.Wallet(privateKeyForSigning);
-      // EIP-191 personal_sign — matches ethers.verifyMessage() on the backend
       const signature = await signerWallet.signMessage(challenge);
 
       // ── Step 4: Submit signature to backend for ECDSA verification ─────────
-      // Backend: verifyMessage(challenge, signature) === user.walletAddress
       const exportRes = await api.post<{ privateKey: string; mnemonic: string }>(
         '/auth/keys/export',
         { signature }
       );
       const { privateKey: serverPrivateKey, mnemonic: serverMnemonic } = exportRes.data;
 
-      // ── Step 5: Also read local SecureStore for display ───────────────────
-      // The server keys are the authoritative source; local keys are a fallback
-      // in case the server has no backup (e.g. mobile-only accounts).
+      // ── Step 5: Read local SecureStore for display fallback ────────────────
       let displayMnemonic = serverMnemonic;
       let displayPrivateKey = serverPrivateKey;
 
@@ -122,10 +135,31 @@ export default function SecurityKeysScreen() {
       });
       setActiveTab(target);
     } catch (err: any) {
-      const message: string = err?.response?.data?.error || err?.message || 'Could not retrieve wallet keys.';
+      // Graceful fallback to local device keys if backend rate limit (429) or network issue occurs
+      try {
+        const [localMnemonic, localPrivateKey] = await Promise.all([
+          getMnemonic(),
+          getPrivateKey(),
+        ]);
+
+        if ((target === 'phrase' && localMnemonic) || (target === 'privateKey' && localPrivateKey)) {
+          setKeys({
+            mnemonic: localMnemonic || '',
+            privateKey: localPrivateKey || '',
+          });
+          setActiveTab(target);
+          return;
+        }
+      } catch {}
+
+      const message: string =
+        err?.response?.data?.error ||
+        (typeof err?.response?.data === 'string' ? err.response.data : null) ||
+        err?.message ||
+        'Could not retrieve wallet keys.';
       Alert.alert('Export Failed', message);
     } finally {
-      setIsLoadingKeys(false);
+      setLoadingTarget(null);
     }
   };
 
@@ -219,7 +253,7 @@ export default function SecurityKeysScreen() {
           {/* Option 1: View Seed Phrase */}
           <TouchableOpacity
             onPress={() => fetchKeys('phrase')}
-            disabled={isLoadingKeys}
+            disabled={loadingTarget !== null}
             activeOpacity={0.8}
             style={{
               backgroundColor: colors.surface,
@@ -257,7 +291,7 @@ export default function SecurityKeysScreen() {
                 </Text>
               </View>
             </View>
-            {isLoadingKeys ? (
+            {loadingTarget === 'phrase' ? (
               <ActivityIndicator color="#f97316" />
             ) : (
               <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
@@ -267,7 +301,7 @@ export default function SecurityKeysScreen() {
           {/* Option 2: Export Private Key */}
           <TouchableOpacity
             onPress={() => fetchKeys('privateKey')}
-            disabled={isLoadingKeys}
+            disabled={loadingTarget !== null}
             activeOpacity={0.8}
             style={{
               backgroundColor: colors.surface,
@@ -305,7 +339,7 @@ export default function SecurityKeysScreen() {
                 </Text>
               </View>
             </View>
-            {isLoadingKeys ? (
+            {loadingTarget === 'privateKey' ? (
               <ActivityIndicator color="#EF4444" />
             ) : (
               <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />

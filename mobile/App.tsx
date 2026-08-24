@@ -19,6 +19,8 @@ import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { OrgProvider } from './src/context/OrgContext';
 import { SocketProvider } from './src/context/SocketContext';
+import { AppLockProvider } from './src/context/AppLockContext';
+import AppLockOverlay from './src/components/AppLockOverlay';
 import { setupAndroidNotificationChannel } from './src/lib/notifications';
 import { pruneExpiredCache } from './src/lib/cache';
 
@@ -232,7 +234,10 @@ export default function App() {
                 everywhere. */}
             <OrgProvider>
               <SocketProvider>
-                <RootNavigator navigationRef={navigationRef} />
+                <AppLockProvider>
+                  <RootNavigator navigationRef={navigationRef} />
+                  <AppLockOverlay />
+                </AppLockProvider>
               </SocketProvider>
             </OrgProvider>
           </AuthProvider>

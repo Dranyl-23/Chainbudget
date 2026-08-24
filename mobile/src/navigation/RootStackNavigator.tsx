@@ -24,6 +24,7 @@ import FeedbackScreen from '../screens/FeedbackScreen';
 import AboutScreen from '../screens/AboutScreen';
 import NetworkStatusScreen from '../screens/NetworkStatusScreen';
 import SecurityKeysScreen from '../screens/SecurityKeysScreen';
+import SettingsScreen from '../screens/SettingsScreen';
 import CreateOrganizationScreen from '../screens/CreateOrganizationScreen';
 import OrgChatScreen from '../screens/OrgChatScreen';
 import OrgChatInfoScreen from '../screens/OrgChatInfoScreen';
@@ -148,6 +149,11 @@ export default function RootStackNavigator() {
         name="SecurityKeys"
         component={SecurityKeysScreen}
         options={{ title: 'Web3 Security & Keys' }}
+      />
+      <Stack.Screen
+        name="Settings"
+        component={SettingsScreen}
+        options={{ title: 'Settings & Security' }}
       />
       <Stack.Screen
         name="CreateOrganization"

@@ -20,7 +20,7 @@ const upload = multer({
 router.post("/", authenticate, upload.single("logo"), async (req, res) => {
   try {
     // BUG-8 FIX: Whitelist fields instead of spreading raw req.body
-    const { name, type, description, highValueThreshold, requiredApprovals, isPrivate } = req.body;
+    const { name, type, description, highValueThreshold, requiredApprovals, isPrivate, logoUrl: directLogoUrl } = req.body;
     if (!name || !type) {
       return res.status(400).json({ error: "name and type are required" });
     }
@@ -29,7 +29,7 @@ router.post("/", authenticate, upload.single("logo"), async (req, res) => {
       return res.status(400).json({ error: "You must link a wallet before creating an organization." });
     }
 
-    let logoUrl = "";
+    let logoUrl = directLogoUrl || "";
     if (req.file) {
       try {
         const { url } = await uploadToPinata(req.file.buffer, req.file.originalname);
@@ -37,7 +37,7 @@ router.post("/", authenticate, upload.single("logo"), async (req, res) => {
       } catch (uploadErr) {
         console.error("Error uploading logo to IPFS:", uploadErr);
         // Fallback or just ignore logo if IPFS fails
-        logoUrl = "";
+        logoUrl = directLogoUrl || "";
       }
     }
 

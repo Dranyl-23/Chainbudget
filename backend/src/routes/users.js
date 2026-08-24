@@ -184,6 +184,7 @@ router.post("/:orgId/invite", authenticate, requireRole(1), async (req, res) => 
 
       const notif = new Notification({
         organization: req.params.orgId,
+        recipientUser: user._id,
         title: `Welcome to ${orgName}! 🎉`,
         message: `${inviterName} has added you to ${orgName} as ${roleName}. You can now view and participate in this organization.`,
         type: "system",
@@ -193,13 +194,30 @@ router.post("/:orgId/invite", authenticate, requireRole(1), async (req, res) => 
 
       const io = req.app.get("io");
       if (io) {
-        io.to(req.params.orgId).emit("notification", notif);
-        io.to(req.params.orgId).emit("org_membership_updated", { orgId: req.params.orgId });
+        // Emit notification ONLY to the invited user's personal channel
         if (user._id) {
-          io.to(user._id.toString()).emit("notification", notif);
-          io.to(user._id.toString()).emit("user_updated", { userId: user._id.toString(), orgId: req.params.orgId });
+          io.to(`user:${user._id.toString()}`).emit("new_notification", notif);
+          io.to(`user:${user._id.toString()}`).emit("notification", notif);
+          io.to(`user:${user._id.toString()}`).emit("user_updated", { userId: user._id.toString(), orgId: req.params.orgId });
         }
-        io.emit("org_membership_updated", { userId: user._id.toString(), orgId: req.params.orgId });
+        // Emit org membership directory update to the org room (without the personal welcome notification)
+        io.to(`org:${req.params.orgId}`).emit("org_membership_updated", { orgId: req.params.orgId });
+      }
+
+      // Dispatch Mobile Push Notification to the invited user's status bar
+      try {
+        const NotificationService = require("../services/notificationService");
+        NotificationService.sendPush([user._id.toString()], {
+          title: `Welcome to ${orgName}! 🎉`,
+          body: `${inviterName} added you to ${orgName} as ${roleName}.`,
+          channelId: "chainbudget-default",
+          data: {
+            orgId: req.params.orgId,
+            screen: "Dashboard",
+          },
+        });
+      } catch (pushErr) {
+        console.warn("[invite] Push notification dispatch warning:", pushErr.message);
       }
     } catch (notifErr) {
       console.warn("[invite] In-app notification creation failed (non-fatal):", notifErr.message);

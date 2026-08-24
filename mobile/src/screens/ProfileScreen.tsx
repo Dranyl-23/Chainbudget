@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, ActivityIndicator, Alert, Modal, ScrollVi
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { useToast } from '../context/ToastContext';
 import api from '../lib/api';
 import { Ionicons } from '@expo/vector-icons';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
@@ -17,7 +18,6 @@ import {
   triggerSuccessHaptic,
   authenticateWithBiometrics,
 } from '../lib/biometrics';
-import ThemeSelectorModal from '../components/ThemeSelectorModal';
 import appConfig from '../../app.json';
 
 const APP_VERSION = appConfig.expo.version;
@@ -25,11 +25,11 @@ const APP_VERSION = appConfig.expo.version;
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { user, logout, refreshUser } = useAuth();
-  const { colors, isDark, themeMode } = useTheme();
+  const { colors, isDark } = useTheme();
+  const { showToast } = useToast();
   const navigation = useNavigation<any>();
 
   const [showLogoutModal, setShowLogoutModal] = useState(false);
-  const [showThemeModal, setShowThemeModal] = useState(false);
   const [mintingSbt, setMintingSbt] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [showAllMemberships, setShowAllMemberships] = useState(false);
@@ -37,13 +37,13 @@ export default function ProfileScreen() {
   const copyToClipboard = async (text: string, label: string) => {
     await Clipboard.setStringAsync(text);
     await triggerSuccessHaptic();
-    Alert.alert('Copied!', `${label} copied to clipboard.`);
+    showToast(`${label} copied to clipboard!`, 'info');
   };
 
   const handlePickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission Denied', 'Gallery access is required to change your avatar.');
+      showToast('Gallery access is required to change your avatar.', 'warning');
       return;
     }
 
@@ -80,12 +80,14 @@ export default function ProfileScreen() {
 
       if (uploadRes.data.documentUrl) {
         await api.put('/users/me', { avatarUrl: uploadRes.data.documentUrl });
+        await triggerSuccessHaptic();
+        showToast('Profile avatar updated successfully!', 'success');
         if (refreshUser) await refreshUser();
       }
     } catch (err: any) {
       console.error("Avatar Upload Error:", err);
       const reason = err.response?.data?.error || 'There was an error uploading your profile picture.';
-      Alert.alert('Upload Failed', reason);
+      showToast(reason, 'error');
     } finally {
       setIsUploading(false);
     }
@@ -100,11 +102,11 @@ export default function ProfileScreen() {
     try {
       const res = await api.post('/auth/mint-sbt');
       await triggerSuccessHaptic();
-      Alert.alert('SBT Minted!', 'Your non-transferable Soulbound Member ID has been verified and recorded on Polygon Amoy testnet.');
+      showToast('Soulbound Member ID (SBT) minted on Polygon!', 'success');
       if (refreshUser) await refreshUser();
     } catch (err: any) {
       await triggerErrorHaptic();
-      Alert.alert('Minting Failed', err.response?.data?.error || 'Failed to mint Soulbound Token.');
+      showToast(err.response?.data?.error || 'Failed to mint Soulbound Token.', 'error');
     } finally {
       setMintingSbt(false);
     }
@@ -353,21 +355,20 @@ export default function ProfileScreen() {
         )}
       </View>
 
-      {/* Settings Menu List */}
-      {/* ── SECTION 1: PREFERENCES & NETWORK ── */}
-      <View className="mb-5">
+      {/* Settings & System Hub */}
+      <View className="mb-6">
         <Text style={{ color: colors.textMuted }} className="text-xs font-bold uppercase tracking-widest px-2 mb-2">
-          Preferences & Network
+          Account & App Settings
         </Text>
         <View 
           style={{ backgroundColor: colors.surface, borderColor: colors.border }}
           className="border rounded-2xl p-1 shadow-sm overflow-hidden"
         >
-          {/* Appearance & Theme Item */}
+          {/* Main Settings & PIN Security Hub Item */}
           <TouchableOpacity 
             onPress={() => {
               triggerLightHaptic();
-              setShowThemeModal(true);
+              navigation.navigate('Settings');
             }}
             activeOpacity={0.7}
             style={{ borderBottomColor: colors.borderSubtle }}
@@ -375,72 +376,27 @@ export default function ProfileScreen() {
           >
             <View className="flex-row items-center gap-3">
               <View 
-                style={{ backgroundColor: colors.primaryMuted, borderColor: colors.primary + '40' }}
+                style={{ backgroundColor: 'rgba(99, 102, 241, 0.15)', borderColor: 'rgba(99, 102, 241, 0.35)' }}
                 className="w-9 h-9 rounded-xl items-center justify-center border"
               >
-                <Ionicons name="color-palette-outline" size={20} color={colors.primary} />
+                <Ionicons name="settings-outline" size={20} color="#818cf8" />
               </View>
               <View>
-                <Text style={{ color: colors.textPrimary }} className="font-bold text-sm">Appearance & Theme</Text>
-                <Text style={{ color: colors.textSecondary }} className="text-xs">
-                  {themeMode === 'system' ? `System (${isDark ? 'Dark' : 'Light'})` : themeMode === 'dark' ? 'Dark Mode' : 'Light Mode'}
-                </Text>
-              </View>
-            </View>
-            <View className="flex-row items-center gap-1.5">
-              <View 
-                style={{ backgroundColor: colors.cardGlass, borderColor: colors.border }}
-                className="px-2.5 py-1 rounded-full border"
-              >
-                <Text style={{ color: colors.primary }} className="text-[11px] font-extrabold uppercase">
-                  {themeMode}
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-            </View>
-          </TouchableOpacity>
-
-          {/* Network Status Item */}
-          <TouchableOpacity 
-            onPress={() => {
-              triggerLightHaptic();
-              navigation.navigate('NetworkStatus');
-            }}
-            activeOpacity={0.7}
-            className="flex-row items-center justify-between p-3.5"
-          >
-            <View className="flex-row items-center gap-3">
-              <View className="w-9 h-9 rounded-xl bg-cyan-500/20 items-center justify-center border border-cyan-500/30">
-                <Ionicons name="hardware-chip-outline" size={20} color="#22d3ee" />
-              </View>
-              <View>
-                <Text style={{ color: colors.textPrimary }} className="font-bold text-sm">Network Status</Text>
-                <Text style={{ color: colors.textSecondary }} className="text-xs">Polygon Amoy & Relayer details</Text>
+                <Text style={{ color: colors.textPrimary }} className="font-bold text-sm">Settings & Security</Text>
+                <Text style={{ color: colors.textSecondary }} className="text-xs">App Lock PIN, Biometrics & Preferences</Text>
               </View>
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </TouchableOpacity>
-        </View>
-      </View>
 
-      {/* ── SECTION 2: SECURITY & PRIVACY ── */}
-      <View className="mb-5">
-        <Text style={{ color: colors.textMuted }} className="text-xs font-bold uppercase tracking-widest px-2 mb-2">
-          Security & Privacy
-        </Text>
-        <View 
-          style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-          className="border rounded-2xl p-1 shadow-sm overflow-hidden"
-        >
-          {/* Security & Web3 Vault Item */}
+          {/* Web3 Security & Keys Direct Shortcut */}
           <TouchableOpacity 
             onPress={() => {
               triggerLightHaptic();
               navigation.navigate('SecurityKeys');
             }}
             activeOpacity={0.7}
-            style={{ borderBottomColor: colors.borderSubtle }}
-            className="flex-row items-center justify-between p-3.5 border-b"
+            className="flex-row items-center justify-between p-3.5"
           >
             <View className="flex-row items-center gap-3">
               <View className="w-9 h-9 rounded-xl bg-orange-500/20 items-center justify-center border border-orange-500/30">
@@ -448,113 +404,7 @@ export default function ProfileScreen() {
               </View>
               <View>
                 <Text style={{ color: colors.textPrimary }} className="font-bold text-sm">Web3 Security & Keys</Text>
-                <Text style={{ color: colors.textSecondary }} className="text-xs">Backup seed phrase & private key</Text>
-              </View>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-          </TouchableOpacity>
-
-          {/* Data Privacy Notice */}
-          <TouchableOpacity 
-            onPress={() => {
-              triggerLightHaptic();
-              navigation.navigate('DataPrivacy');
-            }}
-            activeOpacity={0.7}
-            className="flex-row items-center justify-between p-3.5"
-          >
-            <View className="flex-row items-center gap-3">
-              <View className="w-9 h-9 rounded-xl bg-emerald-500/20 items-center justify-center border border-emerald-500/30">
-                <Ionicons name="lock-closed-outline" size={20} color="#10b981" />
-              </View>
-              <View>
-                <Text style={{ color: colors.textPrimary }} className="font-bold text-sm">Data Privacy & Security</Text>
-                <Text style={{ color: colors.textSecondary }} className="text-xs">Compliance & DPO contact</Text>
-              </View>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* ── SECTION 3: SUPPORT & ABOUT ── */}
-      <View className="mb-6">
-        <Text style={{ color: colors.textMuted }} className="text-xs font-bold uppercase tracking-widest px-2 mb-2">
-          Support & About
-        </Text>
-        <View 
-          style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-          className="border rounded-2xl p-1 shadow-sm overflow-hidden"
-        >
-          {/* Send Feedback & Bug Report */}
-          <TouchableOpacity 
-            onPress={() => {
-              triggerLightHaptic();
-              navigation.navigate('Feedback');
-            }}
-            activeOpacity={0.7}
-            style={{ borderBottomColor: colors.borderSubtle }}
-            className="flex-row items-center justify-between p-3.5 border-b"
-          >
-            <View className="flex-row items-center gap-3">
-              <View 
-                style={{ backgroundColor: '#F59E0B20', borderColor: '#F59E0B40' }}
-                className="w-9 h-9 rounded-xl items-center justify-center border"
-              >
-                <Ionicons name="chatbubbles-outline" size={20} color="#F59E0B" />
-              </View>
-              <View>
-                <Text style={{ color: colors.textPrimary }} className="font-bold text-sm">Send Feedback & Bug Report</Text>
-                <Text style={{ color: colors.textSecondary }} className="text-xs">Report issues, suggestions, or ratings</Text>
-              </View>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-          </TouchableOpacity>
-
-          {/* Help & FAQs */}
-          <TouchableOpacity 
-            onPress={() => {
-              triggerLightHaptic();
-              navigation.navigate('HelpFaq');
-            }}
-            activeOpacity={0.7}
-            style={{ borderBottomColor: colors.borderSubtle }}
-            className="flex-row items-center justify-between p-3.5 border-b"
-          >
-            <View className="flex-row items-center gap-3">
-              <View 
-                style={{ backgroundColor: colors.primaryMuted, borderColor: colors.primary + '40' }}
-                className="w-9 h-9 rounded-xl items-center justify-center border"
-              >
-                <Ionicons name="help-circle-outline" size={20} color={colors.primary} />
-              </View>
-              <View>
-                <Text style={{ color: colors.textPrimary }} className="font-bold text-sm">Help & Knowledge Base</Text>
-                <Text style={{ color: colors.textSecondary }} className="text-xs">FAQs, guides, and support channels</Text>
-              </View>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-          </TouchableOpacity>
-
-          {/* About Item */}
-          <TouchableOpacity 
-            onPress={() => {
-              triggerLightHaptic();
-              navigation.navigate('About');
-            }}
-            activeOpacity={0.7}
-            className="flex-row items-center justify-between p-3.5"
-          >
-            <View className="flex-row items-center gap-3">
-              <View 
-                style={{ backgroundColor: colors.primaryMuted, borderColor: colors.primary + '40' }}
-                className="w-9 h-9 rounded-xl items-center justify-center border"
-              >
-                <Ionicons name="information-circle-outline" size={20} color={colors.primary} />
-              </View>
-              <View>
-                <Text style={{ color: colors.textPrimary }} className="font-bold text-sm">About ChainBudget</Text>
-                <Text style={{ color: colors.textSecondary }} className="text-xs">v{APP_VERSION} Capstone Edition</Text>
+                <Text style={{ color: colors.textSecondary }} className="text-xs">Backup recovery seed phrase & private key</Text>
               </View>
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
@@ -691,12 +541,6 @@ export default function ProfileScreen() {
           </View>
         </View>
       </Modal>
-
-      {/* ── MODAL 5: Theme Selector Modal ── */}
-      <ThemeSelectorModal
-        visible={showThemeModal}
-        onClose={() => setShowThemeModal(false)}
-      />
     </KeyboardAwareScrollView>
   </View>
   );

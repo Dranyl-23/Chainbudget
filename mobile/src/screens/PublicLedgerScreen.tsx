@@ -17,12 +17,14 @@ import {
   TextInput,
   Linking,
   Alert,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import api from '../lib/api';
 import { useTheme } from '../context/ThemeContext';
+import { useToast } from '../context/ToastContext';
 import { triggerLightHaptic } from '../lib/biometrics';
 
 function timeAgo(dateString: string) {
@@ -70,6 +72,7 @@ export default function PublicLedgerScreen() {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
+  const { showToast } = useToast();
 
   const [organizations, setOrganizations] = useState<any[]>([]);
   const [feed, setFeed] = useState<any[]>([]);
@@ -115,7 +118,7 @@ export default function PublicLedgerScreen() {
       ? `https://amoy.polygonscan.com/tx/${hashOrAddress}`
       : `https://amoy.polygonscan.com/address/${hashOrAddress}`;
     Linking.openURL(url).catch(() => {
-      Alert.alert('Error', 'Could not open PolygonScan.');
+      showToast('Could not open PolygonScan explorer.', 'error');
     });
   };
 
@@ -470,21 +473,30 @@ export default function PublicLedgerScreen() {
                       elevation: 2,
                     }}
                   >
-                    {/* Organization Icon Avatar */}
+                    {/* Organization Icon / Logo Avatar */}
                     <View
                       style={{
-                        width: 48,
-                        height: 48,
-                        borderRadius: 16,
+                        width: 52,
+                        height: 52,
+                        borderRadius: 18,
                         backgroundColor: typeInfo.color + '18',
                         borderColor: typeInfo.color + '40',
                         borderWidth: 1.5,
                         alignItems: 'center',
                         justifyContent: 'center',
                         marginBottom: 10,
+                        overflow: 'hidden',
                       }}
                     >
-                      <Ionicons name={typeInfo.icon} size={22} color={typeInfo.color} />
+                      {org.logoUrl ? (
+                        <Image
+                          source={{ uri: org.logoUrl }}
+                          style={{ width: '100%', height: '100%' }}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <Ionicons name={typeInfo.icon} size={24} color={typeInfo.color} />
+                      )}
                     </View>
 
                     {/* Org Name (2 Lines Max with balanced height) */}

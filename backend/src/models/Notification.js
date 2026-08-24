@@ -20,6 +20,11 @@ const notificationSchema = new mongoose.Schema(
       enum: ["urgent", "blockchain", "system", "info"],
       default: "info",
     },
+    recipientUser: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null, // null = all org members, non-null = targeted to specific user
+    },
     readBy: [
       {
         type: mongoose.Schema.Types.ObjectId,
@@ -32,6 +37,8 @@ const notificationSchema = new mongoose.Schema(
 
 // Indexes for fast per-org notification retrieval and unread filtering
 notificationSchema.index({ organization: 1, createdAt: -1 });
+notificationSchema.index({ organization: 1, recipientUser: 1, createdAt: -1 });
+notificationSchema.index({ recipientUser: 1, createdAt: -1 });
 notificationSchema.index({ organization: 1, readBy: 1 });
 notificationSchema.index({ organization: 1, type: 1, createdAt: -1 });
 

@@ -78,18 +78,51 @@ interface ChatMessageItem {
   createdAt: string;
 }
 
-function getRoleBadge(roleLevel: number, roleLabel?: string) {
-  const label = roleLabel || (roleLevel === 1 ? 'President' : roleLevel === 2 ? 'Auditor' : roleLevel === 3 ? 'Treasurer' : 'Member');
-  
+function getRoleBadge(roleLevel: number, roleLabel?: string, isDark: boolean = true) {
+  const cleanLabel =
+    roleLabel && roleLabel.trim()
+      ? roleLabel.trim().replace(/^[\p{Emoji}\s]+/u, '')
+      : roleLevel === 1
+      ? 'President'
+      : roleLevel === 2
+      ? 'Auditor'
+      : roleLevel === 3
+      ? 'Treasurer'
+      : 'Member';
+
   switch (roleLevel) {
     case 1:
-      return { label: `👑 ${label}`, color: '#E879F9', bg: 'rgba(232, 121, 249, 0.15)', border: '#E879F950' };
+      // President / Founder
+      return {
+        label: cleanLabel || 'President',
+        color: isDark ? '#D8B4FE' : '#6B21A8',
+        bg: isDark ? 'rgba(192, 132, 252, 0.20)' : 'rgba(126, 34, 206, 0.12)',
+        border: isDark ? 'rgba(192, 132, 252, 0.40)' : 'rgba(126, 34, 206, 0.30)',
+      };
     case 2:
-      return { label: `🛡️ ${label}`, color: '#22D3EE', bg: 'rgba(34, 211, 238, 0.15)', border: '#22D3EE50' };
+      // Auditor
+      return {
+        label: cleanLabel || 'Auditor',
+        color: isDark ? '#38BDF8' : '#0369A1',
+        bg: isDark ? 'rgba(56, 189, 248, 0.20)' : 'rgba(3, 105, 161, 0.12)',
+        border: isDark ? 'rgba(56, 189, 248, 0.40)' : 'rgba(3, 105, 161, 0.30)',
+      };
     case 3:
-      return { label: `💼 ${label}`, color: '#10B981', bg: 'rgba(16, 185, 129, 0.15)', border: '#10B98150' };
+      // Treasurer
+      return {
+        label: cleanLabel || 'Treasurer',
+        color: isDark ? '#34D399' : '#047857',
+        bg: isDark ? 'rgba(52, 211, 153, 0.20)' : 'rgba(4, 120, 87, 0.12)',
+        border: isDark ? 'rgba(52, 211, 153, 0.40)' : 'rgba(4, 120, 87, 0.30)',
+      };
     default:
-      return { label: `👤 ${label}`, color: '#94A3B8', bg: 'rgba(148, 163, 184, 0.15)', border: '#94A3B840' };
+      // Member
+      return {
+        label: cleanLabel || 'Member',
+        color: isDark ? '#94A3B8' : '#334155',
+        bg: isDark ? 'rgba(148, 163, 184, 0.18)' : 'rgba(71, 85, 105, 0.10)',
+        border: isDark ? 'rgba(148, 163, 184, 0.35)' : 'rgba(71, 85, 105, 0.25)',
+      };
   }
 }
 
@@ -166,7 +199,7 @@ export default function OrgChatScreen() {
   const navigation = useNavigation<any>();
   const { user } = useAuth();
   const { organizations, activeOrgId } = useOrg();
-  const { on, isConnected } = useSocket();
+  const { on, emit, isConnected } = useSocket();
   const { colors, isDark } = useTheme();
 
   const targetOrgId = route.params?.orgId || activeOrgId;
@@ -206,6 +239,17 @@ export default function OrgChatScreen() {
       setIsSearchActive(true);
     }
   }, [route.params?.initialSearch]);
+
+  // Auto-scroll to latest message when new messages arrive
+  useEffect(() => {
+    if (messages.length > 0 && flatListRef.current && !isSearchActive) {
+      setTimeout(() => {
+        try {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        } catch {}
+      }, 100);
+    }
+  }, [messages.length, isSearchActive]);
 
   // Jump to specific message and highlight it
   const jumpToMessage = useCallback((messageId: string) => {
@@ -370,6 +414,58 @@ export default function OrgChatScreen() {
         .catch(() => {});
     }, [targetOrgId])
   );
+
+  // Explicitly join and leave the organization chat room on connection / focus
+  useEffect(() => {
+    if (targetOrgId) {
+      emit('join_org', targetOrgId);
+    }
+    return () => {
+      if (targetOrgId) {
+        emit('leave_org', targetOrgId);
+      }
+    };
+  }, [targetOrgId, emit, isConnected]);
+
+  // Live background polling sync (every 3s) ensuring messages arrive even if WebSocket drops or reconnects
+  useEffect(() => {
+    if (!targetOrgId) return;
+    const syncInterval = setInterval(() => {
+      api
+        .get(`/chat/${targetOrgId}/messages?limit=25`)
+        .then((res) => {
+          const freshList: ChatMessageItem[] = res.data?.messages || [];
+          if (freshList.length > 0) {
+            setMessages((prev) => {
+              let hasNew = false;
+              const merged = [...prev];
+              for (const fresh of freshList) {
+                const exists = merged.some((m) => m._id === fresh._id);
+                if (!exists) {
+                  // Replace matching temporary optimistic message if any
+                  const tempIdx = merged.findIndex(
+                    (m) =>
+                      m._id.startsWith('temp-') &&
+                      m.content === fresh.content &&
+                      m.sender?._id === fresh.sender?._id
+                  );
+                  if (tempIdx !== -1) {
+                    merged[tempIdx] = fresh;
+                  } else {
+                    merged.push(fresh);
+                  }
+                  hasNew = true;
+                }
+              }
+              return hasNew ? merged : prev;
+            });
+          }
+        })
+        .catch(() => {});
+    }, 3000);
+
+    return () => clearInterval(syncInterval);
+  }, [targetOrgId]);
 
   // Live WebSocket subscriptions for real-time messages, reactions, and seen receipts
   useEffect(() => {
@@ -612,15 +708,50 @@ export default function OrgChatScreen() {
   // Toggle emoji reaction on message
   const handleToggleReaction = async (messageId: string, emoji: string) => {
     setSelectedMessageForAction(null);
+    if (!messageId || messageId.startsWith('temp-')) {
+      return;
+    }
     await triggerLightHaptic();
+
+    // Optimistic toggle for instant responsive UI
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (m._id !== messageId) return m;
+        const reactions = [...(m.reactions || [])];
+        const groupIndex = reactions.findIndex((r) => r.emoji === emoji);
+        if (groupIndex === -1) {
+          reactions.push({
+            emoji,
+            users: [{ _id: currentUserId, displayName: user?.displayName || 'You', avatarUrl: user?.avatarUrl }],
+          });
+        } else {
+          const group = { ...reactions[groupIndex], users: [...(reactions[groupIndex].users || [])] };
+          const userIdx = group.users.findIndex((u) => u._id === currentUserId);
+          if (userIdx > -1) {
+            group.users.splice(userIdx, 1);
+            if (group.users.length === 0) {
+              reactions.splice(groupIndex, 1);
+            } else {
+              reactions[groupIndex] = group;
+            }
+          } else {
+            group.users.push({ _id: currentUserId, displayName: user?.displayName || 'You', avatarUrl: user?.avatarUrl });
+            reactions[groupIndex] = group;
+          }
+        }
+        return { ...m, reactions };
+      })
+    );
+
     try {
       const res = await api.post(`/chat/${targetOrgId}/messages/${messageId}/react`, { emoji });
-      setMessages((prev) =>
-        prev.map((m) => (m._id === messageId ? { ...m, reactions: res.data?.reactions } : m))
-      );
+      if (res.data?.reactions) {
+        setMessages((prev) =>
+          prev.map((m) => (m._id === messageId ? { ...m, reactions: res.data.reactions } : m))
+        );
+      }
     } catch (err: any) {
       console.warn('[chat:react error]', err?.response?.data || err.message);
-      Alert.alert('Error', err?.response?.data?.error || 'Failed to update reaction.');
     }
   };
 
@@ -628,7 +759,7 @@ export default function OrgChatScreen() {
   const renderMessageItem = ({ item, index }: { item: ChatMessageItem; index: number }) => {
     const isMyMessage = item.sender?._id === currentUserId;
     const senderName = item.sender?.displayName || 'Member';
-    const badge = getRoleBadge(item.roleLevel, item.roleLabel);
+    const badge = getRoleBadge(item.roleLevel, item.roleLabel, isDark);
 
     const isLastInSequence =
       index === messages.length - 1 ||
@@ -775,12 +906,22 @@ export default function OrgChatScreen() {
                 backgroundColor: badge.bg,
                 borderColor: badge.border,
                 borderWidth: 1,
-                borderRadius: 10,
-                paddingHorizontal: 6,
-                paddingVertical: 1.5,
+                borderRadius: 8,
+                paddingHorizontal: 7,
+                paddingVertical: 2,
               }}
             >
-              <Text style={{ color: badge.color, fontSize: 9.5, fontWeight: '800' }}>{badge.label}</Text>
+              <Text
+                style={{
+                  color: badge.color,
+                  fontSize: 10,
+                  fontWeight: '800',
+                  letterSpacing: 0.2,
+                  includeFontPadding: false,
+                }}
+              >
+                {badge.label}
+              </Text>
             </View>
           </View>
 

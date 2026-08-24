@@ -117,13 +117,26 @@ io.on("connection", async (socket) => {
           });
       }
     } catch (err) {
-      console.error("[socket] Failed to load user memberships for room assignment:", err.message);
+      console.error("[socket:org_init]", err);
     }
   }
 
+  // Dynamic room joining for organizations
+  socket.on("join_org", (orgId) => {
+    if (orgId) {
+      socket.join(`org:${orgId}`);
+      console.log(`[socket] Socket ${socket.id} explicitly joined org:${orgId}`);
+    }
+  });
+
+  socket.on("leave_org", (orgId) => {
+    if (orgId) {
+      socket.leave(`org:${orgId}`);
+    }
+  });
+
   socket.on("disconnect", () => {
     console.log("Client disconnected:", socket.id);
-    // Socket.IO automatically removes the socket from all rooms on disconnect.
   });
 });
 

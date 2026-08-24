@@ -114,27 +114,36 @@ function ChatAvatar({
 }
 
 function getRoleBadge(roleLevel: number, roleLabel?: string) {
-  const label = roleLabel || (roleLevel === 1 ? "President" : roleLevel === 2 ? "Auditor" : roleLevel === 3 ? "Treasurer" : "Member");
+  const cleanLabel =
+    roleLabel && roleLabel.trim()
+      ? roleLabel.trim().replace(/^[\p{Emoji}\s]+/u, '')
+      : roleLevel === 1
+      ? "President"
+      : roleLevel === 2
+      ? "Auditor"
+      : roleLevel === 3
+      ? "Treasurer"
+      : "Member";
 
   switch (roleLevel) {
     case 1:
       return {
-        label: `👑 ${label}`,
+        label: cleanLabel || "President",
         bg: "bg-fuchsia-500/15 border-fuchsia-500/30 text-fuchsia-300",
       };
     case 2:
       return {
-        label: `🛡️ ${label}`,
+        label: cleanLabel || "Auditor",
         bg: "bg-cyan-500/15 border-cyan-500/30 text-cyan-300",
       };
     case 3:
       return {
-        label: `💼 ${label}`,
+        label: cleanLabel || "Treasurer",
         bg: "bg-emerald-500/15 border-emerald-500/30 text-emerald-300",
       };
     default:
       return {
-        label: `👤 ${label}`,
+        label: cleanLabel || "Member",
         bg: "bg-zinc-800/60 border-zinc-700/40 text-zinc-400",
       };
   }

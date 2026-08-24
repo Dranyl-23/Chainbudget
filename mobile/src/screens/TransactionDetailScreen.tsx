@@ -225,20 +225,20 @@ export default function TransactionDetailScreen() {
       const res = await api.post(`/transactions/${tx._id}/release-escrow`, payload);
       await triggerSuccessHaptic();
 
-      Alert.alert(
-        'Escrow Release Successful!',
+      showToast(
         res.data?.txHash
-          ? `On-chain Transaction Hash:\n${res.data.txHash.slice(0, 16)}...`
-          : 'Escrow status updated on-chain.'
+          ? `Escrow Released! TX: ${res.data.txHash.slice(0, 10)}...`
+          : 'Escrow released successfully on-chain!',
+        'success'
       );
 
       fetchDetails();
     } catch (err: any) {
       await triggerErrorHaptic();
       console.error('Escrow release failed:', err);
-      Alert.alert(
-        'Release Failed',
-        err.response?.data?.error || err.message || 'Could not release escrow funds.'
+      showToast(
+        err.response?.data?.error || err.message || 'Could not release escrow funds.',
+        'error'
       );
     } finally {
       setReleasing(false);

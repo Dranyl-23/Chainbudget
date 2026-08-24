@@ -16,6 +16,7 @@ import {
   Linking,
   Alert,
   Share,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -23,6 +24,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Clipboard from 'expo-clipboard';
 import api from '../lib/api';
 import { useTheme } from '../context/ThemeContext';
+import { useToast } from '../context/ToastContext';
 import { triggerLightHaptic, triggerSuccessHaptic } from '../lib/biometrics';
 
 const ORG_TYPE_MAP: Record<string, { label: string; icon: any; color: string }> = {
@@ -32,19 +34,15 @@ const ORG_TYPE_MAP: Record<string, { label: string; icon: any; color: string }> 
   ngo: { label: 'Non-Profit / NGO', icon: 'heart-outline', color: '#F43F5E' },
   cooperative: { label: 'Cooperative', icon: 'people-outline', color: '#10B981' },
   church: { label: 'Church / Religious', icon: 'home-outline', color: '#818CF8' },
-  sports_club: { label: 'Sports Club', icon: 'trophy-outline', color: '#FBBF24' },
-  startup: { label: 'Startup / Company', icon: 'rocket-outline', color: '#60A5FA' },
-  family: { label: 'Family / Estate', icon: 'people-circle-outline', color: '#2DD4BF' },
-  fundraising: { label: 'Charity Drive', icon: 'gift-outline', color: '#A3E635' },
+  sports_club: { label: 'Sports & Club', icon: 'trophy-outline', color: '#E11D48' },
+  startup: { label: 'Startup & Company', icon: 'rocket-outline', color: '#06B6D4' },
+  family: { label: 'Family / Estate', icon: 'people-circle-outline', color: '#84CC16' },
+  fundraising: { label: 'Fundraising Campaign', icon: 'gift-outline', color: '#EC4899' },
 };
 
 function getOrgTypeInfo(type?: string) {
-  if (!type) return { label: 'DAO Workspace', icon: 'cube-outline', color: '#C084FC' };
-  return ORG_TYPE_MAP[type.toLowerCase()] || {
-    label: type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
-    icon: 'business-outline',
-    color: '#C084FC',
-  };
+  if (!type) return { label: 'Organization', icon: 'business-outline' as const, color: '#A855F7' };
+  return ORG_TYPE_MAP[type] || { label: type.replace('_', ' '), icon: 'business-outline' as const, color: '#A855F7' };
 }
 
 function timeAgo(dateString: string) {
@@ -67,39 +65,45 @@ function timeAgo(dateString: string) {
 }
 
 export default function PublicOrgDetailScreen() {
-  const navigation = useNavigation<any>();
   const route = useRoute<any>();
+  const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
+  const { showToast } = useToast();
 
+  const orgId = route.params?.orgId || route.params?.org?._id;
   const initialOrg = route.params?.org;
-  const orgId = initialOrg?._id || route.params?.orgId;
 
   const [org, setOrg] = useState<any>(initialOrg || null);
   const [transactions, setTransactions] = useState<any[]>([]);
+  const [budget, setBudget] = useState<any>(null);
   const [loading, setLoading] = useState(!initialOrg);
   const [refreshing, setRefreshing] = useState(false);
 
+  useEffect(() => {
+    if (orgId) {
+      fetchOrgDetails();
+    }
+  }, [orgId]);
+
   const fetchOrgDetails = async () => {
-    if (!orgId) return;
     try {
-      const [orgRes, txRes] = await Promise.all([
+      const [orgRes, txRes, budgetRes] = await Promise.all([
         api.get(`/public/organizations/${orgId}`),
-        api.get(`/public/organizations/${orgId}/transactions`),
+        api.get(`/public/organizations/${orgId}/transactions`).catch(() => ({ data: [] })),
+        api.get(`/public/organizations/${orgId}/budget`).catch(() => ({ data: null })),
       ]);
-      setOrg(orgRes.data || initialOrg);
-      setTransactions(txRes.data || []);
-    } catch (err: any) {
-      console.warn('Failed to load public org details:', err?.message || err);
+
+      setOrg(orgRes.data?.organization || orgRes.data);
+      setTransactions(txRes.data?.transactions || (Array.isArray(txRes.data) ? txRes.data : []));
+      setBudget(budgetRes.data?.budget || budgetRes.data);
+    } catch (err) {
+      console.error('[PublicOrgDetail] Failed to load:', err);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
-
-  useEffect(() => {
-    fetchOrgDetails();
-  }, [orgId]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -109,7 +113,7 @@ export default function PublicOrgDetailScreen() {
   const handleCopyContract = async (address: string) => {
     await Clipboard.setStringAsync(address);
     await triggerSuccessHaptic();
-    Alert.alert('Copied', 'Smart contract address copied to clipboard.');
+    showToast('Smart contract address copied to clipboard!', 'info');
   };
 
   const handleOpenPolygonscan = (hashOrAddress: string, isTx = false) => {
@@ -118,7 +122,7 @@ export default function PublicOrgDetailScreen() {
       ? `https://amoy.polygonscan.com/tx/${hashOrAddress}`
       : `https://amoy.polygonscan.com/address/${hashOrAddress}`;
     Linking.openURL(url).catch(() => {
-      Alert.alert('Error', 'Could not open PolygonScan.');
+      showToast('Could not open PolygonScan explorer.', 'error');
     });
   };
 
@@ -228,9 +232,18 @@ export default function PublicOrgDetailScreen() {
                     borderWidth: 1.5,
                     alignItems: 'center',
                     justifyContent: 'center',
+                    overflow: 'hidden',
                   }}
                 >
-                  <Ionicons name={typeInfo.icon} size={28} color={typeInfo.color} />
+                  {org?.logoUrl ? (
+                    <Image
+                      source={{ uri: org.logoUrl }}
+                      style={{ width: '100%', height: '100%' }}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <Ionicons name={typeInfo.icon} size={28} color={typeInfo.color} />
+                  )}
                 </View>
 
                 <View className="flex-1">

@@ -8,18 +8,26 @@ const { authenticate } = require("../middleware/auth");
 router.get("/", authenticate, async (req, res) => {
   try {
     const { orgId } = req.query;
-    let filter = {};
-
+    let orgFilter;
     if (orgId && orgId !== "all") {
-      filter.organization = orgId;
+      orgFilter = { organization: orgId };
     } else {
       const user = await User.findById(req.user.id).select("memberships").lean();
       const activeOrgIds = (user?.memberships || [])
         .filter((m) => m.isActive !== false)
         .map((m) => m.organization);
 
-      filter.organization = { $in: activeOrgIds };
+      orgFilter = { organization: { $in: activeOrgIds } };
     }
+
+    const filter = {
+      ...orgFilter,
+      $or: [
+        { recipientUser: null },
+        { recipientUser: { $exists: false } },
+        { recipientUser: req.user.id },
+      ],
+    };
 
     const notifications = await Notification.find(filter)
       .populate("organization", "name logo")
@@ -67,18 +75,27 @@ router.post("/:id/read", authenticate, async (req, res) => {
 router.post("/read-all", authenticate, async (req, res) => {
   try {
     const { orgId } = req.body;
-    let filter = {};
+    let orgFilter;
 
     if (orgId && orgId !== "all") {
-      filter.organization = orgId;
+      orgFilter = { organization: orgId };
     } else {
       const user = await User.findById(req.user.id).select("memberships").lean();
       const activeOrgIds = (user?.memberships || [])
         .filter((m) => m.isActive !== false)
         .map((m) => m.organization);
 
-      filter.organization = { $in: activeOrgIds };
+      orgFilter = { organization: { $in: activeOrgIds } };
     }
+
+    const filter = {
+      ...orgFilter,
+      $or: [
+        { recipientUser: null },
+        { recipientUser: { $exists: false } },
+        { recipientUser: req.user.id },
+      ],
+    };
 
     // Update all notifications where readBy doesn't include the user
     await Notification.updateMany(

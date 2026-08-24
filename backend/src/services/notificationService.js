@@ -124,31 +124,41 @@ class NotificationService {
    *
    * @param {object} params
    * @param {string} params.organizationId
+   * @param {string} [params.recipientUserId=null] - Specific user recipient or null for org broadcast
    * @param {string} params.title
    * @param {string} params.message
    * @param {string} [params.type='info'] - 'urgent' | 'blockchain' | 'system' | 'info'
    * @param {object} [params.io] - Socket.io server instance
    * @returns {Promise<object>}
    */
-  static async createInAppNotification({ organizationId, title, message, type = "info", io = null }) {
+  static async createInAppNotification({ organizationId, recipientUserId = null, title, message, type = "info", io = null }) {
     try {
       const notif = await Notification.create({
         organization: organizationId,
+        recipientUser: recipientUserId || null,
         title,
         message,
         type,
         readBy: [],
       });
 
-      if (io && organizationId) {
-        io.to(`org:${organizationId}`).emit("new_notification", {
+      if (io) {
+        const payload = {
           _id: notif._id,
           title: notif.title,
           message: notif.message,
           type: notif.type,
           organization: organizationId,
           createdAt: notif.createdAt,
-        });
+        };
+
+        if (recipientUserId) {
+          io.to(`user:${recipientUserId.toString()}`).emit("new_notification", payload);
+          io.to(`user:${recipientUserId.toString()}`).emit("notification", payload);
+        } else if (organizationId) {
+          io.to(`org:${organizationId}`).emit("new_notification", payload);
+          io.to(`org:${organizationId}`).emit("notification", payload);
+        }
       }
 
       return notif;
@@ -207,9 +217,10 @@ class NotificationService {
         : `Approval Recorded: ₱${transaction.amount.toLocaleString()}`;
       const body = `${approver.displayName || "An officer"} approved "${transaction.description}".`;
 
-      // 1. In-App Notification
+      // 1. In-App Notification (Targeted specifically to the submitter)
       await NotificationService.createInAppNotification({
         organizationId: organization._id,
+        recipientUserId: transaction.submittedBy ? transaction.submittedBy.toString() : null,
         title,
         message: body,
         type: isFinalApproval ? "blockchain" : "info",

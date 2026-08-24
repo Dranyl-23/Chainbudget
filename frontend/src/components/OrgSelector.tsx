@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import Image from "next/image";
 import { ChevronDown, Check, Plus, Building, X } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import api from "@/lib/api";
@@ -29,6 +30,14 @@ interface ApiErrorResponse {
   };
 }
 
+function formatOrgLogo(url?: string) {
+  if (!url) return null;
+  if (url.startsWith("data:")) return url;
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  const backendBase = process.env.NEXT_PUBLIC_API_URL?.replace("/api", "") || "https://chainbudget-api.fly.dev";
+  return `${backendBase}${url.startsWith("/") ? "" : "/"}${url}`;
+}
+
 export default function OrgSelector() {
   const { activeOrgId, setActiveOrgId } = useAuth();
   const [orgs, setOrgs] = useState<Organization[]>([]);
@@ -45,6 +54,7 @@ export default function OrgSelector() {
     isPrivate: false,
   });
   const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -92,6 +102,18 @@ export default function OrgSelector() {
 
   const activeOrg = orgs.find((o) => o._id === activeOrgId);
 
+  const handleLogoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setLogoFile(file);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setLogoPreview(event.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleCreateOrg = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -116,6 +138,7 @@ export default function OrgSelector() {
       setDropdownOpen(false);
       setFormData({ name: "", type: "student_org", highValueThreshold: 10000, isPrivate: false });
       setLogoFile(null);
+      setLogoPreview(null);
       // Force reload to refresh user memberships from token/backend if needed
       window.location.reload(); 
     } catch (err: unknown) {
@@ -132,11 +155,27 @@ export default function OrgSelector() {
         className="flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors sidebar-card select-none hover:bg-white/5"
         onClick={() => setDropdownOpen(!dropdownOpen)}
       >
-        <div className="overflow-hidden">
-          <p className="text-xs text-gray-400 mb-0.5">Organization</p>
-          <p className="text-sm font-medium text-gray-100 truncate">
-            {loading ? "Loading..." : activeOrg ? activeOrg.name : "Select Organization"}
-          </p>
+        <div className="flex items-center gap-2.5 overflow-hidden">
+          {activeOrg?.logoUrl ? (
+            <Image 
+              src={formatOrgLogo(activeOrg.logoUrl) || ''} 
+              alt={activeOrg.name} 
+              width={28}
+              height={28}
+              unoptimized
+              className="w-7 h-7 rounded-lg object-cover bg-white/5 border border-purple-500/30 shrink-0" 
+            />
+          ) : (
+            <div className="w-7 h-7 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center shrink-0">
+              <Building className="w-3.5 h-3.5 text-purple-400" />
+            </div>
+          )}
+          <div className="overflow-hidden">
+            <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-0.5">Organization</p>
+            <p className="text-sm font-bold text-gray-100 truncate">
+              {loading ? "Loading..." : activeOrg ? activeOrg.name : "Select Organization"}
+            </p>
+          </div>
         </div>
         <ChevronDown className={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${dropdownOpen ? "rotate-180" : ""}`} />
       </div>
@@ -148,13 +187,27 @@ export default function OrgSelector() {
             {orgs.map((org) => (
               <div 
                 key={org._id}
-                className="px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/10 cursor-pointer flex items-center justify-between transition-colors"
+                className="px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/10 cursor-pointer flex items-center justify-between transition-colors gap-2"
                 onClick={() => {
                   setActiveOrgId(org._id);
                   setDropdownOpen(false);
                 }}
               >
-                <span className="truncate pr-2">{org.name}</span>
+                <div className="flex items-center gap-2.5 overflow-hidden">
+                  {org.logoUrl ? (
+                    <Image 
+                      src={formatOrgLogo(org.logoUrl) || ''} 
+                      alt={org.name} 
+                      width={20}
+                      height={20}
+                      unoptimized
+                      className="w-5 h-5 rounded-md object-cover bg-white/5 border border-white/10 shrink-0" 
+                    />
+                  ) : (
+                    <Building className="w-4 h-4 text-gray-400 shrink-0" />
+                  )}
+                  <span className="truncate">{org.name}</span>
+                </div>
                 {activeOrgId === org._id && <Check className="w-4 h-4 text-cyan-400 shrink-0 drop-shadow-[0_0_5px_rgba(34,211,238,0.8)]" />}
               </div>
             ))}
@@ -216,13 +269,38 @@ export default function OrgSelector() {
                 </div>
 
                 <div>
-                  <label className="block text-xs md:text-sm font-bold text-white/80 uppercase tracking-widest mb-1.5">Organization Logo (Optional)</label>
-                  <input 
-                    type="file" 
-                    accept="image/png, image/jpeg, image/webp"
-                    onChange={(e) => setLogoFile(e.target.files?.[0] || null)}
-                    className="w-full px-4 py-2 bg-black/20 border border-white/10 rounded-xl text-xs text-white/60 file:mr-4 file:py-1.5 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-purple-500/20 file:text-purple-300 hover:file:bg-purple-500/30 file:transition-colors transition-all shadow-inner cursor-pointer"
-                  />
+                  <label className="block text-xs md:text-sm font-bold text-white/80 uppercase tracking-widest mb-1.5">Custom Emblem / Logo</label>
+                  <div className="flex items-center gap-3">
+                    {logoPreview ? (
+                      <div className="relative w-12 h-12 rounded-xl border border-purple-500/50 overflow-hidden shrink-0 shadow-[0_0_10px_rgba(168,85,247,0.3)]">
+                        <Image 
+                          src={logoPreview} 
+                          alt="Emblem preview" 
+                          width={48}
+                          height={48}
+                          unoptimized
+                          className="w-full h-full object-cover" 
+                        />
+                        <button
+                          type="button"
+                          onClick={() => { setLogoFile(null); setLogoPreview(null); }}
+                          className="absolute top-0 right-0 bg-red-500/80 hover:bg-red-500 text-white p-0.5 rounded-bl-lg"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="w-12 h-12 rounded-xl bg-purple-500/10 border border-dashed border-purple-500/30 flex items-center justify-center shrink-0 text-purple-400">
+                        <Building className="w-5 h-5" />
+                      </div>
+                    )}
+                    <input 
+                      type="file" 
+                      accept="image/png, image/jpeg, image/webp"
+                      onChange={handleLogoFileChange}
+                      className="flex-1 px-3 py-2 bg-black/20 border border-white/10 rounded-xl text-xs text-white/60 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-purple-500/20 file:text-purple-300 hover:file:bg-purple-500/30 file:transition-colors transition-all shadow-inner cursor-pointer"
+                    />
+                  </div>
                 </div>
 
                 <div>

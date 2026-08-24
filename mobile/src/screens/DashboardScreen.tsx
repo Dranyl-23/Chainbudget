@@ -265,7 +265,15 @@ export default function DashboardScreen() {
             accessibilityRole="button"
             accessibilityLabel={`Switch organization. Current organization: ${activeOrg?.name || 'Select Org'}`}
           >
-            <View style={{ backgroundColor: colors.primary }} className="w-2.5 h-2.5 rounded-full mr-2" />
+            {activeOrg?.logoUrl ? (
+              <Image
+                source={{ uri: activeOrg.logoUrl }}
+                style={{ width: 18, height: 18, borderRadius: 9, marginRight: 6 }}
+                resizeMode="cover"
+              />
+            ) : (
+              <View style={{ backgroundColor: colors.primary }} className="w-2.5 h-2.5 rounded-full mr-2" />
+            )}
             <Text style={{ color: colors.textPrimary }} className="font-medium mr-2">{activeOrg?.name || 'Select Org'}</Text>
             <Ionicons name="chevron-down" size={14} color={colors.textMuted} />
           </TouchableOpacity>
