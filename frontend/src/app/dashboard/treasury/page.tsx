@@ -459,10 +459,10 @@ export default function TreasuryPage() {
                 ) : (
                   <>
                     {/* Glowing background orb */}
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-cyan-400/20 rounded-full blur-[40px] pointer-events-none" />
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-cyan-400/20 rounded-full blur-2xl pointer-events-none" />
                     
                     <div className="text-center relative z-10">
-                      <span className="text-4xl lg:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-br from-cyan-300 to-purple-400 tracking-tighter drop-shadow-[0_0_10px_rgba(34,211,238,0.5)]">
+                      <span className="text-4xl lg:text-5xl font-black text-transparent bg-clip-text bg-linear-to-br from-cyan-300 to-purple-400 tracking-tighter drop-shadow-[0_0_10px_rgba(34,211,238,0.5)]">
                         {balance}
                       </span>
                       <span className="ml-2 text-lg font-bold text-cyan-400">POL</span>

@@ -38,6 +38,44 @@ function formatOrgLogo(url?: string) {
   return `${backendBase}${url.startsWith("/") ? "" : "/"}${url}`;
 }
 
+function OrgLogoIcon({ 
+  url, 
+  name, 
+  size = 28, 
+  className = "" 
+}: { 
+  url?: string; 
+  name?: string; 
+  size?: number; 
+  className?: string; 
+}) {
+  const [hasError, setHasError] = useState(false);
+  const formatted = formatOrgLogo(url);
+
+  if (!formatted || hasError) {
+    return (
+      <div 
+        style={{ width: size, height: size }}
+        className={`rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center shrink-0 ${className}`}
+      >
+        <Building className="text-purple-400" style={{ width: Math.max(12, size * 0.5), height: Math.max(12, size * 0.5) }} />
+      </div>
+    );
+  }
+
+  return (
+    <Image 
+      src={formatted} 
+      alt={name || "Org Emblem"} 
+      width={size}
+      height={size}
+      unoptimized
+      className={`rounded-lg object-cover bg-white/5 border border-purple-500/30 shrink-0 ${className}`}
+      onError={() => setHasError(true)}
+    />
+  );
+}
+
 export default function OrgSelector() {
   const { activeOrgId, setActiveOrgId } = useAuth();
   const [orgs, setOrgs] = useState<Organization[]>([]);
@@ -119,28 +157,41 @@ export default function OrgSelector() {
     setIsSubmitting(true);
     setError(null);
     try {
-      const data = new FormData();
-      data.append("name", formData.name);
-      data.append("type", formData.type);
-      data.append("highValueThreshold", formData.highValueThreshold.toString());
-      data.append("isPrivate", formData.isPrivate.toString());
+      let uploadedLogoUrl: string | undefined = undefined;
+
+      // If logo file is selected, upload it
       if (logoFile) {
-        data.append("logo", logoFile);
+        try {
+          const uploadData = new FormData();
+          uploadData.append("file", logoFile);
+          const uploadRes = await api.post<{ documentUrl?: string }>("/upload", uploadData, {
+            headers: { "Content-Type": "multipart/form-data" }
+          });
+          uploadedLogoUrl = uploadRes.data?.documentUrl;
+        } catch {
+          // If upload fails, use local Base64 data URL
+          uploadedLogoUrl = logoPreview || undefined;
+        }
       }
 
-      const res = await api.post<Organization>("/organizations", data, {
-        headers: { "Content-Type": "multipart/form-data" }
+      const res = await api.post<Organization>("/organizations", {
+        ...formData,
+        logoUrl: uploadedLogoUrl || logoPreview || undefined,
       });
+
       const newOrg = res.data;
       setOrgs((prev) => [...prev, newOrg]);
       setActiveOrgId(newOrg._id);
       setModalOpen(false);
-      setDropdownOpen(false);
-      setFormData({ name: "", type: "student_org", highValueThreshold: 10000, isPrivate: false });
+      setFormData({
+        name: "",
+        type: "student_org",
+        highValueThreshold: 10000,
+        isPrivate: false,
+      });
       setLogoFile(null);
       setLogoPreview(null);
-      // Force reload to refresh user memberships from token/backend if needed
-      window.location.reload(); 
+      setIsSubmitting(false);
     } catch (err: unknown) {
       const apiErr = err as ApiErrorResponse;
       setError(apiErr.response?.data?.error || apiErr.response?.data?.message || "Failed to create organization");
@@ -156,20 +207,7 @@ export default function OrgSelector() {
         onClick={() => setDropdownOpen(!dropdownOpen)}
       >
         <div className="flex items-center gap-2.5 overflow-hidden">
-          {activeOrg?.logoUrl ? (
-            <Image 
-              src={formatOrgLogo(activeOrg.logoUrl) || ''} 
-              alt={activeOrg.name} 
-              width={28}
-              height={28}
-              unoptimized
-              className="w-7 h-7 rounded-lg object-cover bg-white/5 border border-purple-500/30 shrink-0" 
-            />
-          ) : (
-            <div className="w-7 h-7 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center shrink-0">
-              <Building className="w-3.5 h-3.5 text-purple-400" />
-            </div>
-          )}
+          <OrgLogoIcon url={activeOrg?.logoUrl} name={activeOrg?.name} size={28} />
           <div className="overflow-hidden">
             <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-0.5">Organization</p>
             <p className="text-sm font-bold text-gray-100 truncate">
@@ -194,18 +232,7 @@ export default function OrgSelector() {
                 }}
               >
                 <div className="flex items-center gap-2.5 overflow-hidden">
-                  {org.logoUrl ? (
-                    <Image 
-                      src={formatOrgLogo(org.logoUrl) || ''} 
-                      alt={org.name} 
-                      width={20}
-                      height={20}
-                      unoptimized
-                      className="w-5 h-5 rounded-md object-cover bg-white/5 border border-white/10 shrink-0" 
-                    />
-                  ) : (
-                    <Building className="w-4 h-4 text-gray-400 shrink-0" />
-                  )}
+                  <OrgLogoIcon url={org.logoUrl} name={org.name} size={20} />
                   <span className="truncate">{org.name}</span>
                 </div>
                 {activeOrgId === org._id && <Check className="w-4 h-4 text-cyan-400 shrink-0 drop-shadow-[0_0_5px_rgba(34,211,238,0.8)]" />}

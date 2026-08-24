@@ -12,7 +12,7 @@ import { getErrorMessage } from "@/lib/utils";
 import toast from "react-hot-toast";
 import { 
   Save, Wallet, Upload, User as UserIcon, ShieldCheck, 
-  ExternalLink, Copy, Check, Smartphone, CheckCircle2, 
+  ExternalLink, Copy, Check, CheckCircle2, 
   Sparkles, X, Lock, Key, Clock, ShieldAlert,
   Bell, Building, Camera
 } from "lucide-react";
@@ -639,7 +639,7 @@ export default function SettingsPage() {
           </div>
 
           {user?.walletAddress && (
-            <div className="glass p-6 rounded-2xl border border-orange-500/20 bg-gradient-to-br from-orange-500/5 via-transparent to-transparent">
+            <div className="glass p-6 rounded-2xl border border-orange-500/20 bg-linear-to-br from-orange-500/5 via-transparent to-transparent">
               <div className="flex items-center justify-between mb-4 border-b border-orange-500/10 pb-3">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-lg bg-orange-500/10 border border-orange-500/30 flex items-center justify-center">
@@ -775,7 +775,7 @@ export default function SettingsPage() {
             </button>
           </div>
 
-          <div className="glass p-6 rounded-2xl border border-primary/20 bg-gradient-to-b from-primary/5 to-transparent">
+          <div className="glass p-6 rounded-2xl border border-primary/20 bg-linear-to-b from-primary/5 to-transparent">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center">
                 <ShieldCheck className="w-5 h-5 text-purple-400" />
@@ -816,7 +816,7 @@ export default function SettingsPage() {
                       }
                     }}
                     disabled={isLinking}
-                    className="btn-primary w-full text-sm font-semibold py-3 px-4 rounded-xl flex justify-center items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-lg whitespace-nowrap transition-all hover:scale-[1.02]"
+                    className="btn-primary w-full text-sm font-semibold py-3 px-4 rounded-xl flex justify-center items-center gap-2 bg-linear-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-lg whitespace-nowrap transition-all hover:scale-[1.02]"
                   >
                     {isLinking ? (
                       <span className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
@@ -1068,7 +1068,7 @@ export default function SettingsPage() {
             <button
               type="button"
               onClick={() => setShowEmblemSuccessModal(false)}
-              className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white font-bold text-sm shadow-[0_0_20px_rgba(16,185,129,0.4)] transition-all hover:scale-[1.02] flex items-center justify-center gap-2"
+              className="w-full py-3 px-4 rounded-xl bg-linear-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white font-bold text-sm shadow-[0_0_20px_rgba(16,185,129,0.4)] transition-all hover:scale-[1.02] flex items-center justify-center gap-2"
             >
               <CheckCircle2 className="w-4 h-4" />
               Done & Synchronized

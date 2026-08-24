@@ -76,13 +76,17 @@ router.put("/me", authenticate, async (req, res) => {
     if (displayName !== undefined) user.displayName = displayName;
     if (avatarUrl !== undefined) {
       const isValidAvatarUrl = typeof avatarUrl === 'string' && (
+        avatarUrl === '' ||
+        avatarUrl.startsWith('data:image/') ||
         avatarUrl.startsWith('https://gateway.pinata.cloud/ipfs/') ||
         avatarUrl.startsWith('https://ipfs.io/ipfs/') ||
+        avatarUrl.startsWith('https://') ||
+        avatarUrl.startsWith('http://') ||
         avatarUrl.startsWith('/uploads/') ||
         /^https?:\/\/[^/]+\/uploads\//.test(avatarUrl)
       );
-      if (avatarUrl !== '' && !isValidAvatarUrl) {
-        return res.status(400).json({ error: 'Invalid avatar URL. Must be an IPFS or server-hosted URL.' });
+      if (!isValidAvatarUrl) {
+        return res.status(400).json({ error: 'Invalid avatar URL. Must be an IPFS, HTTPS, or image data URL.' });
       }
       user.avatarUrl = avatarUrl;
     }

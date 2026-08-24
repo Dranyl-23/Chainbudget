@@ -6,7 +6,7 @@ import { io, Socket } from "socket.io-client";
 import {
   Send, Pin, PinOff, Trash2, Copy, Check, MessageSquare, RefreshCw,
   Smile, CheckCheck, UserCircle, Camera, Info, X, ChevronDown, ChevronUp,
-  ShieldCheck, Users, Search
+  ShieldCheck, Users, Search, Paperclip, Download
 } from "lucide-react";
 import toast from "react-hot-toast";
 import api from "@/lib/api";
@@ -223,6 +223,9 @@ export default function OrgChatPage() {
   const [isSearchingServer, setIsSearchingServer] = useState(false);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
 
+  const [selectedImagePreview, setSelectedImagePreview] = useState<string | null>(null);
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
+
   const toggleSection = (key: string) => {
     setOpenSection((prev) => ({ ...prev, [key]: !prev[key] }));
   };
@@ -231,6 +234,7 @@ export default function OrgChatPage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
   const socketRef = useRef<Socket | null>(null);
 
   // Jump to specific message by ID and highlight it
@@ -625,6 +629,88 @@ export default function OrgChatPage() {
     }
   };
 
+  // 3.5 Send Image Attachment Handler
+  const handleSendAttachment = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!activeOrgId) {
+      toast.error("No active organization selected");
+      return;
+    }
+    if (!e.target.files || !e.target.files[0]) return;
+    const file = e.target.files[0];
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Image size must be under 5MB");
+      return;
+    }
+
+    setIsUploadingAttachment(true);
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const roleLevel = userRoleLevel;
+    const roleLabel =
+      currentMembership?.roleLabel ||
+      (roleLevel === 1 ? "President" : roleLevel === 2 ? "Auditor" : roleLevel === 3 ? "Treasurer" : "Member");
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const localDataUrl = event.target?.result as string;
+
+      const optimisticMessage: ChatMessage = {
+        _id: tempId,
+        organization: activeOrgId,
+        sender: {
+          _id: currentUserId || "me",
+          displayName: user?.displayName || "Me",
+          avatarUrl: user?.avatarUrl,
+          walletAddress: user?.walletAddress,
+          email: (user as { email?: string })?.email,
+        },
+        content: localDataUrl,
+        messageType: "image",
+        roleLevel,
+        roleLabel,
+        isPinned: false,
+        reactions: [],
+        seenBy: [
+          {
+            _id: currentUserId || "me",
+            displayName: user?.displayName || "Me",
+            avatarUrl: user?.avatarUrl,
+          },
+        ],
+        createdAt: new Date().toISOString(),
+      };
+
+      setMessages((prev) => [...prev, optimisticMessage]);
+      setTimeout(() => scrollToBottom("smooth"), 20);
+
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+        const uploadRes = await api.post<{ documentUrl?: string }>("/upload", formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+
+        const finalUrl = uploadRes.data?.documentUrl || localDataUrl;
+
+        const res = await api.post<{ message: ChatMessage }>(`/chat/${activeOrgId}/messages`, {
+          content: finalUrl,
+          messageType: "image",
+        });
+
+        if (res.data?.message) {
+          setMessages((prev) => prev.map((m) => (m._id === tempId ? res.data.message : m)));
+        }
+      } catch (err: unknown) {
+        console.error("Failed to send image attachment:", err);
+        toast.error("Failed to upload image");
+        setMessages((prev) => prev.filter((m) => m._id !== tempId));
+      } finally {
+        setIsUploadingAttachment(false);
+        if (attachmentInputRef.current) attachmentInputRef.current.value = "";
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   // 4. Toggle Reaction Handler
   const handleToggleReaction = async (messageId: string, emoji: string) => {
     setActiveReactingMessageId(null);
@@ -940,7 +1026,26 @@ export default function OrgChatPage() {
                           <Pin className="w-3 h-3" /> Pinned Announcement
                         </div>
                       )}
-                      <p className="whitespace-pre-wrap wrap-break-word">{msg.content}</p>
+                      {msg.messageType === "image" || (typeof msg.content === "string" && (msg.content.startsWith("data:image/") || msg.content.match(/\.(jpeg|jpg|png|gif|webp)(\?.*)?$/i))) ? (
+                        <div 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedImagePreview(msg.content.startsWith("/") ? `${BACKEND_URL}${msg.content}` : msg.content);
+                          }}
+                          className="rounded-xl overflow-hidden my-1 max-w-xs cursor-pointer group/img relative border border-white/10 shadow-md hover:border-purple-400/50 transition-all"
+                        >
+                          <Image
+                            src={msg.content.startsWith("/") ? `${BACKEND_URL}${msg.content}` : msg.content}
+                            alt="Shared photo"
+                            width={320}
+                            height={240}
+                            unoptimized
+                            className="w-full max-h-72 object-cover transition-transform duration-200 group-hover/img:scale-105"
+                          />
+                        </div>
+                      ) : (
+                        <p className="whitespace-pre-wrap wrap-break-word">{msg.content}</p>
+                      )}
                     </div>
 
                     {/* ── TAP/CLICK TO SHOW TIMESTAMP ── */}
@@ -978,50 +1083,52 @@ export default function OrgChatPage() {
                         className="p-1.5 hover:bg-white/10 text-zinc-400 hover:text-amber-300 rounded-lg transition"
                         title="React with emoji"
                       >
-                        <Smile className="w-3.5 h-3.5" />
+                        <Smile className="w-4 h-4" />
                       </button>
 
                       <button
                         onClick={() => void handleCopyText(msg._id, msg.content)}
                         className="p-1.5 hover:bg-white/10 text-zinc-400 hover:text-white rounded-lg transition"
-                        title="Copy text"
+                        title="Copy message"
                       >
-                        {copiedId === msg._id ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                        {copiedId === msg._id ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
                       </button>
 
                       {userRoleLevel <= 2 && (
                         <button
                           onClick={() => void handleTogglePin(msg)}
-                          className="p-1.5 hover:bg-white/10 text-zinc-400 hover:text-amber-300 rounded-lg transition"
-                          title={msg.isPinned ? "Unpin message" : "Pin message"}
+                          className={`p-1.5 hover:bg-white/10 rounded-lg transition ${
+                            msg.isPinned ? "text-amber-400 hover:text-amber-300" : "text-zinc-400 hover:text-amber-400"
+                          }`}
+                          title={msg.isPinned ? "Unpin message" : "Pin announcement"}
                         >
-                          {msg.isPinned ? <PinOff className="w-3.5 h-3.5 text-amber-400" /> : <Pin className="w-3.5 h-3.5" />}
+                          {msg.isPinned ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4" />}
                         </button>
                       )}
 
-                      {(isMe || userRoleLevel === 1) && (
+                      {(isMe || userRoleLevel <= 2) && (
                         <button
                           onClick={() => void handleDeleteMessage(msg._id)}
-                          className="p-1.5 hover:bg-rose-500/20 text-zinc-400 hover:text-rose-400 rounded-lg transition"
+                          className="p-1.5 hover:bg-red-500/20 text-zinc-400 hover:text-red-400 rounded-lg transition"
                           title="Delete message"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       )}
                     </div>
 
-                    {/* ── QUICK REACTION EMOJI POPUP ── */}
+                    {/* ── EMOJI PICKER POPUP ── */}
                     {activeReactingMessageId === msg._id && (
                       <div
-                        className={`absolute -top-10 flex items-center gap-1.5 p-1.5 bg-zinc-900/95 border border-purple-500/40 rounded-full shadow-2xl z-30 animate-fade-in ${
+                        className={`absolute -top-12 ${
                           isMe ? "right-0" : "left-0"
-                        }`}
+                        } flex items-center gap-1.5 bg-zinc-900/95 backdrop-blur-md border border-purple-500/30 p-1.5 rounded-2xl shadow-2xl z-30 animate-in zoom-in-90 duration-150`}
                       >
                         {REACTION_EMOJIS.map((emoji) => (
                           <button
                             key={emoji}
                             onClick={() => void handleToggleReaction(msg._id, emoji)}
-                            className="text-base hover:scale-125 transition-transform p-1 rounded-full hover:bg-white/10"
+                            className="text-lg hover:scale-125 hover:bg-white/10 p-1 rounded-xl transition transform"
                           >
                             {emoji}
                           </button>
@@ -1030,21 +1137,21 @@ export default function OrgChatPage() {
                     )}
                   </div>
 
-                  {/* ── REACTION PILLS UNDER BUBBLE ── */}
+                  {/* ── DISPLAYED REACTIONS PILLS ── */}
                   {msg.reactions && msg.reactions.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {msg.reactions.map((r) => {
-                        const hasReacted = r.users?.some((u) => u._id === currentUserId);
+                    <div className="flex flex-wrap gap-1 mt-1 px-1">
+                      {msg.reactions.map((r, rIdx) => {
+                        const hasReacted = r.users.some((u) => u._id === currentUserId);
                         return (
                           <button
-                            key={r.emoji}
+                            key={rIdx}
                             onClick={() => void handleToggleReaction(msg._id, r.emoji)}
-                            className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] border transition ${
+                            className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition ${
                               hasReacted
-                                ? "bg-purple-600/25 border-purple-500/50 text-purple-200"
-                                : "bg-zinc-900 border-white/10 text-zinc-400 hover:border-white/20"
+                                ? "bg-purple-600/30 border-purple-500/50 text-white font-bold"
+                                : "bg-zinc-900 border-white/10 text-zinc-300 hover:bg-white/5"
                             }`}
-                            title={`Reacted by: ${r.users?.map((u) => u.displayName || "Member").join(", ")}`}
+                            title={r.users.map((u) => u.displayName || "Member").join(", ")}
                           >
                             <span>{r.emoji}</span>
                             <span className="text-[10px] font-bold font-mono">{r.users.length}</span>
@@ -1102,6 +1209,28 @@ export default function OrgChatPage() {
 
       {/* ── INPUT COMPOSER ── */}
       <form onSubmit={(e) => void handleSendMessage(e)} className="relative flex items-center gap-3">
+        <input
+          type="file"
+          ref={attachmentInputRef}
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => void handleSendAttachment(e)}
+        />
+
+        <button
+          type="button"
+          onClick={() => attachmentInputRef.current?.click()}
+          disabled={isUploadingAttachment || isSending}
+          className="h-12 w-12 rounded-2xl bg-zinc-900/80 hover:bg-zinc-800 border border-white/10 hover:border-purple-500/50 text-zinc-400 hover:text-purple-300 flex items-center justify-center transition shrink-0 disabled:opacity-50"
+          title="Attach photo / image"
+        >
+          {isUploadingAttachment ? (
+            <RefreshCw className="w-4 h-4 text-purple-400 animate-spin" />
+          ) : (
+            <Paperclip className="w-5 h-5" />
+          )}
+        </button>
+
         <div className="flex-1 relative">
           <textarea
             ref={textareaRef}
@@ -1127,6 +1256,45 @@ export default function OrgChatPage() {
         </button>
       </form>
 
+      {/* ── FULLSCREEN IMAGE PREVIEW MODAL ── */}
+      {selectedImagePreview && (
+        <div 
+          onClick={() => setSelectedImagePreview(null)}
+          className="fixed inset-0 z-9999 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in cursor-zoom-out"
+        >
+          <div className="relative max-w-4xl max-h-[90vh] flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setSelectedImagePreview(null)}
+              className="absolute -top-12 right-0 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition"
+              title="Close image"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <div className="rounded-2xl overflow-hidden border border-white/20 shadow-2xl bg-black">
+              <Image
+                src={selectedImagePreview}
+                alt="Enlarged photo"
+                width={800}
+                height={600}
+                unoptimized
+                className="max-h-[82vh] w-auto object-contain"
+              />
+            </div>
+            <div className="mt-3 flex items-center gap-3">
+              <a
+                href={selectedImagePreview}
+                target="_blank"
+                rel="noreferrer"
+                download="chat-image"
+                className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold flex items-center gap-2 shadow-lg transition"
+              >
+                <Download className="w-4 h-4" /> Open Full Image
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── MESSENGER-STYLE CHAT INFO DRAWER (Web Slide-Over) ── */}
       {showChatInfoDrawer && (
         <div className="fixed inset-y-0 right-0 w-full max-w-sm bg-zinc-950/95 backdrop-blur-2xl border-l border-white/10 shadow-2xl z-50 flex flex-col animate-in slide-in-from-right duration-200">
@@ -1150,7 +1318,7 @@ export default function OrgChatPage() {
             <div className="flex flex-col items-center text-center pt-2">
               <div className="relative group/avatar mb-3">
                 <div className="w-20 h-20 rounded-2xl bg-purple-600/20 border-2 border-purple-500/40 flex items-center justify-center text-purple-300 font-bold overflow-hidden shadow-lg shadow-purple-900/30">
-                  {activeOrgLogo ? (
+                  {activeOrgLogo && !failedLogoUrl ? (
                     <Image
                       src={activeOrgLogo.startsWith("/") ? `${BACKEND_URL}${activeOrgLogo}` : activeOrgLogo}
                       alt="Org"
@@ -1158,6 +1326,7 @@ export default function OrgChatPage() {
                       height={80}
                       className="w-full h-full object-cover"
                       unoptimized
+                      onError={() => setFailedLogoUrl(activeOrgLogo)}
                     />
                   ) : (
                     <span className="text-2xl">{currentOrg?.name?.charAt(0).toUpperCase() || "O"}</span>
