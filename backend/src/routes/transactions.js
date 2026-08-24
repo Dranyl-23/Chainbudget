@@ -848,18 +848,22 @@ router.post("/:id/release-escrow", authenticate, async (req, res) => {
 router.patch("/:id/receipt", authenticate, async (req, res) => {
   try {
     const { documentUrl, documentHash } = req.body;
-    if (!documentUrl) return res.status(400).json({ error: "documentUrl is required" });
+    if (!documentUrl || typeof documentUrl !== "string") return res.status(400).json({ error: "documentUrl is required" });
 
-    // CRIT-4 FIX: Validate documentUrl is a safe https:// URL to prevent SSRF and
-    // javascript: / data: URI injection. Only allow https:// scheme.
-    let parsedUrl;
-    try {
-      parsedUrl = new URL(documentUrl);
-    } catch {
-      return res.status(400).json({ error: "documentUrl must be a valid URL" });
-    }
-    if (parsedUrl.protocol !== "https:") {
-      return res.status(400).json({ error: "documentUrl must use the https:// scheme" });
+    // Validate safe URL or data URI
+    const isBase64 = documentUrl.startsWith("data:image/");
+    const isLocalUpload = documentUrl.startsWith("/uploads/") || documentUrl.startsWith("http://localhost:") || documentUrl.startsWith("http://127.0.0.1:");
+    
+    if (!isBase64 && !isLocalUpload) {
+      let parsedUrl;
+      try {
+        parsedUrl = new URL(documentUrl);
+      } catch {
+        return res.status(400).json({ error: "documentUrl must be a valid URL" });
+      }
+      if (parsedUrl.protocol !== "https:" && parsedUrl.protocol !== "http:") {
+        return res.status(400).json({ error: "documentUrl must use https:// or http:// scheme" });
+      }
     }
 
     const txn = await Transaction.findById(req.params.id);

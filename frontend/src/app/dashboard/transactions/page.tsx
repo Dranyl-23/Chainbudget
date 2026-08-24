@@ -8,7 +8,6 @@ import ChainBudgetABI from "@/lib/ChainBudget.json";
 import {
   ArrowUpRight,
   ArrowDownRight,
-  Search,
   X,
   Paperclip,
   Upload,
@@ -26,6 +25,7 @@ import {
   XCircle,
   Download,
   Sparkles,
+  AlertTriangle,
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import toast from "react-hot-toast";
@@ -34,7 +34,6 @@ import TableSkeleton from "@/components/TableSkeleton";
 import TxExplorerModal from "@/components/TxExplorerModal";
 import TransactionFilterBar from "@/components/TransactionFilterBar";
 import { exportToCSV, exportToPDF } from "@/lib/exportUtils";
-import axios from "axios";
 import { BACKEND_URL } from "@/lib/config";
 import { getErrorMessage } from "@/lib/utils";
 
@@ -185,6 +184,15 @@ export default function TransactionsPage() {
   const attachFileInputRef = useRef<HTMLInputElement>(null);
   const [attachingTxId, setAttachingTxId] = useState<string | null>(null);
   const [isAttaching, setIsAttaching] = useState(false);
+
+  // Receipt Preview Modal state
+  const [previewReceipt, setPreviewReceipt] = useState<{
+    url: string;
+    title: string;
+    txId: string;
+    documentHash?: string;
+  } | null>(null);
+  const [receiptLoadError, setReceiptLoadError] = useState(false);
 
   // ── RBAC Calculations ─────────────────────────────────────────────────────
   const memberships = (user?.memberships || []) as UserMembership[];
@@ -387,6 +395,8 @@ export default function TransactionsPage() {
       setTransactions((prev) => 
         prev.map((tx) => (tx._id === attachingTxId ? { ...tx, documentUrl, documentHash } : tx))
       );
+      setPreviewReceipt((prev) => prev && prev.txId === attachingTxId ? { ...prev, url: documentUrl, documentHash } : prev);
+      setReceiptLoadError(false);
       toast.success("Receipt attached successfully!");
     } catch (err: unknown) {
       console.error("Attach receipt error:", err);
@@ -725,18 +735,30 @@ export default function TransactionsPage() {
                   </td>
                   <td className="p-4">
                     {tx.documentUrl ? (
-                      <a
-                        href={tx.documentUrl.startsWith("http") ? tx.documentUrl : `${BACKEND_URL}${tx.documentUrl}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!tx.documentUrl) return;
+                          setReceiptLoadError(false);
+                          const docUrl = tx.documentUrl;
+                          const cleanUrl = docUrl.startsWith("http") || docUrl.startsWith("data:")
+                            ? docUrl
+                            : `${BACKEND_URL}${docUrl}`;
+                          setPreviewReceipt({
+                            url: cleanUrl,
+                            title: tx.description || "Receipt",
+                            txId: tx._id,
+                            documentHash: tx.documentHash,
+                          });
+                        }}
                         title="View receipt"
-                        onClick={(e) => e.stopPropagation()}
-                        className="inline-flex items-center gap-1 text-xs font-bold text-cyan-400 hover:text-cyan-300 hover:underline"
+                        className="inline-flex items-center gap-1.5 text-xs font-bold text-cyan-400 hover:text-cyan-300 hover:underline cursor-pointer bg-cyan-500/10 hover:bg-cyan-500/20 px-2.5 py-1 rounded-md border border-cyan-500/20 transition-colors"
                       >
                         <Paperclip className="w-3.5 h-3.5" />
                         Receipt
                         <ExternalLink className="w-3 h-3 opacity-60" />
-                      </a>
+                      </button>
                     ) : (
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-white/30 font-medium">—</span>
@@ -762,7 +784,7 @@ export default function TransactionsPage() {
                 {/* ── Request Tracking Timeline ── */}
                 {expandedTxId === tx._id && (
                   <tr className="timeline-row">
-                    <td colSpan={7} className="!p-0">
+                    <td colSpan={7} className="p-0!">
                       <div className="bg-black/40 px-8 py-6 border-t border-white/5 shadow-inner">
                         <p className="text-xs font-semibold text-white/50 uppercase tracking-widest mb-5">Request Tracking Timeline</p>
                         <div className="flex items-start gap-0">
@@ -1112,7 +1134,7 @@ export default function TransactionsPage() {
                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold text-xs shadow-sm transition-all ${
                           aiScanSuccess 
                             ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" 
-                            : "bg-gradient-to-r from-purple-500/10 to-blue-500/10 hover:from-purple-500/20 hover:to-blue-500/20 text-cyan-400 border border-cyan-500/20 hover:border-cyan-400/50"
+                            : "bg-linear-to-r from-purple-500/10 to-blue-500/10 hover:from-purple-500/20 hover:to-blue-500/20 text-cyan-400 border border-cyan-500/20 hover:border-cyan-400/50"
                         }`}
                       >
                         {isAiScanning ? (
@@ -1196,6 +1218,125 @@ export default function TransactionsPage() {
         </div>
         </Portal>
       )}
+
+      {/* ── Receipt Viewer & In-App Lightbox Modal ── */}
+      {previewReceipt && (
+        <Portal>
+          <div className="fixed inset-0 z-9999 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+            <div className="relative bg-[#13121d] border border-white/15 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-modal-pop">
+              
+              {/* Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-white/5">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center">
+                    <Receipt className="w-5 h-5 text-cyan-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-white flex items-center gap-2">
+                      {previewReceipt.title}
+                    </h3>
+                    <p className="text-xs text-white/50">Transaction Attached Receipt</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setAttachingTxId(previewReceipt.txId);
+                      if (attachFileInputRef.current) attachFileInputRef.current.click();
+                    }}
+                    className="px-3 py-1.5 text-xs font-bold text-purple-300 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 rounded-lg transition-colors flex items-center gap-1.5"
+                    title="Replace or re-upload receipt"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    Replace
+                  </button>
+                  
+                  {!receiptLoadError && (
+                    <a
+                      href={previewReceipt.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-2 text-white/60 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                      title="Open in new tab"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                    </a>
+                  )}
+
+                  <button
+                    onClick={() => {
+                      setPreviewReceipt(null);
+                      setReceiptLoadError(false);
+                    }}
+                    className="p-2 text-white/60 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                    title="Close"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Content Preview */}
+              <div className="flex-1 overflow-auto p-6 flex flex-col items-center justify-center min-h-75 bg-black/40">
+                {receiptLoadError ? (
+                  <div className="text-center p-8 max-w-md">
+                    <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mx-auto mb-4 text-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.15)]">
+                      <AlertTriangle className="w-8 h-8" />
+                    </div>
+                    <h4 className="text-base font-bold text-white mb-2">Receipt File Expired or Missing</h4>
+                    <p className="text-xs text-white/50 leading-relaxed mb-6">
+                      This receipt was stored in temporary cloud storage that was cleared during a server restart. You can easily re-upload the receipt image below to permanently attach it to this transaction.
+                    </p>
+                    <button
+                      onClick={() => {
+                        setAttachingTxId(previewReceipt.txId);
+                        if (attachFileInputRef.current) attachFileInputRef.current.click();
+                      }}
+                      disabled={isAttaching}
+                      className="btn-primary py-2.5 px-6 text-xs font-bold inline-flex items-center gap-2 shadow-[0_0_20px_rgba(107,85,217,0.4)]"
+                    >
+                      {isAttaching ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Uploading...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="w-4 h-4" />
+                          Re-upload Receipt Image
+                        </>
+                      )}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="relative max-w-full flex items-center justify-center">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={previewReceipt.url}
+                      alt="Receipt Document"
+                      onError={() => setReceiptLoadError(true)}
+                      className="max-h-[60vh] max-w-full rounded-xl object-contain shadow-2xl border border-white/10"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Footer with Document Hash */}
+              {previewReceipt.documentHash && (
+                <div className="px-6 py-3 border-t border-white/10 bg-white/5 flex items-center justify-between text-xs text-white/50">
+                  <span className="flex items-center gap-1.5 font-mono text-[11px] text-cyan-400">
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    IPFS Hash: {previewReceipt.documentHash.slice(0, 16)}...
+                  </span>
+                  <span className="text-[10px] text-emerald-400 font-bold">On-Chain Verified</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </Portal>
+      )}
+
       <TxExplorerModal 
         isOpen={Boolean(selectedExplorerHash)} 
         onClose={() => setSelectedExplorerHash(null)} 
