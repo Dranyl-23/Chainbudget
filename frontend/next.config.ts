@@ -47,7 +47,7 @@ const nextConfig: NextConfig = {
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob: https:",
               "font-src 'self' data:",
-              "connect-src 'self' https://chainbudget-api.fly.dev wss://chainbudget-api.fly.dev https://api.asgardeo.io https://gateway.pinata.cloud",
+              "connect-src 'self' https://chainbudget-api.fly.dev wss://chainbudget-api.fly.dev https://api.asgardeo.io https://gateway.pinata.cloud https://*.pinata.cloud https://ipfs.io https://polygon-amoy.drpc.org https://*.drpc.org https://rpc-amoy.polygon.technology https://*.polygon.technology https://rpc.ankr.com https://api.amoy.polygonscan.com https://amoy.polygonscan.com https://*.walletconnect.com wss://*.walletconnect.org wss://*.walletconnect.com http://localhost:* ws://localhost:* http://127.0.0.1:* ws://127.0.0.1:*",
               "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com",
               "frame-ancestors 'none'",
             ].join("; "),
