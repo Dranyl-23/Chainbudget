@@ -148,8 +148,6 @@ export default function PublicDashboardPage() {
     );
   }
 
-  const backendUrl = BACKEND_URL;
-
   const getScoreColor = (score: number) => {
     if (score >= 90) return "text-green-400 border-green-400/50 shadow-[0_0_15px_rgba(74,222,128,0.2)]";
     if (score >= 70) return "text-cyan-400 border-cyan-400/50 shadow-[0_0_15px_rgba(34,211,238,0.2)]";

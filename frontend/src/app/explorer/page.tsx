@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { Search, Globe, ShieldCheck, ArrowRight, ArrowUpRight, Activity, Lock } from "lucide-react";
 import api from "@/lib/api";
 import { BACKEND_URL } from "@/lib/config";
@@ -142,14 +143,12 @@ export default function ExplorerPage() {
     return "text-red-400 bg-red-400/10 border-red-400/30";
   };
 
-  const backendUrl = BACKEND_URL;
-
   return (
     <main className="min-h-screen bg-[#050505] text-white">
       {/* ── Top Nav ── */}
       <nav className="flex items-center justify-between px-6 py-4 border-b border-white/5 bg-black/50 backdrop-blur-md sticky top-0 z-50">
         <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-          <img src="/images/logo.png" alt="ChainBudget" className="w-8 h-8 rounded-lg" />
+          <Image src="/images/logo.png" alt="ChainBudget" width={32} height={32} className="w-8 h-8 rounded-lg" />
           <span className="font-bold text-xl tracking-tight">
             CHAIN<span className="text-cyan-400">BUDGET</span>
           </span>
@@ -164,8 +163,8 @@ export default function ExplorerPage() {
       {/* ── Live Blockchain Feed Ticker ── */}
       {feed.length > 0 && (
         <div className="w-full bg-cyan-900/20 border-b border-cyan-500/20 py-2 flex overflow-hidden relative">
-          <div className="absolute left-0 top-0 bottom-0 w-16 bg-gradient-to-r from-[#050505] to-transparent z-10" />
-          <div className="absolute right-0 top-0 bottom-0 w-16 bg-gradient-to-l from-[#050505] to-transparent z-10" />
+          <div className="absolute left-0 top-0 bottom-0 w-16 bg-linear-to-r from-[#050505] to-transparent z-10" />
+          <div className="absolute right-0 top-0 bottom-0 w-16 bg-linear-to-l from-[#050505] to-transparent z-10" />
           
           <div className="flex items-center whitespace-nowrap animate-[scroll_30s_linear_infinite] px-4 gap-8">
             {feed.concat(feed).map((tx, idx) => (
@@ -198,20 +197,20 @@ export default function ExplorerPage() {
         
         <Globe className="w-16 h-16 text-cyan-400 mx-auto mb-6 drop-shadow-[0_0_15px_rgba(34,211,238,0.5)]" />
         <h1 className="text-4xl md:text-6xl font-black mb-4 tracking-tight drop-shadow-lg">
-          Public Transparency <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-fuchsia-500">Explorer</span>
+          Public Transparency <span className="text-transparent bg-clip-text bg-linear-to-r from-cyan-400 to-fuchsia-500">Explorer</span>
         </h1>
         <p className="text-lg md:text-xl text-white/60 max-w-2xl mx-auto leading-relaxed">
           Explore public ledgers, verify on-chain transactions, and see the financial transparency score of different organizations.
         </p>
 
         <div className="mt-10 max-w-xl mx-auto relative group">
-          <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-500 to-fuchsia-500 rounded-xl blur opacity-30 group-hover:opacity-60 transition duration-500"></div>
+          <div className="absolute -inset-0.5 bg-linear-to-r from-cyan-500 to-fuchsia-500 rounded-xl blur opacity-30 group-hover:opacity-60 transition duration-500"></div>
           <div className="relative flex items-center bg-black/60 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl">
             <Search className="w-6 h-6 text-white/40 ml-5" />
             <input
               type="text"
               placeholder="Search by name, category, or description..."
-              className="w-full bg-transparent !border-none !outline-none !ring-0 focus:!border-transparent focus:!ring-0 focus:!outline-none text-white placeholder-white/40 px-4 py-4 text-lg rounded-r-xl shadow-none"
+              className="w-full bg-transparent border-none! outline-none! ring-0! focus:border-transparent! focus:ring-0! focus:outline-none! text-white placeholder-white/40 px-4 py-4 text-lg rounded-r-xl shadow-none"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -233,7 +232,7 @@ export default function ExplorerPage() {
                 onClick={() => setSelectedCategory(cat.id)}
                 className={`px-4 py-2 rounded-xl text-xs font-bold transition-all duration-200 flex items-center gap-2 cursor-pointer ${
                   isSelected
-                    ? "bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white shadow-[0_0_20px_rgba(34,211,238,0.35)] scale-105"
+                    ? "bg-linear-to-r from-cyan-500 to-fuchsia-500 text-white shadow-[0_0_20px_rgba(34,211,238,0.35)] scale-105"
                     : "bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/10"
                 }`}
               >
@@ -305,7 +304,7 @@ export default function ExplorerPage() {
                 <Link href={`/explorer/${org._id}`} key={org._id} className="block group">
                   <div className="glass p-6 rounded-2xl border border-white/5 hover:border-cyan-500/30 transition-all duration-300 hover:-translate-y-1 shadow-[0_10px_30px_rgba(0,0,0,0.5)] hover:shadow-[0_15px_40px_rgba(34,211,238,0.15)] relative overflow-hidden h-full flex flex-col">
                     {/* Subtle background glow on hover */}
-                    <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/0 via-transparent to-purple-500/0 group-hover:from-cyan-500/5 group-hover:to-purple-500/5 transition-colors duration-500 pointer-events-none" />
+                    <div className="absolute inset-0 bg-linear-to-br from-cyan-500/0 via-transparent to-purple-500/0 group-hover:from-cyan-500/5 group-hover:to-purple-500/5 transition-colors duration-500 pointer-events-none" />
                     
                     <div className="flex items-start justify-between mb-6 relative z-10">
                       <ExplorerOrgLogo logoUrl={org.logoUrl} name={org.name} />
