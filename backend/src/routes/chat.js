@@ -37,6 +37,89 @@ async function requireOrgMembership(req, res, next) {
 }
 
 /**
+ * @route   GET /api/chat/conversations
+ * @desc    Fetch all organization conversations for the current user with last message preview, unread count & online count
+ * @access  Private
+ */
+router.get("/conversations", authenticate, async (req, res) => {
+  try {
+    const currentUserId = (req.user?._id || req.user?.id || req.user?.sub || req.auth?.sub || "").toString();
+    if (!currentUserId) return res.status(401).json({ error: "Authentication required" });
+
+    const user = await User.findById(currentUserId).select("memberships").lean();
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const activeMemberships = (user.memberships || []).filter((m) => m.isActive !== false);
+    const orgIds = activeMemberships
+      .map((m) => (m.organization?._id || m.organization || "").toString())
+      .filter(Boolean);
+
+    if (orgIds.length === 0) {
+      return res.json({ conversations: [] });
+    }
+
+    const orgs = await Organization.find({ _id: { $in: orgIds } })
+      .select("_id name logo logoUrl category memberCount")
+      .lean();
+
+    const getOrgOnlineUsers = req.app.get("getOrgOnlineUsers");
+
+    const conversations = await Promise.all(
+      orgs.map(async (org) => {
+        const orgIdStr = org._id.toString();
+        const lastMsg = await ChatMessage.findOne({ organization: org._id })
+          .sort({ createdAt: -1 })
+          .populate("sender", "displayName avatarUrl")
+          .lean();
+
+        const unreadCount = await ChatMessage.countDocuments({
+          organization: org._id,
+          sender: { $ne: currentUserId },
+          seenBy: { $ne: currentUserId },
+        });
+
+        const onlineUserIds = getOrgOnlineUsers ? getOrgOnlineUsers(orgIdStr) : [];
+
+        return {
+          organization: {
+            _id: org._id,
+            name: org.name,
+            logo: org.logoUrl || org.logo,
+            category: org.category,
+            memberCount: org.memberCount || 1,
+          },
+          lastMessage: lastMsg
+            ? {
+                _id: lastMsg._id,
+                content: lastMsg.content,
+                messageType: lastMsg.messageType,
+                createdAt: lastMsg.createdAt,
+                sender: lastMsg.sender,
+              }
+            : null,
+          unreadCount,
+          onlineCount: onlineUserIds.length,
+          onlineUserIds,
+        };
+      })
+    );
+
+    // Sort conversations: most recent message first, then alphabetical by org name
+    conversations.sort((a, b) => {
+      const timeA = a.lastMessage?.createdAt ? new Date(a.lastMessage.createdAt).getTime() : 0;
+      const timeB = b.lastMessage?.createdAt ? new Date(b.lastMessage.createdAt).getTime() : 0;
+      if (timeB !== timeA) return timeB - timeA;
+      return a.organization.name.localeCompare(b.organization.name);
+    });
+
+    res.json({ conversations });
+  } catch (err) {
+    console.error("[chat:conversations]", err);
+    res.status(500).json({ error: "Failed to fetch conversations" });
+  }
+});
+
+/**
  * @route   GET /api/chat/:orgId/messages
  * @desc    Fetch paginated chat messages for an organization
  * @access  Private (Org Members)
@@ -57,8 +140,11 @@ router.get("/:orgId/messages", authenticate, requireOrgMembership, async (req, r
       .limit(limit)
       .populate("sender", "displayName avatarUrl walletAddress email")
       .populate("seenBy", "displayName avatarUrl")
-      .populate("reactions.users", "displayName avatarUrl")
-      .populate("replyTo", "content sender createdAt roleLabel")
+      .populate({
+        path: "replyTo",
+        select: "content sender createdAt roleLabel messageType",
+        populate: { path: "sender", select: "displayName avatarUrl walletAddress" },
+      })
       .lean();
 
     // Reverse to send chronological order (oldest -> newest for easy chat rendering)
@@ -121,8 +207,11 @@ router.get("/:orgId/search", authenticate, requireOrgMembership, async (req, res
       .limit(Math.min(parseInt(limit, 10) || 30, 100))
       .populate("sender", "displayName avatarUrl walletAddress email")
       .populate("seenBy", "displayName avatarUrl")
-      .populate("reactions.users", "displayName avatarUrl")
-      .populate("replyTo", "content sender createdAt roleLabel")
+      .populate({
+        path: "replyTo",
+        select: "content sender createdAt roleLabel messageType",
+        populate: { path: "sender", select: "displayName avatarUrl walletAddress" },
+      })
       .lean();
 
     res.json({ results: messages });
@@ -166,7 +255,11 @@ router.post("/:orgId/messages", authenticate, requireOrgMembership, async (req, 
     await message.populate("sender", "displayName avatarUrl walletAddress email");
     await message.populate("seenBy", "displayName avatarUrl");
     if (replyTo) {
-      await message.populate("replyTo", "content sender createdAt roleLabel");
+      await message.populate({
+        path: "replyTo",
+        select: "content sender createdAt roleLabel messageType",
+        populate: { path: "sender", select: "displayName avatarUrl walletAddress" },
+      });
     }
 
     // 1. Emit live WebSocket event to the organization room
@@ -343,9 +436,9 @@ router.post("/:orgId/messages/:messageId/pin", authenticate, requireOrgMembershi
     const { orgId, messageId } = req.params;
     const roleLevel = req.membership.roleLevel || 4;
 
-    // Only Level 1 & 2 can pin messages
-    if (roleLevel > 2) {
-      return res.status(403).json({ error: "Only Organization Executives/Auditors can pin messages" });
+    // Level 1, 2, and 3 members can pin messages (Viewers Level 4 cannot)
+    if (roleLevel > 3) {
+      return res.status(403).json({ error: "Only active Organization members can pin messages" });
     }
 
     const message = await ChatMessage.findOne({ _id: messageId, organization: orgId });
@@ -408,6 +501,23 @@ router.delete("/:orgId/messages/:messageId", authenticate, requireOrgMembership,
   } catch (err) {
     console.error("[chat:delete-message]", err);
     res.status(500).json({ error: "Failed to delete message" });
+  }
+});
+
+/**
+ * @route   GET /api/chat/:orgId/online
+ * @desc    Fetch list of currently online user IDs in an organization
+ * @access  Private (Org Members)
+ */
+router.get("/:orgId/online", authenticate, requireOrgMembership, (req, res) => {
+  try {
+    const { orgId } = req.params;
+    const getOrgOnlineUsers = req.app.get("getOrgOnlineUsers");
+    const onlineUserIds = getOrgOnlineUsers ? getOrgOnlineUsers(orgId) : [];
+    res.json({ orgId, onlineUserIds });
+  } catch (err) {
+    console.error("[chat:get-online]", err);
+    res.status(500).json({ error: "Failed to fetch online users" });
   }
 });
 

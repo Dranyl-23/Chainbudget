@@ -43,7 +43,7 @@ export default function NotificationDetailScreen() {
   const { colors, isDark } = useTheme();
   const { showToast } = useToast();
 
-  const notif = route.params?.notification;
+  const notif = route.params?.notification || route.params?.notif || (route.params?.title ? route.params : null);
   if (!notif) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
@@ -57,7 +57,8 @@ export default function NotificationDetailScreen() {
 
   const title = notif.title || 'Notification';
   const message = notif.message || '';
-  const dateFormatted = formatFullDate(notif.createdAt);
+  const dateFormatted = formatFullDate(notif.createdAt || notif.timestamp);
+  const orgName = notif.orgName;
 
   // Category Tag Resolution
   const lowerTitle = title.toLowerCase();
@@ -67,10 +68,17 @@ export default function NotificationDetailScreen() {
   let categoryIcon: keyof typeof Ionicons.glyphMap = 'information-circle';
   let categoryColor = '#38BDF8';
   let categoryBg = 'rgba(56, 189, 248, 0.15)';
-  let actionType: 'dao' | 'approvals' | 'history' | 'default' = 'default';
+  let actionType: 'dao' | 'approvals' | 'history' | 'members' | 'default' = 'default';
   let actionLabel = 'Back to Notifications';
 
-  if (lowerTitle.includes('dao') || lowerTitle.includes('proposal') || lowerMsg.includes('proposal') || notif.type === 'dao_proposal') {
+  if (lowerTitle.includes('welcome') || lowerTitle.includes('member') || lowerMsg.includes('added you') || notif.type === 'member_added') {
+    categoryName = 'DAO MEMBERSHIP';
+    categoryIcon = 'people';
+    categoryColor = '#EC4899';
+    categoryBg = 'rgba(236, 72, 153, 0.15)';
+    actionType = 'members';
+    actionLabel = 'View DAO Members';
+  } else if (lowerTitle.includes('dao') || lowerTitle.includes('proposal') || lowerMsg.includes('proposal') || notif.type === 'dao_proposal') {
     categoryName = 'DAO GOVERNANCE';
     categoryIcon = 'planet';
     categoryColor = '#A855F7';
@@ -107,6 +115,8 @@ export default function NotificationDetailScreen() {
       navigation.navigate('MainTabs', { screen: 'Inbox' });
     } else if (actionType === 'history') {
       navigation.navigate('History');
+    } else if (actionType === 'members') {
+      navigation.navigate('Members');
     } else {
       navigation.goBack();
     }
@@ -118,26 +128,47 @@ export default function NotificationDetailScreen() {
         contentContainerStyle={{ padding: 20, paddingBottom: 60 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Category Header Badge */}
-        <View
-          style={{
-            alignSelf: 'flex-start',
-            flexDirection: 'row',
-            alignItems: 'center',
-            backgroundColor: categoryBg,
-            borderColor: categoryColor + '40',
-            borderWidth: 1,
-            borderRadius: 20,
-            paddingHorizontal: 12,
-            paddingVertical: 6,
-            marginBottom: 16,
-            gap: 6,
-          }}
-        >
-          <Ionicons name={categoryIcon} size={15} color={categoryColor} />
-          <Text style={{ color: categoryColor, fontSize: 11, fontWeight: '800', letterSpacing: 0.8 }}>
-            {categoryName}
-          </Text>
+        {/* Category & Organization Header Badges */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+          {orgName && (
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: colors.primaryMuted,
+                borderColor: colors.primary + '30',
+                borderWidth: 1,
+                borderRadius: 20,
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                gap: 5,
+              }}
+            >
+              <Ionicons name="business" size={13} color={colors.primary} />
+              <Text style={{ color: colors.primary, fontSize: 11, fontWeight: '800' }}>
+                {orgName}
+              </Text>
+            </View>
+          )}
+
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: categoryBg,
+              borderColor: categoryColor + '40',
+              borderWidth: 1,
+              borderRadius: 20,
+              paddingHorizontal: 12,
+              paddingVertical: 6,
+              gap: 6,
+            }}
+          >
+            <Ionicons name={categoryIcon} size={15} color={categoryColor} />
+            <Text style={{ color: categoryColor, fontSize: 11, fontWeight: '800', letterSpacing: 0.8 }}>
+              {categoryName}
+            </Text>
+          </View>
         </View>
 
         {/* Title */}

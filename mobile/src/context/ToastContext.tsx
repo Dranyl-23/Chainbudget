@@ -53,8 +53,12 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
         duration: 200,
         useNativeDriver: true,
       }),
-    ]).start(() => {
-      setToast(null);
+    ]).start((result) => {
+      if (result.finished) {
+        requestAnimationFrame(() => {
+          setToast(null);
+        });
+      }
     });
   }, [translateY, opacity]);
 

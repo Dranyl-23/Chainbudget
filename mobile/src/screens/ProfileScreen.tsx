@@ -12,6 +12,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import UserAvatar from '../components/UserAvatar';
 import {
   triggerLightHaptic,
   triggerErrorHaptic,
@@ -30,7 +31,7 @@ export default function ProfileScreen() {
   const navigation = useNavigation<any>();
 
   const [showLogoutModal, setShowLogoutModal] = useState(false);
-  const [mintingSbt, setMintingSbt] = useState(false);
+  const [mintingOrgId, setMintingOrgId] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [showAllMemberships, setShowAllMemberships] = useState(false);
 
@@ -93,12 +94,12 @@ export default function ProfileScreen() {
     }
   };
 
-  const handleMintSbt = async () => {
+  const handleMintSbt = async (orgKey: string) => {
     await triggerLightHaptic();
     const auth = await authenticateWithBiometrics('Authorize Soulbound ID (SBT) Minting on Polygon Amoy');
     if (!auth.success) return;
 
-    setMintingSbt(true);
+    setMintingOrgId(orgKey);
     try {
       const res = await api.post('/auth/mint-sbt');
       await triggerSuccessHaptic();
@@ -108,7 +109,7 @@ export default function ProfileScreen() {
       await triggerErrorHaptic();
       showToast(err.response?.data?.error || 'Failed to mint Soulbound Token.', 'error');
     } finally {
-      setMintingSbt(false);
+      setMintingOrgId(null);
     }
   };
 
@@ -182,15 +183,17 @@ export default function ProfileScreen() {
       >
         <TouchableOpacity 
           style={{ borderColor: colors.primary }}
-          className="w-24 h-24 rounded-full mb-3 border-2 relative overflow-hidden"
+          className="w-24 h-24 rounded-full mb-3 border-2 relative overflow-hidden items-center justify-center"
           onPress={handlePickImage}
           disabled={isUploading}
         >
-          <Image 
-            source={{ 
-              uri: user?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.displayName || 'User')}&background=e879f9&color=fff&size=200` 
-            }} 
-            className="w-full h-full rounded-full" 
+          <UserAvatar
+            avatarUrl={user?.avatarUrl}
+            displayName={user?.displayName || 'User'}
+            size={92}
+            shape="circle"
+            backgroundColor={isDark ? 'rgba(0,0,0,0.4)' : colors.backgroundSecondary}
+            textColor={colors.primary}
           />
           
           <View className="absolute bottom-0 w-full bg-black/60 items-center justify-center py-1">
@@ -301,21 +304,27 @@ export default function ProfileScreen() {
                       <Text style={{ color: colors.success }} className="text-[9px] font-extrabold ml-1 uppercase">SBT</Text>
                     </View>
                   ) : (
-                    <TouchableOpacity
-                      onPress={handleMintSbt}
-                      disabled={mintingSbt}
-                      style={{ backgroundColor: colors.primaryMuted, borderColor: colors.primary + '60' }}
-                      className="flex-row items-center px-2.5 py-1 rounded-full border"
-                    >
-                      {mintingSbt ? (
-                        <ActivityIndicator size="small" color={colors.primary} />
-                      ) : (
-                        <View className="flex-row items-center">
-                          <Ionicons name="sparkles-outline" size={11} color={colors.primary} />
-                          <Text style={{ color: colors.primary }} className="text-[9px] font-extrabold ml-1 uppercase">Mint</Text>
-                        </View>
-                      )}
-                    </TouchableOpacity>
+                    (() => {
+                      const itemKey = m._id || m.organization?._id || m.organization || String(idx);
+                      const isItemMinting = mintingOrgId === itemKey;
+                      return (
+                        <TouchableOpacity
+                          onPress={() => handleMintSbt(itemKey)}
+                          disabled={Boolean(mintingOrgId)}
+                          style={{ backgroundColor: colors.primaryMuted, borderColor: colors.primary + '60' }}
+                          className="flex-row items-center px-2.5 py-1 rounded-full border"
+                        >
+                          {isItemMinting ? (
+                            <ActivityIndicator size="small" color={colors.primary} />
+                          ) : (
+                            <View className="flex-row items-center">
+                              <Ionicons name="sparkles-outline" size={11} color={colors.primary} />
+                              <Text style={{ color: colors.primary }} className="text-[9px] font-extrabold ml-1 uppercase">Mint</Text>
+                            </View>
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })()
                   )}
                 </View>
               );

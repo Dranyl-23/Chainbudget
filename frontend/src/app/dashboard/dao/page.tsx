@@ -8,7 +8,6 @@ import Portal from "@/components/Portal";
 import toast from "react-hot-toast";
 import { io } from "socket.io-client";
 import TableSkeleton from "@/components/TableSkeleton";
-import axios from "axios";
 import { BACKEND_URL } from "@/lib/config";
 import { getErrorMessage } from "@/lib/utils";
 
@@ -281,7 +280,8 @@ export default function DAOGovernancePage() {
     const orgId = typeof m.organization === "string" ? m.organization : m.organization?._id;
     return orgId === activeOrgId;
   });
-  const canInteract = user?.isSuperAdmin || (userMembership && (userMembership.roleLevel || 4) <= 3);
+  const canCreate = Boolean(user?.isSuperAdmin || (userMembership && (userMembership.roleLevel || 4) <= 2));
+  const canVote = Boolean(user?.isSuperAdmin || (userMembership && (userMembership.roleLevel || 4) <= 3));
 
   return (
     <div className="p-4 md:p-8 pb-20 animate-fade-in space-y-6">
@@ -296,7 +296,7 @@ export default function DAOGovernancePage() {
             Decentralized voting for major organizational decisions. 1 Member = 1 Vote.
           </p>
         </div>
-        {canInteract && (
+        {canCreate && (
           <button 
             onClick={() => setShowCreateModal(true)}
             className="hidden md:flex btn-primary items-center gap-2 shrink-0"
@@ -395,12 +395,12 @@ export default function DAOGovernancePage() {
                 {/* ── AI Insights Button ── */}
                 <button
                   onClick={() => handleAiInsight(p)}
-                  className="w-full mb-3 md:mb-4 flex items-center justify-center gap-2 bg-gradient-to-r from-purple-500/10 to-blue-500/10 hover:from-purple-500/20 hover:to-blue-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/20 py-1.5 md:py-2 rounded-xl text-xs font-semibold transition-all"
+                  className="w-full mb-3 md:mb-4 flex items-center justify-center gap-2 bg-linear-to-r from-purple-500/10 to-blue-500/10 hover:from-purple-500/20 hover:to-blue-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/20 py-1.5 md:py-2 rounded-xl text-xs font-semibold transition-all"
                 >
                   <Sparkles className="w-3.5 h-3.5" /> AI Risk Analysis
                 </button>
 
-                {p.status === "active" && !p.hasVoted && canInteract && (
+                {p.status === "active" && !p.hasVoted && canVote && (
                   <div className="grid grid-cols-2 gap-2 md:gap-3 mt-auto">
                     <button 
                       onClick={() => handleVote(p, true)}
@@ -456,10 +456,10 @@ export default function DAOGovernancePage() {
       )}
 
       {/* ── Mobile FAB for Create Proposal ── */}
-      {canInteract && (
+      {canCreate && (
         <button
           onClick={() => setShowCreateModal(true)}
-          className="md:hidden fixed bottom-[90px] right-4 w-14 h-14 bg-primary text-white rounded-full shadow-[0_4px_20px_rgba(139,92,246,0.6)] flex items-center justify-center z-40 hover:scale-105 active:scale-95 transition-transform"
+          className="md:hidden fixed bottom-22.5 right-4 w-14 h-14 bg-primary text-white rounded-full shadow-[0_4px_20px_rgba(139,92,246,0.6)] flex items-center justify-center z-40 hover:scale-105 active:scale-95 transition-transform"
         >
           <ShieldCheck className="w-6 h-6" />
         </button>

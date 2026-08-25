@@ -26,6 +26,7 @@ import NetworkStatusScreen from '../screens/NetworkStatusScreen';
 import SecurityKeysScreen from '../screens/SecurityKeysScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import CreateOrganizationScreen from '../screens/CreateOrganizationScreen';
+import ChatInboxScreen from '../screens/ChatInboxScreen';
 import OrgChatScreen from '../screens/OrgChatScreen';
 import OrgChatInfoScreen from '../screens/OrgChatInfoScreen';
 
@@ -159,6 +160,11 @@ export default function RootStackNavigator() {
         name="CreateOrganization"
         component={CreateOrganizationScreen}
         options={{ title: 'Create Organization' }}
+      />
+      <Stack.Screen
+        name="ChatInbox"
+        component={ChatInboxScreen}
+        options={{ headerShown: false }}
       />
       <Stack.Screen
         name="OrgChat"

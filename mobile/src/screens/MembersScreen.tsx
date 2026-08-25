@@ -1,8 +1,8 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import {
   View,
   Text,
-  FlatList,
+  SectionList,
   TouchableOpacity,
   RefreshControl,
   Image,
@@ -24,6 +24,7 @@ import { useOrg } from '../context/OrgContext';
 import { useToast } from '../context/ToastContext';
 import { useTheme } from '../context/ThemeContext';
 import { SkeletonTransactionList } from '../components/SkeletonLoader';
+import UserAvatar from '../components/UserAvatar';
 import { triggerSuccessHaptic, triggerErrorHaptic } from '../lib/biometrics';
 import { getCachedMembers, setCachedMembers } from '../lib/cache';
 
@@ -221,18 +222,17 @@ export default function MembersScreen() {
         style={{ backgroundColor: colors.surface, borderColor: colors.border }}
         className="flex-row items-center p-4 rounded-2xl border mb-3 shadow-sm"
       >
-        <View style={{
-          backgroundColor: isDark ? 'rgba(0,0,0,0.4)' : colors.backgroundSecondary,
-          borderColor: colors.border,
-        }} className="w-12 h-12 rounded-2xl items-center justify-center mr-4 border overflow-hidden">
-          {avatarUrl ? (
-            <Image source={{ uri: avatarUrl }} style={{ width: '100%', height: '100%' }} />
-          ) : (
-            <Text style={{ color: colors.primary }} className="font-extrabold text-base">
-              {displayName.charAt(0).toUpperCase()}
-            </Text>
-          )}
-        </View>
+        <UserAvatar
+          avatarUrl={avatarUrl}
+          displayName={displayName}
+          size={48}
+          shape="squircle"
+          borderColor={colors.border}
+          borderWidth={1}
+          backgroundColor={isDark ? 'rgba(0,0,0,0.4)' : colors.backgroundSecondary}
+          textColor={colors.primary}
+          style={{ marginRight: 16 }}
+        />
 
         <View className="flex-1 mr-2">
           <View className="flex-row items-center gap-1.5 mb-0.5">
@@ -271,6 +271,80 @@ export default function MembersScreen() {
     );
   };
 
+  const leadershipMembers = useMemo(() => {
+    return members.filter((item) => {
+      const userObj = item.user || item;
+      const membership = userObj.memberships?.find(
+        (m: any) => (m.organization?._id || m.organization?.toString() || m.organization) === orgId
+      ) || item.membership || {};
+      const roleLevel = membership.roleLevel || item.roleLevel || userObj.roleLevel || 3;
+      return roleLevel <= 2;
+    });
+  }, [members, orgId]);
+
+  const generalMembers = useMemo(() => {
+    return members.filter((item) => {
+      const userObj = item.user || item;
+      const membership = userObj.memberships?.find(
+        (m: any) => (m.organization?._id || m.organization?.toString() || m.organization) === orgId
+      ) || item.membership || {};
+      const roleLevel = membership.roleLevel || item.roleLevel || userObj.roleLevel || 3;
+      return roleLevel > 2;
+    });
+  }, [members, orgId]);
+
+  const sections = useMemo(() => {
+    const list: any[] = [];
+    if (leadershipMembers.length > 0) {
+      list.push({
+        id: 'leadership',
+        title: 'Founder & Officers',
+        subtitle: 'Organization leadership & transaction approvers',
+        icon: 'shield-checkmark',
+        color: colors.primary,
+        data: leadershipMembers,
+      });
+    }
+    if (generalMembers.length > 0) {
+      list.push({
+        id: 'members',
+        title: 'DAO Members',
+        subtitle: 'Active governance voters & contributors',
+        icon: 'people',
+        color: '#06B6D4',
+        data: generalMembers,
+      });
+    }
+    return list;
+  }, [leadershipMembers, generalMembers, colors.primary]);
+
+  const renderSectionHeader = ({ section }: { section: any }) => {
+    const isFirst = section.id === 'leadership' || (sections.length > 0 && sections[0].id === section.id);
+    return (
+      <View style={{ backgroundColor: colors.background, paddingBottom: 8, paddingTop: isFirst ? 4 : 16 }}>
+        {!isFirst && (
+          <View style={{ height: 1, backgroundColor: colors.border, marginBottom: 14, opacity: 0.7 }} />
+        )}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Ionicons name={section.icon} size={15} color={section.color} />
+            <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '800', letterSpacing: 0.5, textTransform: 'uppercase' }}>
+              {section.title}
+            </Text>
+          </View>
+          <View style={{ backgroundColor: section.color + '20', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10, borderWidth: 1, borderColor: section.color + '40' }}>
+            <Text style={{ color: section.color, fontSize: 11, fontWeight: '800' }}>
+              {section.data.length}
+            </Text>
+          </View>
+        </View>
+        <Text style={{ color: colors.textMuted, fontSize: 11, marginBottom: 4 }}>
+          {section.subtitle}
+        </Text>
+      </View>
+    );
+  };
+
   return (
     <View style={{ backgroundColor: colors.background }} className="flex-1">
       {loading ? (
@@ -278,10 +352,12 @@ export default function MembersScreen() {
           <SkeletonTransactionList count={6} />
         </View>
       ) : (
-        <FlatList
-          data={members}
+        <SectionList
+          sections={sections}
           keyExtractor={(item, index) => item._id || item.user?._id || index.toString()}
           renderItem={renderItem}
+          renderSectionHeader={renderSectionHeader}
+          stickySectionHeadersEnabled={false}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
           refreshControl={

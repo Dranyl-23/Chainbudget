@@ -22,6 +22,7 @@ import { useSocket } from '../context/SocketContext';
 import { useTheme } from '../context/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import UserAvatar from '../components/UserAvatar';
 import {
   SkeletonBalanceCard,
   SkeletonBudgetList,
@@ -196,18 +197,17 @@ export default function DashboardScreen() {
       >
         <View className="flex-row justify-between items-center mb-3">
           <View className="flex-row items-center">
-            {user?.avatarUrl ? (
-              <Image source={{ uri: user.avatarUrl }} className="w-10 h-10 rounded-full mr-3 border" style={{ borderColor: colors.primary }} />
-            ) : (
-              <View 
-                style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-                className="w-10 h-10 rounded-full border items-center justify-center mr-3 shadow-sm"
-              >
-                <Text style={{ color: colors.primary }} className="font-extrabold text-base">
-                  {user?.displayName?.slice(0, 2).toUpperCase() || 'CB'}
-                </Text>
-              </View>
-            )}
+            <UserAvatar
+              avatarUrl={user?.avatarUrl}
+              displayName={user?.displayName || 'User'}
+              size={40}
+              shape="circle"
+              borderColor={colors.primary}
+              borderWidth={1.5}
+              backgroundColor={isDark ? 'rgba(0,0,0,0.4)' : colors.backgroundSecondary}
+              textColor={colors.primary}
+              style={{ marginRight: 12 }}
+            />
             <View>
               <Text style={{ color: colors.textMuted }} className="text-xs font-semibold uppercase tracking-wider">Welcome back,</Text>
               <Text style={{ color: colors.textPrimary }} className="text-base font-bold">{user?.displayName || 'User'}</Text>
@@ -219,13 +219,13 @@ export default function DashboardScreen() {
             <TouchableOpacity 
               onPress={() => {
                 triggerLightHaptic();
-                navigation.navigate('OrgChat', { orgId: activeOrgId });
+                navigation.navigate('ChatInbox');
               }}
               style={{ backgroundColor: colors.surface, borderColor: colors.border }}
               className="w-10 h-10 rounded-full border items-center justify-center shadow-sm relative"
               accessible={true}
               accessibilityRole="button"
-              accessibilityLabel="Open Organization Group Chat"
+              accessibilityLabel="Open Messenger Chat Inbox"
             >
               <Ionicons name="chatbubbles-outline" size={20} color={colors.primary} />
             </TouchableOpacity>

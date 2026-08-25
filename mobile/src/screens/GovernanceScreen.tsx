@@ -23,6 +23,12 @@ export default function GovernanceScreen() {
   const { showToast } = useToast();
   const { on } = useSocket();
   const { colors, isDark } = useTheme();
+
+  const myMembership = user?.memberships?.find(
+    (m: any) => (m.organization?._id || m.organization?.id || m.organization)?.toString() === activeOrgId?.toString()
+  );
+  const roleLevel = myMembership?.roleLevel || 4;
+  const canCreateProposal = Boolean(activeOrgId && (roleLevel <= 2 || (user as any)?.isSuperAdmin));
   
   const [proposals, setProposals] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -617,8 +623,8 @@ export default function GovernanceScreen() {
         />
       </Animated.View>
 
-      {/* Create Proposal FAB */}
-      {activeOrgId && (
+      {/* Create Proposal FAB (Only visible to Level 1 President & Level 2 Treasurer) */}
+      {canCreateProposal && (
         <ScaleButton
           onPress={() => setCreateModalVisible(true)}
           style={{

@@ -112,7 +112,7 @@ export default function NotificationsScreen() {
   const handleNotificationPress = (notif: any) => {
     triggerLightHaptic();
     markAsRead(notif.id || notif._id, notif.isRead);
-    navigation.navigate('NotificationDetail', { notif });
+    navigation.navigate('NotificationDetail', { notification: notif, notif });
   };
 
   const activeOrgName =

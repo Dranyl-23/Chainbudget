@@ -91,8 +91,29 @@ io.use(async (socket, next) => {
   }
 });
 
+// In-memory real-time presence tracking per organization
+const orgOnlineUsers = new Map(); // orgId -> Set<mongoUserId>
+const userActiveSockets = new Map(); // mongoUserId -> Set<socketId>
+
+function broadcastOrgOnline(orgId) {
+  const usersSet = orgOnlineUsers.get(orgId);
+  const onlineUserIds = usersSet ? Array.from(usersSet) : [];
+  io.to(`org:${orgId}`).emit("org_online_users", {
+    orgId,
+    onlineUserIds,
+  });
+}
+
+app.set("getOrgOnlineUsers", (orgId) => {
+  const usersSet = orgOnlineUsers.get(orgId);
+  return usersSet ? Array.from(usersSet) : [];
+});
+
 io.on("connection", async (socket) => {
   console.log("Client connected via WebSocket:", socket.id, "user:", socket.userId, "source:", socket.authSource);
+
+  let mongoUserId = null;
+  const userOrgIds = new Set();
 
   if (socket.userId) {
     socket.join(`user:${socket.userId}`);
@@ -103,18 +124,37 @@ io.on("connection", async (socket) => {
       let user;
       if (socket.authSource === "chainbudget") {
         // Mobile: userId is a MongoDB _id
-        user = await User.findById(socket.userId).select("memberships").lean();
+        user = await User.findById(socket.userId).select("_id memberships").lean();
       } else {
         // Browser: userId is an Asgardeo sub
-        user = await User.findOne({ asgardeoId: socket.userId }).select("memberships").lean();
+        user = await User.findOne({ asgardeoId: socket.userId }).select("_id memberships").lean();
       }
-      if (user && user.memberships) {
-        user.memberships
-          .filter((m) => m.isActive)
-          .forEach((m) => {
-            const orgId = m.organization.toString();
-            socket.join(`org:${orgId}`);
-          });
+      if (user) {
+        mongoUserId = user._id.toString();
+        socket.mongoUserId = mongoUserId;
+        socket.join(`user:${mongoUserId}`);
+
+        // Track socket connection for this user
+        if (!userActiveSockets.has(mongoUserId)) {
+          userActiveSockets.set(mongoUserId, new Set());
+        }
+        userActiveSockets.get(mongoUserId).add(socket.id);
+
+        if (user.memberships) {
+          user.memberships
+            .filter((m) => m.isActive)
+            .forEach((m) => {
+              const orgId = (m.organization?._id || m.organization).toString();
+              userOrgIds.add(orgId);
+              socket.join(`org:${orgId}`);
+
+              if (!orgOnlineUsers.has(orgId)) {
+                orgOnlineUsers.set(orgId, new Set());
+              }
+              orgOnlineUsers.get(orgId).add(mongoUserId);
+              broadcastOrgOnline(orgId);
+            });
+        }
       }
     } catch (err) {
       console.error("[socket:org_init]", err);
@@ -124,19 +164,67 @@ io.on("connection", async (socket) => {
   // Dynamic room joining for organizations
   socket.on("join_org", (orgId) => {
     if (orgId) {
-      socket.join(`org:${orgId}`);
-      console.log(`[socket] Socket ${socket.id} explicitly joined org:${orgId}`);
+      const strOrgId = orgId.toString();
+      socket.join(`org:${strOrgId}`);
+      userOrgIds.add(strOrgId);
+      if (mongoUserId) {
+        if (!orgOnlineUsers.has(strOrgId)) {
+          orgOnlineUsers.set(strOrgId, new Set());
+        }
+        orgOnlineUsers.get(strOrgId).add(mongoUserId);
+        broadcastOrgOnline(strOrgId);
+      }
+      console.log(`[socket] Socket ${socket.id} explicitly joined org:${strOrgId}`);
+    }
+  });
+
+  socket.on("get_org_online", (orgId) => {
+    if (orgId) {
+      const strOrgId = orgId.toString();
+      const usersSet = orgOnlineUsers.get(strOrgId);
+      socket.emit("org_online_users", {
+        orgId: strOrgId,
+        onlineUserIds: usersSet ? Array.from(usersSet) : [],
+      });
     }
   });
 
   socket.on("leave_org", (orgId) => {
     if (orgId) {
-      socket.leave(`org:${orgId}`);
+      const strOrgId = orgId.toString();
+      socket.leave(`org:${strOrgId}`);
+      userOrgIds.delete(strOrgId);
+      if (mongoUserId) {
+        const orgSet = orgOnlineUsers.get(strOrgId);
+        if (orgSet) {
+          orgSet.delete(mongoUserId);
+          if (orgSet.size === 0) orgOnlineUsers.delete(strOrgId);
+          broadcastOrgOnline(strOrgId);
+        }
+      }
     }
   });
 
   socket.on("disconnect", () => {
     console.log("Client disconnected:", socket.id);
+    if (mongoUserId) {
+      const userSockets = userActiveSockets.get(mongoUserId);
+      if (userSockets) {
+        userSockets.delete(socket.id);
+        if (userSockets.size === 0) {
+          userActiveSockets.delete(mongoUserId);
+          // User is offline across all tabs / devices
+          userOrgIds.forEach((orgId) => {
+            const orgSet = orgOnlineUsers.get(orgId);
+            if (orgSet) {
+              orgSet.delete(mongoUserId);
+              if (orgSet.size === 0) orgOnlineUsers.delete(orgId);
+              broadcastOrgOnline(orgId);
+            }
+          });
+        }
+      }
+    }
   });
 });
 

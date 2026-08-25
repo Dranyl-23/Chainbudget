@@ -6,7 +6,7 @@ import { io, Socket } from "socket.io-client";
 import {
   Send, Pin, PinOff, Trash2, Copy, Check, MessageSquare, RefreshCw,
   Smile, CheckCheck, UserCircle, Camera, Info, X, ChevronDown, ChevronUp,
-  ShieldCheck, Users, Search, Paperclip, Download
+  ShieldCheck, Users, Search, Paperclip, Download, Reply
 } from "lucide-react";
 import toast from "react-hot-toast";
 import api from "@/lib/api";
@@ -49,6 +49,17 @@ interface ChatMessage {
   pinnedAt?: string;
   reactions?: ReactionGroup[];
   seenBy?: UserRef[];
+  replyTo?: {
+    _id: string;
+    content: string;
+    roleLabel?: string;
+    messageType?: string;
+    sender?: {
+      _id: string;
+      displayName?: string;
+      avatarUrl?: string;
+    };
+  };
   createdAt: string;
 }
 
@@ -222,6 +233,8 @@ export default function OrgChatPage() {
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
   const [isSearchingServer, setIsSearchingServer] = useState(false);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+  const [replyingToMessage, setReplyingToMessage] = useState<ChatMessage | null>(null);
+  const [onlineUserIds, setOnlineUserIds] = useState<string[]>([]);
 
   const [selectedImagePreview, setSelectedImagePreview] = useState<string | null>(null);
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
@@ -409,21 +422,25 @@ export default function OrgChatPage() {
     }
   }, [activeOrgId]);
 
-  // 1. Fetch initial chat history, pinned messages, and organization details
+  // 1. Fetch initial chat history, pinned messages, organization details, and online members
   const fetchChatData = useCallback(async (showLoadingSpinner = false) => {
     if (!activeOrgId) return;
     if (showLoadingSpinner) setIsLoading(true);
     try {
-      const [msgRes, pinRes, orgRes] = await Promise.all([
+      const [msgRes, pinRes, orgRes, onlineRes] = await Promise.all([
         api.get<{ messages: ChatMessage[] }>(`/chat/${activeOrgId}/messages?limit=50`),
         api.get<{ pinned: ChatMessage[] }>(`/chat/${activeOrgId}/pinned`),
         api.get<OrgFullDetails>(`/organizations/${activeOrgId}`).catch(() => null),
+        api.get<{ onlineUserIds?: string[] }>(`/chat/${activeOrgId}/online`).catch(() => null),
       ]);
 
       setMessages(msgRes.data.messages || []);
       setPinnedMessages(pinRes.data.pinned || []);
       if (orgRes?.data?.logoUrl) {
         setOrgLogoUrl(orgRes.data.logoUrl);
+      }
+      if (onlineRes?.data?.onlineUserIds) {
+        setOnlineUserIds(onlineRes.data.onlineUserIds);
       }
       setTimeout(() => scrollToBottom("auto"), 100);
       void markMessagesAsSeen();
@@ -441,10 +458,11 @@ export default function OrgChatPage() {
     if (activeOrgId) {
       void (async () => {
         try {
-          const [msgRes, pinRes, orgRes] = await Promise.all([
+          const [msgRes, pinRes, orgRes, onlineRes] = await Promise.all([
             api.get<{ messages: ChatMessage[] }>(`/chat/${activeOrgId}/messages?limit=50`),
             api.get<{ pinned: ChatMessage[] }>(`/chat/${activeOrgId}/pinned`),
             api.get<OrgFullDetails>(`/organizations/${activeOrgId}`).catch(() => null),
+            api.get<{ onlineUserIds?: string[] }>(`/chat/${activeOrgId}/online`).catch(() => null),
           ]);
 
           if (!isCancelled) {
@@ -452,6 +470,9 @@ export default function OrgChatPage() {
             setPinnedMessages(pinRes.data.pinned || []);
             if (orgRes?.data?.logoUrl) {
               setOrgLogoUrl(orgRes.data.logoUrl);
+            }
+            if (onlineRes?.data?.onlineUserIds) {
+              setOnlineUserIds(onlineRes.data.onlineUserIds);
             }
             setIsLoading(false);
             setTimeout(() => scrollToBottom("auto"), 100);
@@ -485,10 +506,18 @@ export default function OrgChatPage() {
 
     socket.on("connect", () => {
       setIsSocketConnected(true);
+      socket.emit("join_org", activeOrgId);
+      socket.emit("get_org_online", activeOrgId);
     });
 
     socket.on("disconnect", () => {
       setIsSocketConnected(false);
+    });
+
+    socket.on("org_online_users", (data: { orgId: string; onlineUserIds: string[] }) => {
+      if (data.orgId === activeOrgId && Array.isArray(data.onlineUserIds)) {
+        setOnlineUserIds(data.onlineUserIds);
+      }
     });
 
     socket.on("new_org_message", (data: { orgId: string; message: ChatMessage }) => {
@@ -569,6 +598,9 @@ export default function OrgChatPage() {
     const trimmed = inputText.trim();
     if (!trimmed || isSending || !activeOrgId) return;
 
+    const currentReply = replyingToMessage;
+    setReplyingToMessage(null);
+
     const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const roleLevel = userRoleLevel;
     const roleLabel =
@@ -598,6 +630,15 @@ export default function OrgChatPage() {
           avatarUrl: user?.avatarUrl,
         },
       ],
+      replyTo: currentReply
+        ? {
+            _id: currentReply._id,
+            content: currentReply.content,
+            roleLabel: currentReply.roleLabel,
+            messageType: currentReply.messageType,
+            sender: currentReply.sender,
+          }
+        : undefined,
       createdAt: new Date().toISOString(),
     };
 
@@ -611,6 +652,7 @@ export default function OrgChatPage() {
       const res = await api.post<{ message: ChatMessage }>(`/chat/${activeOrgId}/messages`, {
         content: trimmed,
         messageType: "text",
+        replyTo: currentReply?._id || undefined,
       });
 
       const sentMsg = res.data.message;
@@ -624,6 +666,9 @@ export default function OrgChatPage() {
       toast.error("Failed to send message");
       setMessages((prev) => prev.filter((m) => m._id !== tempId));
       setInputText(trimmed);
+      if (currentReply) {
+        setReplyingToMessage(currentReply);
+      }
     } finally {
       setIsSending(false);
     }
@@ -895,6 +940,14 @@ export default function OrgChatPage() {
 
             <div>
               <h1 className="text-base font-bold text-white">{currentOrg?.name || "Organization Group Chat"}</h1>
+              <div className="flex items-center gap-1.5 text-xs">
+                <span className={`w-2 h-2 rounded-full ${onlineUserIds.length > 0 ? "bg-emerald-400 animate-pulse" : "bg-zinc-500"}`} />
+                <span className={onlineUserIds.length > 0 ? "text-emerald-400 font-medium" : "text-zinc-500"}>
+                  {onlineUserIds.length > 0
+                    ? `${onlineUserIds.length} ${onlineUserIds.length === 1 ? "member" : "members"} online`
+                    : "Offline"}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -977,13 +1030,18 @@ export default function OrgChatPage() {
               >
                 {/* ── SENDER AVATAR (Only for other members on the left side, compact 22px) ── */}
                 {!isMe && (
-                  <div className="w-5.5 h-5.5 shrink-0 mb-0.5">
+                  <div className="w-5.5 h-5.5 shrink-0 mb-0.5 relative">
                     {isLastInSequence ? (
-                      <ChatAvatar
-                        src={msg.sender?.avatarUrl}
-                        name={senderName}
-                        size={22}
-                      />
+                      <>
+                        <ChatAvatar
+                          src={msg.sender?.avatarUrl}
+                          name={senderName}
+                          size={22}
+                        />
+                        {onlineUserIds.includes(msg.sender?._id || "") && (
+                          <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 border border-zinc-900" />
+                        )}
+                      </>
                     ) : (
                       <div className="w-5.5 h-5.5" />
                     )}
@@ -992,13 +1050,40 @@ export default function OrgChatPage() {
 
                 {/* ── MESSAGE CONTENT CONTAINER ── */}
                 <div className={`max-w-[78%] md:max-w-[62%] flex flex-col ${isMe ? "items-end" : "items-start"}`}>
-                  {/* Sender Name & Role Badge (shown only for incoming messages) */}
-                  {!isMe && (
+                  {/* Messenger Reply Header (e.g. "↩ You replied to Z Andrie") */}
+                  {msg.replyTo ? (
+                    <div className="flex items-center gap-1.5 text-[11px] text-zinc-400 font-medium mb-1 px-1">
+                      <Reply className="w-3 h-3 text-zinc-400" />
+                      <span>
+                        {isMe
+                          ? `You replied to ${msg.replyTo.sender?._id === user?.id ? "yourself" : msg.replyTo.sender?.displayName || "Member"}`
+                          : `${senderName} replied to ${msg.replyTo.sender?._id === user?.id ? "you" : msg.replyTo.sender?.displayName || "Member"}`}
+                      </span>
+                    </div>
+                  ) : !isMe ? (
+                    /* Sender Name & Role Badge (shown only for normal incoming messages) */
                     <div className="flex items-center gap-1.5 mb-1 px-1">
                       <span className="text-[11px] font-semibold text-zinc-300">{senderName}</span>
                       <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold border ${badge.bg}`}>
                         {badge.label}
                       </span>
+                    </div>
+                  ) : null}
+
+                  {/* Quoted Message Pill (Messenger Muted Capsule on Top) */}
+                  {msg.replyTo && (
+                    <div
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (msg.replyTo?._id) jumpToMessage(msg.replyTo._id);
+                      }}
+                      className={`px-3 py-1.5 rounded-2xl text-xs max-w-sm mb-1 cursor-pointer select-none transition-all ${
+                        isMe
+                          ? "bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700/90 rounded-br-xs self-end"
+                          : "bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700/90 rounded-bl-xs self-start"
+                      }`}
+                    >
+                      <p className="line-clamp-2 text-[12px] leading-snug opacity-90">{msg.replyTo.content}</p>
                     </div>
                   )}
 
@@ -1013,8 +1098,8 @@ export default function OrgChatPage() {
                       }
                       className={`px-3.5 py-2 rounded-2xl text-sm leading-relaxed cursor-pointer select-text transition-all duration-300 ${
                         isMe
-                          ? "bg-linear-to-r from-purple-600 to-indigo-600 text-white rounded-br-xs shadow-md shadow-purple-900/20"
-                          : "bg-zinc-900/90 border border-white/8 text-zinc-100 rounded-bl-xs shadow-sm"
+                          ? `bg-linear-to-r from-purple-600 to-indigo-600 text-white rounded-br-xs shadow-md shadow-purple-900/20 ${msg.replyTo ? "rounded-tr-xs" : ""}`
+                          : `bg-zinc-900/90 border border-white/8 text-zinc-100 rounded-bl-xs shadow-sm ${msg.replyTo ? "rounded-tl-xs" : ""}`
                       } ${msg.isPinned ? "border-amber-500/50 ring-1 ring-amber-500/30" : ""} ${
                         highlightedMessageId === msg._id
                           ? "ring-2 ring-amber-400 border-amber-400 shadow-lg shadow-amber-500/20 scale-[1.02]"
@@ -1074,6 +1159,18 @@ export default function OrgChatPage() {
                         isMe ? "right-2" : "left-2"
                       }`}
                     >
+                      {/* Reply button */}
+                      <button
+                        onClick={() => {
+                          setReplyingToMessage(msg);
+                          textareaRef.current?.focus();
+                        }}
+                        className="p-1.5 hover:bg-white/10 text-zinc-400 hover:text-purple-300 rounded-lg transition"
+                        title="Reply to message"
+                      >
+                        <Reply className="w-4 h-4" />
+                      </button>
+
                       <button
                         onClick={() =>
                           setActiveReactingMessageId(
@@ -1094,7 +1191,7 @@ export default function OrgChatPage() {
                         {copiedId === msg._id ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
                       </button>
 
-                      {userRoleLevel <= 2 && (
+                      {userRoleLevel <= 3 && (
                         <button
                           onClick={() => void handleTogglePin(msg)}
                           className={`p-1.5 hover:bg-white/10 rounded-lg transition ${
@@ -1208,53 +1305,84 @@ export default function OrgChatPage() {
       </div>
 
       {/* ── INPUT COMPOSER ── */}
-      <form onSubmit={(e) => void handleSendMessage(e)} className="relative flex items-center gap-3">
-        <input
-          type="file"
-          ref={attachmentInputRef}
-          accept="image/*"
-          className="hidden"
-          onChange={(e) => void handleSendAttachment(e)}
-        />
+      <div className="relative">
+        {/* ── REPLYING TO PREVIEW BANNER (Web) ── */}
+        {replyingToMessage && (
+          <div className="flex items-center justify-between px-4 py-2 mb-2 bg-purple-950/40 border border-purple-500/30 border-l-4 border-l-purple-500 rounded-xl animate-fade-in text-xs shadow-md">
+            <div className="flex items-center gap-2 overflow-hidden mr-2">
+              <Reply className="w-4 h-4 text-purple-400 shrink-0" />
+              <div className="truncate">
+                <span className="font-bold text-purple-300 mr-1.5">
+                  Replying to {replyingToMessage.sender?.displayName || "Member"}:
+                </span>
+                <span className="text-zinc-400 italic">
+                  {replyingToMessage.content}
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setReplyingToMessage(null)}
+              className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition shrink-0 cursor-pointer"
+              title="Cancel reply"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
 
-        <button
-          type="button"
-          onClick={() => attachmentInputRef.current?.click()}
-          disabled={isUploadingAttachment || isSending}
-          className="h-12 w-12 rounded-2xl bg-zinc-900/80 hover:bg-zinc-800 border border-white/10 hover:border-purple-500/50 text-zinc-400 hover:text-purple-300 flex items-center justify-center transition shrink-0 disabled:opacity-50"
-          title="Attach photo / image"
-        >
-          {isUploadingAttachment ? (
-            <RefreshCw className="w-4 h-4 text-purple-400 animate-spin" />
-          ) : (
-            <Paperclip className="w-5 h-5" />
-          )}
-        </button>
-
-        <div className="flex-1 relative">
-          <textarea
-            ref={textareaRef}
-            rows={1}
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={`Message #${currentOrg?.name || "general"}... (Enter to send, Shift+Enter for new line)`}
-            className="w-full px-4 py-3.5 pr-12 bg-zinc-900/80 border border-white/10 rounded-2xl text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 resize-none max-h-32 shadow-sm transition"
+        <form onSubmit={(e) => void handleSendMessage(e)} className="relative flex items-center gap-3">
+          <input
+            type="file"
+            ref={attachmentInputRef}
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => void handleSendAttachment(e)}
           />
-        </div>
 
-        <button
-          type="submit"
-          disabled={!inputText.trim() || isSending}
-          className="h-12 w-12 rounded-2xl bg-linear-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white flex items-center justify-center shadow-lg shadow-purple-900/30 transition shrink-0"
-        >
-          {isSending ? (
-            <RefreshCw className="w-4 h-4 animate-spin" />
-          ) : (
-            <Send className="w-4 h-4" />
-          )}
-        </button>
-      </form>
+          <button
+            type="button"
+            onClick={() => attachmentInputRef.current?.click()}
+            disabled={isUploadingAttachment || isSending}
+            className="h-12 w-12 rounded-2xl bg-zinc-900/80 hover:bg-zinc-800 border border-white/10 hover:border-purple-500/50 text-zinc-400 hover:text-purple-300 flex items-center justify-center transition shrink-0 disabled:opacity-50"
+            title="Attach photo / image"
+          >
+            {isUploadingAttachment ? (
+              <RefreshCw className="w-4 h-4 text-purple-400 animate-spin" />
+            ) : (
+              <Paperclip className="w-5 h-5" />
+            )}
+          </button>
+
+          <div className="flex-1 relative">
+            <textarea
+              ref={textareaRef}
+              rows={1}
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={
+                replyingToMessage
+                  ? `Reply to ${replyingToMessage.sender?.displayName || "message"}... (Enter to send)`
+                  : `Message #${currentOrg?.name || "general"}... (Enter to send, Shift+Enter for new line)`
+              }
+              className="w-full px-4 py-3.5 pr-12 bg-zinc-900/80 border border-white/10 rounded-2xl text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 resize-none max-h-32 shadow-sm transition"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={!inputText.trim() || isSending}
+            className="h-12 w-12 rounded-2xl bg-linear-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white flex items-center justify-center shadow-lg shadow-purple-900/30 transition shrink-0"
+          >
+            {isSending ? (
+              <RefreshCw className="w-4 h-4 animate-spin" />
+            ) : (
+              <Send className="w-4 h-4" />
+            )}
+          </button>
+        </form>
+      </div>
 
       {/* ── FULLSCREEN IMAGE PREVIEW MODAL ── */}
       {selectedImagePreview && (
@@ -1446,11 +1574,24 @@ export default function OrgChatPage() {
                   {orgMembers.map((m, idx) => {
                     const badge = getRoleBadge(m.roleLevel, m.roleLabel);
                     const mName = m.displayName || "Member";
+                    const isOnline = onlineUserIds.includes(m._id);
                     return (
-                      <div key={m._id || idx} className="flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <ChatAvatar src={m.avatarUrl} name={mName} size={24} />
-                          <span className="font-medium text-zinc-200 truncate">{mName}</span>
+                      <div key={m._id || idx} className="flex items-center justify-between text-xs py-1 border-b border-white/5 last:border-0">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="relative shrink-0">
+                            <ChatAvatar src={m.avatarUrl} name={mName} size={26} />
+                            {isOnline && (
+                              <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 border border-zinc-900" />
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <span className="font-medium text-zinc-200 block truncate">{mName}</span>
+                            {isOnline && (
+                              <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" /> Active now
+                              </span>
+                            )}
+                          </div>
                         </div>
                         <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold border shrink-0 ${badge.bg}`}>
                           {badge.label}

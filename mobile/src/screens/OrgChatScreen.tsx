@@ -24,7 +24,7 @@ import {
   StatusBar,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
@@ -73,7 +73,13 @@ interface ChatMessageItem {
   replyTo?: {
     _id: string;
     content: string;
-    roleLabel: string;
+    roleLabel?: string;
+    messageType?: string;
+    sender?: {
+      _id: string;
+      displayName?: string;
+      avatarUrl?: string;
+    };
   };
   createdAt: string;
 }
@@ -283,8 +289,11 @@ export default function OrgChatScreen() {
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
   const [isSearchingServer, setIsSearchingServer] = useState(false);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+  const [replyingToMessage, setReplyingToMessage] = useState<ChatMessageItem | null>(null);
+  const [onlineUserIds, setOnlineUserIds] = useState<string[]>([]);
 
   const flatListRef = useRef<FlatList>(null);
+  const textInputRef = useRef<TextInput>(null);
 
   useEffect(() => {
     if (route.params?.initialSearch) {
@@ -420,10 +429,11 @@ export default function OrgChatScreen() {
   const loadChatHistory = useCallback(async () => {
     if (!targetOrgId) return;
     try {
-      const [msgRes, pinRes, orgRes] = await Promise.all([
+      const [msgRes, pinRes, orgRes, onlineRes] = await Promise.all([
         api.get(`/chat/${targetOrgId}/messages?limit=50`),
         api.get(`/chat/${targetOrgId}/pinned`),
         api.get(`/organizations/${targetOrgId}`).catch(() => null),
+        api.get(`/chat/${targetOrgId}/online`).catch(() => null),
       ]);
 
       const history: ChatMessageItem[] = msgRes.data?.messages || [];
@@ -438,6 +448,10 @@ export default function OrgChatScreen() {
 
       if (orgRes?.data?.logoUrl || orgRes?.data?.logo) {
         setOrgLogoUrl(orgRes.data.logoUrl || orgRes.data.logo);
+      }
+
+      if (onlineRes?.data?.onlineUserIds) {
+        setOnlineUserIds(onlineRes.data.onlineUserIds);
       }
 
       void markMessagesAsSeen();
@@ -461,6 +475,15 @@ export default function OrgChatScreen() {
         .then((res) => {
           if (res.data?.logoUrl || res.data?.logo) {
             setOrgLogoUrl(res.data.logoUrl || res.data.logo);
+          }
+        })
+        .catch(() => {});
+
+      api
+        .get(`/chat/${targetOrgId}/online`)
+        .then((res) => {
+          if (res.data?.onlineUserIds) {
+            setOnlineUserIds(res.data.onlineUserIds);
           }
         })
         .catch(() => {});
@@ -519,7 +542,7 @@ export default function OrgChatScreen() {
     return () => clearInterval(syncInterval);
   }, [targetOrgId]);
 
-  // Live WebSocket subscriptions for real-time messages, reactions, and seen receipts
+  // Live WebSocket subscriptions for real-time messages, reactions, seen receipts, and online users
   useEffect(() => {
     const unsubNewMsg = on('new_org_message', (data: { orgId: string; message: ChatMessageItem }) => {
       if (data.orgId === targetOrgId && data.message) {
@@ -561,6 +584,12 @@ export default function OrgChatScreen() {
       }
     });
 
+    const unsubOnline = on('org_online_users', (data: { orgId: string; onlineUserIds: string[] }) => {
+      if (data.orgId === targetOrgId && Array.isArray(data.onlineUserIds)) {
+        setOnlineUserIds(data.onlineUserIds);
+      }
+    });
+
     const unsubPin = on('org_message_pinned', (data: { orgId: string; message: ChatMessageItem }) => {
       if (data.orgId === targetOrgId && data.message) {
         setMessages((prev) =>
@@ -594,6 +623,7 @@ export default function OrgChatScreen() {
       unsubNewMsg();
       unsubReaction();
       unsubSeen();
+      unsubOnline();
       unsubPin();
       unsubDelete();
       unsubOrgUpdated();
@@ -698,6 +728,9 @@ export default function OrgChatScreen() {
     const trimmed = inputText.trim();
     if (!trimmed || isSending) return;
 
+    const currentReply = replyingToMessage;
+    setReplyingToMessage(null);
+
     const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const roleLevel = userRoleLevel;
     const roleLabel =
@@ -727,6 +760,15 @@ export default function OrgChatScreen() {
           avatarUrl: user?.avatarUrl,
         },
       ],
+      replyTo: currentReply
+        ? {
+            _id: currentReply._id,
+            content: currentReply.content,
+            roleLabel: currentReply.roleLabel,
+            messageType: currentReply.messageType,
+            sender: currentReply.sender,
+          }
+        : undefined,
       createdAt: new Date().toISOString(),
     };
 
@@ -740,6 +782,7 @@ export default function OrgChatScreen() {
       const res = await api.post(`/chat/${targetOrgId}/messages`, {
         content: trimmed,
         messageType: 'text',
+        replyTo: currentReply?._id || undefined,
       });
 
       const sentMsg: ChatMessageItem = res.data?.message;
@@ -753,6 +796,9 @@ export default function OrgChatScreen() {
       Alert.alert('Error', err.response?.data?.error || 'Failed to send message.');
       setMessages((prev) => prev.filter((m) => m._id !== tempId));
       setInputText(trimmed);
+      if (currentReply) {
+        setReplyingToMessage(currentReply);
+      }
     } finally {
       setIsSending(false);
     }
@@ -812,6 +858,10 @@ export default function OrgChatScreen() {
   const renderMessageItem = ({ item, index }: { item: ChatMessageItem; index: number }) => {
     const isMyMessage = item.sender?._id === currentUserId;
     const senderName = item.sender?.displayName || 'Member';
+    const repliedToName =
+      item.replyTo?.sender?._id === currentUserId
+        ? 'yourself'
+        : item.replyTo?.sender?.displayName || 'Member';
     const badge = getRoleBadge(item.roleLevel, item.roleLabel, isDark);
 
     const isLastInSequence =
@@ -831,7 +881,47 @@ export default function OrgChatScreen() {
     if (isMyMessage) {
       return (
         <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'flex-end', marginBottom: 8, paddingHorizontal: 14, gap: 8 }}>
-          <View style={{ alignItems: 'flex-end', maxWidth: '82%' }}>
+          <View style={{ alignItems: 'flex-end', maxWidth: '85%' }}>
+            {/* ── MESSENGER REPLY HEADER (e.g. "↩ You replied to Z Andrie") ── */}
+            {item.replyTo && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4, paddingRight: 4 }}>
+                <Ionicons name="arrow-undo" size={11} color={colors.textMuted} />
+                <Text style={{ color: colors.textMuted, fontSize: 11, fontWeight: '600' }}>
+                  You replied to {repliedToName}
+                </Text>
+              </View>
+            )}
+
+            {/* ── QUOTED MESSAGE PILL (Messenger Muted Capsule on Top) ── */}
+            {item.replyTo && (
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => item.replyTo?._id && jumpToMessage(item.replyTo._id)}
+                style={{
+                  backgroundColor: isDark ? '#27272A' : '#E2E8F0',
+                  borderRadius: 16,
+                  borderBottomRightRadius: 4,
+                  paddingHorizontal: 13,
+                  paddingVertical: 7,
+                  marginBottom: 2,
+                  maxWidth: '88%',
+                  alignSelf: 'flex-end',
+                }}
+              >
+                <Text
+                  style={{
+                    color: isDark ? '#A1A1AA' : '#64748B',
+                    fontSize: 13,
+                    lineHeight: 18,
+                  }}
+                  numberOfLines={2}
+                >
+                  {item.replyTo.content}
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {/* ── MAIN REPLY MESSAGE BUBBLE ── */}
             <TouchableOpacity
               activeOpacity={0.85}
               onPress={() => setSelectedTimestampMessageId((prev) => (prev === item._id ? null : item._id))}
@@ -839,6 +929,7 @@ export default function OrgChatScreen() {
               style={{
                 backgroundColor: '#9333EA',
                 borderRadius: 18,
+                borderTopRightRadius: item.replyTo ? 4 : 18,
                 borderBottomRightRadius: 4,
                 paddingHorizontal: 14,
                 paddingVertical: 9,
@@ -853,7 +944,7 @@ export default function OrgChatScreen() {
             >
               {item.isPinned && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 }}>
-                  <Ionicons name="pin" size={12} color="#FDE047" />
+                  <MaterialCommunityIcons name="pin" size={13} color="#FDE047" style={{ transform: [{ rotate: '-45deg' }] }} />
                   <Text style={{ color: '#FDE047', fontSize: 10, fontWeight: '700' }}>PINNED</Text>
                 </View>
               )}
@@ -939,45 +1030,102 @@ export default function OrgChatScreen() {
     return (
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginBottom: 10, paddingHorizontal: 14, gap: 8 }}>
         {/* ── SENDER AVATAR (Messenger Style: Beside message bubble, 22px) ── */}
-        <View style={{ width: 22, height: 22, justifyContent: 'center', alignItems: 'center', marginBottom: 2 }}>
+        <View style={{ width: 22, height: 22, justifyContent: 'center', alignItems: 'center', marginBottom: 2, position: 'relative' }}>
           {isLastInSequence ? (
-            <ChatMobileAvatar
-              uri={item.sender?.avatarUrl}
-              name={senderName}
-              size={22}
-            />
+            <>
+              <ChatMobileAvatar
+                uri={item.sender?.avatarUrl}
+                name={senderName}
+                size={22}
+              />
+              {onlineUserIds.includes(item.sender?._id) && (
+                <View
+                  style={{
+                    position: 'absolute',
+                    bottom: -1,
+                    right: -1,
+                    width: 7,
+                    height: 7,
+                    borderRadius: 3.5,
+                    backgroundColor: '#10B981',
+                    borderWidth: 1.5,
+                    borderColor: isDark ? colors.background : '#FFFFFF',
+                  }}
+                />
+              )}
+            </>
           ) : null}
         </View>
 
         <View style={{ flex: 1, alignItems: 'flex-start' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
-            <Text style={{ color: colors.textPrimary, fontWeight: '700', fontSize: 12 }} numberOfLines={1}>
-              {senderName}
-            </Text>
-            <View
+          {/* ── MESSENGER REPLY HEADER OR SENDER ROW ── */}
+          {item.replyTo ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4, paddingLeft: 4 }}>
+              <Ionicons name="arrow-undo" size={11} color={colors.textMuted} />
+              <Text style={{ color: colors.textMuted, fontSize: 11, fontWeight: '600' }}>
+                {senderName} replied to {item.replyTo.sender?._id === currentUserId ? 'you' : item.replyTo.sender?.displayName || 'Member'}
+              </Text>
+            </View>
+          ) : (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
+              <Text style={{ color: colors.textPrimary, fontWeight: '700', fontSize: 12 }} numberOfLines={1}>
+                {senderName}
+              </Text>
+              <View
+                style={{
+                  backgroundColor: badge.bg,
+                  borderColor: badge.border,
+                  borderWidth: 1,
+                  borderRadius: 8,
+                  paddingHorizontal: 7,
+                  paddingVertical: 2,
+                }}
+              >
+                <Text
+                  style={{
+                    color: badge.color,
+                    fontSize: 10,
+                    fontWeight: '800',
+                    letterSpacing: 0.2,
+                    includeFontPadding: false,
+                  }}
+                >
+                  {badge.label}
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* ── QUOTED MESSAGE PILL (Incoming Muted Capsule on Top) ── */}
+          {item.replyTo && (
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => item.replyTo?._id && jumpToMessage(item.replyTo._id)}
               style={{
-                backgroundColor: badge.bg,
-                borderColor: badge.border,
-                borderWidth: 1,
-                borderRadius: 8,
-                paddingHorizontal: 7,
-                paddingVertical: 2,
+                backgroundColor: isDark ? '#27272A' : '#E2E8F0',
+                borderRadius: 16,
+                borderBottomLeftRadius: 4,
+                paddingHorizontal: 13,
+                paddingVertical: 7,
+                marginBottom: 2,
+                maxWidth: '88%',
+                alignSelf: 'flex-start',
               }}
             >
               <Text
                 style={{
-                  color: badge.color,
-                  fontSize: 10,
-                  fontWeight: '800',
-                  letterSpacing: 0.2,
-                  includeFontPadding: false,
+                  color: isDark ? '#A1A1AA' : '#64748B',
+                  fontSize: 13,
+                  lineHeight: 18,
                 }}
+                numberOfLines={2}
               >
-                {badge.label}
+                {item.replyTo.content}
               </Text>
-            </View>
-          </View>
+            </TouchableOpacity>
+          )}
 
+          {/* ── MAIN INCOMING MESSAGE BUBBLE ── */}
           <TouchableOpacity
             activeOpacity={0.85}
             onPress={() => setSelectedTimestampMessageId((prev) => (prev === item._id ? null : item._id))}
@@ -993,6 +1141,7 @@ export default function OrgChatScreen() {
                   : (isDark ? 'rgba(255,255,255,0.08)' : '#E2E8F0'),
               borderWidth: highlightedMessageId === item._id ? 2 : 1,
               borderRadius: 18,
+              borderTopLeftRadius: item.replyTo ? 4 : 18,
               borderBottomLeftRadius: 4,
               paddingHorizontal: 14,
               paddingVertical: 9,
@@ -1006,7 +1155,7 @@ export default function OrgChatScreen() {
           >
             {item.isPinned && (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 }}>
-                <Ionicons name="pin" size={12} color="#EAB308" />
+                <MaterialCommunityIcons name="pin" size={13} color="#EAB308" style={{ transform: [{ rotate: '-45deg' }] }} />
                 <Text style={{ color: '#EAB308', fontSize: 10, fontWeight: '700' }}>PINNED ANNOUNCEMENT</Text>
               </View>
             )}
@@ -1197,9 +1346,30 @@ export default function OrgChatScreen() {
               activeOpacity={0.7}
               style={{ flex: 1 }}
             >
-              <Text style={{ color: colors.textPrimary, fontWeight: '800', fontSize: 16 }} numberOfLines={1}>
+              <Text style={{ color: colors.textPrimary, fontWeight: '800', fontSize: 15 }} numberOfLines={1}>
                 {currentOrg?.name || 'Organization Chat'}
               </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4.5, marginTop: 1 }}>
+                <View
+                  style={{
+                    width: 6.5,
+                    height: 6.5,
+                    borderRadius: 3.25,
+                    backgroundColor: onlineUserIds.length > 0 ? '#10B981' : '#94A3B8',
+                  }}
+                />
+                <Text
+                  style={{
+                    color: onlineUserIds.length > 0 ? '#10B981' : colors.textMuted,
+                    fontSize: 11,
+                    fontWeight: '600',
+                  }}
+                >
+                  {onlineUserIds.length > 0
+                    ? `${onlineUserIds.length} ${onlineUserIds.length === 1 ? 'member' : 'members'} online`
+                    : 'Offline'}
+                </Text>
+              </View>
             </TouchableOpacity>
           </View>
 
@@ -1236,7 +1406,7 @@ export default function OrgChatScreen() {
           }}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, marginRight: 8 }}>
-            <Ionicons name="pin" size={16} color="#CA8A04" />
+            <MaterialCommunityIcons name="pin" size={17} color="#CA8A04" style={{ transform: [{ rotate: '-45deg' }] }} />
             <View style={{ flex: 1 }}>
               <Text style={{ color: isDark ? '#FDE047' : '#854D0E', fontSize: 11, fontWeight: '800' }}>
                 PINNED ANNOUNCEMENT
@@ -1275,6 +1445,7 @@ export default function OrgChatScreen() {
             keyExtractor={(item) => item._id}
             renderItem={renderMessageItem}
             contentContainerStyle={{ paddingVertical: 16 }}
+            showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="on-drag"
             onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
@@ -1314,39 +1485,92 @@ export default function OrgChatScreen() {
             backgroundColor: isDark ? colors.surface : '#FFFFFF',
             borderTopWidth: 1,
             borderTopColor: colors.borderSubtle,
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 10,
           }}
         >
-          <View
-            style={{
-              flex: 1,
-              backgroundColor: isDark ? 'rgba(0,0,0,0.35)' : '#F1F5F9',
-              borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#E2E8F0',
-              borderWidth: 1,
-              borderRadius: 22,
-              paddingHorizontal: 14,
-              paddingVertical: Platform.OS === 'ios' ? 8 : 4,
-              maxHeight: 100,
-              minHeight: 42,
-              justifyContent: 'center',
-            }}
-          >
-            <TextInput
+          {/* ── REPLYING TO PREVIEW BANNER ── */}
+          {replyingToMessage && (
+            <View
               style={{
-                color: colors.textPrimary,
-                fontSize: 14,
-                padding: 0,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                backgroundColor: isDark ? 'rgba(147, 51, 234, 0.12)' : '#F3E8FF',
+                borderLeftWidth: 4,
+                borderLeftColor: '#9333EA',
+                borderTopWidth: 1,
+                borderRightWidth: 1,
+                borderBottomWidth: 1,
+                borderColor: isDark ? 'rgba(168, 85, 247, 0.25)' : '#E9D5FF',
+                borderRadius: 12,
+                paddingHorizontal: 12,
+                paddingVertical: 7,
+                marginBottom: 8,
               }}
-              placeholder={`Message ${currentOrg?.name || 'organization'}...`}
-              placeholderTextColor={colors.textMuted}
-              value={inputText}
-              onChangeText={setInputText}
-              multiline={true}
-              maxLength={2000}
-            />
-          </View>
+            >
+              <View style={{ flex: 1, marginRight: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 1 }}>
+                  <Ionicons name="arrow-undo" size={11} color="#A855F7" />
+                  <Text style={{ color: isDark ? '#D8B4FE' : '#6B21A8', fontSize: 11, fontWeight: '800' }}>
+                    Replying to {replyingToMessage.sender?.displayName || 'Member'}
+                  </Text>
+                </View>
+                <Text style={{ color: isDark ? '#CBD5E1' : '#475569', fontSize: 12 }} numberOfLines={1}>
+                  {replyingToMessage.content}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => {
+                  triggerLightHaptic();
+                  setReplyingToMessage(null);
+                }}
+                style={{
+                  width: 24,
+                  height: 24,
+                  borderRadius: 12,
+                  backgroundColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Ionicons name="close" size={14} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+          )}
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <View
+              style={{
+                flex: 1,
+                backgroundColor: isDark ? 'rgba(0,0,0,0.35)' : '#F1F5F9',
+                borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#E2E8F0',
+                borderWidth: 1,
+                borderRadius: 22,
+                paddingHorizontal: 14,
+                paddingVertical: Platform.OS === 'ios' ? 8 : 4,
+                maxHeight: 100,
+                minHeight: 42,
+                justifyContent: 'center',
+              }}
+            >
+              <TextInput
+                ref={textInputRef}
+                style={{
+                  color: colors.textPrimary,
+                  fontSize: 14,
+                  padding: 0,
+                }}
+                placeholder={
+                  replyingToMessage
+                    ? `Reply to ${replyingToMessage.sender?.displayName || 'message'}...`
+                    : `Message ${currentOrg?.name || 'organization'}...`
+                }
+                placeholderTextColor={colors.textMuted}
+                value={inputText}
+                onChangeText={setInputText}
+                multiline={true}
+                maxLength={2000}
+              />
+            </View>
 
           <TouchableOpacity
             onPress={handleSendMessage}
@@ -1372,6 +1596,7 @@ export default function OrgChatScreen() {
               <Ionicons name="send" size={18} color="#FFFFFF" style={{ marginLeft: 2 }} />
             )}
           </TouchableOpacity>
+          </View>
         </View>
       </KeyboardAvoidingView>
 
@@ -1449,6 +1674,35 @@ export default function OrgChatScreen() {
 
               {/* Action Buttons */}
               <View style={{ gap: 8 }}>
+                {/* ── REPLY ACTION (Instagram/Messenger style) ── */}
+                <TouchableOpacity
+                  onPress={() => {
+                    const target = selectedMessageForAction;
+                    setSelectedMessageForAction(null);
+                    setReplyingToMessage(target);
+                    triggerLightHaptic();
+                    setTimeout(() => {
+                      textInputRef.current?.focus();
+                    }, 150);
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingVertical: 11,
+                    paddingHorizontal: 12,
+                    borderRadius: 12,
+                    backgroundColor: isDark ? 'rgba(147, 51, 234, 0.15)' : '#F3E8FF',
+                    borderColor: isDark ? 'rgba(168, 85, 247, 0.35)' : '#E9D5FF',
+                    borderWidth: 1,
+                    gap: 10,
+                  }}
+                >
+                  <Ionicons name="arrow-undo-outline" size={18} color="#A855F7" />
+                  <Text style={{ color: isDark ? '#D8B4FE' : '#7E22CE', fontWeight: '700', fontSize: 13 }}>
+                    Reply to Message
+                  </Text>
+                </TouchableOpacity>
+
                 <TouchableOpacity
                   onPress={async () => {
                     await Clipboard.setStringAsync(selectedMessageForAction.content);
@@ -1469,7 +1723,7 @@ export default function OrgChatScreen() {
                   <Text style={{ color: colors.textPrimary, fontWeight: '600', fontSize: 13 }}>Copy Text</Text>
                 </TouchableOpacity>
 
-                {userRoleLevel <= 2 && (
+                {userRoleLevel <= 3 && (
                   <TouchableOpacity
                     onPress={async () => {
                       const msgId = selectedMessageForAction._id;
@@ -1491,7 +1745,12 @@ export default function OrgChatScreen() {
                       gap: 10,
                     }}
                   >
-                    <Ionicons name="pin-outline" size={18} color="#EAB308" />
+                    <MaterialCommunityIcons
+                      name={selectedMessageForAction.isPinned ? "pin-off" : "pin"}
+                      size={19}
+                      color="#F59E0B"
+                      style={{ transform: [{ rotate: '-45deg' }] }}
+                    />
                     <Text style={{ color: colors.textPrimary, fontWeight: '600', fontSize: 13 }}>
                       {selectedMessageForAction.isPinned ? 'Unpin Announcement' : 'Pin Announcement'}
                     </Text>

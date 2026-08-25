@@ -235,11 +235,14 @@ export default function PublicLedgerScreen() {
         {/* Tab Switcher */}
         <View
           style={{
+            flexDirection: 'row',
             backgroundColor: isDark ? 'rgba(0,0,0,0.45)' : colors.backgroundSecondary,
             borderColor: colors.borderSubtle,
             borderWidth: 1,
+            borderRadius: 16,
+            padding: 4,
+            marginTop: 8,
           }}
-          className="flex-row p-1 rounded-2xl mt-2"
         >
           <TouchableOpacity
             onPress={() => {
@@ -247,42 +250,65 @@ export default function PublicLedgerScreen() {
               setActiveTab('feed');
             }}
             style={{
+              flex: 1,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingVertical: 10,
+              borderRadius: 12,
               backgroundColor: activeTab === 'feed' ? colors.primary : 'transparent',
             }}
-            className="flex-1 items-center py-2.5 rounded-xl flex-row justify-center gap-1.5"
             activeOpacity={0.8}
           >
             <Ionicons
               name="pulse"
               size={15}
               color={activeTab === 'feed' ? '#ffffff' : colors.textMuted}
+              style={{ marginRight: 6 }}
             />
             <Text
-              style={{ color: activeTab === 'feed' ? '#ffffff' : colors.textMuted }}
-              className="font-bold text-xs"
+              style={{
+                color: activeTab === 'feed' ? '#ffffff' : colors.textMuted,
+                fontWeight: '700',
+                fontSize: 13,
+                textAlign: 'center',
+                includeFontPadding: false,
+              }}
             >
               Live Feed
             </Text>
           </TouchableOpacity>
+
           <TouchableOpacity
             onPress={() => {
               triggerLightHaptic();
               setActiveTab('directory');
             }}
             style={{
+              flex: 1,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingVertical: 10,
+              borderRadius: 12,
               backgroundColor: activeTab === 'directory' ? colors.primary : 'transparent',
             }}
-            className="flex-1 items-center py-2.5 rounded-xl flex-row justify-center gap-1.5"
             activeOpacity={0.8}
           >
             <Ionicons
               name="grid"
               size={14}
               color={activeTab === 'directory' ? '#ffffff' : colors.textMuted}
+              style={{ marginRight: 6 }}
             />
             <Text
-              style={{ color: activeTab === 'directory' ? '#ffffff' : colors.textMuted }}
-              className="font-bold text-xs"
+              style={{
+                color: activeTab === 'directory' ? '#ffffff' : colors.textMuted,
+                fontWeight: '700',
+                fontSize: 13,
+                textAlign: 'center',
+                includeFontPadding: false,
+              }}
             >
               Directory ({organizations.length})
             </Text>
@@ -342,7 +368,7 @@ export default function PublicLedgerScreen() {
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
-                    gap: 6,
+                    justifyContent: 'center',
                     paddingHorizontal: 12,
                     paddingVertical: 7,
                     borderRadius: 14,
@@ -359,12 +385,14 @@ export default function PublicLedgerScreen() {
                     name={cat.icon as any}
                     size={13}
                     color={isSelected ? '#ffffff' : colors.textSecondary}
+                    style={{ marginRight: 6 }}
                   />
                   <Text
                     style={{
                       color: isSelected ? '#ffffff' : colors.textSecondary,
                       fontSize: 12,
                       fontWeight: isSelected ? '700' : '600',
+                      includeFontPadding: false,
                     }}
                   >
                     {cat.label}
@@ -379,6 +407,7 @@ export default function PublicLedgerScreen() {
                       paddingHorizontal: 5,
                       paddingVertical: 1,
                       borderRadius: 8,
+                      marginLeft: 6,
                     }}
                   >
                     <Text
@@ -386,6 +415,7 @@ export default function PublicLedgerScreen() {
                         color: isSelected ? '#ffffff' : colors.textMuted,
                         fontSize: 10,
                         fontWeight: '700',
+                        includeFontPadding: false,
                       }}
                     >
                       {count}

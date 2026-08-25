@@ -74,6 +74,7 @@ export default function OrgChatInfoScreen() {
   const [orgDetails, setOrgDetails] = useState<any>(null);
   const [members, setMembers] = useState<any[]>([]);
   const [pinnedMessages, setPinnedMessages] = useState<any[]>([]);
+  const [onlineUserIds, setOnlineUserIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [orgLogoUrl, setOrgLogoUrl] = useState<string | undefined>(currentOrg?.logo);
@@ -108,26 +109,32 @@ export default function OrgChatInfoScreen() {
     chatInfo: true,
     members: false,
     pinned: false,
-    privacy: false,
+    governance: false,
   });
 
-  const toggleSection = (key: string) => {
-    triggerLightHaptic();
-    setOpenSection((prev) => ({ ...prev, [key]: !prev[key] }));
+  const toggleSection = (sectionKey: string) => {
+    setOpenSection((prev) => ({ ...prev, [sectionKey]: !prev[sectionKey] }));
   };
 
+  // Load organization, members, pinned announcements & online members
   const fetchDetails = useCallback(async () => {
     if (!orgId) return;
     try {
-      const [orgRes, membersRes, pinRes] = await Promise.all([
+      setLoading(true);
+      const [orgRes, membersRes, pinRes, onlineRes] = await Promise.all([
         api.get(`/organizations/${orgId}`),
-        api.get(`/users/${orgId}/members`),
+        api.get(`/organizations/${orgId}/members`),
         api.get(`/chat/${orgId}/pinned`),
+        api.get(`/chat/${orgId}/online`).catch(() => null),
       ]);
 
       setOrgDetails(orgRes.data);
       if (orgRes.data?.logoUrl) {
         setOrgLogoUrl(orgRes.data.logoUrl);
+      }
+
+      if (onlineRes?.data?.onlineUserIds) {
+        setOnlineUserIds(onlineRes.data.onlineUserIds);
       }
 
       const formattedMembers = (membersRes.data || []).map((u: any) => {
@@ -160,7 +167,7 @@ export default function OrgChatInfoScreen() {
     fetchDetails();
   }, [fetchDetails]);
 
-  // Live WebSocket update for organization profile
+  // Live WebSocket updates for organization profile and online users
   useEffect(() => {
     const unsub = on('org_updated', (data: { orgId: string; logoUrl?: string; name?: string }) => {
       if (data.orgId === orgId) {
@@ -169,8 +176,15 @@ export default function OrgChatInfoScreen() {
       }
     });
 
+    const unsubOnline = on('org_online_users', (data: { orgId: string; onlineUserIds: string[] }) => {
+      if (data.orgId === orgId && Array.isArray(data.onlineUserIds)) {
+        setOnlineUserIds(data.onlineUserIds);
+      }
+    });
+
     return () => {
       unsub();
+      unsubOnline();
     };
   }, [orgId, on]);
 
@@ -548,10 +562,11 @@ export default function OrgChatInfoScreen() {
               ) : members.length === 0 ? (
                 <Text style={{ color: colors.textSecondary, fontSize: 12 }}>No members found</Text>
               ) : (
-                members.slice(0, 10).map((m: any, idx: number) => {
+                members.slice(0, 20).map((m: any, idx: number) => {
                   const badge = getRoleBadge(m.roleLevel, m.roleLabel);
                   const mName = m.displayName || 'Member';
                   const mAvatar = formatAvatarUrl(m.avatarUrl);
+                  const isOnline = onlineUserIds.includes(m._id);
                   return (
                     <View
                       key={m._id || idx}
@@ -565,28 +580,52 @@ export default function OrgChatInfoScreen() {
                       }}
                     >
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                        <View
-                          style={{
-                            width: 32,
-                            height: 32,
-                            borderRadius: 16,
-                            backgroundColor: colors.primary,
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            overflow: 'hidden',
-                          }}
-                        >
-                          {mAvatar ? (
-                            <Image source={{ uri: mAvatar }} style={{ width: 32, height: 32 }} />
-                          ) : (
-                            <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 13 }}>
-                              {mName.charAt(0).toUpperCase()}
+                        <View style={{ position: 'relative' }}>
+                          <View
+                            style={{
+                              width: 34,
+                              height: 34,
+                              borderRadius: 17,
+                              backgroundColor: colors.primary,
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              overflow: 'hidden',
+                            }}
+                          >
+                            {mAvatar ? (
+                              <Image source={{ uri: mAvatar }} style={{ width: 34, height: 34 }} />
+                            ) : (
+                              <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 13 }}>
+                                {mName.charAt(0).toUpperCase()}
+                              </Text>
+                            )}
+                          </View>
+                          {isOnline && (
+                            <View
+                              style={{
+                                position: 'absolute',
+                                bottom: -1,
+                                right: -1,
+                                width: 9,
+                                height: 9,
+                                borderRadius: 4.5,
+                                backgroundColor: '#10B981',
+                                borderWidth: 1.5,
+                                borderColor: isDark ? colors.surface : '#FFFFFF',
+                              }}
+                            />
+                          )}
+                        </View>
+                        <View>
+                          <Text style={{ color: colors.textPrimary, fontWeight: '700', fontSize: 13 }}>
+                            {mName}
+                          </Text>
+                          {isOnline && (
+                            <Text style={{ color: '#10B981', fontSize: 10, fontWeight: '600', marginTop: 1 }}>
+                              ● Active now
                             </Text>
                           )}
                         </View>
-                        <Text style={{ color: colors.textPrimary, fontWeight: '600', fontSize: 13 }}>
-                          {mName}
-                        </Text>
                       </View>
                       <View
                         style={{
