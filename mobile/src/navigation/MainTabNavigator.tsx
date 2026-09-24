@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   Animated,
-  useWindowDimensions,
 } from 'react-native';
 import { createBottomTabNavigator, BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -228,51 +227,12 @@ function StandardTabButton({
   );
 }
 
-const INDICATOR_WIDTH = 28;
-
 function SlidingNavbar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
-  const { width } = useWindowDimensions();
 
   const activeColor = isDark ? colors.primary : '#0F172A';
   const inactiveColor = isDark ? 'rgba(255, 255, 255, 0.45)' : '#94A3B8';
-
-  // Calculate dynamic tab width
-  const totalNavWidth = width - 16;
-  const tabWidth = totalNavWidth / 5;
-
-  const slideAnim = useRef(new Animated.Value(state.index * tabWidth + (tabWidth - INDICATOR_WIDTH) / 2)).current;
-  const indicatorScaleX = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    const targetX = state.index * tabWidth + (tabWidth - INDICATOR_WIDTH) / 2;
-
-    // Fluid stretch and glide physics
-    Animated.parallel([
-      // Stretch slightly during slide, then spring settle
-      Animated.sequence([
-        Animated.timing(indicatorScaleX, {
-          toValue: 1.45,
-          duration: 100,
-          useNativeDriver: true,
-        }),
-        Animated.spring(indicatorScaleX, {
-          toValue: 1,
-          friction: 4,
-          tension: 100,
-          useNativeDriver: true,
-        }),
-      ]),
-      // Spring glide to new tab position
-      Animated.spring(slideAnim, {
-        toValue: targetX,
-        friction: 5.5,
-        tension: 110,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [state.index, tabWidth]);
 
   return (
     <View
@@ -286,22 +246,6 @@ function SlidingNavbar({ state, descriptors, navigation }: BottomTabBarProps) {
         },
       ]}
     >
-      {/* Sliding Fluid Indicator Pill (Glides horizontally under the active tab) */}
-      {state.index !== 2 && (
-        <Animated.View
-          style={[
-            styles.slidingIndicator,
-            {
-              backgroundColor: activeColor,
-              shadowColor: activeColor,
-              transform: [
-                { translateX: slideAnim },
-                { scaleX: indicatorScaleX },
-              ],
-            },
-          ]}
-        />
-      )}
 
       {state.routes.map((route, index) => {
         const isFocused = state.index === index;
@@ -383,19 +327,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     position: 'relative',
   },
-  slidingIndicator: {
-    position: 'absolute',
-    bottom: 8,
-    left: 8,
-    width: INDICATOR_WIDTH,
-    height: 3.5,
-    borderRadius: 2,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.35,
-    shadowRadius: 5,
-    elevation: 4,
-    zIndex: 10,
-  },
+
   standardTabButton: {
     flex: 1,
     alignItems: 'center',
