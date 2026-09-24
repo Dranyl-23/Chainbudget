@@ -763,8 +763,8 @@ router.post("/:id/release-escrow", authenticate, async (req, res) => {
     if (txn.onChainTxId && process.env.CONTRACT_ADDRESS && process.env.BACKEND_WALLET_PRIVATE_KEY) {
       try {
         const { ethers } = require("ethers");
-        const rpcUrl = process.env.AMOY_RPC_URL || "https://rpc-amoy.polygon.technology";
-        const provider = new ethers.JsonRpcProvider(rpcUrl);
+        const rpcUrl = process.env.AMOY_RPC_URL || "https://polygon-amoy-bor-rpc.publicnode.com";
+        const provider = new ethers.JsonRpcProvider(rpcUrl, 80002, { staticNetwork: true });
         const signer = new ethers.Wallet(process.env.BACKEND_WALLET_PRIVATE_KEY, provider);
         const ChainBudgetABI = require("../lib/ChainBudget.json");
         const contract = new ethers.Contract(process.env.CONTRACT_ADDRESS, ChainBudgetABI.abi, signer);

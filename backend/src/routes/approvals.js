@@ -150,8 +150,8 @@ router.post("/:txId", authenticate, requireRole(2), requireIdempotency, async (r
         // Trigger Gasless Relayer Execution if Smart Contract is linked
         if (org.contractAddress) {
           try {
-            const rpcUrl = process.env.AMOY_RPC_URL || process.env.POLYGON_RPC_URL || "https://rpc-amoy.polygon.technology";
-            const provider = new ethers.JsonRpcProvider(rpcUrl);
+            const rpcUrl = process.env.AMOY_RPC_URL || process.env.POLYGON_RPC_URL || "https://polygon-amoy-bor-rpc.publicnode.com";
+            const provider = new ethers.JsonRpcProvider(rpcUrl, 80002, { staticNetwork: true });
             const relayerPrivateKey = process.env.BACKEND_WALLET_PRIVATE_KEY || process.env.BACKEND_PRIVATE_KEY;
             if (!relayerPrivateKey) throw new Error("BACKEND_WALLET_PRIVATE_KEY not set in environment");
             const relayerWallet = new ethers.Wallet(relayerPrivateKey, provider);

@@ -6,7 +6,7 @@ const sbtAbi = [
 
 async function mintSBT(walletAddress, orgId) {
   try {
-    const rpcUrl = process.env.AMOY_RPC_URL || "https://rpc-amoy.polygon.technology/";
+    const rpcUrl = process.env.AMOY_RPC_URL || "https://polygon-amoy-bor-rpc.publicnode.com";
     const privateKey = process.env.BACKEND_WALLET_PRIVATE_KEY;
     const contractAddress = process.env.SBT_CONTRACT_ADDRESS;
 
@@ -15,7 +15,7 @@ async function mintSBT(walletAddress, orgId) {
       return null;
     }
 
-    const provider = new ethers.JsonRpcProvider(rpcUrl);
+    const provider = new ethers.JsonRpcProvider(rpcUrl, 80002, { staticNetwork: true });
     const wallet = new ethers.Wallet(privateKey, provider);
     const sbtContract = new ethers.Contract(contractAddress, sbtAbi, wallet);
 

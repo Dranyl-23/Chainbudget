@@ -34,7 +34,8 @@ router.get("/me/balance", authenticate, async (req, res) => {
     if (!req.user.walletAddress) {
       return res.json({ balance: "0.0" });
     }
-    const provider = new ethers.JsonRpcProvider(process.env.AMOY_RPC_URL || process.env.RPC_URL || "https://rpc-amoy.polygon.technology/");
+    const rpcUrl = process.env.AMOY_RPC_URL || process.env.RPC_URL || "https://polygon-amoy-bor-rpc.publicnode.com";
+    const provider = new ethers.JsonRpcProvider(rpcUrl, 80002, { staticNetwork: true });
     const balanceWei = await provider.getBalance(req.user.walletAddress);
     const balanceMatic = ethers.formatEther(balanceWei);
     res.json({ balance: balanceMatic });

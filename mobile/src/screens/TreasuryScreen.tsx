@@ -20,7 +20,7 @@ import { useOrg } from '../context/OrgContext';
 import { useTheme } from '../context/ThemeContext';
 import { triggerSuccessHaptic, triggerErrorHaptic, triggerLightHaptic } from '../lib/biometrics';
 
-const AMOY_RPC = 'https://rpc-amoy.polygon.technology';
+const AMOY_RPC = 'https://polygon-amoy-bor-rpc.publicnode.com';
 
 export default function TreasuryScreen() {
   const route = useRoute<any>();
@@ -99,7 +99,7 @@ export default function TreasuryScreen() {
     if (!contractAddr || !contractAddr.startsWith('0x')) return;
     setLoadingBalance(true);
     try {
-      const provider = new ethers.JsonRpcProvider(AMOY_RPC);
+      const provider = new ethers.JsonRpcProvider(AMOY_RPC, 80002, { staticNetwork: true });
       const bal = await provider.getBalance(contractAddr);
       setChainBalance(ethers.formatEther(bal));
     } catch {

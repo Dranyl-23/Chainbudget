@@ -25,7 +25,7 @@ let signer = null;
 const initBlockchain = () => {
   if (contract) return; // Already initialized
 
-  const rpcUrl = process.env.AMOY_RPC_URL;
+  const rpcUrl = process.env.AMOY_RPC_URL || "https://polygon-amoy-bor-rpc.publicnode.com";
   const privateKey = process.env.BACKEND_WALLET_PRIVATE_KEY;
   const contractAddress = process.env.CONTRACT_ADDRESS;
 
@@ -36,7 +36,7 @@ const initBlockchain = () => {
     return;
   }
 
-  provider = new ethers.JsonRpcProvider(rpcUrl);
+  provider = new ethers.JsonRpcProvider(rpcUrl, 80002, { staticNetwork: true });
   signer = new ethers.Wallet(privateKey, provider);
   contract = new ethers.Contract(
     contractAddress,

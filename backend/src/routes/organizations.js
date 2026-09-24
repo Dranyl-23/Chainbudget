@@ -214,9 +214,9 @@ router.post("/:orgId/approve-liquidation", authenticate, async (req, res) => {
     if (org.contractAddress) {
       try {
         const { ethers } = require("ethers");
-        const rpcUrl = process.env.AMOY_RPC_URL;
+        const rpcUrl = process.env.AMOY_RPC_URL || "https://polygon-amoy-bor-rpc.publicnode.com";
         const privateKey = process.env.BACKEND_WALLET_PRIVATE_KEY;
-        const provider = new ethers.JsonRpcProvider(rpcUrl);
+        const provider = new ethers.JsonRpcProvider(rpcUrl, 80002, { staticNetwork: true });
         const signer = new ethers.Wallet(privateKey, provider);
         
         // Transfer 0.01 MATIC as a symbolic representation of the subsidy / gas
