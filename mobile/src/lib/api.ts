@@ -110,6 +110,17 @@ api.interceptors.request.use(async (config) => {
     }
   }
 
+  // 4. Critical fix for React Native FormData / file uploads:
+  // If request data is FormData, remove explicit Content-Type header so Axios & React Native
+  // automatically construct the proper 'multipart/form-data; boundary=----...' header.
+  if (config.data instanceof FormData) {
+    if (config.headers) {
+      delete config.headers['Content-Type'];
+      delete config.headers['content-type'];
+    }
+    config.timeout = 60000; // Give file uploads 60 seconds
+  }
+
   return config;
 });
 

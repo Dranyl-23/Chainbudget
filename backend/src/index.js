@@ -265,7 +265,8 @@ app.use(cors({
   },
   credentials: true,
 }));
-app.use(express.json({ limit: '1mb' })); // H-8 Fix: Prevent large payload DoS
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // GAP-18: Safe MongoDB operator ($ and .) sanitizer that does not reassign req.query getter
 function sanitizeMongoObject(obj) {

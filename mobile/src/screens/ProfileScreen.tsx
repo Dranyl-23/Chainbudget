@@ -64,10 +64,13 @@ export default function ProfileScreen() {
     setIsUploading(true);
     try {
       const formData = new FormData();
-      const filename = uri.split('/').pop() || 'avatar.jpg';
+      let filename = uri.split('/').pop() || 'avatar.jpg';
+      if (!filename.includes('.')) {
+        filename = `${filename}.jpg`;
+      }
       const match = /\.(\w+)$/.exec(filename);
       const ext = match ? match[1].toLowerCase() : 'jpeg';
-      const type = ext === 'jpg' ? 'image/jpeg' : `image/${ext}`;
+      const type = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
 
       formData.append('file', {
         uri,
@@ -75,9 +78,7 @@ export default function ProfileScreen() {
         type,
       } as any);
 
-      const uploadRes = await api.post('/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      const uploadRes = await api.post('/upload', formData);
 
       if (uploadRes.data.documentUrl) {
         await api.put('/users/me', { avatarUrl: uploadRes.data.documentUrl });
