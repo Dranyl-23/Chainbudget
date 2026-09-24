@@ -777,7 +777,7 @@ export default function OrgChatScreen() {
                   const tempIdx = merged.findIndex(
                     (m) =>
                       (fresh.clientMessageId && (m.clientMessageId === fresh.clientMessageId || m._id === fresh.clientMessageId)) ||
-                      (m._id.startsWith('temp-') &&
+                      ((m._id.startsWith('temp-') || m._id.startsWith('msg-')) &&
                         m.content === fresh.content &&
                         m.sender?._id === fresh.sender?._id)
                   );
@@ -789,7 +789,18 @@ export default function OrgChatScreen() {
                   hasNew = true;
                 }
               }
-              return hasNew ? merged : prev;
+
+              // Deduplicate merged array by _id as a safety net
+              const seen = new Set<string>();
+              const unique = merged.filter((m) => {
+                const id = m._id || m.clientMessageId;
+                if (!id) return true;
+                if (seen.has(id)) return false;
+                seen.add(id);
+                return true;
+              });
+
+              return hasNew || unique.length !== prev.length ? unique : prev;
             });
           }
         })
@@ -808,7 +819,7 @@ export default function OrgChatScreen() {
             (m) =>
               (data.message.clientMessageId &&
                 (m.clientMessageId === data.message.clientMessageId || m._id === data.message.clientMessageId)) ||
-              (m._id.startsWith('temp-') &&
+              ((m._id.startsWith('temp-') || m._id.startsWith('msg-')) &&
                 m.content === data.message.content &&
                 m.sender?._id === data.message.sender?._id)
           );
@@ -1110,13 +1121,17 @@ export default function OrgChatScreen() {
 
       const sentMsg: ChatMessageItem = res.data?.message;
       if (sentMsg) {
-        setMessages((prev) =>
-          prev.map((m) =>
+        setMessages((prev) => {
+          const alreadyExists = prev.some((m) => m._id === sentMsg._id && m._id !== tempId);
+          if (alreadyExists) {
+            return prev.filter((m) => m._id !== tempId);
+          }
+          return prev.map((m) =>
             m._id === tempId || m.clientMessageId === clientMessageId
               ? { ...sentMsg, status: 'sent', _localContent: trimmed }
               : m
-          )
-        );
+          );
+        });
       }
     } catch (err: any) {
       console.warn('[chat:send error]', err?.response?.data || err.message);
@@ -1161,13 +1176,17 @@ export default function OrgChatScreen() {
 
       const sentMsg: ChatMessageItem = res.data?.message;
       if (sentMsg) {
-        setMessages((prev) =>
-          prev.map((m) =>
+        setMessages((prev) => {
+          const alreadyExists = prev.some((m) => m._id === sentMsg._id && m._id !== failedMsg._id);
+          if (alreadyExists) {
+            return prev.filter((m) => m._id !== failedMsg._id);
+          }
+          return prev.map((m) =>
             m._id === failedMsg._id || m.clientMessageId === clientMessageId
               ? { ...sentMsg, status: 'sent', _localContent: trimmed }
               : m
-          )
-        );
+          );
+        });
       }
     } catch (err: any) {
       console.warn('[chat:retry error]', err?.response?.data || err.message);
@@ -1356,11 +1375,11 @@ export default function OrgChatScreen() {
             {/* ── REACTIONS PILLS UNDER BUBBLE ── */}
             {item.reactions && item.reactions.length > 0 && (
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
-                {item.reactions.map((r) => {
+                {item.reactions.map((r, rIdx) => {
                   const hasReacted = r.users?.some((u) => u._id === currentUserId);
                   return (
                     <TouchableOpacity
-                      key={r.emoji}
+                      key={`${item._id}-react-${r.emoji}-${rIdx}`}
                       onPress={() => handleToggleReaction(item._id, r.emoji)}
                       style={{
                         flexDirection: 'row',
@@ -1388,7 +1407,7 @@ export default function OrgChatScreen() {
                 <Text style={{ fontSize: 9.5, color: colors.textMuted, fontWeight: '500' }}>Seen by</Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   {otherSeenUsers.slice(0, 4).map((u, i) => (
-                    <View key={u._id} style={{ marginLeft: i > 0 ? -4 : 0 }}>
+                    <View key={u?._id || `seen-${item._id}-${i}`} style={{ marginLeft: i > 0 ? -4 : 0 }}>
                       <ChatMobileAvatar
                         uri={u.avatarUrl}
                         name={u.displayName || 'M'}
@@ -1560,11 +1579,11 @@ export default function OrgChatScreen() {
           {/* ── REACTIONS PILLS UNDER BUBBLE ── */}
           {item.reactions && item.reactions.length > 0 && (
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
-              {item.reactions.map((r) => {
+              {item.reactions.map((r, rIdx) => {
                 const hasReacted = r.users?.some((u) => u._id === currentUserId);
                 return (
                   <TouchableOpacity
-                    key={r.emoji}
+                    key={`${item._id}-incoming-react-${r.emoji}-${rIdx}`}
                     onPress={() => handleToggleReaction(item._id, r.emoji)}
                     style={{
                       flexDirection: 'row',
@@ -1830,7 +1849,7 @@ export default function OrgChatScreen() {
           <FlatList
             ref={flatListRef}
             data={messages}
-            keyExtractor={(item) => item._id}
+            keyExtractor={(item, index) => item._id ? `${item._id}` : (item.clientMessageId || `msg-${index}`)}
             renderItem={renderMessageItem}
             contentContainerStyle={{ paddingVertical: 16 }}
             showsVerticalScrollIndicator={false}
