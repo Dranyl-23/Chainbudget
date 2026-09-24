@@ -63,9 +63,9 @@
     "extra": {
       "apiUrl": "https://chainbudget-api.fly.dev/api",
       "eas": {
-        "projectId": "85dd7732-5fd7-438e-8e34-6d2246d7426a"
+        "projectId": "0f55256d-69ce-4219-b4c2-27ebe7b043f7"
       }
     },
-    "owner": "askyyys-team"
+    "owner": "lynard"
   }
 }
