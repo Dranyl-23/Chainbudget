@@ -130,6 +130,83 @@ function isRedisAvailable() {
 
 const MAX_CACHE_MESSAGES_PER_ROOM = 200;
 const CACHE_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days
+const MAX_ITEM_BYTES = 32768; // 32KB max per message item in Redis
+
+/**
+ * Sanitizes a message before caching to prevent Redis memory bloat.
+ * Strips huge base64 data URIs (e.g. 1MB+ avatars) from sender/seenBy/replyTo.
+ */
+function sanitizeMessageForCache(msg) {
+  if (!msg || typeof msg !== "object") return null;
+
+  try {
+    const clean = { ...msg };
+
+    // Sanitize sender avatar
+    if (clean.sender && typeof clean.sender === "object") {
+      const avatar = clean.sender.avatarUrl;
+      clean.sender = {
+        ...clean.sender,
+        avatarUrl:
+          typeof avatar === "string" && (avatar.startsWith("data:") || avatar.length > 512)
+            ? ""
+            : avatar,
+      };
+    }
+
+    // Sanitize seenBy avatars
+    if (Array.isArray(clean.seenBy)) {
+      clean.seenBy = clean.seenBy.map((u) => {
+        if (!u || typeof u !== "object") return u;
+        const avatar = u.avatarUrl;
+        return {
+          ...u,
+          avatarUrl:
+            typeof avatar === "string" && (avatar.startsWith("data:") || avatar.length > 512)
+              ? ""
+              : avatar,
+        };
+      });
+    }
+
+    // Sanitize replyTo sender avatar
+    if (clean.replyTo && typeof clean.replyTo === "object") {
+      clean.replyTo = { ...clean.replyTo };
+      if (clean.replyTo.sender && typeof clean.replyTo.sender === "object") {
+        const avatar = clean.replyTo.sender.avatarUrl;
+        clean.replyTo.sender = {
+          ...clean.replyTo.sender,
+          avatarUrl:
+            typeof avatar === "string" && (avatar.startsWith("data:") || avatar.length > 512)
+              ? ""
+              : avatar,
+        };
+      }
+    }
+
+    // Sanitize attachments: if attachment has large base64 data, strip it
+    if (Array.isArray(clean.attachments)) {
+      clean.attachments = clean.attachments.map((att) => {
+        if (!att || typeof att !== "object") return att;
+        const copy = { ...att };
+        if (typeof copy.data === "string" && copy.data.length > 512) {
+          delete copy.data;
+        }
+        return copy;
+      });
+    }
+
+    // Check final payload size: If a single message is > 32KB, do not cache in Redis
+    const str = JSON.stringify(clean);
+    if (str.length > MAX_ITEM_BYTES) {
+      return null;
+    }
+
+    return clean;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Retrieves cached messages for an organization using Redis Sorted Sets
@@ -169,6 +246,10 @@ async function getCachedMessages(orgId, limit = 50, before = null) {
     return parsed.reverse();
   } catch (err) {
     console.warn("[Redis:getCachedMessages]", err.message);
+    if (err.message && err.message.includes("max request size exceeded")) {
+      // Auto-purge the bloated key to restore Redis health instantly
+      void redisClient.del(`chat:msgs:${orgId}`).catch(() => {});
+    }
     return null;
   }
 }
@@ -182,9 +263,12 @@ async function cacheMessage(orgId, message) {
   if (!isRedisAvailable() || !message) return;
 
   try {
+    const cleanMsg = sanitizeMessageForCache(message);
+    if (!cleanMsg) return;
+
     const key = `chat:msgs:${orgId}`;
-    const score = new Date(message.createdAt || Date.now()).getTime();
-    const payload = JSON.stringify(message);
+    const score = new Date(cleanMsg.createdAt || Date.now()).getTime();
+    const payload = JSON.stringify(cleanMsg);
 
     const pipeline = redisClient.pipeline();
     pipeline.zadd(key, score, payload);
@@ -208,17 +292,27 @@ async function cacheMessageBatch(orgId, messages) {
   try {
     const key = `chat:msgs:${orgId}`;
     const pipeline = redisClient.pipeline();
+    let validCount = 0;
 
     for (const msg of messages) {
-      const score = new Date(msg.createdAt || Date.now()).getTime();
-      pipeline.zadd(key, score, JSON.stringify(msg));
+      const cleanMsg = sanitizeMessageForCache(msg);
+      if (!cleanMsg) continue;
+
+      const score = new Date(cleanMsg.createdAt || Date.now()).getTime();
+      pipeline.zadd(key, score, JSON.stringify(cleanMsg));
+      validCount++;
     }
+
+    if (validCount === 0) return;
 
     pipeline.zremrangebyrank(key, 0, -(MAX_CACHE_MESSAGES_PER_ROOM + 1));
     pipeline.expire(key, CACHE_TTL_SECONDS);
     await pipeline.exec();
   } catch (err) {
     console.warn("[Redis:cacheMessageBatch]", err.message);
+    if (err.message && err.message.includes("max request size exceeded")) {
+      void redisClient.del(`chat:msgs:${orgId}`).catch(() => {});
+    }
   }
 }
 
