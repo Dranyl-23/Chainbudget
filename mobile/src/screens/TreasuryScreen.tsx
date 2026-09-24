@@ -20,7 +20,7 @@ import { useOrg } from '../context/OrgContext';
 import { useTheme } from '../context/ThemeContext';
 import { triggerSuccessHaptic, triggerErrorHaptic, triggerLightHaptic } from '../lib/biometrics';
 
-const AMOY_RPC = 'https://polygon-amoy-bor-rpc.publicnode.com';
+const AMOY_RPC = 'https://polygon-amoy.gateway.tenderly.co';
 
 export default function TreasuryScreen() {
   const route = useRoute<any>();
