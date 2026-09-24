@@ -3,6 +3,10 @@ const router = express.Router();
 const multer = require("multer");
 const { authenticate } = require("../middleware/auth");
 const { GoogleGenAI } = require("@google/genai");
+const {
+  generateWithFallback,
+  getAiProvidersStatus,
+} = require("../services/aiProviders");
 
 // Helper to sanitize strings before prompt interpolation
 function sanitizePromptInput(str, maxLength = 500) {
@@ -47,6 +51,7 @@ const upload = multer({
 });
 
 // Candidate Gemini models to try in order of preference
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash";
 const GEMINI_MODELS = [
   process.env.GEMINI_MODEL,
   "gemini-2.5-flash",
@@ -89,6 +94,11 @@ async function generateGeminiContent(contents, isJson = true) {
   throw lastError || new Error("All Gemini models failed");
 }
 
+// ── 0. AI Providers Status ────────────────────────────────────────────────────
+router.get("/providers", authenticate, (req, res) => {
+  res.json(getAiProvidersStatus());
+});
+
 // ── 1. AI Proposal Analyzer ───────────────────────────────────────────────────
 router.post("/analyze-proposal", authenticate, async (req, res) => {
   try {
@@ -107,7 +117,7 @@ router.post("/analyze-proposal", authenticate, async (req, res) => {
       return res.status(400).json({ error: "Invalid amount" });
     }
 
-    // 1. Try Gemini generation first
+    // 1. Try Multi-Provider AI (Gemini -> Groq -> OpenRouter)
     try {
       const prompt = `
         You are an expert financial and risk analyst for a DAO (Decentralized Autonomous Organization).
@@ -127,13 +137,18 @@ router.post("/analyze-proposal", authenticate, async (req, res) => {
         }
       `;
 
-      const rawText = await generateGeminiContent(prompt, true);
-      const data = safeParseAiJson(rawText, null);
+      const aiResult = await generateWithFallback({ prompt, isJson: true });
+      const data = safeParseAiJson(aiResult.text, null);
       if (data && data.summary && Array.isArray(data.pros)) {
-        return res.json(data);
+        return res.json({
+          ...data,
+          aiProvider: aiResult.provider,
+          aiModel: aiResult.model,
+          isAiGenerated: true,
+        });
       }
-    } catch (geminiErr) {
-      console.warn("[AI] Gemini proposal analysis unavailable, running deterministic engine:", geminiErr.message);
+    } catch (aiErr) {
+      console.warn("[AI] Multi-provider proposal analysis failed, running deterministic engine:", aiErr.message);
     }
 
     // 2. Deterministic Financial & Risk Analysis Engine Fallback
@@ -182,15 +197,6 @@ router.post("/scan-receipt", authenticate, upload.single("receipt"), async (req,
       return res.status(400).json({ error: "No receipt image uploaded" });
     }
 
-    const imageParts = [
-      {
-        inlineData: {
-          data: req.file.buffer.toString("base64"),
-          mimeType: req.file.mimetype,
-        },
-      },
-    ];
-
     const prompt = `
       You are an OCR and expense data extraction AI. Read the attached receipt image and extract the key information.
       Map the items to one of these predefined categories: "logistics", "marketing", "operations", "meals", "software", "travel", "supplies", or "other".
@@ -205,18 +211,28 @@ router.post("/scan-receipt", authenticate, upload.single("receipt"), async (req,
     `;
 
     try {
-      const rawText = await generateGeminiContent([prompt, ...imageParts], true);
-      const data = safeParseAiJson(rawText, null);
+      const aiResult = await generateWithFallback({
+        prompt,
+        image: {
+          buffer: req.file.buffer,
+          mimetype: req.file.mimetype,
+        },
+        isJson: true,
+      });
+      const data = safeParseAiJson(aiResult.text, null);
       if (data && (data.merchant || data.totalAmount !== undefined)) {
         return res.json({
           merchant: data.merchant || "Scanned Receipt Merchant",
           totalAmount: typeof data.totalAmount === "number" ? data.totalAmount : 0,
           date: data.date || new Date().toISOString().split("T")[0],
-          suggestedCategory: data.suggestedCategory || "supplies"
+          suggestedCategory: data.suggestedCategory || "supplies",
+          aiProvider: aiResult.provider,
+          aiModel: aiResult.model,
+          isAiGenerated: true,
         });
       }
     } catch (scanErr) {
-      console.warn("[AI] Gemini receipt scan error, using fallback parser:", scanErr.message);
+      console.warn("[AI] Multi-provider receipt scan error, using fallback parser:", scanErr.message);
     }
 
     // Default fallback
@@ -262,66 +278,58 @@ router.get("/forecast", authenticate, async (req, res) => {
       : budgetUtilization > 95 || netFlow < -50000 ? "critical" 
       : "warning";
 
-    // 1. Try Gemini AI if API key is present
-    const ai = getAiClient();
-    if (ai) {
-      try {
-        const txSummary = txs.slice(0, 20).map(t => 
-          `${t.createdAt ? t.createdAt.toISOString().split('T')[0] : 'N/A'}: ₱${t.amount} (${t.type}) for ${sanitizePromptInput(t.category || t.budgetCategory || 'General', 50)} - ${sanitizePromptInput(t.description, 100)}`
-        ).join("\n");
+    // 1. Try Multi-Provider AI (Gemini -> Groq -> OpenRouter)
+    try {
+      const txSummary = txs.slice(0, 20).map(t => 
+        `${t.createdAt ? t.createdAt.toISOString().split('T')[0] : 'N/A'}: ₱${t.amount} (${t.type}) for ${sanitizePromptInput(t.category || t.budgetCategory || 'General', 50)} - ${sanitizePromptInput(t.description, 100)}`
+      ).join("\n");
 
-        const prompt = `
-          You are the Chief Financial Officer (CFO) AI for an organization named "${sanitizePromptInput(org.name, 100)}".
-          Total Inflow Recorded: ₱${totalIncome}
-          Total Outflow Recorded: ₱${totalExpense}
-          Net Cash Flow: ₱${netFlow}
-          Total Budget Allocated: ₱${totalBudget} (₱${totalSpent} spent, ${budgetUtilization}% utilized)
-          
-          Recent Transactions:
-          ${txSummary || "No recent transactions found."}
-          
-          Analyze the spending patterns and current balance.
-          Provide a concise 2-paragraph financial forecast and exactly 3 actionable insights/warnings.
-          
-          Respond in EXACTLY this JSON format without markdown:
-          {
-            "forecast": "Paragraph 1...\\n\\nParagraph 2...",
-            "insights": [
-              "Actionable insight 1",
-              "Actionable insight 2",
-              "Actionable insight 3"
-            ],
-            "healthStatus": "${healthStatus}"
-          }
-        `;
-
-        const response = await ai.models.generateContent({
-          model: GEMINI_MODEL,
-          contents: prompt,
-          config: {
-            responseMimeType: "application/json"
-          }
-        });
-
-        const parsed = safeParseAiJson(response.text, null);
-        if (parsed && parsed.forecast) {
-          const insightsList = parsed.insights || [
-            "Maintain active treasury monitoring.",
-            "Track recurring expenses across categories.",
-            "Ensure liquidation compliance for upcoming milestones."
-          ];
-          return res.json({
-            forecast: parsed.forecast,
-            summary: parsed.forecast,
-            insights: insightsList,
-            recommendations: insightsList,
-            healthStatus: parsed.healthStatus || healthStatus,
-            isAiGenerated: true,
-          });
+      const prompt = `
+        You are the Chief Financial Officer (CFO) AI for an organization named "${sanitizePromptInput(org.name, 100)}".
+        Total Inflow Recorded: ₱${totalIncome}
+        Total Outflow Recorded: ₱${totalExpense}
+        Net Cash Flow: ₱${netFlow}
+        Total Budget Allocated: ₱${totalBudget} (₱${totalSpent} spent, ${budgetUtilization}% utilized)
+        
+        Recent Transactions:
+        ${txSummary || "No recent transactions found."}
+        
+        Analyze the spending patterns and current balance.
+        Provide a concise 2-paragraph financial forecast and exactly 3 actionable insights/warnings.
+        
+        Respond in EXACTLY this JSON format without markdown:
+        {
+          "forecast": "Paragraph 1...\\n\\nParagraph 2...",
+          "insights": [
+            "Actionable insight 1",
+            "Actionable insight 2",
+            "Actionable insight 3"
+          ],
+          "healthStatus": "${healthStatus}"
         }
-      } catch (aiError) {
-        console.warn("[AI] Gemini generation failed, falling back to deterministic analytics:", aiError.message);
+      `;
+
+      const aiResult = await generateWithFallback({ prompt, isJson: true });
+      const parsed = safeParseAiJson(aiResult.text, null);
+      if (parsed && parsed.forecast) {
+        const insightsList = parsed.insights || [
+          "Maintain active treasury monitoring.",
+          "Track recurring expenses across categories.",
+          "Ensure liquidation compliance for upcoming milestones."
+        ];
+        return res.json({
+          forecast: parsed.forecast,
+          summary: parsed.forecast,
+          insights: insightsList,
+          recommendations: insightsList,
+          healthStatus: parsed.healthStatus || healthStatus,
+          isAiGenerated: true,
+          aiProvider: aiResult.provider,
+          aiModel: aiResult.model,
+        });
       }
+    } catch (aiError) {
+      console.warn("[AI] Multi-provider generation failed, falling back to deterministic analytics:", aiError.message);
     }
 
     // 2. Deterministic Financial Analytics Fallback (guarantees 100% uptime)
