@@ -578,17 +578,17 @@ export default function ApprovalsPage() {
 
                     if (wouldOverspend) {
                       return (
-                        <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                        <div className="mt-4 p-3 bg-red-950/40 border border-red-500/30 rounded-lg">
                           <div className="flex items-start gap-2">
-                            <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5 shrink-0" />
+                            <AlertTriangle className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
                             <div>
-                              <p className="text-sm font-semibold text-red-700">Budget Overspend Warning</p>
-                              <p className="text-xs text-red-600 mt-1">
+                              <p className="text-sm font-semibold text-red-300">Budget Overspend Warning</p>
+                              <p className="text-xs text-red-400 mt-1">
                                 Approving this will exceed the <strong>&quot;{budget.name}&quot;</strong> budget.
                                 Currently ₱{Math.round(budget.spent).toLocaleString()} of ₱{Math.round(budget.allocated).toLocaleString()} used ({usageBefore}%).
                                 After approval: <strong>₱{Math.round(budget.spent + req.amount).toLocaleString()} ({usageAfter}%)</strong> — over by ₱{Math.round(req.amount - remaining).toLocaleString()}.
                               </p>
-                              <div className="mt-2 w-full bg-red-200 rounded-full h-2 overflow-hidden">
+                              <div className="mt-2 w-full bg-red-950/60 border border-red-500/20 rounded-full h-2 overflow-hidden">
                                 <div className="h-full rounded-full bg-red-500 transition-all" style={{ width: `${Math.min(usageAfter, 100)}%` }} />
                               </div>
                             </div>
@@ -597,16 +597,16 @@ export default function ApprovalsPage() {
                       );
                     } else if (usageAfter >= 80) {
                       return (
-                        <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                        <div className="mt-4 p-3 bg-amber-950/40 border border-amber-500/30 rounded-lg">
                           <div className="flex items-start gap-2">
-                            <TrendingDown className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                            <TrendingDown className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
                             <div>
-                              <p className="text-sm font-semibold text-amber-700">Budget Running Low</p>
-                              <p className="text-xs text-amber-600 mt-1">
+                              <p className="text-sm font-semibold text-amber-300">Budget Running Low</p>
+                              <p className="text-xs text-amber-400 mt-1">
                                 After approval, <strong>&quot;{budget.name}&quot;</strong> will be at {usageAfter}% utilization.
                                 Remaining: ₱{Math.round(remaining - req.amount).toLocaleString()} of ₱{Math.round(budget.allocated).toLocaleString()}.
                               </p>
-                              <div className="mt-2 w-full bg-amber-200 rounded-full h-2 overflow-hidden">
+                              <div className="mt-2 w-full bg-amber-950/60 border border-amber-500/20 rounded-full h-2 overflow-hidden">
                                 <div className="h-full rounded-full bg-amber-500 transition-all" style={{ width: `${Math.min(usageAfter, 100)}%` }} />
                               </div>
                             </div>
@@ -686,12 +686,12 @@ export default function ApprovalsPage() {
               </div>
             ))
           ) : (
-            <div className="text-center py-20 glass rounded-2xl border border-dashed border-primary/20 bg-white/40 flex flex-col items-center justify-center">
-              <div className="w-20 h-20 bg-gradient-to-br from-green-100 to-green-50 rounded-full flex items-center justify-center mb-5 shadow-sm border border-green-200/50">
-                <CheckCircle2 className="w-10 h-10 text-green-500" />
+            <div className="text-center py-20 glass rounded-2xl border border-dashed border-white/10 flex flex-col items-center justify-center">
+              <div className="w-20 h-20 bg-emerald-500/10 rounded-full flex items-center justify-center mb-5 shadow-sm border border-emerald-500/20">
+                <CheckCircle2 className="w-10 h-10 text-emerald-400" />
               </div>
-              <h3 className="text-xl font-bold text-gray-800 mb-2">You&apos;re all caught up!</h3>
-              <p className="text-sm text-gray-500 max-w-sm mx-auto">
+              <h3 className="text-xl font-bold text-white mb-2">You&apos;re all caught up!</h3>
+              <p className="text-sm text-gray-400 max-w-sm mx-auto">
                 There are no pending high-value transactions requiring your approval at this time.
               </p>
             </div>

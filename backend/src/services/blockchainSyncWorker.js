@@ -43,9 +43,9 @@ const syncPendingTransactions = async (io = null) => {
     const balanceWei = await provider.getBalance(wallet.address);
     const balancePol = Number(ethers.formatEther(balanceWei));
 
-    if (balancePol < 0.003) {
+    if (balancePol < 0.015) {
       console.warn(
-        `[BlockchainSyncWorker] Relayer gas low: ${balancePol.toFixed(4)} POL. Minimum needed: 0.005 POL. Waiting for faucet funding.`
+        `[BlockchainSyncWorker] Relayer gas low: ${balancePol.toFixed(4)} POL. Minimum needed: 0.015 POL. Waiting for faucet funding.`
       );
       isSyncing = false;
       return { status: "low_gas", balance: balancePol };

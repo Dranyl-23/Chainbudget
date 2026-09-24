@@ -219,7 +219,7 @@ router.get("/verify/:hash", async (req, res) => {
 router.get("/protocol", async (req, res) => {
   try {
     const amoyRpc = process.env.AMOY_RPC_URL || "https://rpc-amoy.polygon.technology";
-    const masterContract = process.env.CONTRACT_ADDRESS || "0x1887be6c9cc06ddddb125da24b9b554c18f0a1fb";
+    const masterContract = process.env.CONTRACT_ADDRESS || "0xf1f8F195963586E01Abb7516ACBe9572D7514C41";
     const daoContract = process.env.DAO_CONTRACT_ADDRESS || "0x0b15187c87a9c3f8588753c123b7071a9548cc9c";
     const sbtContract = process.env.SBT_CONTRACT_ADDRESS || "0x7a376e224276988e3b01aae7a5b17c8c14e94031";
 

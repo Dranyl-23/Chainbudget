@@ -213,7 +213,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <OnboardingTour />
       <SessionExpiredModal />
       {/* ── Mobile Header ── */}
-      <div className="md:hidden flex items-center justify-between px-4 py-3 border-b bg-white z-20" style={{ borderColor: "var(--color-border)" }}>
+      <div className="md:hidden flex items-center justify-between px-4 py-3 border-b z-20" style={{ background: "var(--color-surface, #0f0f14)", borderColor: "var(--color-border)" }}>
         <div className="flex items-center gap-3">
           <Image src="/3D-Chainbudget.png" alt="ChainBudget logo" width={52} height={52} unoptimized className="w-12 h-12 object-contain drop-shadow-md shrink-0" />
           <span className="font-extrabold text-2xl tracking-tight">
@@ -245,7 +245,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           ${isCollapsed ? "w-20" : "w-60"}
           ${isMobileOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0
         `} 
-        style={{ background: "#ffffff", borderRight: "1px solid var(--color-border)" }}
+        style={{ background: "var(--color-surface, #0f0f14)", borderRight: "1px solid var(--color-border)" }}
       >
         {/* Floating Sidebar Toggle Button on the Right Border */}
         <button 
@@ -498,6 +498,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <UserAvatar src={user?.avatarUrl} name={user?.displayName} size={40} />
               </div>
             </div>
+
+            {/* Desktop Logout Button */}
+            <button
+              onClick={() => setShowDisconnectModal(true)}
+              title="Sign out"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-400 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span className="hidden xl:inline">Sign Out</span>
+            </button>
           </div>
         </div>
 

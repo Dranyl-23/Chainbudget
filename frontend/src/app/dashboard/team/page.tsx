@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { Plus, X, Trash2, Shield, User as UserIcon, Crown, CheckCircle2, Eye } from "lucide-react";
+import { Plus, X, Trash2, Shield, User as UserIcon, Crown, CheckCircle2, Eye, Edit2 } from "lucide-react";
 import api from "@/lib/api";
 import toast from "react-hot-toast";
 import TableSkeleton from "@/components/TableSkeleton";
@@ -52,8 +52,6 @@ interface AddMemberFormData {
   roleLabel: string;
 }
 
-
-
 function getOrgId(org: string | UserOrgRef | undefined): string | undefined {
   if (!org) return undefined;
   return typeof org === "string" ? org : org._id;
@@ -74,10 +72,17 @@ export default function TeamPage() {
     }
     return [];
   });
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return !sessionStorage.getItem("cb_cache_team");
+  });
   const [error, setError] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Edit role modal state
+  const [editingMember, setEditingMember] = useState<{ member: Member; roleLevel: number; roleLabel: string } | null>(null);
+  const [isUpdatingRole, setIsUpdatingRole] = useState(false);
 
   const [formData, setFormData] = useState<AddMemberFormData>({
     walletAddress: "",
@@ -145,11 +150,8 @@ export default function TeamPage() {
   // ── Lookup Identifier (Declared BEFORE debounced effect) ──────────────────
   const checkIdentifier = useCallback(async (endpoint: string) => {
     try {
-      const token = localStorage.getItem("cb_token");
-      if (!token) return;
-      const res = await api.get<UserLookupResponse>(endpoint, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      // Use api directly — HttpOnly cookie auth is handled automatically by the axios instance
+      const res = await api.get<UserLookupResponse>(endpoint);
       if (res.data) {
         const fetchedName = res.data.displayName === "New User" ? "" : res.data.displayName;
         toast.success(`Found User: ${fetchedName || res.data.email || res.data.walletAddress || "Unknown"}`);
@@ -204,6 +206,37 @@ export default function TeamPage() {
       setError(getErrorMessage(err, "Failed to add member."));
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleOpenEditRole = (member: Member) => {
+    const membership = member.memberships.find(
+      (m) => getOrgId(m.organization) === orgId
+    );
+    setEditingMember({
+      member,
+      roleLevel: membership?.roleLevel || 3,
+      roleLabel: membership?.roleLabel || ""
+    });
+  };
+
+  const handleUpdateRole = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!editingMember || !orgId) return;
+
+    setIsUpdatingRole(true);
+    try {
+      await api.put(`/users/${orgId}/members/${editingMember.member._id}/role`, {
+        roleLevel: Number(editingMember.roleLevel),
+        roleLabel: editingMember.roleLabel
+      });
+      toast.success("Member role updated successfully!");
+      setEditingMember(null);
+      await refreshMembers();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, "Failed to update member role."));
+    } finally {
+      setIsUpdatingRole(false);
     }
   };
 
@@ -318,16 +351,25 @@ export default function TeamPage() {
                             </td>
                             {canManage && (
                               <td className="p-4 text-right">
-                                <button
-                                  onClick={() => handleRemoveMember(member._id)}
-                                  disabled={isSelf} // Don't allow removing yourself to prevent lockout
-                                  className={`p-2 rounded-lg transition-colors ${
-                                    isSelf ? "text-gray-300 cursor-not-allowed" : "text-gray-400 hover:text-danger hover:bg-danger/10"
-                                  }`}
-                                  title={isSelf ? "Cannot remove yourself" : "Remove member"}
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
+                                <div className="flex items-center justify-end gap-1">
+                                  <button
+                                    onClick={() => handleOpenEditRole(member)}
+                                    className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+                                    title="Edit member role"
+                                  >
+                                    <Edit2 className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleRemoveMember(member._id)}
+                                    disabled={isSelf} // Don't allow removing yourself to prevent lockout
+                                    className={`p-2 rounded-lg transition-colors ${
+                                      isSelf ? "text-gray-300 cursor-not-allowed" : "text-gray-400 hover:text-danger hover:bg-danger/10"
+                                    }`}
+                                    title={isSelf ? "Cannot remove yourself" : "Remove member"}
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
                               </td>
                             )}
                           </tr>
@@ -450,6 +492,83 @@ export default function TeamPage() {
                   className="btn-primary flex-1 py-2.5"
                 >
                   {isSubmitting ? "Saving..." : "Add Member"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Edit Role Modal ── */}
+      {editingMember && (
+        <div
+          className="fixed inset-0 z-9999 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+          onClick={(e) => { if (e.target === e.currentTarget) setEditingMember(null); }}
+        >
+          <div className="glass rounded-2xl p-8 w-full max-w-md shadow-2xl animate-fade-in">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold">Edit Member Role</h2>
+              <button
+                onClick={() => setEditingMember(null)}
+                className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-primary/10 text-gray-500 hover:text-primary transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="mb-4 p-3 bg-white/5 border border-white/10 rounded-xl">
+              <p className="text-xs text-gray-400">Editing permissions for</p>
+              <p className="text-sm font-bold text-white mt-0.5">
+                {editingMember.member.displayName || editingMember.member.email || editingMember.member.walletAddress}
+              </p>
+            </div>
+
+            <form onSubmit={handleUpdateRole} className="space-y-4">
+              {/* Role Level */}
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1">Access Level</label>
+                <select
+                  className="input"
+                  value={editingMember.roleLevel}
+                  onChange={(e) => setEditingMember({ ...editingMember, roleLevel: Number(e.target.value) })}
+                >
+                  <option value={1}>Level 1: Executive Approver</option>
+                  <option value={2}>Level 2: Finance / Transaction Officer</option>
+                  <option value={3}>Level 3: Member / Contributor</option>
+                  <option value={4}>Level 4: Public Viewer</option>
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Level 1 is required for multi-sig approvals.
+                </p>
+              </div>
+
+              {/* Role Label */}
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1">Position / Title</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Treasurer, Secretary"
+                  className="input"
+                  value={editingMember.roleLabel}
+                  onChange={(e) => setEditingMember({ ...editingMember, roleLabel: e.target.value })}
+                />
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="button"
+                  className="btn-secondary flex-1 py-2.5"
+                  onClick={() => setEditingMember(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUpdatingRole}
+                  className="btn-primary flex-1 py-2.5"
+                >
+                  {isUpdatingRole ? "Saving..." : "Save Role"}
                 </button>
               </div>
             </form>

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { ShieldAlert, Activity, User, FileText, CheckCircle, XCircle, Download, BookOpen } from "lucide-react";
+import { ShieldAlert, Activity, User, FileText, CheckCircle, XCircle, Download, BookOpen, Filter, Calendar } from "lucide-react";
 import api from "@/lib/api";
 import { exportToCSV } from "@/lib/exportUtils";
 import { getExplorerTxUrl } from "@/lib/config";
@@ -59,6 +59,8 @@ export default function AuditPage() {
     }
     return [];
   });
+  const [actionFilter, setActionFilter] = useState<string>("all");
+  const [rangeFilter, setRangeFilter] = useState<string>("all");
   const [loading, setLoading] = useState(logs.length === 0);
   const [error, setError] = useState<string | null>(null);
   const [isPrintMode, setIsPrintMode] = useState(false);
@@ -74,13 +76,20 @@ export default function AuditPage() {
         }
 
         const res = await api.get<AuditResponse>("/audit", {
-          params: { orgId: activeOrgId, limit: 100 },
+          params: {
+            orgId: activeOrgId,
+            limit: 100,
+            action: actionFilter !== "all" ? actionFilter : undefined,
+            range: rangeFilter !== "all" ? rangeFilter : undefined,
+          },
         });
 
         const data = res.data.logs || [];
         if (!isCancelled) {
           setLogs(data);
-          sessionStorage.setItem("cb_cache_audit", JSON.stringify(data));
+          if (actionFilter === "all" && rangeFilter === "all") {
+            sessionStorage.setItem("cb_cache_audit", JSON.stringify(data));
+          }
         }
       } catch (err: unknown) {
         console.error("Failed to fetch audit logs:", err);
@@ -105,7 +114,7 @@ export default function AuditPage() {
     return () => {
       isCancelled = true;
     };
-  }, [activeOrgId]);
+  }, [activeOrgId, actionFilter, rangeFilter]);
 
   const getActionIcon = (action: string) => {
     if (action.includes("approve")) return <CheckCircle className="w-4 h-4 text-green-400 drop-shadow-[0_0_8px_rgba(74,222,128,0.8)]" />;
@@ -233,6 +242,50 @@ export default function AuditPage() {
           </button>
         </div>
       </header>
+
+      {/* ── Filters Bar ── */}
+      <div className="mb-6 flex flex-wrap items-center gap-3">
+        {/* Action Type Filter */}
+        <div className="flex items-center gap-2 glass px-3 py-1.5 rounded-xl border border-white/10">
+          <Filter className="w-3.5 h-3.5 text-cyan-400" />
+          <select
+            value={actionFilter}
+            onChange={(e) => setActionFilter(e.target.value)}
+            className="bg-transparent text-xs text-white focus:outline-none cursor-pointer"
+          >
+            <option value="all" className="bg-[#160B2E] text-white">All Actions</option>
+            <option value="approve" className="bg-[#160B2E] text-white">Approvals</option>
+            <option value="reject" className="bg-[#160B2E] text-white">Rejections</option>
+            <option value="create" className="bg-[#160B2E] text-white">Creations</option>
+            <option value="transaction" className="bg-[#160B2E] text-white">Transactions</option>
+            <option value="budget" className="bg-[#160B2E] text-white">Budget</option>
+            <option value="member" className="bg-[#160B2E] text-white">Members</option>
+          </select>
+        </div>
+
+        {/* Date Range Filter */}
+        <div className="flex items-center gap-1 glass p-1 rounded-xl border border-white/10">
+          {[
+            { key: "all", label: "All Time" },
+            { key: "24h", label: "Today" },
+            { key: "7d", label: "7D" },
+            { key: "30d", label: "30D" },
+            { key: "90d", label: "90D" },
+          ].map((item) => (
+            <button
+              key={item.key}
+              onClick={() => setRangeFilter(item.key)}
+              className={`px-3 py-1 text-xs rounded-lg font-medium transition-all ${
+                rangeFilter === item.key
+                  ? "bg-fuchsia-600 text-white shadow-md shadow-fuchsia-600/30"
+                  : "text-gray-400 hover:text-white hover:bg-white/5"
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {error && (
         <div className="mb-6 p-4 glass bg-red-500/10 border border-red-500/30 rounded-xl text-sm text-red-400 shadow-[0_0_20px_rgba(248,113,113,0.2)] flex items-center gap-3">

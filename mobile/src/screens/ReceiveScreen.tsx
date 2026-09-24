@@ -74,7 +74,7 @@ export default function ReceiveScreen() {
     try {
       const message =
         customAmount && Number(customAmount) > 0
-          ? `Requesting ${customAmount} MATIC to ChainBudget address: ${activeAddress}`
+          ? `Requesting ${customAmount} POL to ChainBudget address: ${activeAddress}`
           : `My ChainBudget deposit address: ${activeAddress}`;
       await Share.share({
         message,
@@ -190,7 +190,7 @@ export default function ReceiveScreen() {
             : `${selectedOrg?.name || 'Organization'} Treasury`}
         </Text>
         <Text style={{ color: colors.textMuted }} className="text-xs text-center mb-4">
-          Scan with any Web3 wallet to transfer MATIC
+          Scan with any Web3 wallet to transfer POL
         </Text>
 
         {/* Address Display Box */}
@@ -243,7 +243,7 @@ export default function ReceiveScreen() {
             style={{ color: colors.textPrimary }}
             className="flex-1 text-base font-bold"
           />
-          <Text style={{ color: colors.textMuted }} className="text-sm font-bold ml-2">MATIC</Text>
+          <Text style={{ color: colors.textMuted }} className="text-sm font-bold ml-2">POL</Text>
         </View>
       </View>
 

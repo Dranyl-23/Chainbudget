@@ -608,6 +608,65 @@ export default function SettingsScreen() {
 
           {/* Biometrics Fast-Unlock Switch */}
           {hasPinSet && (
+            <TouchableOpacity
+              onPress={() => {
+                triggerLightHaptic();
+                Alert.alert(
+                  'Remove PIN',
+                  'Are you sure you want to remove your 6-digit PIN? App Lock will be disabled.',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Remove PIN',
+                      style: 'destructive',
+                      onPress: async () => {
+                        await removePin();
+                        await triggerSuccessHaptic();
+                      },
+                    },
+                  ]
+                );
+              }}
+              activeOpacity={0.7}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: 16,
+                borderBottomWidth: 1,
+                borderBottomColor: colors.borderSubtle,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1 }}>
+                <View
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 13,
+                    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                    borderColor: 'rgba(239, 68, 68, 0.3)',
+                    borderWidth: 1,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Ionicons name="key-outline" size={20} color="#ef4444" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: '#ef4444', fontSize: 14.5, fontWeight: '700', marginBottom: 2 }}>
+                    Remove PIN
+                  </Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                    Disable app lock and clear stored PIN
+                  </Text>
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            </TouchableOpacity>
+          )}
+
+          {/* Biometrics Fast-Unlock Switch */}
+          {hasPinSet && (
             <View
               style={{
                 flexDirection: 'row',
@@ -1482,6 +1541,46 @@ export default function SettingsScreen() {
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </TouchableOpacity>
         </View>
+      </View>
+      {/* ── Sign Out Section ───────────────────────────────────────────── */}
+      <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 24 }}>
+        <TouchableOpacity
+          onPress={() => {
+            triggerLightHaptic();
+            Alert.alert(
+              'Sign Out',
+              'Are you sure you want to sign out of ChainBudget?',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Sign Out',
+                  style: 'destructive',
+                  onPress: () => {
+                    triggerErrorHaptic();
+                    logout();
+                  },
+                },
+              ]
+            );
+          }}
+          activeOpacity={0.8}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 10,
+            paddingVertical: 15,
+            borderRadius: 16,
+            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+            borderWidth: 1,
+            borderColor: 'rgba(239, 68, 68, 0.25)',
+          }}
+        >
+          <Ionicons name="log-out-outline" size={20} color="#ef4444" />
+          <Text style={{ color: '#ef4444', fontSize: 15, fontWeight: '800' }}>
+            Sign Out
+          </Text>
+        </TouchableOpacity>
       </View>
 
       {/* Modals */}

@@ -25,9 +25,10 @@ const AMOY_RPC = 'https://rpc-amoy.polygon.technology';
 export default function TreasuryScreen() {
   const route = useRoute<any>();
   const { user, refreshUser } = useAuth();
-  const { refreshOrgs } = useOrg();
+  const { activeOrgId, refreshOrgs } = useOrg();
   const { colors, isDark } = useTheme();
-  const orgId: string = route.params?.orgId;
+  // Fallback to activeOrgId so the screen works when navigated from tabs (no route params)
+  const orgId: string = route.params?.orgId || activeOrgId;
 
   const [org, setOrg] = useState<any>(null);
   const [chainBalance, setChainBalance] = useState<string | null>(null);

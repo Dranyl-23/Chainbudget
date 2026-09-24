@@ -46,8 +46,10 @@ export async function getSocket(): Promise<Socket | null> {
     transports: ['polling', 'websocket'],
     autoConnect: true,
     reconnection: true,
-    reconnectionAttempts: 10,
-    reconnectionDelay: 2000,
+    reconnectionAttempts: 15,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 5000,
+    randomizationFactor: 0.5,
   });
 
   socket.on('connect', () => {

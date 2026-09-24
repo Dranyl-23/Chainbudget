@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, FlatList, Animated, TextInput } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, RefreshControl, FlatList, Animated, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
@@ -122,7 +122,62 @@ export default function ApprovalsScreen() {
   const roleLevel = activeMembership?.roleLevel || 4;
   const isAdmin = roleLevel <= 2;
 
-  const promptConfirmation = (tx: any, action: 'approved' | 'rejected') => {
+  const promptConfirmation = async (tx: any, action: 'approved' | 'rejected') => {
+    // Budget Overspend Check: Warn before approving expenses that exceed budget
+    if (action === 'approved' && tx.type === 'expense' && activeOrgId) {
+      try {
+        const [budgetsRes, txRes] = await Promise.all([
+          api.get(`/budgets?orgId=${activeOrgId}`),
+          api.get(`/reports/summary?orgId=${activeOrgId}`),
+        ]);
+        const budgets: any[] = budgetsRes.data?.budgets || budgetsRes.data || [];
+        const totalIncome: number = txRes.data?.totalIncome ?? 0;
+        const totalExpenses: number = txRes.data?.totalExpenses ?? 0;
+        const remainingBudget = totalIncome - totalExpenses;
+
+        // Check category-specific budget if one matches
+        const matchedBudget = budgets.find(
+          (b: any) => b.name?.toLowerCase() === (tx.category || '').toLowerCase()
+        );
+        const categoryRemaining = matchedBudget
+          ? matchedBudget.allocated - matchedBudget.spent
+          : null;
+
+        const overspendsCategoryBudget = categoryRemaining !== null && tx.amount > categoryRemaining;
+        const overspendsTotal = remainingBudget < tx.amount;
+
+        if (overspendsCategoryBudget || overspendsTotal) {
+          const warningMsg = overspendsCategoryBudget
+            ? `This ₱${tx.amount.toLocaleString()} expense exceeds the "${matchedBudget.name}" category budget (only ₱${categoryRemaining.toLocaleString()} remaining).`
+            : `This ₱${tx.amount.toLocaleString()} expense exceeds the remaining org budget (₱${remainingBudget.toLocaleString()} available).`;
+
+          await new Promise<void>((resolve) => {
+            Alert.alert(
+              '⚠️ Budget Overspend Warning',
+              `${warningMsg}\n\nDo you still want to approve this transaction?`,
+              [
+                { text: 'Cancel', style: 'cancel', onPress: () => resolve() },
+                {
+                  text: 'Approve Anyway',
+                  style: 'destructive',
+                  onPress: () => {
+                    setTargetTx(tx);
+                    setTargetAction(action);
+                    setConfirmModalVisible(true);
+                    triggerLightHaptic();
+                    resolve();
+                  },
+                },
+              ]
+            );
+          });
+          return;
+        }
+      } catch {
+        // Budget check failed silently — still allow approval
+      }
+    }
+
     setTargetTx(tx);
     setTargetAction(action);
     setConfirmModalVisible(true);
@@ -137,10 +192,11 @@ export default function ApprovalsScreen() {
 
     // 🔐 Biometric Gate: Require FaceID / Fingerprint for High-Value Payouts
     if (action === 'approved' && (tx.isHighValue || (tx.amount || 0) >= 5000)) {
-      const authSuccess = await authenticateWithBiometrics(
+      const authResult = await authenticateWithBiometrics(
         `Authorize Multi-Sig Payout of ₱${(tx.amount || 0).toLocaleString()}`
       );
-      if (!authSuccess) {
+      // authResult is a { success: boolean, error?: string } object — must check .success
+      if (!authResult.success) {
         showToast('Biometric authorization cancelled or failed.', 'error');
         await triggerErrorHaptic();
         return;

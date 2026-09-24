@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { PiggyBank, TrendingUp, TrendingDown, Plus, X } from "lucide-react";
+import { PiggyBank, TrendingUp, TrendingDown, Plus, X, Edit2, Trash2 } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import api from "@/lib/api";
 import DashboardSkeleton from "@/components/DashboardSkeleton";
 import axios from "axios";
+import toast from "react-hot-toast";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface BudgetCategory {
@@ -51,7 +52,10 @@ export default function BudgetPage() {
     }
     return [];
   });
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return !sessionStorage.getItem("cb_cache_budgets");
+  });
   const [error, setError] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -61,6 +65,15 @@ export default function BudgetPage() {
     allocated: "",
     color: "#6B55D9"
   });
+
+  // Edit category state
+  const [editingCategory, setEditingCategory] = useState<BudgetCategory | null>(null);
+  const [editFormData, setEditFormData] = useState<AddCategoryFormData>({
+    name: "",
+    allocated: "",
+    color: "#6B55D9"
+  });
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const availableColors = [
     "#6B55D9", "#A892F0", "#7B66C7", "#D4D0F5", "#B8A5F8",
@@ -130,6 +143,7 @@ export default function BudgetPage() {
       setBudgetCategories((prev) => [...prev, res.data]);
       setShowAddModal(false);
       setFormData({ name: "", allocated: "", color: "#6B55D9" });
+      toast.success("Budget category created successfully!");
     } catch (err: unknown) {
       let msg = "Failed to create budget category.";
       if (axios.isAxiosError(err)) {
@@ -138,8 +152,69 @@ export default function BudgetPage() {
         msg = err.message;
       }
       setError(msg);
+      toast.error(msg);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleOpenEdit = (cat: BudgetCategory) => {
+    setEditingCategory(cat);
+    setEditFormData({
+      name: cat.name,
+      allocated: cat.allocated.toString(),
+      color: cat.color || "#6B55D9"
+    });
+    setError(null);
+  };
+
+  const handleUpdateCategory = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!editingCategory) return;
+    if (!editFormData.name.trim() || !editFormData.allocated || isNaN(Number(editFormData.allocated))) {
+      setError("Please fill out all required fields correctly.");
+      return;
+    }
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      const res = await api.put<BudgetCategory>(`/budget/${editingCategory._id}`, {
+        name: editFormData.name.trim(),
+        allocated: Number(editFormData.allocated),
+        color: editFormData.color,
+      });
+      setBudgetCategories((prev) =>
+        prev.map((c) => (c._id === editingCategory._id ? { ...c, ...res.data, spent: c.spent } : c))
+      );
+      setEditingCategory(null);
+      toast.success("Budget category updated!");
+    } catch (err: unknown) {
+      let msg = "Failed to update category.";
+      if (axios.isAxiosError(err)) {
+        msg = err.response?.data?.error || err.message || msg;
+      }
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteCategory = async (id: string, name: string) => {
+    if (!window.confirm(`Are you sure you want to delete the "${name}" budget category?`)) return;
+    setDeletingId(id);
+    try {
+      await api.delete(`/budget/${id}`);
+      setBudgetCategories((prev) => prev.filter((c) => c._id !== id));
+      toast.success("Budget category deleted!");
+    } catch (err: unknown) {
+      let msg = "Failed to delete category.";
+      if (axios.isAxiosError(err)) {
+        msg = err.response?.data?.error || err.message || msg;
+      }
+      toast.error(msg);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -178,47 +253,47 @@ export default function BudgetPage() {
         <>
           {/* ── Summary Cards ── */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-            <div className="bg-white border border-gray-100 rounded-xl md:rounded-2xl p-4 md:p-6 shadow-sm flex items-center md:items-start md:flex-col justify-between relative">
+            <div className="glass rounded-xl md:rounded-2xl p-4 md:p-6 shadow-sm flex items-center md:items-start md:flex-col justify-between relative border border-white/10">
               <div className="flex items-center gap-3 md:block md:w-full">
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-primary/10 shrink-0 md:mb-4">
                   <PiggyBank className="w-5 h-5 text-primary" />
                 </div>
                 <div className="md:hidden">
-                  <p className="text-xs text-gray-500 font-medium">Total Budget</p>
-                  <h3 className="text-lg font-bold leading-tight">&#8369;{totalAllocated.toLocaleString()}</h3>
+                  <p className="text-xs text-gray-400 font-medium">Total Budget</p>
+                  <h3 className="text-lg font-bold leading-tight text-white">&#8369;{totalAllocated.toLocaleString()}</h3>
                 </div>
                 <div className="hidden md:block">
-                  <p className="text-sm text-gray-500 font-medium mb-1">Total Budget</p>
-                  <h3 className="text-2xl font-bold">&#8369;{totalAllocated.toLocaleString()}</h3>
+                  <p className="text-sm text-gray-400 font-medium mb-1">Total Budget</p>
+                  <h3 className="text-2xl font-bold text-white">&#8369;{totalAllocated.toLocaleString()}</h3>
                 </div>
               </div>
             </div>
-            <div className="bg-white border border-gray-100 rounded-xl md:rounded-2xl p-4 md:p-6 shadow-sm flex items-center md:items-start md:flex-col justify-between relative">
+            <div className="glass rounded-xl md:rounded-2xl p-4 md:p-6 shadow-sm flex items-center md:items-start md:flex-col justify-between relative border border-white/10">
               <div className="flex items-center gap-3 md:block md:w-full">
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-danger/10 shrink-0 md:mb-4">
                   <TrendingDown className="w-5 h-5 text-danger" />
                 </div>
                 <div className="md:hidden">
-                  <p className="text-xs text-gray-500 font-medium">Total Spent</p>
+                  <p className="text-xs text-gray-400 font-medium">Total Spent</p>
                   <h3 className="text-lg font-bold text-danger leading-tight">&#8369;{totalSpent.toLocaleString()}</h3>
                 </div>
                 <div className="hidden md:block">
-                  <p className="text-sm text-gray-500 font-medium mb-1">Total Spent</p>
+                  <p className="text-sm text-gray-400 font-medium mb-1">Total Spent</p>
                   <h3 className="text-2xl font-bold text-danger">&#8369;{totalSpent.toLocaleString()}</h3>
                 </div>
               </div>
             </div>
-            <div className="bg-white border border-gray-100 rounded-xl md:rounded-2xl p-4 md:p-6 shadow-sm flex items-center md:items-start md:flex-col justify-between relative">
+            <div className="glass rounded-xl md:rounded-2xl p-4 md:p-6 shadow-sm flex items-center md:items-start md:flex-col justify-between relative border border-white/10">
               <div className="flex items-center gap-3 md:block md:w-full">
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-primary/10 shrink-0 md:mb-4">
                   <TrendingUp className="w-5 h-5 text-primary/80" />
                 </div>
                 <div className="md:hidden">
-                  <p className="text-xs text-gray-500 font-medium">Remaining</p>
+                  <p className="text-xs text-gray-400 font-medium">Remaining</p>
                   <h3 className="text-lg font-bold text-primary leading-tight">&#8369;{(totalAllocated - totalSpent).toLocaleString()}</h3>
                 </div>
                 <div className="hidden md:block">
-                  <p className="text-sm text-gray-500 font-medium mb-1">Remaining</p>
+                  <p className="text-sm text-gray-400 font-medium mb-1">Remaining</p>
                   <h3 className="text-2xl font-bold text-primary">&#8369;{(totalAllocated - totalSpent).toLocaleString()}</h3>
                 </div>
               </div>
@@ -243,18 +318,22 @@ export default function BudgetPage() {
                         ))}
                       </Pie>
                       <Tooltip
-                        contentStyle={{ background: "#F8F6FF", border: "1px solid rgba(107,85,217,0.16)", borderRadius: "8px", color: "#1A1A2E" }}
-                        formatter={(val: unknown) => `₱${Number(val ?? 0).toLocaleString()}`}
+                        contentStyle={{
+                          background: "#1e1338",
+                          border: "1px solid rgba(139,92,246,0.3)",
+                          borderRadius: "12px",
+                          color: "#fff",
+                        }}
+                        formatter={(val: unknown) => `₱${Number(val || 0).toLocaleString()}`}
                       />
-                      <Legend iconType="circle" iconSize={8}
-                        formatter={(value) => <span className="text-xs text-gray-400">{String(value)}</span>}
+                      <Legend 
+                        formatter={(value) => <span className="text-xs text-gray-300">{value}</span>}
                       />
                     </PieChart>
                   </ResponsiveContainer>
                 ) : (
-                  <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
-                    <PieChart className="opacity-20 mb-2 w-12 h-12" />
-                    <span className="text-sm">No spending data yet</span>
+                  <div className="h-full flex items-center justify-center text-gray-400 text-sm">
+                    No expenditures recorded yet
                   </div>
                 )}
               </div>
@@ -274,19 +353,40 @@ export default function BudgetPage() {
                       <div key={cat._id || i}>
                         <div className="flex items-center justify-between mb-1.5">
                           <div className="flex items-center gap-2">
-                            <span className="w-2.5 h-2.5 rounded-full" style={{ background: cat.color }} />
-                            <span className="text-sm font-medium text-gray-700">{cat.name}</span>
+                            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: cat.color }} />
+                            <span className="text-sm font-medium text-white">{cat.name}</span>
                           </div>
-                          <div className="text-right">
-                            <span className={`text-xs font-bold ${isOver ? "text-danger" : "text-gray-400"}`}>
-                              {pct}% used
-                            </span>
-                            <span className="text-xs text-gray-600 ml-2">
-                              &#8369;{cat.spent.toLocaleString()} / &#8369;{cat.allocated.toLocaleString()}
-                            </span>
+                          <div className="flex items-center gap-3">
+                            <div className="text-right">
+                              <span className={`text-xs font-bold ${isOver ? "text-danger" : "text-gray-400"}`}>
+                                {pct}% used
+                              </span>
+                              <span className="text-xs text-gray-400 ml-2">
+                                &#8369;{cat.spent.toLocaleString()} / &#8369;{cat.allocated.toLocaleString()}
+                              </span>
+                            </div>
+                            {canManageBudget && (
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => handleOpenEdit(cat)}
+                                  title="Edit category"
+                                  className="p-1 rounded-md text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteCategory(cat._id, cat.name)}
+                                  disabled={deletingId === cat._id}
+                                  title="Delete category"
+                                  className="p-1 rounded-md text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </div>
-                        <div className="h-2 bg-[#f2efff] rounded-full overflow-hidden">
+                        <div className="h-2 bg-white/10 rounded-full overflow-hidden">
                           <div
                             className="h-full rounded-full transition-all duration-700"
                             style={{
@@ -393,6 +493,101 @@ export default function BudgetPage() {
                   className="btn-primary flex-1 py-2.5"
                 >
                   {isSubmitting ? "Saving..." : "Add Category"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Edit Category Modal ── */}
+      {editingCategory && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(26,26,46,0.55)", backdropFilter: "blur(4px)" }}
+          onClick={(e) => { if (e.target === e.currentTarget) setEditingCategory(null); }}
+        >
+          <div className="bg-[#160B2E] border border-purple-500/30 rounded-2xl p-8 w-full max-w-md shadow-[0_0_40px_rgba(0,0,0,0.8)] animate-fade-in relative z-60">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold">Edit Budget Category</h2>
+              <button
+                onClick={() => setEditingCategory(null)}
+                className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-primary/10 text-gray-500 hover:text-primary transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {error && (
+              <div className="mb-4 px-4 py-3 rounded-lg text-sm text-danger border border-danger/20 bg-danger/10">
+                {error}
+              </div>
+            )}
+
+            <form onSubmit={handleUpdateCategory} className="space-y-4">
+              {/* Name */}
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1">Category Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Events & Activities"
+                  className="input"
+                  value={editFormData.name}
+                  onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                  required
+                />
+              </div>
+
+              {/* Allocated Amount */}
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1">Allocated Amount (&#8369;)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="0.00"
+                  className="input"
+                  value={editFormData.allocated}
+                  onChange={(e) => setEditFormData({ ...editFormData, allocated: e.target.value })}
+                  required
+                />
+              </div>
+
+              {/* Color Picker */}
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-2">Category Color</label>
+                <div className="flex flex-wrap gap-2">
+                  {availableColors.map((col) => (
+                    <button
+                      key={col}
+                      type="button"
+                      onClick={() => setEditFormData({ ...editFormData, color: col })}
+                      className="w-8 h-8 rounded-full border-2 transition-all"
+                      style={{
+                        background: col,
+                        borderColor: editFormData.color === col ? "#fff" : "transparent",
+                        boxShadow: editFormData.color === col ? `0 0 0 2px ${col}` : "none",
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="button"
+                  className="btn-secondary flex-1 py-2.5"
+                  onClick={() => setEditingCategory(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="btn-primary flex-1 py-2.5"
+                >
+                  {isSubmitting ? "Saving..." : "Update Category"}
                 </button>
               </div>
             </form>

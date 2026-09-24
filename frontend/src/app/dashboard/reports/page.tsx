@@ -115,7 +115,10 @@ export default function ReportsPage() {
     }
     return { totalTxs: 0, totalIncome: 0, totalExpenses: 0, netBalance: 0 };
   });
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return !sessionStorage.getItem("cb_cache_reports_monthly");
+  });
   const [range, setRange] = useState("6months");
   const [isExporting, setIsExporting] = useState(false);
   const [printData, setPrintData] = useState<ExportTransactionItem[] | null>(null);
@@ -132,24 +135,10 @@ export default function ReportsPage() {
     let isCancelled = false;
     const orgId = activeOrgId;
 
-    const generateDefaultData = () => {
-      const defaults: ReportData[] = [
-        { month: "Jan", income: 12000, expense: 8500, balance: 3500 },
-        { month: "Feb", income: 9500, expense: 6200, balance: 3300 },
-        { month: "Mar", income: 18000, expense: 14200, balance: 3800 },
-        { month: "Apr", income: 11000, expense: 7800, balance: 3200 },
-        { month: "May", income: 15000, expense: 9800, balance: 5200 },
-        { month: "Jun", income: 13500, expense: 8200, balance: 5300 },
-      ];
-      if (!isCancelled) {
-        setMonthlyData(defaults);
-      }
-    };
-
     const calculateStats = async (targetOrgId: string) => {
       try {
         const txRes = await api.get<TransactionsApiResponse>("/transactions", {
-          params: { orgId: targetOrgId, limit: 1000 },
+          params: { orgId: targetOrgId, limit: 1000, range },
         });
         const txs: TransactionApiItem[] = txRes.data.transactions || [];
         const income = txs
@@ -169,13 +158,15 @@ export default function ReportsPage() {
           setSummaryStats(stats);
           sessionStorage.setItem("cb_cache_reports_stats", JSON.stringify(stats));
         }
-      } catch {
+      } catch (err) {
+        console.error("[Reports] Failed to calculate stats from transactions:", err);
         if (!isCancelled) {
+          // Show real zeroes — never fabricate financial data
           setSummaryStats({
-            totalTxs: 47,
-            totalIncome: 79000,
-            totalExpenses: 54700,
-            netBalance: 24300,
+            totalTxs: 0,
+            totalIncome: 0,
+            totalExpenses: 0,
+            netBalance: 0,
           });
         }
       }
@@ -184,7 +175,8 @@ export default function ReportsPage() {
     const fetchReportData = async () => {
       try {
         const [res, orgRes] = await Promise.all([
-          api.get<ReportSummaryResponse>("/reports/summary", { params: { orgId } }),
+          // Pass range so backend filters cashFlow to the correct period
+          api.get<ReportSummaryResponse>("/reports/summary", { params: { orgId, range } }),
           api.get<OrganizationResponse>(`/organizations/${orgId}`)
         ]);
 
@@ -206,7 +198,8 @@ export default function ReportsPage() {
           setMonthlyData(enriched);
           sessionStorage.setItem("cb_cache_reports_monthly", JSON.stringify(enriched));
         } else {
-          generateDefaultData();
+          // No cashFlow data yet — show empty chart, not fake placeholder data
+          if (!isCancelled) setMonthlyData([]);
         }
 
         if (data?.totalIncome !== undefined) {
@@ -222,9 +215,10 @@ export default function ReportsPage() {
           await calculateStats(orgId);
         }
       } catch (err) {
-        console.error("Failed to fetch report data:", err);
+        console.error("[Reports] Failed to fetch report data:", err);
         if (!isCancelled) {
-          generateDefaultData();
+          // Show real empty chart — never inject fake data on failure
+          setMonthlyData([]);
           await calculateStats(orgId);
         }
       } finally {
@@ -392,14 +386,14 @@ export default function ReportsPage() {
 
       {/* ── AI Financial Advisor Widget ── */}
       {isFetchingForecast ? (
-        <div className="mb-8 p-6 rounded-2xl glass border border-purple-500/20 flex flex-col items-center justify-center min-h-[150px]">
+        <div className="mb-8 p-6 rounded-2xl glass border border-purple-500/20 flex flex-col items-center justify-center min-h-37.5">
           <Loader2 className="w-8 h-8 text-purple-400 animate-spin mb-3" />
           <p className="text-sm font-semibold text-purple-300">AI is analyzing your financial data...</p>
         </div>
       ) : aiForecast ? (
         <div className="mb-8 rounded-2xl border overflow-hidden shadow-lg border-purple-500/30">
           {/* Header */}
-          <div className="bg-gradient-to-r from-purple-900/40 to-blue-900/40 p-4 md:p-5 flex items-center gap-3 border-b border-purple-500/20">
+          <div className="bg-linear-to-r from-purple-900/40 to-blue-900/40 p-4 md:p-5 flex items-center gap-3 border-b border-purple-500/20">
             <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center shrink-0 border border-purple-500/30 shadow-[0_0_15px_rgba(168,85,247,0.3)]">
               <BrainCircuit className="w-5 h-5 text-purple-400" />
             </div>
@@ -449,7 +443,7 @@ export default function ReportsPage() {
               </h4>
               <ul className="space-y-3">
                 {aiForecast.insights?.map((insight: string, idx: number) => (
-                  <li key={idx} className="bg-gradient-to-r from-purple-500/5 to-transparent p-3 rounded-xl border-l-2 border-purple-500 text-sm text-gray-200 shadow-sm flex gap-3">
+                  <li key={idx} className="bg-linear-to-r from-purple-500/5 to-transparent p-3 rounded-xl border-l-2 border-purple-500 text-sm text-gray-200 shadow-sm flex gap-3">
                     <span className="font-bold text-purple-400 shrink-0">{idx + 1}.</span>
                     <span>{insight}</span>
                   </li>
@@ -496,7 +490,7 @@ export default function ReportsPage() {
             <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-primary/70 inline-block" /> Balance</span>
           </div>
         </div>
-        <div className="h-[300px]">
+        <div className="h-75">
           <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
             <AreaChart data={monthlyData} margin={{ left: 0, right: 20, top: 4, bottom: 0 }}>
               <defs>

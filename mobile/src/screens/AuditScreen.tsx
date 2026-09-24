@@ -5,12 +5,13 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity,
-  RefreshControl, Linking, ActivityIndicator,
+  RefreshControl, Linking, ActivityIndicator, ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute } from '@react-navigation/native';
 import api from '../lib/api';
 import { useTheme } from '../context/ThemeContext';
+import { useOrg } from '../context/OrgContext';
 
 function formatActionLabel(action: string): string {
   if (!action) return 'Activity Logged';
@@ -185,19 +186,26 @@ function renderDetailPill(key: string, value: any, colors: any) {
 export default function AuditScreen() {
   const route = useRoute<any>();
   const { colors, isDark } = useTheme();
-  const orgId: string = route.params?.orgId;
+  const { activeOrgId } = useOrg();
+  // Fallback to activeOrgId so the screen works when navigated from tabs (no route params)
+  const orgId: string = route.params?.orgId || activeOrgId;
 
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [actionFilter, setActionFilter] = useState<'all' | 'approve' | 'reject' | 'create'>('all');
+  const [rangeFilter, setRangeFilter] = useState<'all' | '24h' | '7d' | '30d'>('all');
 
   useEffect(() => {
-    if (orgId) fetchAudit();
-  }, [orgId]);
+    if (orgId) fetchAudit(actionFilter, rangeFilter);
+  }, [orgId, actionFilter, rangeFilter]);
 
-  const fetchAudit = async () => {
+  const fetchAudit = async (action = actionFilter, range = rangeFilter) => {
     try {
-      const res = await api.get(`/audit?orgId=${orgId}&limit=100`);
+      let url = `/audit?orgId=${orgId}&limit=100`;
+      if (action !== 'all') url += `&action=${action}`;
+      if (range !== 'all') url += `&range=${range}`;
+      const res = await api.get(url);
       const data = Array.isArray(res.data) ? res.data : res.data.logs || [];
       setEvents(data);
     } catch (err) {
@@ -375,6 +383,69 @@ export default function AuditScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {/* Filters Bar */}
+      <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 6 }}>
+        {/* Action Filters */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }}>
+          {[
+            { key: 'all', label: 'All Actions' },
+            { key: 'approve', label: 'Approvals' },
+            { key: 'reject', label: 'Rejections' },
+            { key: 'create', label: 'Creations' },
+          ].map((item) => {
+            const active = actionFilter === item.key;
+            return (
+              <TouchableOpacity
+                key={item.key}
+                onPress={() => setActionFilter(item.key as any)}
+                style={{
+                  backgroundColor: active ? colors.primary : colors.surface,
+                  borderColor: active ? colors.primary : colors.border,
+                  borderWidth: 1,
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                  borderRadius: 14,
+                  marginRight: 8,
+                }}
+              >
+                <Text style={{ color: active ? '#fff' : colors.textSecondary, fontSize: 11, fontWeight: '700' }}>
+                  {item.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
+        {/* Date Range Filters */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          {[
+            { key: 'all', label: 'All Time' },
+            { key: '24h', label: 'Today' },
+            { key: '7d', label: '7D' },
+            { key: '30d', label: '30D' },
+          ].map((item) => {
+            const active = rangeFilter === item.key;
+            return (
+              <TouchableOpacity
+                key={item.key}
+                onPress={() => setRangeFilter(item.key as any)}
+                style={{
+                  backgroundColor: active ? (isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)') : 'transparent',
+                  paddingHorizontal: 10,
+                  paddingVertical: 4,
+                  borderRadius: 10,
+                  marginRight: 6,
+                }}
+              >
+                <Text style={{ color: active ? colors.textPrimary : colors.textMuted, fontSize: 11, fontWeight: '600' }}>
+                  {item.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
+
       {loading ? (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
           <ActivityIndicator size="large" color={colors.primary} />

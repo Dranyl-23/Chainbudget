@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { ShieldCheck, Vote, CheckCircle2, Search, Link2, X, Sparkles, BrainCircuit, Info, AlertTriangle } from "lucide-react";
+import { ShieldCheck, Vote, CheckCircle2, Search, Link2, X, Sparkles, BrainCircuit, Info, AlertTriangle, Clock, Zap } from "lucide-react";
 import api from "@/lib/api";
 import Portal from "@/components/Portal";
 import toast from "react-hot-toast";
@@ -90,7 +90,10 @@ export default function DAOGovernancePage() {
     }
     return [];
   });
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return !sessionStorage.getItem("cb_cache_dao");
+  });
   const [votingOn, setVotingOn] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -107,6 +110,12 @@ export default function DAOGovernancePage() {
   const [showAiModal, setShowAiModal] = useState<string | null>(null);
   const [aiInsight, setAiInsight] = useState<AiInsightData | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  // Vote Confirmation State — prevents accidental irreversible votes
+  const [pendingVote, setPendingVote] = useState<{ proposal: Proposal; support: boolean } | null>(null);
+
+  // Treasury balance for AI analysis (fetched once per org)
+  const [treasuryBalance, setTreasuryBalance] = useState<number>(0);
 
   // Pagination is reset directly on filter/search change without cascading useEffect
   const handleFilterChange = (status: string) => {
@@ -190,18 +199,35 @@ export default function DAOGovernancePage() {
     };
   }, [activeOrgId]);
 
-  const handleVote = async (proposal: Proposal, support: boolean) => {
+  // Fetch treasury balance once per org for AI analysis accuracy
+  useEffect(() => {
+    if (!activeOrgId) return;
+    api.get(`/organizations/${activeOrgId}`)
+      .then((res) => {
+        const bal = res.data?.treasuryBalance ?? res.data?.subsidyAmount ?? 0;
+        setTreasuryBalance(Number(bal));
+      })
+      .catch(() => {/* silent — AI will still work with 0 */});
+  }, [activeOrgId]);
+
+  // Step 1: open confirmation modal instead of immediately casting the vote
+  const handleVote = (proposal: Proposal, support: boolean) => {
     if (!isConnected) {
       toast.error("Please connect wallet first");
       return;
     }
-    
+    setPendingVote({ proposal, support });
+  };
+
+  // Step 2: user confirmed in the modal — now actually cast the vote
+  const confirmVote = async () => {
+    if (!pendingVote) return;
+    const { proposal, support } = pendingVote;
+    setPendingVote(null);
     setVotingOn(proposal._id);
     try {
       await api.post(`/dao/proposals/${proposal._id}/vote`, { support });
       toast.success(`Vote "${support ? "Yes" : "No"}" cast successfully!`);
-      
-      // Re-fetch proposals to get updated votes list
       await refreshProposals();
     } catch (err: unknown) {
       console.error("Voting failed:", err);
@@ -235,7 +261,7 @@ export default function DAOGovernancePage() {
         title: proposal.title,
         description: proposal.description,
         amount: proposal.amount,
-        currentBudget: 500000 // Fetched or projected org treasury
+        currentBudget: treasuryBalance // Real treasury balance instead of hardcoded 500000
       });
       setAiInsight(res.data);
     } catch (err: unknown) {
@@ -246,6 +272,34 @@ export default function DAOGovernancePage() {
       setShowAiModal(null);
     } finally {
       setIsAnalyzing(false);
+    }
+  };
+
+  const [executingId, setExecutingId] = useState<string | null>(null);
+
+  const formatDeadline = (endTime?: string) => {
+    if (!endTime) return null;
+    const diff = new Date(endTime).getTime() - Date.now();
+    if (diff <= 0) return "Voting closed";
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    if (days > 0) return `${days}d ${hours}h left`;
+    if (hours > 0) return `${hours}h ${minutes}m left`;
+    return `${minutes}m left`;
+  };
+
+  const handleExecute = async (p: Proposal) => {
+    if (!window.confirm(`Are you sure you want to execute proposal "${p.title}" on-chain?`)) return;
+    setExecutingId(p._id);
+    try {
+      await api.post(`/dao/proposals/${p._id}/execute`);
+      toast.success("Proposal executed successfully! 🎉");
+      await refreshProposals();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, "Failed to execute proposal."));
+    } finally {
+      setExecutingId(null);
     }
   };
 
@@ -368,7 +422,12 @@ export default function DAOGovernancePage() {
             filteredProposals.slice(0, visibleCount).map((p) => (
             <div key={p._id} className="glass p-3.5 md:p-6 rounded-xl md:rounded-2xl flex flex-col hover:-translate-y-1 transition-transform duration-300">
               <div className="flex justify-between items-start mb-2 md:mb-4">
-                <span className={`badge text-[10px] md:text-xs px-2 py-0.5 md:py-1 ${p.status === "active" ? "badge-pending" : p.status === "passed" ? "badge-approved" : "badge-rejected"}`}>
+                <span className={`badge text-[10px] md:text-xs px-2 py-0.5 md:py-1 ${
+                  p.status === "active" ? "badge-pending" :
+                  p.status === "passed" ? "badge-approved" :
+                  p.status === "executed" ? "bg-purple-500/20 text-purple-400 border border-purple-500/30 font-bold" :
+                  "badge-rejected"
+                }`}>
                   {p.status.toUpperCase()}
                 </span>
                 {p.blockchainProposalId && (
@@ -378,27 +437,45 @@ export default function DAOGovernancePage() {
                 )}
               </div>
                 
-                <h3 className="text-sm md:text-lg font-bold text-gray-800 mb-1 leading-tight line-clamp-2 md:line-clamp-none">{p.title}</h3>
-                <p className="text-[11px] md:text-sm text-gray-500 mb-3 md:mb-4 line-clamp-2 md:line-clamp-3 flex-1">{p.description}</p>
+                <h3 className="text-sm md:text-lg font-bold text-white mb-1 leading-tight line-clamp-2 md:line-clamp-none">{p.title}</h3>
+                <p className="text-[11px] md:text-sm text-gray-400 mb-3 md:mb-4 line-clamp-2 md:line-clamp-3 flex-1">{p.description}</p>
                 
-                <div className="bg-gray-50/50 dark:bg-gray-800/30 p-2.5 md:p-4 rounded-xl mb-3 md:mb-6">
+                {formatDeadline(p.endTime) && (
+                  <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-3">
+                    <Clock className="w-3.5 h-3.5 text-gray-400" />
+                    <span>{formatDeadline(p.endTime)}</span>
+                  </div>
+                )}
+
+                <div className="bg-white/5 border border-white/10 p-2.5 md:p-4 rounded-xl mb-3 md:mb-6">
                   <div className="flex justify-between items-center mb-1 md:mb-2">
-                    <span className="text-[10px] md:text-xs text-gray-500 dark:text-gray-400">Requested Amount</span>
-                    <span className="text-xs md:text-sm font-bold text-primary dark:text-primary/90">₱{p.amount.toLocaleString()}</span>
+                    <span className="text-[10px] md:text-xs text-gray-400">Requested Amount</span>
+                    <span className="text-xs md:text-sm font-bold text-primary">₱{p.amount.toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-[10px] md:text-xs text-gray-500 dark:text-gray-400">Proposed By</span>
-                    <span className="text-[10px] md:text-sm font-medium text-gray-700 dark:text-gray-300 truncate max-w-32.5 md:max-w-none text-right">{getCreatorLabel(p.creator)}</span>
+                    <span className="text-[10px] md:text-xs text-gray-400">Proposed By</span>
+                    <span className="text-[10px] md:text-sm font-medium text-gray-300 truncate max-w-32.5 md:max-w-none text-right">{getCreatorLabel(p.creator)}</span>
                   </div>
                 </div>
 
                 {/* ── AI Insights Button ── */}
                 <button
                   onClick={() => handleAiInsight(p)}
-                  className="w-full mb-3 md:mb-4 flex items-center justify-center gap-2 bg-linear-to-r from-purple-500/10 to-blue-500/10 hover:from-purple-500/20 hover:to-blue-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/20 py-1.5 md:py-2 rounded-xl text-xs font-semibold transition-all"
+                  className="w-full mb-3 md:mb-4 flex items-center justify-center gap-2 bg-linear-to-r from-purple-500/10 to-blue-500/10 hover:from-purple-500/20 hover:to-blue-500/20 text-purple-400 border border-purple-500/20 py-1.5 md:py-2 rounded-xl text-xs font-semibold transition-all"
                 >
                   <Sparkles className="w-3.5 h-3.5" /> AI Risk Analysis
                 </button>
+
+                {p.status === "passed" && canCreate && (
+                  <button
+                    onClick={() => handleExecute(p)}
+                    disabled={executingId === p._id}
+                    className="w-full mt-auto mb-2 py-2.5 px-4 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs md:text-sm flex items-center justify-center gap-2 shadow-lg shadow-purple-500/20 transition-all"
+                  >
+                    <Zap className="w-4 h-4" />
+                    {executingId === p._id ? "Executing..." : "Execute Proposal"}
+                  </button>
+                )}
 
                 {p.status === "active" && !p.hasVoted && canVote && (
                   <div className="grid grid-cols-2 gap-2 md:gap-3 mt-auto">
@@ -468,16 +545,16 @@ export default function DAOGovernancePage() {
       {/* ── Create Proposal Modal ── */}
       {showCreateModal && (
         <Portal>
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 overflow-hidden flex flex-col relative" style={{ maxHeight: "90vh" }}>
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold flex items-center gap-2">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+            <div className="glass rounded-2xl shadow-[0_0_40px_rgba(139,92,246,0.2)] border border-white/10 w-full max-w-lg p-6 overflow-hidden flex flex-col relative text-white" style={{ maxHeight: "90vh" }}>
+              <div className="flex items-center justify-between mb-6 border-b border-white/10 pb-4">
+                <h2 className="text-xl font-bold flex items-center gap-2 text-white">
                   <ShieldCheck className="w-5 h-5 text-primary" />
                   Create Proposal
                 </h2>
                 <button
                   onClick={() => setShowCreateModal(false)}
-                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                  className="text-gray-400 hover:text-white transition-colors"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -485,47 +562,47 @@ export default function DAOGovernancePage() {
 
               <form onSubmit={handleCreateProposal} className="space-y-4 overflow-y-auto pr-2 custom-scrollbar">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Title</label>
                   <input
                     type="text"
                     required
                     value={formData.title}
                     onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                    className="w-full px-4 py-2 bg-white/5 border border-white/10 text-white placeholder-gray-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-all"
                     placeholder="e.g. Upgrade Sound System"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Amount (₱)</label>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Amount (₱)</label>
                   <input
                     type="number"
                     required
                     min="1"
                     value={formData.amount}
                     onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                    className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                    className="w-full px-4 py-2 bg-white/5 border border-white/10 text-white placeholder-gray-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-all"
                     placeholder="25000"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Description</label>
                   <textarea
                     required
                     rows={4}
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                    className="w-full px-4 py-2 bg-white/5 border border-white/10 text-white placeholder-gray-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-all"
                     placeholder="Why is this proposal necessary?"
                   />
                 </div>
 
-                <div className="pt-4 flex justify-end gap-3 mt-auto">
+                <div className="pt-4 flex justify-end gap-3 mt-auto border-t border-white/10">
                   <button
                     type="button"
                     onClick={() => setShowCreateModal(false)}
-                    className="px-5 py-2 text-gray-600 hover:bg-gray-100 rounded-xl transition-colors font-medium"
+                    className="px-5 py-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-xl transition-colors font-medium"
                     disabled={isSubmitting}
                   >
                     Cancel
@@ -629,6 +706,45 @@ export default function DAOGovernancePage() {
                 ) : (
                   <div className="text-center text-red-400 py-8">Failed to load insights.</div>
                 )}
+              </div>
+            </div>
+          </div>
+        </Portal>
+      )}
+      {/* ── Vote Confirmation Modal ── */}
+      {pendingVote && (
+        <Portal>
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+            <div className="glass rounded-2xl shadow-xl border border-white/10 w-full max-w-sm p-6 flex flex-col gap-5">
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${pendingVote.support ? "bg-emerald-500/20 border border-emerald-500/30" : "bg-red-500/20 border border-red-500/30"}`}>
+                  <Vote className={`w-5 h-5 ${pendingVote.support ? "text-emerald-400" : "text-red-400"}`} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-base">Confirm Your Vote</h3>
+                  <p className="text-xs text-gray-400 mt-0.5">This action is irreversible on the blockchain.</p>
+                </div>
+              </div>
+              <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+                <p className="text-xs text-gray-400 mb-1">Proposal</p>
+                <p className="text-sm font-semibold text-white line-clamp-2">{pendingVote.proposal.title}</p>
+                <p className="text-xs mt-2 font-bold tracking-wide uppercase" style={{ color: pendingVote.support ? "#34d399" : "#f87171" }}>
+                  Your vote: {pendingVote.support ? "✓ YES — In Support" : "✗ NO — Against"}
+                </p>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setPendingVote(null)}
+                  className="flex-1 px-4 py-2 rounded-xl border border-white/10 text-gray-400 hover:bg-white/5 text-sm font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmVote}
+                  className={`flex-1 px-4 py-2 rounded-xl text-white text-sm font-bold transition-colors ${pendingVote.support ? "bg-emerald-600 hover:bg-emerald-500" : "bg-red-600 hover:bg-red-500"}`}
+                >
+                  Confirm Vote {pendingVote.support ? "Yes" : "No"}
+                </button>
               </div>
             </div>
           </div>

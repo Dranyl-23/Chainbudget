@@ -148,17 +148,35 @@ export interface AppNotification {
 // ─── Navigation Params ──────────────────────────────────────────────────────
 
 export type RootStackParamList = {
+  MainTabs: undefined;
   Dashboard: undefined;
-  Transfer: { orgId: string };
+  Transfer: { orgId?: string };
   Scanner: { orgId?: string };
-  History: { orgId: string };
+  History: { orgId?: string };
   TransactionDetail: { txId: string };
   Approvals: undefined;
   Governance: undefined;
-  Members: { orgId: string };
+  Members: { orgId?: string };
   Notifications: undefined;
-  VerificationReport: { hash: string };
+  NotificationDetail: { notification?: any; notif?: any };
+  RecoveryPhrase: undefined;
+  Budget: { orgId?: string };
+  Audit: { orgId?: string };
+  Reports: { orgId?: string };
+  Treasury: { orgId?: string };
+  HelpFaq: undefined;
+  DataPrivacy: undefined;
   PublicLedger: undefined;
-  Receive: { orgId?: string; initialOrgId?: string };
+  PublicOrgDetail: { orgId: string };
+  Feedback: undefined;
+  About: undefined;
+  NetworkStatus: undefined;
+  SecurityKeys: undefined;
   Settings: undefined;
+  CreateOrganization: undefined;
+  ChatInbox: undefined;
+  OrgChat: { orgId: string; orgName?: string };
+  OrgChatInfo: { orgId: string; orgName?: string };
+  VerificationReport: { hash: string };
+  Receive: { orgId?: string; initialOrgId?: string };
 };

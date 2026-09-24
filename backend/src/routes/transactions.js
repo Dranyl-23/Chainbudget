@@ -314,7 +314,7 @@ router.get("/pending-count", authenticate, async (req, res) => {
 /// GET /api/transactions?orgId=xxx — List transactions for an org
 router.get("/", authenticate, async (req, res) => {
   try {
-    const { orgId, status, type, page = 1, limit = 20 } = req.query;
+    const { orgId, status, type, page = 1, limit = 20, range, startDate, endDate } = req.query;
     if (!orgId) return res.status(400).json({ error: "orgId required" });
 
     const mongoose = require("mongoose");
@@ -331,6 +331,23 @@ router.get("/", authenticate, async (req, res) => {
     const orgObjectId = new mongoose.Types.ObjectId(orgId);
     const filter = { organization: orgObjectId };
     if (type) filter.type = type;
+
+    // Date range filter
+    if (range && range !== "all") {
+      const now = new Date();
+      let since = new Date();
+      if (range === "24h" || range === "today") since.setDate(now.getDate() - 1);
+      else if (range === "7d") since.setDate(now.getDate() - 7);
+      else if (range === "30d" || range === "1month") since.setDate(now.getDate() - 30);
+      else if (range === "90d" || range === "3months") since.setDate(now.getDate() - 90);
+      else if (range === "6months") since.setMonth(now.getMonth() - 6);
+      else if (range === "1year") since.setFullYear(now.getFullYear() - 1);
+      filter.createdAt = { $gte: since };
+    } else if (startDate || endDate) {
+      filter.createdAt = {};
+      if (startDate) filter.createdAt.$gte = new Date(startDate);
+      if (endDate) filter.createdAt.$lte = new Date(endDate);
+    }
 
     // Security filters based on Role Level
     const roleLevel = req.user.getRoleInOrg(orgId);

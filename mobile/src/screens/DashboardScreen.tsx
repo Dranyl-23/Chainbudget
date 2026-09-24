@@ -552,7 +552,7 @@ export default function DashboardScreen() {
                     </View>
                   </View>
 
-                  {/* Middle: MATIC Balance Display */}
+                  {/* Middle: POL Balance Display */}
                   <View style={{ marginVertical: 2 }}>
                     <Text
                       style={{
@@ -564,7 +564,7 @@ export default function DashboardScreen() {
                         marginBottom: 2,
                       }}
                     >
-                      YOUR BALANCE (MATIC)
+                      YOUR BALANCE (POL)
                     </Text>
 
                     <AnimatedCounter
@@ -587,7 +587,7 @@ export default function DashboardScreen() {
                         marginTop: 2,
                       }}
                     >
-                      MATIC
+                      POL
                     </Text>
                   </View>
 

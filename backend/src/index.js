@@ -60,10 +60,27 @@ const io = new Server(server, {
 });
 app.set("io", io);
 
+// Initialize Redis multi-server adapter and L1 cache service
+const redisService = require("./services/redis");
+redisService.initRedisAdapter(io);
+app.set("redisService", redisService);
+
 // H-4 Fix: Authenticate WebSocket connections (supports both mobile + browser tokens)
 io.use(async (socket, next) => {
-  const token = socket.handshake.auth?.token;
-  if (!token) return next(new Error("Authentication required"));
+  let token = socket.handshake.auth?.token;
+  if (!token || token === "undefined" || token === "null") {
+    const cookieHeader = socket.handshake.headers?.cookie;
+    if (cookieHeader) {
+      const match = cookieHeader.match(/(?:^|;\s*)(?:cb_session|jwt)=([^;]+)/);
+      if (match) {
+        token = decodeURIComponent(match[1])?.trim();
+      }
+    }
+  }
+
+  if (!token || token === "undefined" || token === "null") {
+    return next(new Error("Authentication required"));
+  }
 
   const { verifyChainBudgetJWT } = require("./middleware/auth");
 
@@ -91,23 +108,19 @@ io.use(async (socket, next) => {
   }
 });
 
-// In-memory real-time presence tracking per organization
-const orgOnlineUsers = new Map(); // orgId -> Set<mongoUserId>
+// Cluster-wide presence tracking per organization (backed by Redis or in-memory fallback)
 const userActiveSockets = new Map(); // mongoUserId -> Set<socketId>
 
-function broadcastOrgOnline(orgId) {
-  const usersSet = orgOnlineUsers.get(orgId);
-  const onlineUserIds = usersSet ? Array.from(usersSet) : [];
+async function broadcastOrgOnline(orgId) {
+  const onlineUserIds = await redisService.getOrgOnlineUsers(orgId);
   io.to(`org:${orgId}`).emit("org_online_users", {
     orgId,
     onlineUserIds,
   });
 }
 
-app.set("getOrgOnlineUsers", (orgId) => {
-  const usersSet = orgOnlineUsers.get(orgId);
-  return usersSet ? Array.from(usersSet) : [];
-});
+app.set("getOrgOnlineUsers", (orgId) => redisService.getOrgOnlineUsersSync(orgId));
+app.set("getOrgOnlineUsersAsync", (orgId) => redisService.getOrgOnlineUsers(orgId));
 
 io.on("connection", async (socket) => {
   console.log("Client connected via WebSocket:", socket.id, "user:", socket.userId, "source:", socket.authSource);
@@ -141,19 +154,13 @@ io.on("connection", async (socket) => {
         userActiveSockets.get(mongoUserId).add(socket.id);
 
         if (user.memberships) {
-          user.memberships
-            .filter((m) => m.isActive)
-            .forEach((m) => {
-              const orgId = (m.organization?._id || m.organization).toString();
-              userOrgIds.add(orgId);
-              socket.join(`org:${orgId}`);
-
-              if (!orgOnlineUsers.has(orgId)) {
-                orgOnlineUsers.set(orgId, new Set());
-              }
-              orgOnlineUsers.get(orgId).add(mongoUserId);
-              broadcastOrgOnline(orgId);
-            });
+          for (const m of user.memberships.filter((m) => m.isActive)) {
+            const orgId = (m.organization?._id || m.organization).toString();
+            userOrgIds.add(orgId);
+            socket.join(`org:${orgId}`);
+            await redisService.addOrgOnlineUser(orgId, mongoUserId);
+            void broadcastOrgOnline(orgId);
+          }
         }
       }
     } catch (err) {
@@ -162,50 +169,43 @@ io.on("connection", async (socket) => {
   }
 
   // Dynamic room joining for organizations
-  socket.on("join_org", (orgId) => {
+  socket.on("join_org", async (orgId) => {
     if (orgId) {
       const strOrgId = orgId.toString();
       socket.join(`org:${strOrgId}`);
       userOrgIds.add(strOrgId);
       if (mongoUserId) {
-        if (!orgOnlineUsers.has(strOrgId)) {
-          orgOnlineUsers.set(strOrgId, new Set());
-        }
-        orgOnlineUsers.get(strOrgId).add(mongoUserId);
-        broadcastOrgOnline(strOrgId);
+        await redisService.addOrgOnlineUser(strOrgId, mongoUserId);
+        await broadcastOrgOnline(strOrgId);
       }
       console.log(`[socket] Socket ${socket.id} explicitly joined org:${strOrgId}`);
     }
   });
 
-  socket.on("get_org_online", (orgId) => {
+  socket.on("get_org_online", async (orgId) => {
     if (orgId) {
       const strOrgId = orgId.toString();
-      const usersSet = orgOnlineUsers.get(strOrgId);
+      const onlineUserIds = await redisService.getOrgOnlineUsers(strOrgId);
       socket.emit("org_online_users", {
         orgId: strOrgId,
-        onlineUserIds: usersSet ? Array.from(usersSet) : [],
+        onlineUserIds,
       });
     }
   });
 
-  socket.on("leave_org", (orgId) => {
+  socket.on("leave_org", async (orgId) => {
     if (orgId) {
       const strOrgId = orgId.toString();
       socket.leave(`org:${strOrgId}`);
       userOrgIds.delete(strOrgId);
       if (mongoUserId) {
-        const orgSet = orgOnlineUsers.get(strOrgId);
-        if (orgSet) {
-          orgSet.delete(mongoUserId);
-          if (orgSet.size === 0) orgOnlineUsers.delete(strOrgId);
-          broadcastOrgOnline(strOrgId);
-        }
+        await redisService.removeOrgOnlineUser(strOrgId, mongoUserId);
+        await broadcastOrgOnline(strOrgId);
       }
     }
   });
 
-  socket.on("disconnect", () => {
+  socket.on("disconnect", async () => {
     console.log("Client disconnected:", socket.id);
     if (mongoUserId) {
       const userSockets = userActiveSockets.get(mongoUserId);
@@ -214,14 +214,10 @@ io.on("connection", async (socket) => {
         if (userSockets.size === 0) {
           userActiveSockets.delete(mongoUserId);
           // User is offline across all tabs / devices
-          userOrgIds.forEach((orgId) => {
-            const orgSet = orgOnlineUsers.get(orgId);
-            if (orgSet) {
-              orgSet.delete(mongoUserId);
-              if (orgSet.size === 0) orgOnlineUsers.delete(orgId);
-              broadcastOrgOnline(orgId);
-            }
-          });
+          for (const orgId of userOrgIds) {
+            await redisService.removeOrgOnlineUser(orgId, mongoUserId);
+            await broadcastOrgOnline(orgId);
+          }
         }
       }
     }

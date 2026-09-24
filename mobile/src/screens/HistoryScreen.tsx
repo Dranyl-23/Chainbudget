@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { View, Text, FlatList, TouchableOpacity, RefreshControl, TextInput, ScrollView } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, RefreshControl, TextInput, ScrollView, Share, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../lib/api';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -9,6 +9,7 @@ import { SkeletonTransactionList } from '../components/SkeletonLoader';
 import { triggerLightHaptic } from '../lib/biometrics';
 
 type FilterType = 'all' | 'expense' | 'income' | 'pending' | 'approved' | 'escrow';
+type RangeType = 'all' | '24h' | '7d' | '30d' | '90d' | '1year';
 
 const FILTERS: { key: FilterType; label: string; icon?: any }[] = [
   { key: 'all', label: 'All' },
@@ -17,6 +18,15 @@ const FILTERS: { key: FilterType; label: string; icon?: any }[] = [
   { key: 'pending', label: 'Pending', icon: 'time-outline' },
   { key: 'approved', label: 'Approved', icon: 'checkmark-circle-outline' },
   { key: 'escrow', label: 'Escrow', icon: 'shield-checkmark-outline' },
+];
+
+const RANGE_FILTERS: { key: RangeType; label: string }[] = [
+  { key: 'all', label: 'All Time' },
+  { key: '24h', label: '24H' },
+  { key: '7d', label: '7D' },
+  { key: '30d', label: '30D' },
+  { key: '90d', label: '90D' },
+  { key: '1year', label: '1Y' },
 ];
 
 export default function HistoryScreen() {
@@ -31,6 +41,7 @@ export default function HistoryScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
+  const [rangeFilter, setRangeFilter] = useState<RangeType>('all');
 
   useEffect(() => {
     if (orgId) {
@@ -38,11 +49,12 @@ export default function HistoryScreen() {
     } else {
       setLoading(false);
     }
-  }, [orgId]);
+  }, [orgId, rangeFilter]);
 
   const fetchHistory = async () => {
     try {
-      const res = await api.get(`/transactions?orgId=${orgId}&limit=100`);
+      const rangeParam = rangeFilter !== 'all' ? `&range=${rangeFilter}` : '';
+      const res = await api.get(`/transactions?orgId=${orgId}&limit=100${rangeParam}`);
       const list =
         res.data.transactions ||
         res.data.data ||
@@ -58,6 +70,33 @@ export default function HistoryScreen() {
   const onRefresh = () => {
     setRefreshing(true);
     fetchHistory().then(() => setRefreshing(false));
+  };
+
+  const handleExportCSV = async () => {
+    if (!filteredTransactions.length) {
+      Alert.alert('No Transactions', 'There are no transactions matching your filters to export.');
+      return;
+    }
+    triggerLightHaptic();
+    const headers = ['Date', 'Description', 'Type', 'Amount (PHP)', 'Status', 'Category', 'Blockchain Tx'];
+    const rows = filteredTransactions.map((t) => [
+      `"${new Date(t.createdAt).toLocaleDateString()}"`,
+      `"${(t.description || '').replace(/"/g, '""')}"`,
+      `"${t.type || ''}"`,
+      `"${t.amount || 0}"`,
+      `"${t.status || ''}"`,
+      `"${(t.category || '').replace(/"/g, '""')}"`,
+      `"${t.blockchainTxHash || ''}"`,
+    ]);
+    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    try {
+      await Share.share({
+        title: 'ChainBudgets Transactions Export',
+        message: csvContent,
+      });
+    } catch (err: any) {
+      Alert.alert('Export Error', err?.message || 'Could not export transactions');
+    }
   };
 
   // Live client-side search & filtering
@@ -77,6 +116,18 @@ export default function HistoryScreen() {
       list = list.filter((t) => t.isEscrow || t.escrowStatus);
     }
 
+    // Filter by date range
+    if (rangeFilter !== 'all') {
+      const now = new Date();
+      let since = new Date();
+      if (rangeFilter === '24h') since.setDate(now.getDate() - 1);
+      else if (rangeFilter === '7d') since.setDate(now.getDate() - 7);
+      else if (rangeFilter === '30d') since.setDate(now.getDate() - 30);
+      else if (rangeFilter === '90d') since.setDate(now.getDate() - 90);
+      else if (rangeFilter === '1year') since.setFullYear(now.getFullYear() - 1);
+      list = list.filter((t) => new Date(t.createdAt) >= since);
+    }
+
     // Filter by search query
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
@@ -91,7 +142,7 @@ export default function HistoryScreen() {
     }
 
     return list;
-  }, [transactions, activeFilter, searchQuery]);
+  }, [transactions, activeFilter, rangeFilter, searchQuery]);
 
   if (!orgId) {
     return (
@@ -223,28 +274,51 @@ export default function HistoryScreen() {
     <View style={{ backgroundColor: colors.background }} className="flex-1">
       {/* Search and Filters Header */}
       <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 }}>
-        {/* Search Bar */}
-        <View
-          style={{
-            backgroundColor: isDark ? 'rgba(0,0,0,0.4)' : colors.backgroundSecondary,
-            borderColor: colors.border,
-          }}
-          className="flex-row items-center px-3 py-2.5 rounded-2xl border mb-3"
-        >
-          <Ionicons name="search-outline" size={18} color={colors.textMuted} style={{ marginRight: 8 }} />
-          <TextInput
-            placeholder="Search description, category, amount..."
-            placeholderTextColor={colors.inputPlaceholder}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            style={{ color: colors.textPrimary, flex: 1, fontSize: 13 }}
-            clearButtonMode="while-editing"
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Ionicons name="close-circle" size={16} color={colors.textMuted} />
-            </TouchableOpacity>
-          )}
+        {/* Search Bar & Export Button */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+          <View
+            style={{
+              backgroundColor: isDark ? 'rgba(0,0,0,0.4)' : colors.backgroundSecondary,
+              borderColor: colors.border,
+              flex: 1,
+            }}
+            className="flex-row items-center px-3 py-2.5 rounded-2xl border"
+          >
+            <Ionicons name="search-outline" size={18} color={colors.textMuted} style={{ marginRight: 8 }} />
+            <TextInput
+              placeholder="Search description, category, amount..."
+              placeholderTextColor={colors.inputPlaceholder}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              style={{ color: colors.textPrimary, flex: 1, fontSize: 13 }}
+              clearButtonMode="while-editing"
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')}>
+                <Ionicons name="close-circle" size={16} color={colors.textMuted} />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <TouchableOpacity
+            onPress={handleExportCSV}
+            style={{
+              backgroundColor: isDark ? colors.surface : colors.backgroundSecondary,
+              borderColor: colors.border,
+              borderWidth: 1,
+              borderRadius: 16,
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+              marginLeft: 8,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 5,
+            }}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="share-outline" size={16} color={colors.primary} />
+            <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '700' }}>Export</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Filter Pills */}
@@ -286,6 +360,41 @@ export default function HistoryScreen() {
                   }}
                 >
                   {f.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
+        {/* Date Range Filter Pills */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row pb-1">
+          {RANGE_FILTERS.map((r) => {
+            const isActive = rangeFilter === r.key;
+            return (
+              <TouchableOpacity
+                key={r.key}
+                onPress={() => {
+                  triggerLightHaptic();
+                  setRangeFilter(r.key);
+                }}
+                style={{
+                  backgroundColor: isActive
+                    ? (isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.08)')
+                    : 'transparent',
+                  paddingHorizontal: 11,
+                  paddingVertical: 5,
+                  borderRadius: 12,
+                  marginRight: 6,
+                }}
+              >
+                <Text
+                  style={{
+                    color: isActive ? colors.textPrimary : colors.textMuted,
+                    fontWeight: isActive ? '700' : '500',
+                    fontSize: 11,
+                  }}
+                >
+                  {r.label}
                 </Text>
               </TouchableOpacity>
             );

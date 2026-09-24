@@ -19,7 +19,7 @@ export const EXPLORER_BASE_URL =
 
 /** Master ChainBudget Smart Contract Address */
 export const MASTER_CONTRACT_ADDRESS =
-  process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "0x1887be6c9cc06ddddb125da24b9b554c18f0a1fb";
+  process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "0xf1f8F195963586E01Abb7516ACBe9572D7514C41";
 
 /**
  * Generates an explorer link for any smart contract or wallet address

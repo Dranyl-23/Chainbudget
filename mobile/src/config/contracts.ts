@@ -14,6 +14,7 @@ export interface ProtocolNetworkInfo {
   hexChainId: string;
   currency: string;
   rpcUrl: string;
+  fallbackRpcUrls?: string[];
   explorerUrl: string;
   consensus: string;
 }
@@ -44,12 +45,13 @@ export const PROTOCOL_CONFIG: LiveProtocolResponse = {
     chainId: Number(process.env.EXPO_PUBLIC_CHAIN_ID || 80002),
     hexChainId: '0x13882',
     currency: 'POL (Polygon Ecosystem Token)',
-    rpcUrl: process.env.EXPO_PUBLIC_AMOY_RPC || 'https://rpc-amoy.polygon.technology',
+    rpcUrl: process.env.EXPO_PUBLIC_AMOY_RPC || 'https://polygon-amoy-bor-rpc.publicnode.com',
+    fallbackRpcUrls: ['https://polygon-amoy.drpc.org', 'https://polygon-amoy.gateway.tenderly.co'],
     explorerUrl: process.env.EXPO_PUBLIC_EXPLORER_URL || 'https://amoy.polygonscan.com',
     consensus: 'Bor + Heimdall (Proof-of-Stake)',
   },
   contracts: {
-    masterTreasury: process.env.EXPO_PUBLIC_CONTRACT_ADDRESS || '0x1887be6c9cc06ddddb125da24b9b554c18f0a1fb',
+    masterTreasury: process.env.EXPO_PUBLIC_CONTRACT_ADDRESS || '0xf1f8F195963586E01Abb7516ACBe9572D7514C41',
     daoGovernance: process.env.EXPO_PUBLIC_DAO_CONTRACT_ADDRESS || '0x0b15187c87a9c3f8588753c123b7071a9548cc9c',
     sbtMembership: process.env.EXPO_PUBLIC_SBT_CONTRACT_ADDRESS || '0x7a376e224276988e3b01aae7a5b17c8c14e94031',
   },

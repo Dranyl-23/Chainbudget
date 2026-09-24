@@ -97,8 +97,16 @@ async function verifyAsgardeoJWT(token) {
 function verifyInternalJWT(token) {
   try {
     const secret = process.env.JWT_SECRET;
-    if (!secret) return null;
-    return jwt.verify(token, secret, { algorithms: ['HS256'] });
+    if (!secret || !token || typeof token !== "string") return null;
+    if (token === "undefined" || token === "null") return null;
+
+    // Fast check: A JWT must have exactly 3 dot-delimited sections (header.payload.signature)
+    const parts = token.split(".");
+    if (parts.length !== 3) {
+      return null; // Not a JWT (e.g. Asgardeo opaque UUID token or plain string)
+    }
+
+    return jwt.verify(token, secret, { algorithms: ["HS256"] });
   } catch (err) {
     console.warn("[auth] Internal JWT verification failed:", err.message);
     return null;
@@ -109,17 +117,20 @@ function verifyInternalJWT(token) {
 function extractToken(req) {
   const authHeader = req.headers?.authorization;
   if (authHeader && typeof authHeader === "string" && authHeader.startsWith("Bearer ")) {
-    return authHeader.split(" ")[1].trim();
+    const t = authHeader.split(" ")[1]?.trim();
+    if (t && t !== "undefined" && t !== "null") return t;
   }
 
   if (req.cookies && (req.cookies.cb_session || req.cookies.jwt)) {
-    return (req.cookies.cb_session || req.cookies.jwt).trim();
+    const t = (req.cookies.cb_session || req.cookies.jwt)?.trim();
+    if (t && t !== "undefined" && t !== "null") return t;
   }
 
   if (req.headers?.cookie) {
     const match = req.headers.cookie.match(/(?:^|;\s*)(?:cb_session|jwt)=([^;]+)/);
     if (match) {
-      return decodeURIComponent(match[1]).trim();
+      const t = decodeURIComponent(match[1])?.trim();
+      if (t && t !== "undefined" && t !== "null") return t;
     }
   }
 

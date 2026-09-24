@@ -21,6 +21,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRoute } from '@react-navigation/native';
 import api from '../lib/api';
 import { useTheme } from '../context/ThemeContext';
+import { useOrg } from '../context/OrgContext';
 import { triggerLightHaptic, triggerSuccessHaptic } from '../lib/biometrics';
 import ScaleButton from '../components/ScaleButton';
 
@@ -41,7 +42,9 @@ export default function ReportsScreen() {
   const route = useRoute<any>();
   const { width: screenWidth } = useWindowDimensions();
   const { colors, isDark } = useTheme();
-  const orgId: string = route.params?.orgId;
+  const { activeOrgId } = useOrg();
+  // Fallback to activeOrgId so the screen works when navigated from tabs (no route params)
+  const orgId: string = route.params?.orgId || activeOrgId;
 
   const isTablet = screenWidth >= 768;
 
@@ -67,10 +70,11 @@ export default function ReportsScreen() {
         api.get(`/transactions?orgId=${orgId}&limit=200`),
       ]);
       setSummary(summaryRes.data || {});
-      const txData = txRes.data?.data || txRes.data || [];
-      setTransactions(Array.isArray(txData) ? txData : []);
+      // Backend returns { transactions: [...], total: N } — never .data.data or a bare array
+      const txData = txRes.data?.transactions ?? (Array.isArray(txRes.data) ? txRes.data : []);
+      setTransactions(txData);
     } catch (err) {
-      console.error(err);
+      console.error('[Reports] fetchData error:', err);
     } finally {
       setLoading(false);
     }
@@ -454,6 +458,42 @@ export default function ReportsScreen() {
                           ))}
                         </View>
                       )}
+                    </View>
+                  ) : forecastError ? (
+                    <View
+                      style={{
+                        backgroundColor: colors.errorBg || 'rgba(239, 68, 68, 0.12)',
+                        borderColor: colors.errorBorder || 'rgba(239, 68, 68, 0.3)',
+                        borderWidth: 1,
+                        borderRadius: 16,
+                        padding: 14,
+                        alignItems: 'center',
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                        <Ionicons name="alert-circle-outline" size={18} color={colors.error || '#EF4444'} />
+                        <Text style={{ color: colors.error || '#EF4444', fontWeight: '700', fontSize: 13 }}>
+                          AI Forecast Unavailable
+                        </Text>
+                      </View>
+                      <Text style={{ color: colors.textSecondary, fontSize: 12, textAlign: 'center', marginBottom: 12 }}>
+                        {forecastError}
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() => fetchForecast(true)}
+                        style={{
+                          backgroundColor: colors.primary,
+                          borderRadius: 10,
+                          paddingHorizontal: 16,
+                          paddingVertical: 8,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 6,
+                        }}
+                      >
+                        <Ionicons name="refresh-outline" size={14} color="#fff" />
+                        <Text style={{ color: '#fff', fontWeight: '700', fontSize: 12 }}>Retry Forecast</Text>
+                      </TouchableOpacity>
                     </View>
                   ) : (
                     <TouchableOpacity

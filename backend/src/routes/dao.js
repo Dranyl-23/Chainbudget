@@ -45,8 +45,17 @@ router.get("/proposals", authenticate, async (req, res) => {
         else noVotes++;
       });
       
+      // Check if voting period has concluded
+      let effectiveStatus = p.status;
+      const isExpired = p.endTime && new Date() > new Date(p.endTime);
+      if (effectiveStatus === "active" && isExpired) {
+        effectiveStatus = yesVotes > noVotes ? "passed" : "rejected";
+      }
+
       return {
         ...p,
+        status: effectiveStatus,
+        isExpired: Boolean(isExpired),
         votesList: pVotes.map(v => ({ support: v.support, voter: v.voter })),
         yesVotes,
         noVotes,
@@ -264,6 +273,59 @@ router.post("/proposals/:id/vote", authenticate, async (req, res) => {
       return res.status(400).json({ error: "You have already voted" });
     }
     console.error("Vote error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+/**
+ * @route   POST /api/dao/proposals/:id/execute
+ * @desc    Execute a passed proposal (Level 1 or 2)
+ * @access  Private
+ */
+router.post("/proposals/:id/execute", authenticate, async (req, res) => {
+  try {
+    const proposal = await Proposal.findById(req.params.id);
+    if (!proposal) return res.status(404).json({ error: "Proposal not found" });
+
+    const roleLevel = req.user.getRoleInOrg(proposal.organization);
+    if (!req.user.isSuperAdmin && (roleLevel === null || roleLevel > 2)) {
+      return res.status(403).json({ error: "Only admins can execute proposals" });
+    }
+
+    if (proposal.status === "executed") {
+      return res.status(400).json({ error: "Proposal has already been executed" });
+    }
+
+    // Tally votes
+    const votes = await DaoVote.find({ proposal: proposal._id });
+    let yesVotes = 0;
+    let noVotes = 0;
+    votes.forEach(v => {
+      if (v.support) yesVotes++;
+      else noVotes++;
+    });
+
+    if (yesVotes <= noVotes) {
+      proposal.status = "rejected";
+      await proposal.save();
+      return res.status(400).json({ error: "Proposal did not pass (insufficient votes)", proposal });
+    }
+
+    proposal.status = "executed";
+    await proposal.save();
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(`org:${proposal.organization}`).emit("dao_vote_updated", {
+        proposalId: proposal._id,
+        status: "executed",
+        orgId: proposal.organization
+      });
+    }
+
+    res.json({ message: "Proposal executed successfully", proposal });
+  } catch (err) {
+    console.error("Execute proposal error:", err);
     res.status(500).json({ error: "Server error" });
   }
 });

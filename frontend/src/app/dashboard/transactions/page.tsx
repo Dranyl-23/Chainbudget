@@ -148,12 +148,20 @@ export default function TransactionsPage() {
     }
     return [];
   });
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return !sessionStorage.getItem("cb_cache_transactions");
+  });
   const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [filters, setFilters] = useState({ search: "", type: "", status: "" });
+  const [filters, setFilters] = useState<{ search: string; type: string; status: string; range: string }>({
+    search: "",
+    type: "",
+    status: "",
+    range: "all",
+  });
   const [activeTab, setActiveTab] = useState<"expense" | "income">("expense");
   const [selectedExplorerHash, setSelectedExplorerHash] = useState<string | null>(null);
   const [expandedTxId, setExpandedTxId] = useState<string | null>(null);
@@ -212,7 +220,13 @@ export default function TransactionsPage() {
     const fetchTransactions = async () => {
       try {
         const [txRes, budgetRes] = await Promise.all([
-          api.get<TransactionsResponse>("/transactions", { params: { orgId, limit: 100 } }),
+          api.get<TransactionsResponse>("/transactions", {
+            params: {
+              orgId,
+              limit: 100,
+              range: filters.range !== "all" ? filters.range : undefined,
+            },
+          }),
           api.get<BudgetItem[]>("/budget", { params: { orgId } }),
         ]);
 
@@ -239,7 +253,7 @@ export default function TransactionsPage() {
     return () => {
       isCancelled = true;
     };
-  }, [activeOrgId]);
+  }, [activeOrgId, filters.range]);
 
   // ── Derived Filtered Transactions (Pure useMemo Computation) ──────────────
   const filteredTxs = useMemo(() => {
@@ -257,6 +271,16 @@ export default function TransactionsPage() {
     }
     if (filters.status) {
       result = result.filter((tx) => tx.status === filters.status);
+    }
+    if (filters.range && filters.range !== "all") {
+      const now = new Date();
+      let since = new Date();
+      if (filters.range === "24h") since.setDate(now.getDate() - 1);
+      else if (filters.range === "7d") since.setDate(now.getDate() - 7);
+      else if (filters.range === "30d") since.setDate(now.getDate() - 30);
+      else if (filters.range === "90d") since.setDate(now.getDate() - 90);
+      else if (filters.range === "1year") since.setFullYear(now.getFullYear() - 1);
+      result = result.filter((tx) => new Date(tx.createdAt) >= since);
     }
     return result;
   }, [transactions, filters]);
@@ -841,7 +865,7 @@ export default function TransactionsPage() {
                                 <div className="flex flex-col items-center w-32 shrink-0">
                                   <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white shadow-md transition-all duration-300 ${
                                     step.done 
-                                      ? `${step.color} scale-100 shadow-[0_0_15px_rgba(var(--${step.color.replace("bg-", "")}),0.4)]` 
+                                      ? `${step.color} scale-100 shadow-[0_0_15px_rgba(139,92,246,0.4)]` 
                                       : "bg-white/10 border border-white/20 scale-90"
                                   }`}>
                                     {step.done ? step.icon : <span className="w-2 h-2 bg-white/20 rounded-full" />}

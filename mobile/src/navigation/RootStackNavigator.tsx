@@ -29,8 +29,9 @@ import CreateOrganizationScreen from '../screens/CreateOrganizationScreen';
 import ChatInboxScreen from '../screens/ChatInboxScreen';
 import OrgChatScreen from '../screens/OrgChatScreen';
 import OrgChatInfoScreen from '../screens/OrgChatInfoScreen';
+import { RootStackParamList } from '../types';
 
-const Stack = createNativeStackNavigator();
+const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function RootStackNavigator() {
   const { colors } = useTheme();

@@ -30,12 +30,17 @@ interface ApiErrorResponse {
   };
 }
 
-function formatOrgLogo(url?: string) {
-  if (!url) return null;
-  if (url.startsWith("data:")) return url;
-  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+function formatOrgLogo(url?: string | null): string | null {
+  if (!url || typeof url !== "string") return null;
+  const trimmed = url.trim();
+  if (!trimmed || trimmed === "null" || trimmed === "undefined") return null;
+  if (trimmed.startsWith("data:") || trimmed.startsWith("blob:")) return trimmed;
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) return trimmed;
+  if (trimmed.startsWith("ipfs://")) {
+    return trimmed.replace("ipfs://", "https://gateway.pinata.cloud/ipfs/");
+  }
   const backendBase = process.env.NEXT_PUBLIC_API_URL?.replace("/api", "") || "https://chainbudget-api.fly.dev";
-  return `${backendBase}${url.startsWith("/") ? "" : "/"}${url}`;
+  return `${backendBase}${trimmed.startsWith("/") ? "" : "/"}${trimmed}`;
 }
 
 function OrgLogoIcon({ 
@@ -64,12 +69,11 @@ function OrgLogoIcon({
   }
 
   return (
-    <Image 
+    // eslint-disable-next-line @next/next/no-img-element
+    <img 
       src={formatted} 
       alt={name || "Org Emblem"} 
-      width={size}
-      height={size}
-      unoptimized
+      style={{ width: size, height: size }}
       className={`rounded-lg object-cover bg-white/5 border border-purple-500/30 shrink-0 ${className}`}
       onError={() => setHasError(true)}
     />

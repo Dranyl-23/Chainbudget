@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React from "react";
 import { Search } from "lucide-react";
@@ -7,6 +7,7 @@ export interface TransactionFilterState {
   search: string;
   type: string;
   status: string;
+  range: string;
 }
 
 interface TransactionFilterBarProps {
@@ -30,7 +31,7 @@ export default function TransactionFilterBar({
           onChange={(e) => onFilterChange({ ...filters, search: e.target.value })}
         />
       </div>
-      <div className="grid grid-cols-2 gap-3 w-full md:w-auto">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full md:w-auto">
         <select
           className="input w-full"
           value={filters.type}
@@ -50,6 +51,18 @@ export default function TransactionFilterBar({
           <option value="pending_approval">Pending</option>
           <option value="requested">Requested</option>
           <option value="rejected">Rejected</option>
+        </select>
+        <select
+          className="input w-full"
+          value={filters.range || "all"}
+          onChange={(e) => onFilterChange({ ...filters, range: e.target.value })}
+        >
+          <option value="all">All Time</option>
+          <option value="24h">Past 24 Hours</option>
+          <option value="7d">Past 7 Days</option>
+          <option value="30d">Past 30 Days</option>
+          <option value="90d">Past 90 Days</option>
+          <option value="1year">Past Year</option>
         </select>
       </div>
     </div>

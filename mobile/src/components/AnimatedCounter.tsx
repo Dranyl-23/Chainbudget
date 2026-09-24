@@ -44,7 +44,7 @@ export default function AnimatedCounter({
       const now = Date.now();
       const progress = Math.min((now - startTime) / duration, 1);
       
-      // Ease out cubic
+      // Ease out cubic - smoothly decelerates the animation towards the end
       const easeOut = 1 - Math.pow(1 - progress, 3);
       const current = Math.round(startValue + (endValue - startValue) * easeOut);
       

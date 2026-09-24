@@ -99,12 +99,14 @@ export default function NotificationsScreen() {
   };
 
   const markAllAsRead = async () => {
+    const previous = notifications;
+    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
     try {
       await api.post(`/notifications/read-all`, { orgId: selectedOrgFilter });
-      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
       showToast('All notifications marked as read', 'info');
     } catch (err) {
       console.error('Failed to mark all as read:', err);
+      setNotifications(previous);
       showToast('Failed to mark all as read', 'error');
     }
   };

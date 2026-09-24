@@ -28,6 +28,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { useOrg } from '../context/OrgContext';
@@ -36,6 +37,80 @@ import { useTheme } from '../context/ThemeContext';
 import { triggerLightHaptic, triggerSuccessHaptic } from '../lib/biometrics';
 
 const REACTION_EMOJIS = ['👍', '❤️', '🥰', '😆', '👎', '😡'];
+const CHAT_CACHE_KEY_PREFIX = 'cb_chat_cache_';
+
+interface MobileChatCacheData {
+  messages: ChatMessageItem[];
+  pinned?: ChatMessageItem | null;
+  logo?: string;
+  cachedAt?: number;
+}
+
+async function getMobileLocalChatCache(orgId: string): Promise<MobileChatCacheData | null> {
+  try {
+    const raw = await AsyncStorage.getItem(`${CHAT_CACHE_KEY_PREFIX}${orgId}`);
+    return raw ? (JSON.parse(raw) as MobileChatCacheData) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function setMobileLocalChatCache(
+  orgId: string,
+  data: { messages: ChatMessageItem[]; pinned?: ChatMessageItem | null; logo?: string }
+) {
+  try {
+    const payload: MobileChatCacheData = {
+      ...data,
+      messages: (data.messages || []).slice(-100),
+      cachedAt: Date.now(),
+    };
+    await AsyncStorage.setItem(`${CHAT_CACHE_KEY_PREFIX}${orgId}`, JSON.stringify(payload));
+  } catch {
+    // non-blocking
+  }
+}
+
+const CHAT_OUTBOX_KEY_PREFIX = 'cb_chat_outbox_';
+
+interface MobileOutboxItem {
+  clientMessageId: string;
+  orgId: string;
+  content: string;
+  messageType?: string;
+  replyToId?: string;
+  createdAt: string;
+}
+
+async function getMobileLocalOutbox(orgId: string): Promise<MobileOutboxItem[]> {
+  try {
+    const raw = await AsyncStorage.getItem(`${CHAT_OUTBOX_KEY_PREFIX}${orgId}`);
+    return raw ? (JSON.parse(raw) as MobileOutboxItem[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+async function saveMobileLocalOutbox(orgId: string, items: MobileOutboxItem[]) {
+  try {
+    await AsyncStorage.setItem(`${CHAT_OUTBOX_KEY_PREFIX}${orgId}`, JSON.stringify(items));
+  } catch {}
+}
+
+async function addToMobileLocalOutbox(orgId: string, item: MobileOutboxItem) {
+  const current = await getMobileLocalOutbox(orgId);
+  if (!current.some((i) => i.clientMessageId === item.clientMessageId)) {
+    await saveMobileLocalOutbox(orgId, [...current, item]);
+  }
+}
+
+async function removeFromMobileLocalOutbox(orgId: string, clientMessageId: string) {
+  const current = await getMobileLocalOutbox(orgId);
+  await saveMobileLocalOutbox(
+    orgId,
+    current.filter((i) => i.clientMessageId !== clientMessageId)
+  );
+}
 
 interface UserRef {
   _id: string;
@@ -47,6 +122,9 @@ interface ReactionGroup {
   emoji: string;
   users: UserRef[];
 }
+
+/** Client-side only. 'sending' and 'failed' are never stored on the server. */
+type MessageStatus = 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
 
 interface ChatMessageItem {
   _id: string;
@@ -70,6 +148,7 @@ interface ChatMessageItem {
   pinnedAt?: string;
   reactions?: ReactionGroup[];
   seenBy?: UserRef[];
+  deliveredTo?: UserRef[];
   replyTo?: {
     _id: string;
     content: string;
@@ -82,6 +161,50 @@ interface ChatMessageItem {
     };
   };
   createdAt: string;
+  /** Client-side delivery state — not persisted to DB */
+  status?: MessageStatus;
+  /** Client-generated idempotency key to prevent duplicates */
+  clientMessageId?: string;
+  /** Original text preserved for retry on failed messages */
+  _localContent?: string;
+}
+
+/**
+ * Always-visible message status tick — shown on the sender's own messages.
+ * Sending: grey clock | Sent: grey single-tick | Delivered: grey double-tick
+ * Read: cyan double-tick | Failed: red ×-circle
+ */
+function MessageStatusTick({
+  status,
+  colors,
+}: {
+  status: MessageStatus;
+  colors: any;
+}) {
+  if (status === 'sending') {
+    return (
+      <Ionicons name="time-outline" size={11} color={colors.textMuted} />
+    );
+  }
+  if (status === 'failed') {
+    return (
+      <Ionicons name="alert-circle" size={12} color="#EF4444" />
+    );
+  }
+  if (status === 'read') {
+    return (
+      <Ionicons name="checkmark-done" size={12} color="#22D3EE" />
+    );
+  }
+  if (status === 'delivered') {
+    return (
+      <Ionicons name="checkmark-done" size={12} color={colors.textMuted} />
+    );
+  }
+  // 'sent'
+  return (
+    <Ionicons name="checkmark" size={12} color={colors.textMuted} />
+  );
 }
 
 function getRoleBadge(roleLevel: number, roleLabel?: string, isDark: boolean = true) {
@@ -425,46 +548,174 @@ export default function OrgChatScreen() {
     }
   }, [targetOrgId]);
 
-  // Fetch initial chat messages, pinned announcements, and organization details
+  const [hasMoreOlder, setHasMoreOlder] = useState(true);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+
+  // Cursor-based backward pagination (older messages upwards)
+  const handleLoadOlderMessages = useCallback(async () => {
+    if (!targetOrgId || loadingOlder || !hasMoreOlder || messages.length === 0) return;
+
+    const oldest = messages[0];
+    if (!oldest?.createdAt) return;
+
+    setLoadingOlder(true);
+    try {
+      const res = await api.get<{ messages: ChatMessageItem[]; hasMore?: boolean }>(
+        `/chat/${targetOrgId}/messages?before=${encodeURIComponent(oldest.createdAt)}&limit=30`
+      );
+
+      const olderMessages = res.data?.messages || [];
+      if (olderMessages.length === 0) {
+        setHasMoreOlder(false);
+      } else {
+        setHasMoreOlder(res.data?.hasMore ?? olderMessages.length === 30);
+        setMessages((prev) => {
+          const map = new Map<string, ChatMessageItem>();
+          for (const m of olderMessages) {
+            map.set(m._id, m);
+          }
+          for (const m of prev) {
+            map.set(m._id, m);
+          }
+          const merged = Array.from(map.values()).sort(
+            (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+          );
+          void setMobileLocalChatCache(targetOrgId, {
+            messages: merged,
+            pinned: pinnedMessage,
+            logo: orgLogoUrl,
+          });
+          return merged;
+        });
+      }
+    } catch (err) {
+      console.warn('[OrgChat] Failed to load older messages:', err);
+    } finally {
+      setLoadingOlder(false);
+    }
+  }, [targetOrgId, loadingOlder, hasMoreOlder, messages, pinnedMessage, orgLogoUrl]);
+
+  // Flush local Outbox (automatically sends pending offline messages upon reconnect)
+  const flushMobileOutbox = useCallback(async () => {
+    if (!targetOrgId || isSending) return;
+    const pending = await getMobileLocalOutbox(targetOrgId);
+    if (pending.length === 0) return;
+
+    for (const item of pending) {
+      try {
+        const res = await api.post(`/chat/${targetOrgId}/messages`, {
+          content: item.content,
+          messageType: item.messageType || 'text',
+          replyTo: item.replyToId || undefined,
+          clientMessageId: item.clientMessageId,
+        });
+
+        await removeFromMobileLocalOutbox(targetOrgId, item.clientMessageId);
+
+        if (res.data?.message) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.clientMessageId === item.clientMessageId || m._id === item.clientMessageId
+                ? { ...res.data.message, status: 'sent' as MessageStatus, _localContent: item.content }
+                : m
+            )
+          );
+        }
+      } catch {
+        break; // Stop and retry later if network still unavailable
+      }
+    }
+  }, [targetOrgId, isSending]);
+
+  // Fetch initial chat messages, pinned announcements, and organization details in 1 fast roundtrip
   const loadChatHistory = useCallback(async () => {
     if (!targetOrgId) return;
     try {
-      const [msgRes, pinRes, orgRes, onlineRes] = await Promise.all([
-        api.get(`/chat/${targetOrgId}/messages?limit=50`),
-        api.get(`/chat/${targetOrgId}/pinned`),
-        api.get(`/organizations/${targetOrgId}`).catch(() => null),
-        api.get(`/chat/${targetOrgId}/online`).catch(() => null),
-      ]);
+      const res = await api.get(`/chat/${targetOrgId}/bootstrap?limit=50`);
+      const {
+        messages: msgs = [],
+        pinned = [],
+        organization: orgData,
+        onlineUserIds: onlineIds = [],
+        hasMore,
+      } = res.data || {};
 
-      const history: ChatMessageItem[] = msgRes.data?.messages || [];
-      setMessages(history);
+      setMessages((prev) => {
+        const optimistic = prev.filter((m) => m._id.startsWith('temp-'));
+        const map = new Map<string, ChatMessageItem>();
+        for (const m of msgs) {
+          map.set(m._id, m);
+        }
+        for (const opt of optimistic) {
+          if (!map.has(opt._id)) {
+            map.set(opt._id, opt);
+          }
+        }
+        const merged = Array.from(map.values()).sort(
+          (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        );
+        void setMobileLocalChatCache(targetOrgId, {
+          messages: merged,
+          pinned: pinned[0] || null,
+          logo: orgData?.logoUrl || orgData?.logo || orgLogoUrl,
+        });
+        return merged;
+      });
 
-      const pinnedList: ChatMessageItem[] = pinRes.data?.pinned || [];
-      if (pinnedList.length > 0) {
-        setPinnedMessage(pinnedList[0]);
+      if (typeof hasMore === 'boolean') {
+        setHasMoreOlder(hasMore);
+      }
+
+      if (pinned.length > 0) {
+        setPinnedMessage(pinned[0]);
+        setShowPinnedBanner(true);
       } else {
         setPinnedMessage(null);
       }
 
-      if (orgRes?.data?.logoUrl || orgRes?.data?.logo) {
-        setOrgLogoUrl(orgRes.data.logoUrl || orgRes.data.logo);
+      if (orgData?.logoUrl || orgData?.logo) {
+        setOrgLogoUrl(orgData.logoUrl || orgData.logo);
       }
 
-      if (onlineRes?.data?.onlineUserIds) {
-        setOnlineUserIds(onlineRes.data.onlineUserIds);
+      if (Array.isArray(onlineIds)) {
+        setOnlineUserIds(onlineIds);
       }
 
       void markMessagesAsSeen();
     } catch (err) {
-      console.warn('[OrgChat] Failed to load messages:', err);
+      console.warn('[OrgChat] Failed to bootstrap chat messages:', err);
     } finally {
       setLoadingInitial(false);
     }
-  }, [targetOrgId, markMessagesAsSeen]);
+  }, [targetOrgId, markMessagesAsSeen, orgLogoUrl]);
 
   useEffect(() => {
+    let isCancelled = false;
+
+    // 1. Instant AsyncStorage Cache Hydration (0ms display!)
+    if (targetOrgId) {
+      getMobileLocalChatCache(targetOrgId).then((cached) => {
+        if (!isCancelled && cached && cached.messages && cached.messages.length > 0) {
+          setMessages(cached.messages);
+          if (cached.pinned) {
+            setPinnedMessage(cached.pinned);
+            setShowPinnedBanner(true);
+          }
+          if (cached.logo) {
+            setOrgLogoUrl(cached.logo);
+          }
+          setLoadingInitial(false);
+        }
+      });
+    }
+
+    // 2. Background Revalidation
     loadChatHistory();
-  }, [loadChatHistory]);
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [loadChatHistory, targetOrgId]);
 
   // Refresh organization logo whenever screen is focused (e.g. returning from Chat Info)
   useFocusEffect(
@@ -487,20 +738,25 @@ export default function OrgChatScreen() {
           }
         })
         .catch(() => {});
-    }, [targetOrgId])
+
+      void flushMobileOutbox();
+    }, [targetOrgId, flushMobileOutbox])
   );
 
   // Explicitly join and leave the organization chat room on connection / focus
   useEffect(() => {
     if (targetOrgId) {
       emit('join_org', targetOrgId);
+      if (isConnected) {
+        void flushMobileOutbox();
+      }
     }
     return () => {
       if (targetOrgId) {
         emit('leave_org', targetOrgId);
       }
     };
-  }, [targetOrgId, emit, isConnected]);
+  }, [targetOrgId, emit, isConnected, flushMobileOutbox]);
 
   // Live background polling sync (every 3s) ensuring messages arrive even if WebSocket drops or reconnects
   useEffect(() => {
@@ -520,9 +776,10 @@ export default function OrgChatScreen() {
                   // Replace matching temporary optimistic message if any
                   const tempIdx = merged.findIndex(
                     (m) =>
-                      m._id.startsWith('temp-') &&
-                      m.content === fresh.content &&
-                      m.sender?._id === fresh.sender?._id
+                      (fresh.clientMessageId && (m.clientMessageId === fresh.clientMessageId || m._id === fresh.clientMessageId)) ||
+                      (m._id.startsWith('temp-') &&
+                        m.content === fresh.content &&
+                        m.sender?._id === fresh.sender?._id)
                   );
                   if (tempIdx !== -1) {
                     merged[tempIdx] = fresh;
@@ -549,20 +806,50 @@ export default function OrgChatScreen() {
         setMessages((prev) => {
           const tempMsg = prev.find(
             (m) =>
-              m._id.startsWith('temp-') &&
-              m.content === data.message.content &&
-              m.sender?._id === data.message.sender?._id
+              (data.message.clientMessageId &&
+                (m.clientMessageId === data.message.clientMessageId || m._id === data.message.clientMessageId)) ||
+              (m._id.startsWith('temp-') &&
+                m.content === data.message.content &&
+                m.sender?._id === data.message.sender?._id)
           );
           if (tempMsg) {
-            return prev.map((m) => (m._id === tempMsg._id ? data.message : m));
+            return prev.map((m) =>
+              m._id === tempMsg._id
+                ? { ...data.message, status: 'sent', _localContent: data.message.content }
+                : m
+            );
           }
           if (prev.some((m) => m._id === data.message._id)) return prev;
           return [...prev, data.message];
         });
         triggerLightHaptic();
         void markMessagesAsSeen();
+
+        // Auto-acknowledge delivery for messages from OTHER users (fire-and-forget)
+        if (data.message.sender?._id !== currentUserId) {
+          api
+            .post(`/chat/${targetOrgId}/messages/${data.message._id}/delivered`)
+            .catch(() => {});
+        }
       }
     });
+
+    // Upgrade sender's tick from 'sent' → 'delivered' when recipient acknowledges receipt
+    const unsubDelivered = on(
+      'org_message_delivered',
+      (data: { orgId: string; messageId: string; user: UserRef }) => {
+        if (data.orgId === targetOrgId && data.user._id !== currentUserId) {
+          setMessages((prev) =>
+            prev.map((m) => {
+              if (m._id !== data.messageId) return m;
+              const alreadyDelivered = m.deliveredTo?.some((u) => u._id === data.user._id);
+              if (alreadyDelivered) return m;
+              return { ...m, deliveredTo: [...(m.deliveredTo || []), data.user] };
+            })
+          );
+        }
+      }
+    );
 
     const unsubReaction = on('org_message_reacted', (data: { orgId: string; messageId: string; reactions: ReactionGroup[] }) => {
       if (data.orgId === targetOrgId) {
@@ -621,6 +908,7 @@ export default function OrgChatScreen() {
 
     return () => {
       unsubNewMsg();
+      unsubDelivered();
       unsubReaction();
       unsubSeen();
       unsubOnline();
@@ -723,6 +1011,23 @@ export default function OrgChatScreen() {
     }
   };
 
+  /**
+   * Derives the display status of a sent message from its current data.
+   * 'sending'/'failed' are client-side only (temp- messages).
+   * 'read' > 'delivered' > 'sent' once the message is on the server.
+   */
+  const deriveStatus = (msg: ChatMessageItem): MessageStatus => {
+    if (msg.status === 'sending') return 'sending';
+    if (msg.status === 'failed') return 'failed';
+    const otherSeen = (msg.seenBy || []).some((u) => u._id !== currentUserId);
+    if (otherSeen) return 'read';
+    const otherDelivered = (msg.deliveredTo || []).some(
+      (u: any) => (u?._id || u) !== currentUserId
+    );
+    if (otherDelivered) return 'delivered';
+    return 'sent';
+  };
+
   // 3. Instant Optimistic Send message handler (0ms UI latency)
   const handleSendMessage = async () => {
     const trimmed = inputText.trim();
@@ -731,7 +1036,8 @@ export default function OrgChatScreen() {
     const currentReply = replyingToMessage;
     setReplyingToMessage(null);
 
-    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const clientMessageId = `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    const tempId = clientMessageId;
     const roleLevel = userRoleLevel;
     const roleLabel =
       currentMembership?.roleLabel ||
@@ -739,6 +1045,7 @@ export default function OrgChatScreen() {
 
     const optimisticMessage: ChatMessageItem = {
       _id: tempId,
+      clientMessageId,
       organization: targetOrgId,
       sender: {
         _id: currentUserId || 'me',
@@ -760,6 +1067,7 @@ export default function OrgChatScreen() {
           avatarUrl: user?.avatarUrl,
         },
       ],
+      deliveredTo: [],
       replyTo: currentReply
         ? {
             _id: currentReply._id,
@@ -770,6 +1078,8 @@ export default function OrgChatScreen() {
           }
         : undefined,
       createdAt: new Date().toISOString(),
+      status: 'sending',
+      _localContent: trimmed,
     };
 
     // 1. Instantly display in UI (0ms latency!)
@@ -778,29 +1088,94 @@ export default function OrgChatScreen() {
     setIsSending(true);
     await triggerLightHaptic();
 
+    // 2. Persist in local Outbox queue for offline resilience
+    void addToMobileLocalOutbox(targetOrgId, {
+      clientMessageId,
+      orgId: targetOrgId,
+      content: trimmed,
+      messageType: 'text',
+      replyToId: currentReply?._id,
+      createdAt: new Date().toISOString(),
+    });
+
     try {
       const res = await api.post(`/chat/${targetOrgId}/messages`, {
         content: trimmed,
         messageType: 'text',
         replyTo: currentReply?._id || undefined,
+        clientMessageId,
       });
+
+      void removeFromMobileLocalOutbox(targetOrgId, clientMessageId);
 
       const sentMsg: ChatMessageItem = res.data?.message;
       if (sentMsg) {
         setMessages((prev) =>
-          prev.map((m) => (m._id === tempId ? sentMsg : m))
+          prev.map((m) =>
+            m._id === tempId || m.clientMessageId === clientMessageId
+              ? { ...sentMsg, status: 'sent', _localContent: trimmed }
+              : m
+          )
         );
       }
     } catch (err: any) {
       console.warn('[chat:send error]', err?.response?.data || err.message);
-      Alert.alert('Error', err.response?.data?.error || 'Failed to send message.');
-      setMessages((prev) => prev.filter((m) => m._id !== tempId));
-      setInputText(trimmed);
+      // Keep the message bubble visible with 'failed' status and in Outbox for retry
+      setMessages((prev) =>
+        prev.map((m) =>
+          m._id === tempId ? { ...m, status: 'failed' } : m
+        )
+      );
       if (currentReply) {
         setReplyingToMessage(currentReply);
       }
     } finally {
       setIsSending(false);
+    }
+  };
+
+  // 3b. Retry a failed message — re-sends using preserved _localContent and idempotent key
+  const handleRetryMessage = async (failedMsg: ChatMessageItem) => {
+    if (!failedMsg._localContent) return;
+    await triggerLightHaptic();
+
+    const trimmed = failedMsg._localContent;
+    const clientMessageId = failedMsg.clientMessageId || failedMsg._id;
+
+    // Set status back to 'sending'
+    setMessages((prev) =>
+      prev.map((m) =>
+        m._id === failedMsg._id ? { ...m, status: 'sending' } : m
+      )
+    );
+
+    try {
+      const res = await api.post(`/chat/${targetOrgId}/messages`, {
+        content: trimmed,
+        messageType: failedMsg.messageType || 'text',
+        replyTo: failedMsg.replyTo?._id || undefined,
+        clientMessageId,
+      });
+
+      void removeFromMobileLocalOutbox(targetOrgId, clientMessageId);
+
+      const sentMsg: ChatMessageItem = res.data?.message;
+      if (sentMsg) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m._id === failedMsg._id || m.clientMessageId === clientMessageId
+              ? { ...sentMsg, status: 'sent', _localContent: trimmed }
+              : m
+          )
+        );
+      }
+    } catch (err: any) {
+      console.warn('[chat:retry error]', err?.response?.data || err.message);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m._id === failedMsg._id ? { ...m, status: 'failed' } : m
+        )
+      );
     }
   };
 
@@ -933,8 +1308,8 @@ export default function OrgChatScreen() {
                 borderBottomRightRadius: 4,
                 paddingHorizontal: 14,
                 paddingVertical: 9,
-                borderWidth: highlightedMessageId === item._id ? 2 : 0,
-                borderColor: '#FDE047',
+                borderWidth: highlightedMessageId === item._id ? 2 : item.status === 'failed' ? 1.5 : 0,
+                borderColor: highlightedMessageId === item._id ? '#FDE047' : '#EF4444',
                 shadowColor: '#9333EA',
                 shadowOffset: { width: 0, height: 2 },
                 shadowOpacity: 0.2,
@@ -951,19 +1326,32 @@ export default function OrgChatScreen() {
               <Text style={{ color: '#FFFFFF', fontSize: 14, lineHeight: 20 }}>{item.content}</Text>
             </TouchableOpacity>
 
-            {/* ── TAP-TO-SHOW TIMESTAMP & STATUS (Messenger Style) ── */}
-            {isTimestampVisible && (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3, paddingRight: 2 }}>
-                <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '500' }}>
-                  {formatChatTime(item.createdAt)}
-                </Text>
-                <Ionicons
-                  name={otherSeenUsers.length > 0 ? "checkmark-done" : "checkmark"}
-                  size={12}
-                  color={otherSeenUsers.length > 0 ? "#22D3EE" : colors.textMuted}
-                />
-              </View>
-            )}
+            {/* ── ALWAYS-VISIBLE STATUS ROW: time + tick + retry ── */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3, paddingRight: 2 }}>
+              <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '500' }}>
+                {formatChatTime(item.createdAt)}
+              </Text>
+              <MessageStatusTick status={deriveStatus(item)} colors={colors} />
+              {deriveStatus(item) === 'failed' && (
+                <TouchableOpacity
+                  onPress={() => handleRetryMessage(item)}
+                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 3,
+                    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                    borderRadius: 8,
+                    paddingHorizontal: 6,
+                    paddingVertical: 2,
+                    marginLeft: 2,
+                  }}
+                >
+                  <Ionicons name="refresh" size={10} color="#EF4444" />
+                  <Text style={{ color: '#EF4444', fontSize: 10, fontWeight: '700' }}>Retry</Text>
+                </TouchableOpacity>
+              )}
+            </View>
 
             {/* ── REACTIONS PILLS UNDER BUBBLE ── */}
             {item.reactions && item.reactions.length > 0 && (
@@ -1450,6 +1838,20 @@ export default function OrgChatScreen() {
             keyboardDismissMode="on-drag"
             onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
             onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
+            ListHeaderComponent={
+              loadingOlder ? (
+                <View style={{ paddingVertical: 10, alignItems: 'center', justifyContent: 'center' }}>
+                  <ActivityIndicator size="small" color={colors.primary} />
+                </View>
+              ) : null
+            }
+            onScroll={(event) => {
+              const offsetY = event.nativeEvent.contentOffset.y;
+              if (offsetY <= 30 && hasMoreOlder && !loadingOlder && messages.length > 0) {
+                void handleLoadOlderMessages();
+              }
+            }}
+            scrollEventThrottle={32}
             ListEmptyComponent={
               <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 60, paddingHorizontal: 30 }}>
                 <View

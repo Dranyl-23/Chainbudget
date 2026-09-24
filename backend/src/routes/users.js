@@ -307,6 +307,36 @@ router.post("/:orgId/invite", authenticate, requireRole(1), async (req, res) => 
   }
 });
 
+/// PUT /api/users/:orgId/members/:userId/role — Update member role (Level 1 only)
+router.put(
+  "/:orgId/members/:userId/role",
+  authenticate,
+  requireRole(1),
+  async (req, res) => {
+    try {
+      const { roleLevel, roleLabel } = req.body;
+      if (!roleLevel) return res.status(400).json({ error: "roleLevel required" });
+
+      const user = await User.findById(req.params.userId);
+      if (!user) return res.status(404).json({ error: "User not found" });
+
+      const membership = user.memberships.find(
+        (m) => m.organization.toString() === req.params.orgId
+      );
+      if (!membership) return res.status(404).json({ error: "Membership not found" });
+
+      membership.roleLevel = Number(roleLevel);
+      if (roleLabel) membership.roleLabel = roleLabel;
+      membership.isActive = true;
+      await user.save();
+
+      res.json({ message: "Member role updated", user });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+
 /// DELETE /api/users/:orgId/members/:userId — Remove member (Level 1 only)
 router.delete(
   "/:orgId/members/:userId",

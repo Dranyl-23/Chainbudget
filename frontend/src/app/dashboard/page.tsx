@@ -137,7 +137,11 @@ export default function DashboardPage() {
       pendingCount: 0,
     };
   });
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(() => {
+    // Show skeleton on first visit (no cache), skip it when cache hydrates instantly
+    if (typeof window === "undefined") return false;
+    return !sessionStorage.getItem("cb_cache_dash_stats");
+  });
   const [transparencyScore, setTransparencyScore] = useState<TransparencyScore>({ approved: 0, onChain: 0, percentage: 0 });
   const [budgetAlerts, setBudgetAlerts] = useState<BudgetAlert[]>([]);
 
@@ -154,15 +158,6 @@ export default function DashboardPage() {
 
     let isCancelled = false;
     const orgId = activeOrgId;
-
-    const generateMockCashFlow = (): CashFlowData[] => [
-      { month: "Jan", income: 4000, expense: 2400 },
-      { month: "Feb", income: 3000, expense: 1398 },
-      { month: "Mar", income: 2000, expense: 9800 },
-      { month: "Apr", income: 2780, expense: 3908 },
-      { month: "May", income: 1890, expense: 4800 },
-      { month: "Jun", income: 2390, expense: 3800 },
-    ];
 
     const fetchData = async () => {
       try {
@@ -232,12 +227,12 @@ export default function DashboardPage() {
             }
           } else {
             if (!isCancelled) {
-              setCashFlow(generateMockCashFlow());
+              setCashFlow([]);
             }
           }
         } catch {
           if (!isCancelled) {
-            setCashFlow(generateMockCashFlow());
+            setCashFlow([]);
           }
         }
 
@@ -265,7 +260,7 @@ export default function DashboardPage() {
       } catch (err: unknown) {
         console.error("Failed to fetch dashboard data:", err);
         if (!isCancelled) {
-          setCashFlow(generateMockCashFlow());
+          setCashFlow([]);
         }
       } finally {
         if (!isCancelled) {
@@ -429,40 +424,48 @@ export default function DashboardPage() {
           <h3 className="text-base font-bold text-white mb-6 flex items-center gap-2 drop-shadow-md">
             <BarChart2 className="w-5 h-5 text-cyan-400" /> Cash Flow
           </h3>
-          <div className="h-75 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={cashFlow} margin={{ top: 20, right: 0, left: 0, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorIncome" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#22D3EE" stopOpacity={1}/>
-                    <stop offset="100%" stopColor="#22D3EE" stopOpacity={0.2}/>
-                  </linearGradient>
-                  <linearGradient id="colorExpense" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#F43F5E" stopOpacity={1}/>
-                    <stop offset="100%" stopColor="#F43F5E" stopOpacity={0.2}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                <XAxis dataKey="month" stroke="rgba(255,255,255,0.4)" fontSize={12} tickLine={false} axisLine={false} dy={10} />
-                <YAxis stroke="rgba(255,255,255,0.4)" fontSize={12} tickLine={false} axisLine={false} width={48}
-                  tickFormatter={(val) => `₱${val / 1000}k`} />
-                <Tooltip
-                  cursor={{ fill: "rgba(255,255,255,0.05)" }}
-                  contentStyle={{ 
-                    background: "rgba(22, 11, 46, 0.9)", 
-                    backdropFilter: "blur(10px)",
-                    border: "1px solid rgba(139, 92, 246, 0.3)", 
-                    borderRadius: "12px", 
-                    color: "white",
-                    boxShadow: "0 0 30px rgba(139, 92, 246, 0.2)"
-                  }}
-                  itemStyle={{ fontWeight: "bold" }}
-                  formatter={(value: unknown) => `₱${Number(value || 0).toLocaleString()}`}
-                />
-                <Bar dataKey="income" fill="url(#colorIncome)" radius={[6, 6, 0, 0]} maxBarSize={40} name="Income" />
-                <Bar dataKey="expense" fill="url(#colorExpense)" radius={[6, 6, 0, 0]} maxBarSize={40} name="Expense" />
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="h-75 w-full flex items-center justify-center">
+            {cashFlow.length === 0 ? (
+              <div className="flex flex-col items-center justify-center text-center text-gray-500 py-12">
+                <BarChart2 className="w-10 h-10 mb-2 opacity-30 text-cyan-400" />
+                <p className="text-sm font-medium text-gray-400">No cash flow activity recorded yet</p>
+                <p className="text-xs text-gray-600 mt-1">Income and expenses will appear here once transactions are recorded.</p>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={cashFlow} margin={{ top: 20, right: 0, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorIncome" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#22D3EE" stopOpacity={1}/>
+                      <stop offset="100%" stopColor="#22D3EE" stopOpacity={0.2}/>
+                    </linearGradient>
+                    <linearGradient id="colorExpense" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#F43F5E" stopOpacity={1}/>
+                      <stop offset="100%" stopColor="#F43F5E" stopOpacity={0.2}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                  <XAxis dataKey="month" stroke="rgba(255,255,255,0.4)" fontSize={12} tickLine={false} axisLine={false} dy={10} />
+                  <YAxis stroke="rgba(255,255,255,0.4)" fontSize={12} tickLine={false} axisLine={false} width={48}
+                    tickFormatter={(val) => `₱${val / 1000}k`} />
+                  <Tooltip
+                    cursor={{ fill: "rgba(255,255,255,0.05)" }}
+                    contentStyle={{ 
+                      background: "rgba(22, 11, 46, 0.9)", 
+                      backdropFilter: "blur(10px)",
+                      border: "1px solid rgba(139, 92, 246, 0.3)", 
+                      borderRadius: "12px", 
+                      color: "white",
+                      boxShadow: "0 0 30px rgba(139, 92, 246, 0.2)"
+                    }}
+                    itemStyle={{ fontWeight: "bold" }}
+                    formatter={(value: unknown) => `₱${Number(value || 0).toLocaleString()}`}
+                  />
+                  <Bar dataKey="income" fill="url(#colorIncome)" radius={[6, 6, 0, 0]} maxBarSize={40} name="Income" />
+                  <Bar dataKey="expense" fill="url(#colorExpense)" radius={[6, 6, 0, 0]} maxBarSize={40} name="Expense" />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 

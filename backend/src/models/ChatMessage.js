@@ -59,10 +59,22 @@ const chatMessageSchema = new mongoose.Schema(
         ref: "User",
       },
     ],
+    deliveredTo: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
     replyTo: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "ChatMessage",
       default: null,
+    },
+    clientMessageId: {
+      type: String,
+      trim: true,
+      default: null,
+      index: true,
     },
   },
   {
@@ -73,5 +85,7 @@ const chatMessageSchema = new mongoose.Schema(
 // Compound index for fast chronological pagination by organization
 chatMessageSchema.index({ organization: 1, createdAt: -1 });
 chatMessageSchema.index({ organization: 1, isPinned: 1, pinnedAt: -1 });
+// Compound index for idempotency duplicate prevention
+chatMessageSchema.index({ organization: 1, clientMessageId: 1 }, { unique: true, sparse: true });
 
 module.exports = mongoose.model("ChatMessage", chatMessageSchema);

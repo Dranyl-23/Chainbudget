@@ -27,6 +27,9 @@ interface ReactionGroup {
   users: UserRef[];
 }
 
+/** Client-side only. 'sending' and 'failed' are never stored on the server. */
+type MessageStatus = "sending" | "sent" | "delivered" | "read" | "failed";
+
 interface ChatMessage {
   _id: string;
   organization: string;
@@ -49,6 +52,7 @@ interface ChatMessage {
   pinnedAt?: string;
   reactions?: ReactionGroup[];
   seenBy?: UserRef[];
+  deliveredTo?: UserRef[];
   replyTo?: {
     _id: string;
     content: string;
@@ -61,6 +65,34 @@ interface ChatMessage {
     };
   };
   createdAt: string;
+  /** Client-side delivery state — not persisted to DB */
+  status?: MessageStatus;
+  /** Client-generated idempotency key to prevent duplicates */
+  clientMessageId?: string;
+  /** Original text preserved for retry on failed messages */
+  _localContent?: string;
+}
+
+/**
+ * Always-visible message status indicator using Lucide icons.
+ * Sending: grey clock | Sent: grey single-check | Delivered: grey double-check
+ * Read: cyan double-check | Failed: red x-circle
+ */
+function MessageStatusIndicator({ status }: { status: MessageStatus }) {
+  if (status === "sending") {
+    return <RefreshCw className="w-3 h-3 text-zinc-500 animate-spin" />;
+  }
+  if (status === "failed") {
+    return <X className="w-3 h-3 text-red-400" />;
+  }
+  if (status === "read") {
+    return <CheckCheck className="w-3.5 h-3.5 text-cyan-300" />;
+  }
+  if (status === "delivered") {
+    return <CheckCheck className="w-3.5 h-3.5 text-zinc-400" />;
+  }
+  // "sent"
+  return <Check className="w-3 h-3 text-zinc-400" />;
 }
 
 function ChatAvatar({
@@ -190,6 +222,15 @@ interface OrgFullDetails {
   requiredApprovals?: number;
 }
 
+interface ChatBootstrapResponse {
+  organization?: OrgFullDetails;
+  messages: ChatMessage[];
+  pinned?: ChatMessage[];
+  onlineUserIds?: string[];
+  hasMore?: boolean;
+  serverTime?: string;
+}
+
 interface RawUserMember {
   _id: string;
   displayName?: string;
@@ -201,6 +242,78 @@ interface RawUserMember {
     roleLabel?: string;
     isActive?: boolean;
   }>;
+}
+
+interface LocalChatCacheData {
+  messages: ChatMessage[];
+  pinned?: ChatMessage[];
+  logoUrl?: string;
+  cachedAt?: number;
+}
+
+function getLocalChatCache(orgId: string): LocalChatCacheData | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(`cb_chat_cache_${orgId}`);
+    return raw ? (JSON.parse(raw) as LocalChatCacheData) : null;
+  } catch {
+    return null;
+  }
+}
+
+function setLocalChatCache(orgId: string, data: LocalChatCacheData) {
+  if (typeof window === "undefined") return;
+  try {
+    const payload: LocalChatCacheData = {
+      ...data,
+      messages: (data.messages || []).slice(-100),
+      cachedAt: Date.now(),
+    };
+    localStorage.setItem(`cb_chat_cache_${orgId}`, JSON.stringify(payload));
+  } catch {
+    // non-blocking
+  }
+}
+
+interface OutboxItem {
+  clientMessageId: string;
+  orgId: string;
+  content: string;
+  messageType?: "text" | "image" | "system";
+  replyToId?: string;
+  createdAt: string;
+}
+
+function getLocalOutbox(orgId: string): OutboxItem[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(`cb_chat_outbox_${orgId}`);
+    return raw ? (JSON.parse(raw) as OutboxItem[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalOutbox(orgId: string, items: OutboxItem[]) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(`cb_chat_outbox_${orgId}`, JSON.stringify(items));
+  } catch {}
+}
+
+function addToLocalOutbox(orgId: string, item: OutboxItem) {
+  const current = getLocalOutbox(orgId);
+  if (!current.some((i) => i.clientMessageId === item.clientMessageId)) {
+    saveLocalOutbox(orgId, [...current, item]);
+  }
+}
+
+function removeFromLocalOutbox(orgId: string, clientMessageId: string) {
+  const current = getLocalOutbox(orgId);
+  saveLocalOutbox(
+    orgId,
+    current.filter((i) => i.clientMessageId !== clientMessageId)
+  );
 }
 
 export default function OrgChatPage() {
@@ -244,11 +357,15 @@ export default function OrgChatPage() {
   };
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const socketRef = useRef<Socket | null>(null);
+
+  const [hasMoreOlder, setHasMoreOlder] = useState(true);
+  const [isLoadingOlder, setIsLoadingOlder] = useState(false);
 
   // Jump to specific message by ID and highlight it
   const jumpToMessage = useCallback((messageId: string) => {
@@ -422,66 +539,181 @@ export default function OrgChatPage() {
     }
   }, [activeOrgId]);
 
-  // 1. Fetch initial chat history, pinned messages, organization details, and online members
+  // Load older messages (cursor pagination going upwards)
+  const handleLoadOlderMessages = useCallback(async () => {
+    if (!activeOrgId || isLoadingOlder || !hasMoreOlder || messages.length === 0) return;
+
+    const oldest = messages[0];
+    if (!oldest?.createdAt) return;
+
+    setIsLoadingOlder(true);
+    const container = messagesContainerRef.current;
+    const prevScrollHeight = container ? container.scrollHeight : 0;
+    const prevScrollTop = container ? container.scrollTop : 0;
+
+    try {
+      const res = await api.get<{ messages: ChatMessage[]; hasMore?: boolean }>(
+        `/chat/${activeOrgId}/messages?before=${encodeURIComponent(oldest.createdAt)}&limit=30`
+      );
+
+      const olderMessages = res.data?.messages || [];
+      if (olderMessages.length === 0) {
+        setHasMoreOlder(false);
+      } else {
+        setHasMoreOlder(res.data?.hasMore ?? olderMessages.length === 30);
+        setMessages((prev) => {
+          const map = new Map<string, ChatMessage>();
+          for (const m of olderMessages) {
+            map.set(m._id, m);
+          }
+          for (const m of prev) {
+            map.set(m._id, m);
+          }
+          const merged = Array.from(map.values()).sort(
+            (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+          );
+          setLocalChatCache(activeOrgId, {
+            messages: merged,
+            pinned: pinnedMessages,
+            logoUrl: orgLogoUrl,
+          });
+          return merged;
+        });
+
+        // Maintain exact scroll position after prepending messages
+        requestAnimationFrame(() => {
+          if (container) {
+            const newScrollHeight = container.scrollHeight;
+            container.scrollTop = newScrollHeight - prevScrollHeight + prevScrollTop;
+          }
+        });
+      }
+    } catch (err) {
+      console.error("[Chat] Failed to load older messages:", err);
+    } finally {
+      setIsLoadingOlder(false);
+    }
+  }, [activeOrgId, isLoadingOlder, hasMoreOlder, messages, pinnedMessages, orgLogoUrl]);
+
+  // Detect reaching top of feed to load earlier messages
+  const handleMessagesScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    if (e.currentTarget.scrollTop <= 40 && hasMoreOlder && !isLoadingOlder) {
+      void handleLoadOlderMessages();
+    }
+  };
+
+  // 1. Fetch initial chat history, pinned messages, organization details, and online members in a single fast roundtrip
   const fetchChatData = useCallback(async (showLoadingSpinner = false) => {
     if (!activeOrgId) return;
     if (showLoadingSpinner) setIsLoading(true);
     try {
-      const [msgRes, pinRes, orgRes, onlineRes] = await Promise.all([
-        api.get<{ messages: ChatMessage[] }>(`/chat/${activeOrgId}/messages?limit=50`),
-        api.get<{ pinned: ChatMessage[] }>(`/chat/${activeOrgId}/pinned`),
-        api.get<OrgFullDetails>(`/organizations/${activeOrgId}`).catch(() => null),
-        api.get<{ onlineUserIds?: string[] }>(`/chat/${activeOrgId}/online`).catch(() => null),
-      ]);
+      const res = await api.get<ChatBootstrapResponse>(`/chat/${activeOrgId}/bootstrap?limit=50`);
+      const { messages: serverMsgs = [], pinned = [], organization: org, onlineUserIds: onlineIds = [], hasMore } = res.data || {};
 
-      setMessages(msgRes.data.messages || []);
-      setPinnedMessages(pinRes.data.pinned || []);
-      if (orgRes?.data?.logoUrl) {
-        setOrgLogoUrl(orgRes.data.logoUrl);
+      setMessages((prev) => {
+        const optimistic = prev.filter((m) => m._id.startsWith("temp-"));
+        const map = new Map<string, ChatMessage>();
+        for (const m of serverMsgs) {
+          map.set(m._id, m);
+        }
+        for (const opt of optimistic) {
+          if (!map.has(opt._id)) {
+            map.set(opt._id, opt);
+          }
+        }
+        const merged = Array.from(map.values()).sort(
+          (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        );
+        setLocalChatCache(activeOrgId, {
+          messages: merged,
+          pinned,
+          logoUrl: org?.logoUrl || orgLogoUrl,
+        });
+        return merged;
+      });
+
+      setPinnedMessages(pinned);
+      if (typeof hasMore === "boolean") setHasMoreOlder(hasMore);
+      if (org?.logoUrl) {
+        setOrgLogoUrl(org.logoUrl);
       }
-      if (onlineRes?.data?.onlineUserIds) {
-        setOnlineUserIds(onlineRes.data.onlineUserIds);
+      if (onlineIds) {
+        setOnlineUserIds(onlineIds);
       }
       setTimeout(() => scrollToBottom("auto"), 100);
       void markMessagesAsSeen();
     } catch (err: unknown) {
-      console.error("[Chat] Failed to load messages:", err);
+      console.error("[Chat] Failed to bootstrap chat data:", err);
       toast.error("Could not load organization chat history");
     } finally {
       setIsLoading(false);
     }
-  }, [activeOrgId, markMessagesAsSeen]);
+  }, [activeOrgId, markMessagesAsSeen, orgLogoUrl]);
 
   useEffect(() => {
     let isCancelled = false;
 
     if (activeOrgId) {
+      // 1. Instant Cache Hydration (0ms display!)
+      const cached = getLocalChatCache(activeOrgId);
+      if (cached && cached.messages && cached.messages.length > 0) {
+        setMessages(cached.messages);
+        if (cached.pinned) setPinnedMessages(cached.pinned);
+        if (cached.logoUrl) setOrgLogoUrl(cached.logoUrl);
+        setIsLoading(false);
+        setTimeout(() => scrollToBottom("auto"), 20);
+      } else {
+        setIsLoading(true);
+      }
+
+      // 2. Silent Background Revalidation via Unified Bootstrap
       void (async () => {
         try {
-          const [msgRes, pinRes, orgRes, onlineRes] = await Promise.all([
-            api.get<{ messages: ChatMessage[] }>(`/chat/${activeOrgId}/messages?limit=50`),
-            api.get<{ pinned: ChatMessage[] }>(`/chat/${activeOrgId}/pinned`),
-            api.get<OrgFullDetails>(`/organizations/${activeOrgId}`).catch(() => null),
-            api.get<{ onlineUserIds?: string[] }>(`/chat/${activeOrgId}/online`).catch(() => null),
-          ]);
+          const res = await api.get<ChatBootstrapResponse>(`/chat/${activeOrgId}/bootstrap?limit=50`);
+          if (!isCancelled && res.data) {
+            const { messages: serverMsgs = [], pinned = [], organization: org, onlineUserIds: onlineIds = [], hasMore } = res.data;
+            setMessages((prev) => {
+              const optimistic = prev.filter((m) => m._id.startsWith("temp-"));
+              const map = new Map<string, ChatMessage>();
+              for (const m of serverMsgs) {
+                map.set(m._id, m);
+              }
+              for (const opt of optimistic) {
+                if (!map.has(opt._id)) {
+                  map.set(opt._id, opt);
+                }
+              }
+              const merged = Array.from(map.values()).sort(
+                (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+              );
+              setLocalChatCache(activeOrgId, {
+                messages: merged,
+                pinned,
+                logoUrl: org?.logoUrl,
+              });
+              return merged;
+            });
 
-          if (!isCancelled) {
-            setMessages(msgRes.data.messages || []);
-            setPinnedMessages(pinRes.data.pinned || []);
-            if (orgRes?.data?.logoUrl) {
-              setOrgLogoUrl(orgRes.data.logoUrl);
+            setPinnedMessages(pinned);
+            if (typeof hasMore === "boolean") setHasMoreOlder(hasMore);
+            if (org?.logoUrl) {
+              setOrgLogoUrl(org.logoUrl);
             }
-            if (onlineRes?.data?.onlineUserIds) {
-              setOnlineUserIds(onlineRes.data.onlineUserIds);
+            if (onlineIds) {
+              setOnlineUserIds(onlineIds);
             }
             setIsLoading(false);
-            setTimeout(() => scrollToBottom("auto"), 100);
+            if (!cached || cached.messages.length === 0) {
+              setTimeout(() => scrollToBottom("auto"), 50);
+            }
             void markMessagesAsSeen();
           }
         } catch (err: unknown) {
-          console.error("[Chat] Failed to load messages:", err);
+          console.error("[Chat] Failed to bootstrap chat data:", err);
           if (!isCancelled) {
-            toast.error("Could not load organization chat history");
+            if (!cached) {
+              toast.error("Could not load organization chat history");
+            }
             setIsLoading(false);
           }
         }
@@ -493,14 +725,54 @@ export default function OrgChatPage() {
     };
   }, [activeOrgId, markMessagesAsSeen]);
 
+  // Flush local Outbox (automatically sends pending offline messages upon reconnect)
+  const flushOutbox = useCallback(async () => {
+    if (!activeOrgId) return;
+    const pending = getLocalOutbox(activeOrgId);
+    if (pending.length === 0) return;
+
+    for (const item of pending) {
+      try {
+        const res = await api.post<{ message: ChatMessage }>(`/chat/${activeOrgId}/messages`, {
+          content: item.content,
+          messageType: item.messageType || "text",
+          replyTo: item.replyToId || undefined,
+          clientMessageId: item.clientMessageId,
+        });
+
+        removeFromLocalOutbox(activeOrgId, item.clientMessageId);
+
+        if (res.data?.message) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.clientMessageId === item.clientMessageId || m._id === item.clientMessageId
+                ? { ...res.data.message, status: "sent", _localContent: item.content }
+                : m
+            )
+          );
+        }
+      } catch {
+        break; // Stop and retry later if network still unavailable
+      }
+    }
+  }, [activeOrgId]);
+
   // 2. Connect to Socket.IO for real-time chat updates
   useEffect(() => {
     if (!activeOrgId) return;
 
-    const token = typeof window !== "undefined" ? (localStorage.getItem("cb_token") || localStorage.getItem("token")) : null;
+    const rawToken = typeof window !== "undefined" ? (localStorage.getItem("cb_token") || localStorage.getItem("token")) : null;
+    const token = (rawToken && rawToken !== "undefined" && rawToken !== "null") ? rawToken : undefined;
+
     const socket = io(BACKEND_URL, {
       auth: { token },
+      withCredentials: true,
       transports: ["websocket", "polling"],
+      reconnection: true,
+      reconnectionAttempts: 15,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      randomizationFactor: 0.5,
     });
     socketRef.current = socket;
 
@@ -508,7 +780,20 @@ export default function OrgChatPage() {
       setIsSocketConnected(true);
       socket.emit("join_org", activeOrgId);
       socket.emit("get_org_online", activeOrgId);
+      void flushOutbox();
     });
+
+    socket.on("reconnect", () => {
+      setIsSocketConnected(true);
+      socket.emit("join_org", activeOrgId);
+      socket.emit("get_org_online", activeOrgId);
+      void flushOutbox();
+    });
+
+    const handleOnline = () => {
+      void flushOutbox();
+    };
+    window.addEventListener("online", handleOnline);
 
     socket.on("disconnect", () => {
       setIsSocketConnected(false);
@@ -525,20 +810,48 @@ export default function OrgChatPage() {
         setMessages((prev) => {
           const tempMsg = prev.find(
             (m) =>
-              m._id.startsWith("temp-") &&
-              m.content === data.message.content &&
-              m.sender?._id === data.message.sender?._id
+              (data.message.clientMessageId && m.clientMessageId === data.message.clientMessageId) ||
+              (data.message.clientMessageId && m._id === data.message.clientMessageId) ||
+              (m._id.startsWith("temp-") && m.content === data.message.content)
           );
           if (tempMsg) {
-            return prev.map((m) => (m._id === tempMsg._id ? data.message : m));
+            return prev.map((m) =>
+              m._id === tempMsg._id
+                ? { ...data.message, status: "sent" as MessageStatus, _localContent: data.message.content }
+                : m
+            );
           }
           if (prev.some((m) => m._id === data.message._id)) return prev;
           return [...prev, data.message];
         });
         scrollToBottom("smooth");
         void markMessagesAsSeen();
+
+        // Auto-acknowledge delivery for messages from OTHER users (fire-and-forget)
+        if (data.message.sender?._id !== currentUserId) {
+          api
+            .post(`/chat/${activeOrgId}/messages/${data.message._id}/delivered`)
+            .catch(() => {});
+        }
       }
     });
+
+    // Upgrade sender's tick from 'sent' → 'delivered' when recipient's browser receives it
+    socket.on(
+      "org_message_delivered",
+      (data: { orgId: string; messageId: string; user: UserRef }) => {
+        if (data.orgId === activeOrgId && data.user._id !== currentUserId) {
+          setMessages((prev) =>
+            prev.map((m) => {
+              if (m._id !== data.messageId) return m;
+              const alreadyDelivered = m.deliveredTo?.some((u) => u._id === data.user._id);
+              if (alreadyDelivered) return m;
+              return { ...m, deliveredTo: [...(m.deliveredTo || []), data.user] };
+            })
+          );
+        }
+      }
+    );
 
     socket.on("org_message_reacted", (data: { orgId: string; messageId: string; reactions: ReactionGroup[] }) => {
       if (data.orgId === activeOrgId) {
@@ -587,10 +900,29 @@ export default function OrgChatPage() {
     });
 
     return () => {
+      // Properly notify server we are leaving the org room
+      window.removeEventListener("online", handleOnline);
+      socket.emit("leave_org", activeOrgId);
       socket.disconnect();
       socketRef.current = null;
     };
   }, [activeOrgId, currentUserId, markMessagesAsSeen]);
+
+  /**
+   * Derives the display status of a sent message from its data.
+   * 'sending'/'failed' are client-side only. 'read' > 'delivered' > 'sent' on server.
+   */
+  const deriveStatus = (msg: ChatMessage): MessageStatus => {
+    if (msg.status === "sending") return "sending";
+    if (msg.status === "failed") return "failed";
+    const otherSeen = (msg.seenBy || []).some((u) => u._id !== currentUserId);
+    if (otherSeen) return "read";
+    const otherDelivered = (msg.deliveredTo || []).some(
+      (u) => (typeof u === "object" && u?._id ? u._id : u) !== currentUserId
+    );
+    if (otherDelivered) return "delivered";
+    return "sent";
+  };
 
   // 3. Instant Optimistic Send message handler (0ms UI latency)
   const handleSendMessage = async (e?: React.FormEvent) => {
@@ -601,7 +933,8 @@ export default function OrgChatPage() {
     const currentReply = replyingToMessage;
     setReplyingToMessage(null);
 
-    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const clientMessageId = `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    const tempId = clientMessageId;
     const roleLevel = userRoleLevel;
     const roleLabel =
       currentMembership?.roleLabel ||
@@ -609,6 +942,7 @@ export default function OrgChatPage() {
 
     const optimisticMessage: ChatMessage = {
       _id: tempId,
+      clientMessageId,
       organization: activeOrgId,
       sender: {
         _id: currentUserId || "me",
@@ -630,6 +964,7 @@ export default function OrgChatPage() {
           avatarUrl: user?.avatarUrl,
         },
       ],
+      deliveredTo: [],
       replyTo: currentReply
         ? {
             _id: currentReply._id,
@@ -640,6 +975,8 @@ export default function OrgChatPage() {
           }
         : undefined,
       createdAt: new Date().toISOString(),
+      status: "sending",
+      _localContent: trimmed,
     };
 
     // 1. Instantly render in UI with 0ms delay!
@@ -648,29 +985,97 @@ export default function OrgChatPage() {
     setTimeout(() => scrollToBottom("smooth"), 20);
     setIsSending(true);
 
+    // 2. Persist in local Outbox queue for offline resilience
+    addToLocalOutbox(activeOrgId, {
+      clientMessageId,
+      orgId: activeOrgId,
+      content: trimmed,
+      messageType: "text",
+      replyToId: currentReply?._id,
+      createdAt: new Date().toISOString(),
+    });
+
     try {
-      const res = await api.post<{ message: ChatMessage }>(`/chat/${activeOrgId}/messages`, {
-        content: trimmed,
-        messageType: "text",
-        replyTo: currentReply?._id || undefined,
-      });
+      const res = await api.post<{ message: ChatMessage; isDuplicate?: boolean }>(
+        `/chat/${activeOrgId}/messages`,
+        {
+          content: trimmed,
+          messageType: "text",
+          replyTo: currentReply?._id || undefined,
+          clientMessageId,
+        }
+      );
+
+      removeFromLocalOutbox(activeOrgId, clientMessageId);
 
       const sentMsg = res.data.message;
       if (sentMsg) {
         setMessages((prev) =>
-          prev.map((m) => (m._id === tempId ? sentMsg : m))
+          prev.map((m) =>
+            m._id === tempId || m.clientMessageId === clientMessageId
+              ? { ...sentMsg, status: "sent", _localContent: trimmed }
+              : m
+          )
         );
       }
     } catch (err: unknown) {
       console.error("[Chat] Send failed:", err);
-      toast.error("Failed to send message");
-      setMessages((prev) => prev.filter((m) => m._id !== tempId));
-      setInputText(trimmed);
+      // Keep message bubble with 'failed' status and in Outbox for manual/auto retry
+      setMessages((prev) =>
+        prev.map((m) =>
+          m._id === tempId ? { ...m, status: "failed" } : m
+        )
+      );
       if (currentReply) {
         setReplyingToMessage(currentReply);
       }
     } finally {
       setIsSending(false);
+    }
+  };
+
+  // 3b. Retry a failed message with idempotent key
+  const handleRetryMessage = async (failedMsg: ChatMessage) => {
+    if (!failedMsg._localContent || !activeOrgId) return;
+    const trimmed = failedMsg._localContent;
+    const clientMessageId = failedMsg.clientMessageId || failedMsg._id;
+
+    setMessages((prev) =>
+      prev.map((m) =>
+        m._id === failedMsg._id ? { ...m, status: "sending" } : m
+      )
+    );
+
+    try {
+      const res = await api.post<{ message: ChatMessage; isDuplicate?: boolean }>(
+        `/chat/${activeOrgId}/messages`,
+        {
+          content: trimmed,
+          messageType: failedMsg.messageType || "text",
+          replyTo: failedMsg.replyTo?._id || undefined,
+          clientMessageId,
+        }
+      );
+
+      removeFromLocalOutbox(activeOrgId, clientMessageId);
+
+      const sentMsg = res.data?.message;
+      if (sentMsg) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m._id === failedMsg._id || m.clientMessageId === clientMessageId
+              ? { ...sentMsg, status: "sent", _localContent: trimmed }
+              : m
+          )
+        );
+      }
+    } catch (err: unknown) {
+      console.error("[Chat] Retry failed:", err);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m._id === failedMsg._id ? { ...m, status: "failed" } : m
+        )
+      );
     }
   };
 
@@ -688,7 +1093,8 @@ export default function OrgChatPage() {
     }
 
     setIsUploadingAttachment(true);
-    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const clientMessageId = `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    const tempId = clientMessageId;
     const roleLevel = userRoleLevel;
     const roleLabel =
       currentMembership?.roleLabel ||
@@ -700,6 +1106,7 @@ export default function OrgChatPage() {
 
       const optimisticMessage: ChatMessage = {
         _id: tempId,
+        clientMessageId,
         organization: activeOrgId,
         sender: {
           _id: currentUserId || "me",
@@ -739,10 +1146,17 @@ export default function OrgChatPage() {
         const res = await api.post<{ message: ChatMessage }>(`/chat/${activeOrgId}/messages`, {
           content: finalUrl,
           messageType: "image",
+          clientMessageId,
         });
 
         if (res.data?.message) {
-          setMessages((prev) => prev.map((m) => (m._id === tempId ? res.data.message : m)));
+          setMessages((prev) =>
+            prev.map((m) =>
+              m._id === tempId || m.clientMessageId === clientMessageId
+                ? res.data.message
+                : m
+            )
+          );
         }
       } catch (err: unknown) {
         console.error("Failed to send image attachment:", err);
@@ -993,7 +1407,17 @@ export default function OrgChatPage() {
       )}
 
       {/* ── MESSAGES CHAT STREAM ── */}
-      <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-zinc-950/60 backdrop-blur-md border border-white/8 rounded-2xl mb-4 space-y-4 shadow-inner [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] scrollbar-none">
+      <div
+        ref={messagesContainerRef}
+        onScroll={handleMessagesScroll}
+        className="flex-1 overflow-y-auto p-4 md:p-6 bg-zinc-950/60 backdrop-blur-md border border-white/8 rounded-2xl mb-4 space-y-4 shadow-inner [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] scrollbar-none"
+      >
+        {isLoadingOlder && (
+          <div className="flex items-center justify-center py-2 text-xs text-purple-400 gap-2">
+            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+            <span>Loading older messages...</span>
+          </div>
+        )}
         {isLoading ? (
           <div className="flex flex-col items-center justify-center h-full text-zinc-400 text-sm gap-3">
             <RefreshCw className="w-6 h-6 animate-spin text-purple-400" />
@@ -1087,7 +1511,7 @@ export default function OrgChatPage() {
                     </div>
                   )}
 
-                  {/* Message Bubble + Floating Toolbar */}
+                    {/* Message Bubble + Floating Toolbar */}
                   <div className="relative group/bubble">
                     <div
                       id={`msg-${msg._id}`}
@@ -1103,6 +1527,8 @@ export default function OrgChatPage() {
                       } ${msg.isPinned ? "border-amber-500/50 ring-1 ring-amber-500/30" : ""} ${
                         highlightedMessageId === msg._id
                           ? "ring-2 ring-amber-400 border-amber-400 shadow-lg shadow-amber-500/20 scale-[1.02]"
+                          : msg.status === "failed" && isMe
+                          ? "ring-1 ring-red-500/60 shadow-red-900/20"
                           : ""
                       }`}
                     >
@@ -1133,22 +1559,26 @@ export default function OrgChatPage() {
                       )}
                     </div>
 
-                    {/* ── TAP/CLICK TO SHOW TIMESTAMP ── */}
-                    {activeTimestampMessageId === msg._id && (
+                    {/* ── ALWAYS-VISIBLE STATUS ROW (own messages only) ── */}
+                    {isMe && (
                       <div
-                        className={`text-[10px] mt-1 font-mono flex items-center gap-1.5 px-1 animate-fade-in ${
+                        className={`text-[10px] mt-1 font-mono flex items-center gap-1.5 px-1 ${
                           isMe ? "text-zinc-400 justify-end" : "text-zinc-500 justify-start"
                         }`}
                       >
                         <span>{formatChatTime(msg.createdAt)}</span>
-                        {isMe && (
-                          <span title={otherSeenUsers.length > 0 ? "Seen" : "Delivered"}>
-                            {otherSeenUsers.length > 0 ? (
-                              <CheckCheck className="w-3.5 h-3.5 text-cyan-300 inline" />
-                            ) : (
-                              <Check className="w-3 h-3 text-zinc-400 inline" />
-                            )}
-                          </span>
+                        <MessageStatusIndicator status={deriveStatus(msg)} />
+                        {deriveStatus(msg) === "failed" && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void handleRetryMessage(msg);
+                            }}
+                            className="flex items-center gap-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-[10px] font-bold px-1.5 py-0.5 rounded-md transition-colors ml-1"
+                          >
+                            <RefreshCw className="w-2.5 h-2.5" />
+                            Retry
+                          </button>
                         )}
                       </div>
                     )}

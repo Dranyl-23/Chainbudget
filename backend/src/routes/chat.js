@@ -120,6 +120,118 @@ router.get("/conversations", authenticate, async (req, res) => {
 });
 
 /**
+ * @route   GET /api/chat/:orgId/bootstrap
+ * @desc    Consolidated chat initialization endpoint: returns messages, pinned announcements,
+ *          organization profile, and online members in a single low-latency roundtrip.
+ * @access  Private (Org Members)
+ */
+router.get("/:orgId/bootstrap", authenticate, requireOrgMembership, async (req, res) => {
+  try {
+    const { orgId } = req.params;
+    const limit = Math.min(parseInt(req.query.limit, 10) || 50, 100);
+    const { before, since } = req.query;
+
+    const filter = { organization: orgId };
+    if (before) {
+      filter.createdAt = { $lt: new Date(before) };
+    } else if (since) {
+      filter.createdAt = { $gt: new Date(since) };
+    }
+
+    const getOrgOnlineUsers = req.app.get("getOrgOnlineUsers");
+    const getOrgOnlineUsersAsync = req.app.get("getOrgOnlineUsersAsync");
+    const redisService = req.app.get("redisService");
+
+    // 1. Check Redis L1 Sorted Set message cache (bypasses DB query if hit)
+    let cachedMessages = null;
+    if (redisService && !since) {
+      cachedMessages = await redisService.getCachedMessages(orgId, limit, before);
+    }
+
+    let org;
+    let messages;
+    let pinned;
+
+    if (cachedMessages && cachedMessages.length > 0) {
+      // Fast path (<2ms): Cached messages in Redis
+      [org, pinned] = await Promise.all([
+        Organization.findById(orgId)
+          .select("_id name logo logoUrl category memberCount treasuryWallet walletAddress highValueThreshold requiredApprovals description")
+          .lean(),
+        ChatMessage.find({ organization: orgId, isPinned: true })
+          .sort({ pinnedAt: -1 })
+          .limit(10)
+          .populate("sender", "displayName avatarUrl walletAddress")
+          .populate("pinnedBy", "displayName")
+          .lean(),
+      ]);
+      messages = cachedMessages;
+    } else {
+      // Slow path: MongoDB collection query & lean populate
+      const [dbOrg, dbMessages, dbPinned] = await Promise.all([
+        Organization.findById(orgId)
+          .select("_id name logo logoUrl category memberCount treasuryWallet walletAddress highValueThreshold requiredApprovals description")
+          .lean(),
+        ChatMessage.find(filter)
+          .sort({ createdAt: -1 })
+          .limit(limit)
+          .populate("sender", "displayName avatarUrl walletAddress email")
+          .populate("seenBy", "displayName avatarUrl")
+          .populate({
+            path: "replyTo",
+            select: "content sender createdAt roleLabel messageType",
+            populate: { path: "sender", select: "displayName avatarUrl walletAddress" },
+          })
+          .lean(),
+        ChatMessage.find({ organization: orgId, isPinned: true })
+          .sort({ pinnedAt: -1 })
+          .limit(10)
+          .populate("sender", "displayName avatarUrl walletAddress")
+          .populate("pinnedBy", "displayName")
+          .lean(),
+      ]);
+
+      org = dbOrg;
+      pinned = dbPinned;
+
+      const formattedMessages = dbMessages.map((m) => ({
+        ...m,
+        deliveredTo: (m.deliveredTo || []).map((u) =>
+          typeof u === "object" && u?._id ? u : { _id: (u || "").toString() }
+        ),
+      }));
+
+      messages = formattedMessages.reverse();
+
+      // Prime Redis cache with retrieved messages
+      if (redisService && messages.length > 0 && !before && !since) {
+        void redisService.cacheMessageBatch(orgId, messages);
+      }
+    }
+
+    let onlineUserIds = [];
+    if (getOrgOnlineUsersAsync) {
+      onlineUserIds = await getOrgOnlineUsersAsync(orgId);
+    } else if (getOrgOnlineUsers) {
+      onlineUserIds = getOrgOnlineUsers(orgId);
+    }
+
+    res.json({
+      organization: org,
+      messages,
+      pinned,
+      onlineUserIds: Array.isArray(onlineUserIds) ? onlineUserIds : [],
+      hasMore: messages.length === limit,
+      serverTime: new Date().toISOString(),
+      fromCache: Boolean(cachedMessages && cachedMessages.length > 0),
+    });
+  } catch (err) {
+    console.error("[chat:bootstrap]", err);
+    res.status(500).json({ error: "Failed to bootstrap chat" });
+  }
+});
+
+/**
  * @route   GET /api/chat/:orgId/messages
  * @desc    Fetch paginated chat messages for an organization
  * @access  Private (Org Members)
@@ -129,6 +241,19 @@ router.get("/:orgId/messages", authenticate, requireOrgMembership, async (req, r
     const { orgId } = req.params;
     const limit = Math.min(parseInt(req.query.limit, 10) || 50, 100);
     const { before } = req.query;
+
+    // Check Redis L1 cache first
+    const redisService = req.app.get("redisService");
+    if (redisService) {
+      const cached = await redisService.getCachedMessages(orgId, limit, before);
+      if (cached && cached.length > 0) {
+        return res.json({
+          messages: cached,
+          hasMore: cached.length === limit,
+          fromCache: true,
+        });
+      }
+    }
 
     const filter = { organization: orgId };
     if (before) {
@@ -147,8 +272,21 @@ router.get("/:orgId/messages", authenticate, requireOrgMembership, async (req, r
       })
       .lean();
 
+    // Map deliveredTo to uniform { _id: string } format without incurring Mongoose populate queries
+    const formattedMessages = messages.map((m) => ({
+      ...m,
+      deliveredTo: (m.deliveredTo || []).map((u) =>
+        typeof u === "object" && u?._id ? u : { _id: (u || "").toString() }
+      ),
+    }));
+
     // Reverse to send chronological order (oldest -> newest for easy chat rendering)
-    const chronologicalMessages = messages.reverse();
+    const chronologicalMessages = formattedMessages.reverse();
+
+    // Prime Redis cache with retrieved messages
+    if (redisService && chronologicalMessages.length > 0 && !before) {
+      void redisService.cacheMessageBatch(orgId, chronologicalMessages);
+    }
 
     res.json({
       messages: chronologicalMessages,
@@ -214,7 +352,14 @@ router.get("/:orgId/search", authenticate, requireOrgMembership, async (req, res
       })
       .lean();
 
-    res.json({ results: messages });
+    const formattedMessages = messages.map((m) => ({
+      ...m,
+      deliveredTo: (m.deliveredTo || []).map((u) =>
+        typeof u === "object" && u?._id ? u : { _id: (u || "").toString() }
+      ),
+    }));
+
+    res.json({ results: formattedMessages });
   } catch (err) {
     console.error("[chat:search]", err);
     res.status(500).json({ error: "Failed to search messages" });
@@ -229,10 +374,36 @@ router.get("/:orgId/search", authenticate, requireOrgMembership, async (req, res
 router.post("/:orgId/messages", authenticate, requireOrgMembership, async (req, res) => {
   try {
     const { orgId } = req.params;
-    const { content, messageType = "text", replyTo } = req.body;
+    const { content, messageType = "text", replyTo, clientMessageId } = req.body;
 
     if (!content || typeof content !== "string" || !content.trim()) {
       return res.status(400).json({ error: "Message content cannot be empty" });
+    }
+
+    // Idempotency check: if clientMessageId already exists for this org, return existing message
+    if (clientMessageId) {
+      const existing = await ChatMessage.findOne({
+        organization: orgId,
+        clientMessageId,
+      })
+        .populate("sender", "displayName avatarUrl walletAddress email")
+        .populate("seenBy", "displayName avatarUrl")
+        .populate({
+          path: "replyTo",
+          select: "content sender createdAt roleLabel messageType",
+          populate: { path: "sender", select: "displayName avatarUrl walletAddress" },
+        })
+        .lean();
+
+      if (existing) {
+        const formatted = {
+          ...existing,
+          deliveredTo: (existing.deliveredTo || []).map((u) =>
+            typeof u === "object" && u?._id ? u : { _id: (u || "").toString() }
+          ),
+        };
+        return res.json({ message: formatted, isDuplicate: true });
+      }
     }
 
     const roleLevel = req.membership.roleLevel || 4;
@@ -249,9 +420,25 @@ router.post("/:orgId/messages", authenticate, requireOrgMembership, async (req, 
       roleLabel,
       seenBy: [req.user.id],
       replyTo: replyTo || null,
+      clientMessageId: clientMessageId || null,
     });
 
-    await message.save();
+    try {
+      await message.save();
+    } catch (saveErr) {
+      if (saveErr.code === 11000 && clientMessageId) {
+        // Race condition: concurrent retry saved first
+        const racedExisting = await ChatMessage.findOne({ organization: orgId, clientMessageId })
+          .populate("sender", "displayName avatarUrl walletAddress email")
+          .populate("seenBy", "displayName avatarUrl")
+          .lean();
+        if (racedExisting) {
+          return res.json({ message: racedExisting, isDuplicate: true });
+        }
+      }
+      throw saveErr;
+    }
+
     await message.populate("sender", "displayName avatarUrl walletAddress email");
     await message.populate("seenBy", "displayName avatarUrl");
     if (replyTo) {
@@ -262,16 +449,29 @@ router.post("/:orgId/messages", authenticate, requireOrgMembership, async (req, 
       });
     }
 
-    // 1. Emit live WebSocket event to the organization room
+    const formattedNewMessage = {
+      ...message.toObject(),
+      deliveredTo: (message.deliveredTo || []).map((u) =>
+        typeof u === "object" && u?._id ? u : { _id: (u || "").toString() }
+      ),
+    };
+
+    // 1. Cache new message in Redis L1 Sorted Set
+    const redisService = req.app.get("redisService");
+    if (redisService) {
+      void redisService.cacheMessage(orgId, formattedNewMessage);
+    }
+
+    // 2. Emit live WebSocket event to the organization room
     const io = req.app.get("io");
     if (io) {
       io.to(`org:${orgId}`).emit("new_org_message", {
         orgId,
-        message: message.toObject(),
+        message: formattedNewMessage,
       });
     }
 
-    // 2. Dispatch push notifications to other active members of the organization (fire-and-forget)
+    // 3. Presence-Gated Push Notifications: only alert offline/background members
     try {
       const org = await Organization.findById(orgId).select("name").lean();
       const orgName = org ? org.name : "Organization Chat";
@@ -282,9 +482,21 @@ router.post("/:orgId/messages", authenticate, requireOrgMembership, async (req, 
         },
       }).select("_id").lean();
 
+      // Retrieve members currently connected to the org chat room
+      const getOrgOnlineUsersAsync = req.app.get("getOrgOnlineUsersAsync");
+      const getOrgOnlineUsersSync = req.app.get("getOrgOnlineUsers");
+      let onlineUserIds = [];
+      if (getOrgOnlineUsersAsync) {
+        onlineUserIds = await getOrgOnlineUsersAsync(orgId);
+      } else if (getOrgOnlineUsersSync) {
+        onlineUserIds = getOrgOnlineUsersSync(orgId);
+      }
+      const onlineSet = new Set((onlineUserIds || []).map((id) => id.toString()));
+
+      // Exclude sender and exclude members actively online in room
       const recipientIds = orgUsers
         .map((u) => u._id.toString())
-        .filter((id) => id !== req.user.id.toString());
+        .filter((id) => id !== req.user.id.toString() && !onlineSet.has(id));
 
       if (recipientIds.length > 0) {
         const NotificationService = require("../services/notificationService");
@@ -300,7 +512,7 @@ router.post("/:orgId/messages", authenticate, requireOrgMembership, async (req, 
       console.warn("[chat:push-notification warning]", pushErr.message);
     }
 
-    res.status(201).json({ message });
+    res.status(201).json({ message: formattedNewMessage });
   } catch (err) {
     console.error("[chat:send-message]", err);
     res.status(500).json({ error: "Failed to send message" });
@@ -423,6 +635,65 @@ router.post("/:orgId/seen", authenticate, requireOrgMembership, async (req, res)
   } catch (err) {
     console.error("[chat:seen]", err);
     res.status(500).json({ error: "Failed to mark seen" });
+  }
+});
+
+/**
+ * @route   POST /api/chat/:orgId/messages/:messageId/delivered
+ * @desc    Mark a single message as delivered to the current user's device.
+ *          Called automatically by the client when it receives a new_org_message
+ *          socket event from another sender. Powers the grey double-tick state.
+ * @access  Private (Org Members)
+ */
+router.post("/:orgId/messages/:messageId/delivered", authenticate, requireOrgMembership, async (req, res) => {
+  try {
+    const { orgId, messageId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(messageId)) {
+      return res.status(400).json({ error: "Invalid message ID" });
+    }
+
+    const currentUserId = (req.user?._id || req.user?.id || req.user?.sub || req.auth?.sub || "").toString();
+    if (!currentUserId) return res.status(401).json({ error: "Authentication required" });
+
+    // Only mark delivery for messages not sent by this user
+    const message = await ChatMessage.findOne({ _id: messageId, organization: orgId });
+    if (!message) return res.status(404).json({ error: "Message not found" });
+
+    // Skip if sender is marking their own message (no-op)
+    if (message.sender.toString() === currentUserId) {
+      return res.json({ success: true, skipped: true });
+    }
+
+    // Idempotent: only add if not already in deliveredTo
+    const alreadyDelivered = message.deliveredTo?.some(
+      (uid) => uid.toString() === currentUserId
+    );
+
+    if (!alreadyDelivered) {
+      await ChatMessage.updateOne(
+        { _id: messageId },
+        { $addToSet: { deliveredTo: currentUserId } }
+      );
+
+      const io = req.app.get("io");
+      if (io) {
+        io.to(`org:${orgId}`).emit("org_message_delivered", {
+          orgId,
+          messageId,
+          user: {
+            _id: currentUserId,
+            displayName: req.fullUser?.displayName || req.user.displayName || "Member",
+            avatarUrl: req.fullUser?.avatarUrl || null,
+          },
+        });
+      }
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[chat:delivered]", err);
+    res.status(500).json({ error: "Failed to mark delivered" });
   }
 });
 

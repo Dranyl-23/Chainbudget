@@ -57,8 +57,49 @@ export default function GovernanceScreen() {
   const [filterTab, setFilterTab] = useState<'active' | 'passed' | 'rejected' | 'all'>('active');
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedDesc, setExpandedDesc] = useState<Record<string, boolean>>({});
+  const [executingId, setExecutingId] = useState<string | null>(null);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  function formatDeadline(endTime?: string | Date) {
+    if (!endTime) return null;
+    const diff = new Date(endTime).getTime() - Date.now();
+    if (diff <= 0) return 'Voting closed';
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    if (days > 0) return `${days}d ${hours}h left`;
+    if (hours > 0) return `${hours}h ${minutes}m left`;
+    return `${minutes}m left`;
+  }
+
+  const handleExecute = async (proposalId: string) => {
+    Alert.alert(
+      'Execute Proposal',
+      'Are you sure you want to execute this passed proposal on-chain?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Execute',
+          style: 'default',
+          onPress: async () => {
+            setExecutingId(proposalId);
+            try {
+              await api.post(`/dao/proposals/${proposalId}/execute`);
+              await triggerSuccessHaptic();
+              showToast('Proposal executed successfully! 🎉', 'success');
+              if (activeOrgId) fetchProposals(activeOrgId);
+            } catch (err: any) {
+              await triggerErrorHaptic();
+              showToast(err.response?.data?.error || 'Failed to execute proposal', 'error');
+            } finally {
+              setExecutingId(null);
+            }
+          }
+        }
+      ]
+    );
+  };
 
   // Android BackHandler for modals
   useEffect(() => {
@@ -302,9 +343,25 @@ export default function GovernanceScreen() {
               <Ionicons name="sparkles" size={12} color={colors.primary} style={{ marginRight: 4 }} />
               <Text style={{ color: colors.primary, fontSize: 11, fontWeight: '700' }}>AI Risk Analysis</Text>
             </TouchableOpacity>
+            {formatDeadline(proposal.endTime) && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6 }}>
+                <Ionicons name="time-outline" size={12} color={colors.textMuted} style={{ marginRight: 4 }} />
+                <Text style={{ color: colors.textMuted, fontSize: 11, fontWeight: '600' }}>
+                  {formatDeadline(proposal.endTime)}
+                </Text>
+              </View>
+            )}
           </View>
-          <View style={{ backgroundColor: isClosed ? colors.cardGlass : colors.successBg, borderColor: isClosed ? colors.border : colors.successBorder }} className="px-2.5 py-1 rounded-full border">
-            <Text style={{ color: isClosed ? colors.textMuted : colors.success, fontSize: 10, fontWeight: '800', textTransform: 'uppercase' }}>
+          <View style={{
+            backgroundColor: proposal.status === 'executed' ? 'rgba(139, 92, 246, 0.15)' : isClosed ? colors.cardGlass : colors.successBg,
+            borderColor: proposal.status === 'executed' ? 'rgba(139, 92, 246, 0.3)' : isClosed ? colors.border : colors.successBorder
+          }} className="px-2.5 py-1 rounded-full border">
+            <Text style={{
+              color: proposal.status === 'executed' ? '#A78BFA' : isClosed ? colors.textMuted : colors.success,
+              fontSize: 10,
+              fontWeight: '800',
+              textTransform: 'uppercase'
+            }}>
               {formatStatusLabel(proposal.status || 'Active')}
             </Text>
           </View>
@@ -423,6 +480,31 @@ export default function GovernanceScreen() {
               </Text>
             </Text>
           </View>
+        )}
+
+        {proposal.status === 'passed' && canCreateProposal && (
+          <TouchableOpacity
+            onPress={() => handleExecute(proposal._id)}
+            disabled={executingId === proposal._id}
+            style={{
+              backgroundColor: '#8B5CF6',
+              borderRadius: 12,
+              paddingVertical: 12,
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexDirection: 'row',
+              marginTop: 10,
+            }}
+          >
+            {executingId === proposal._id ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="flash" size={16} color="#fff" style={{ marginRight: 6 }} />
+                <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13 }}>Execute Proposal</Text>
+              </View>
+            )}
+          </TouchableOpacity>
         )}
       </View>
     );
