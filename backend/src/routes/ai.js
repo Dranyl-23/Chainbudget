@@ -51,14 +51,15 @@ const upload = multer({
 });
 
 // Candidate Gemini models to try in order of preference
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.6-flash";
 const GEMINI_MODELS = [
   process.env.GEMINI_MODEL,
-  "gemini-2.5-flash",
+  "gemini-3.6-flash",
+  "gemini-3.8-flash",
+  "gemini-3.7-flash",
+  "gemini-3.1-flash-lite",
+  "gemini-flash-latest",
   "gemini-2.0-flash",
-  "gemini-1.5-flash-latest",
-  "gemini-1.5-flash",
-  "gemini-1.5-pro",
 ].filter(Boolean);
 
 // MED-5 FIX: Instantiate GoogleGenAI singleton at module load to avoid per-request instantiation overhead

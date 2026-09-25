@@ -2,7 +2,7 @@
   "expo": {
     "name": "ChainBudget",
     "slug": "lynard",
-    "version": "1.1.14",
+    "version": "1.1.15",
     "scheme": "chainbudget",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -16,11 +16,11 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.chainbudget.app",
-      "buildNumber": "16"
+      "buildNumber": "17"
     },
     "android": {
       "package": "com.chainbudget.app",
-      "versionCode": 16,
+      "versionCode": 17,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#05040F",
@@ -63,9 +63,9 @@
     "extra": {
       "apiUrl": "https://chainbudget-api.fly.dev/api",
       "eas": {
-        "projectId": "0f55256d-69ce-4219-b4c2-27ebe7b043f7"
+        "projectId": "85dd7732-5fd7-438e-8e34-6d2246d7426a"
       }
     },
-    "owner": "lynard"
+    "owner": "askyyys-team"
   }
 }
