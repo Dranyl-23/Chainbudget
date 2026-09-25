@@ -491,7 +491,7 @@ router.get("/", authenticate, async (req, res) => {
 });
 
 /// PATCH /api/transactions/:id/process-request — Approve/Reject Level 3 Request
-router.patch("/:id/process-request", authenticate, requireRole(2), async (req, res) => {
+router.patch("/:id/process-request", authenticate, async (req, res) => {
   try {
     const { action } = req.body; // 'approve' or 'reject'
     if (!["approve", "reject"].includes(action)) {

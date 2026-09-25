@@ -261,9 +261,16 @@ export default function ApprovalsScreen() {
     if (tx.status === 'requested') {
       try {
         setSigningTxId(tx._id);
-        await api.patch(`/transactions/${tx._id}/process-request`, {
-          action: action === 'approved' ? 'approve' : 'reject',
-        });
+        await api.patch(
+          `/transactions/${tx._id}/process-request`,
+          {
+            action: action === 'approved' ? 'approve' : 'reject',
+            organizationId: activeOrgId,
+          },
+          {
+            params: { orgId: activeOrgId },
+          }
+        );
         showToast(
           action === 'approved'
             ? 'Member request approved & synced!'

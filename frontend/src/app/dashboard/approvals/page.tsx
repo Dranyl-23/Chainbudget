@@ -315,7 +315,11 @@ export default function ApprovalsPage() {
       // ── Level 3 Member Request Review ──
       if (req.status === "requested") {
         toast.loading("Processing Member Request...", { id: "txToast" });
-        await api.patch(`/transactions/${req._id}/process-request`, { action: "approve" });
+        await api.patch(
+          `/transactions/${req._id}/process-request`,
+          { action: "approve", organizationId: activeOrgId },
+          { params: { orgId: activeOrgId } }
+        );
         const isHighValue = req.amount >= (req.organization?.highValueThreshold || 10000);
         toast.success(
           isHighValue
@@ -471,7 +475,11 @@ export default function ApprovalsPage() {
       // ── Level 3 Member Request Reject ──
       if (req.status === "requested") {
         toast.loading("Rejecting Member Request...", { id: "txToast" });
-        await api.patch(`/transactions/${req._id}/process-request`, { action: "reject" });
+        await api.patch(
+          `/transactions/${req._id}/process-request`,
+          { action: "reject", organizationId: activeOrgId },
+          { params: { orgId: activeOrgId } }
+        );
         toast.success("Member request rejected.", { id: "txToast" });
         await refreshApprovals();
         window.dispatchEvent(new CustomEvent("cb_approvals_updated"));
