@@ -42,8 +42,14 @@ export interface AsgardeoAuthContext {
   getAccessToken: () => Promise<string | null>;
 }
 
+interface SessionResult {
+  user: User | null;
+  token: string | null;
+}
+
 interface AuthContextType {
   user: User | null;
+  token: string | null;
   walletAddress: string | null;
   isLoading: boolean;
   isConnected: boolean;
@@ -64,14 +70,14 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 /**
  * CRIT-2 FIX: Restore session by calling the Next.js HttpOnly cookie proxy.
- * No localStorage access. The cookie is sent automatically by the browser.
+ * No localStorage access. Returns user and in-memory token for WebSocket auth.
  */
-async function restoreSessionFromCookie(): Promise<User | null> {
+async function restoreSessionFromCookie(): Promise<SessionResult | null> {
   try {
     const res = await fetch("/api/auth/session", { credentials: "include", cache: "no-store" });
     if (!res.ok) return null;
-    const data = await res.json() as { user?: User };
-    return data.user ?? null;
+    const data = await res.json() as { user?: User; token?: string };
+    return { user: data.user ?? null, token: data.token ?? null };
   } catch {
     return null;
   }
@@ -81,7 +87,7 @@ async function restoreSessionFromCookie(): Promise<User | null> {
  * CRIT-2 FIX: Establish session by posting the Asgardeo token to the proxy.
  * The proxy validates the token and sets the HttpOnly cookie.
  */
-async function establishCookieSession(token: string): Promise<User | null> {
+async function establishCookieSession(token: string): Promise<SessionResult | null> {
   try {
     const res = await fetch("/api/auth/session", {
       method: "POST",
@@ -90,8 +96,8 @@ async function establishCookieSession(token: string): Promise<User | null> {
       body: JSON.stringify({ token }),
     });
     if (!res.ok) return null;
-    const data = await res.json() as { user?: User };
-    return data.user ?? null;
+    const data = await res.json() as { user?: User; token?: string };
+    return { user: data.user ?? null, token: data.token ?? token };
   } catch {
     return null;
   }
@@ -131,6 +137,7 @@ export function ChainBudgetAuthProvider({ children, asgardeoAuth }: { children: 
   const { state: asgardeoState, signIn, signOut, getAccessToken } = asgardeoAuth || {};
 
   const [user, setUser] = useState<User | null>(null);
+  const [token, setToken] = useState<string | null>(null);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
@@ -158,10 +165,12 @@ export function ChainBudgetAuthProvider({ children, asgardeoAuth }: { children: 
         clearSession();
 
         // Restore session from the server-side HttpOnly cookie
-        const restoredUser = await restoreSessionFromCookie();
+        const sessionResult = await restoreSessionFromCookie();
 
-        if (restoredUser && !isCancelled) {
+        if (sessionResult && sessionResult.user && !isCancelled) {
+          const restoredUser = sessionResult.user;
           setUser(restoredUser);
+          setToken(sessionResult.token);
           setWalletAddress(restoredUser.walletAddress);
           setIsConnected(Boolean(restoredUser.walletAddress));
 
@@ -195,17 +204,19 @@ export function ChainBudgetAuthProvider({ children, asgardeoAuth }: { children: 
     const handleAuth = async () => {
       if (asgardeoState?.isAuthenticated) {
         try {
-          const token = getAccessToken ? await getAccessToken() : null;
-          if (!token) {
+          const asgardeoToken = getAccessToken ? await getAccessToken() : null;
+          if (!asgardeoToken) {
             if (!isCancelled) setIsLoading(false);
             return;
           }
 
           // Establish server-side HttpOnly cookie session
-          const sessionUser = await establishCookieSession(token);
+          const sessionResult = await establishCookieSession(asgardeoToken);
 
-          if (!isCancelled && sessionUser) {
+          if (!isCancelled && sessionResult && sessionResult.user) {
+            const sessionUser = sessionResult.user;
             setUser(sessionUser);
+            setToken(sessionResult.token || asgardeoToken);
             setWalletAddress(sessionUser.walletAddress);
             setIsConnected(Boolean(sessionUser.walletAddress));
 
@@ -241,6 +252,7 @@ export function ChainBudgetAuthProvider({ children, asgardeoAuth }: { children: 
     clearSession();
     if (signOut) void signOut();
     setUser(null);
+    setToken(null);
     setWalletAddress(null);
     setIsConnected(false);
     setActiveOrgIdState(null);
@@ -330,7 +342,7 @@ export function ChainBudgetAuthProvider({ children, asgardeoAuth }: { children: 
   return (
     <AuthContext.Provider
       value={{
-        user, walletAddress, isLoading: isLoading || (asgardeoState?.isLoading ?? true),
+        user, token, walletAddress, isLoading: isLoading || (asgardeoState?.isLoading ?? true),
         isConnected, login, register, logout, error, activeOrgId, setActiveOrgId,
         isAsgardeoAuthenticated: asgardeoState?.isAuthenticated || false, linkMetaMask, refreshUser,
         refreshToken

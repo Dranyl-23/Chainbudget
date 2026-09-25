@@ -23,6 +23,22 @@ let isConnecting = false;
 // Fallback in-memory presence tracking if Redis is offline or not configured
 const inMemoryOrgPresence = new Map(); // orgId -> Set<userId>
 
+let ioInstance = null;
+
+function tryAttachAdapter() {
+  if (!ioInstance || !pubClient || !subClient) return false;
+  if (pubClient.status !== "ready" && pubClient.status !== "connecting") return false;
+  if (subClient.status !== "ready" && subClient.status !== "connecting") return false;
+  try {
+    ioInstance.adapter(createAdapter(pubClient, subClient));
+    console.log("[Socket.IO] Redis adapter attached for multi-server cluster broadcast.");
+    return true;
+  } catch (err) {
+    console.warn("[Socket.IO] Could not attach Redis adapter:", err.message);
+    return false;
+  }
+}
+
 /**
  * Creates an ioredis client instance configured for resilience
  */
@@ -49,6 +65,7 @@ function createClient(name) {
 
   client.on("ready", () => {
     isRedisConnected = true;
+    tryAttachAdapter();
   });
 
   client.on("error", (err) => {
@@ -87,6 +104,7 @@ async function initRedis() {
     ]);
 
     isRedisConnected = redisClient.status === "ready" || redisClient.status === "connecting";
+    tryAttachAdapter();
     return isRedisConnected;
   } catch (err) {
     console.warn("[Redis] Failed to initialize Redis clients:", err.message);
@@ -106,17 +124,8 @@ if (REDIS_URL) {
  * Attaches @socket.io/redis-adapter to the Socket.IO instance if Redis is configured
  */
 function initRedisAdapter(io) {
-  if (pubClient && subClient && isRedisConnected) {
-    try {
-      io.adapter(createAdapter(pubClient, subClient));
-      console.log("[Socket.IO] Redis adapter attached for multi-server cluster broadcast.");
-      return true;
-    } catch (err) {
-      console.warn("[Socket.IO] Could not attach Redis adapter:", err.message);
-      return false;
-    }
-  }
-  return false;
+  ioInstance = io;
+  return tryAttachAdapter();
 }
 
 /**

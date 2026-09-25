@@ -4,16 +4,13 @@ import React, { useState } from "react";
 import {
   Wallet,
   AlertTriangle,
-  ArrowRight,
   CheckCircle2,
   Copy,
   Check,
-  ExternalLink,
   RefreshCw,
   X,
   Key,
   ShieldCheck,
-  HelpCircle,
 } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
@@ -52,7 +49,7 @@ export default function WalletMismatchGuideModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in">
+    <div className="fixed inset-0 z-9999 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in">
       <div className="relative bg-slate-900 border border-slate-700/80 rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden p-6 md:p-8 animate-in zoom-in-95 duration-200">
         {/* Close Button */}
         <button
@@ -192,7 +189,7 @@ export default function WalletMismatchGuideModal({
                 1
               </div>
               <p className="text-xs text-slate-300">
-                Go to your <Link href="/dashboard/settings" target="_blank" className="text-purple-400 underline font-semibold hover:text-purple-300">Profile & Settings</Link> page and click <strong>"Reveal Recovery Phrase & Private Key"</strong>.
+                Go to your <Link href="/dashboard/settings" target="_blank" className="text-purple-400 underline font-semibold hover:text-purple-300">Profile & Settings</Link> page and click <strong>&quot;Reveal Recovery Phrase &amp; Private Key&quot;</strong>.
               </p>
             </div>
             <div className="flex items-start gap-3">
@@ -220,7 +217,7 @@ export default function WalletMismatchGuideModal({
             onClick={onClose}
             className="flex-1 py-3 px-4 rounded-xl border border-slate-700 bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 font-bold text-xs transition-colors"
           >
-            I'll Switch Later
+            I&apos;ll Switch Later
           </button>
 
           {onRetry && (

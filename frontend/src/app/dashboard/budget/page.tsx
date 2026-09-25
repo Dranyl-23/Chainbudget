@@ -304,7 +304,7 @@ export default function BudgetPage() {
             {/* ── Breakdown chart ── */}
             <div className="glass p-6 rounded-xl">
               <h3 className="text-base font-semibold mb-6">Spending Breakdown</h3>
-              <div className="h-[260px]">
+              <div className="h-65">
                 {totalSpent > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>

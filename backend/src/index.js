@@ -65,9 +65,49 @@ const redisService = require("./services/redis");
 redisService.initRedisAdapter(io);
 app.set("redisService", redisService);
 
-// H-4 Fix: Authenticate WebSocket connections (supports both mobile + browser tokens)
+const { verifyChainBudgetJWT, verifyAsgardeoJWT } = require("./middleware/auth");
+
+async function authenticateSocketToken(token) {
+  if (!token || token === "undefined" || token === "null") return null;
+
+  // 1. ChainBudget internal JWT (mobile / wallet)
+  try {
+    const cbPayload = verifyChainBudgetJWT(token);
+    if (cbPayload && cbPayload.sub) {
+      return { userId: cbPayload.sub, source: "chainbudget" };
+    }
+  } catch {}
+
+  // 2. Asgardeo RS256 JWT (browser OIDC)
+  if (token.includes(".")) {
+    try {
+      const asgardeoPayload = await verifyAsgardeoJWT(token);
+      if (asgardeoPayload && asgardeoPayload.sub) {
+        return { userId: asgardeoPayload.sub, source: "asgardeo" };
+      }
+    } catch {}
+  }
+
+  // 3. Asgardeo UserInfo endpoint fallback (opaque tokens)
+  try {
+    const asgardeoBase = process.env.ASGARDEO_BASE_URL || "https://api.asgardeo.io/t/orgs3xfu";
+    const response = await fetch(`${asgardeoBase}/oauth2/userinfo`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (response.ok) {
+      const data = await response.json();
+      if (data && data.sub) {
+        return { userId: data.sub, source: "asgardeo" };
+      }
+    }
+  } catch {}
+
+  return null;
+}
+
+// Resilient WebSocket authentication (supports mobile JWT, Asgardeo browser token, or anonymous listening)
 io.use(async (socket, next) => {
-  let token = socket.handshake.auth?.token;
+  let token = socket.handshake.auth?.token || socket.handshake.query?.token;
   if (!token || token === "undefined" || token === "null") {
     const cookieHeader = socket.handshake.headers?.cookie;
     if (cookieHeader) {
@@ -78,34 +118,22 @@ io.use(async (socket, next) => {
     }
   }
 
-  if (!token || token === "undefined" || token === "null") {
-    return next(new Error("Authentication required"));
+  if (token && token !== "undefined" && token !== "null") {
+    const authResult = await authenticateSocketToken(token);
+    if (authResult) {
+      socket.userId = authResult.userId;
+      socket.authSource = authResult.source;
+    }
   }
 
-  const { verifyChainBudgetJWT } = require("./middleware/auth");
-
-  // Try ChainBudget mobile JWT first (fast, no network)
-  const cbPayload = verifyChainBudgetJWT(token);
-  if (cbPayload && cbPayload.sub) {
-    socket.userId = cbPayload.sub;       // MongoDB _id string
-    socket.authSource = "chainbudget";
-    return next();
+  // Allow socket to connect even if unauthenticated (read-only for public org rooms).
+  // All write actions (sending messages, reactions, pin) strictly require REST API auth.
+  if (!socket.userId) {
+    socket.userId = null;
+    socket.authSource = "anonymous";
   }
 
-  // Fall back to Asgardeo UserInfo (browser)
-  try {
-    const asgardeoBase = process.env.ASGARDEO_BASE_URL || "https://api.asgardeo.io/t/orgs3xfu";
-    const response = await fetch(`${asgardeoBase}/oauth2/userinfo`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    if (!response.ok) return next(new Error("Invalid token"));
-    const data = await response.json();
-    socket.userId = data.sub;            // Asgardeo sub
-    socket.authSource = "asgardeo";
-    return next();
-  } catch (err) {
-    return next(new Error("Authentication failed"));
-  }
+  return next();
 });
 
 // Cluster-wide presence tracking per organization (backed by Redis or in-memory fallback)
@@ -128,19 +156,22 @@ io.on("connection", async (socket) => {
   let mongoUserId = null;
   const userOrgIds = new Set();
 
-  if (socket.userId) {
-    socket.join(`user:${socket.userId}`);
+  async function bindUserToSocket(userId, authSource) {
+    if (!userId) return;
+    socket.userId = userId;
+    socket.authSource = authSource;
+    socket.join(`user:${userId}`);
 
     // Load org memberships from DB using the correct identifier per auth source
     try {
       const User = require("./models/User");
       let user;
-      if (socket.authSource === "chainbudget") {
+      if (authSource === "chainbudget") {
         // Mobile: userId is a MongoDB _id
-        user = await User.findById(socket.userId).select("_id memberships").lean();
+        user = await User.findById(userId).select("_id memberships").lean();
       } else {
         // Browser: userId is an Asgardeo sub
-        user = await User.findOne({ asgardeoId: socket.userId }).select("_id memberships").lean();
+        user = await User.findOne({ asgardeoId: userId }).select("_id memberships").lean();
       }
       if (user) {
         mongoUserId = user._id.toString();
@@ -162,11 +193,27 @@ io.on("connection", async (socket) => {
             void broadcastOrgOnline(orgId);
           }
         }
+        socket.emit("authenticated", { userId: mongoUserId });
       }
     } catch (err) {
-      console.error("[socket:org_init]", err);
+      console.error("[socket:bindUserToSocket]", err);
     }
   }
+
+  if (socket.userId) {
+    void bindUserToSocket(socket.userId, socket.authSource);
+  }
+
+  // Dynamic in-flight authentication
+  socket.on("authenticate", async (data) => {
+    const rawToken = typeof data === "string" ? data : data?.token;
+    if (rawToken) {
+      const authResult = await authenticateSocketToken(rawToken);
+      if (authResult) {
+        await bindUserToSocket(authResult.userId, authResult.source);
+      }
+    }
+  });
 
   // Dynamic room joining for organizations
   socket.on("join_org", async (orgId) => {

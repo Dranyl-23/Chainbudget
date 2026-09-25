@@ -1,4 +1,4 @@
-﻿/**
+/**
  * /api/auth/session/route.ts
  *
  * CRIT-2 FIX: Secure session proxy for Asgardeo authentication.
@@ -57,8 +57,8 @@ export async function POST(req: NextRequest) {
     const data = await backendRes.json() as { user?: object };
     const user = data.user || data;
 
-    // Set the HttpOnly session cookie — never readable by client JavaScript
-    const res = NextResponse.json({ user }, { status: 200 });
+    // Set the HttpOnly session cookie and return in-memory token for WebSocket auth
+    const res = NextResponse.json({ user, token }, { status: 200 });
     res.cookies.set(COOKIE_NAME, token, COOKIE_OPTIONS);
     return res;
   } catch (err) {
@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
   try {
     const token = req.cookies.get(COOKIE_NAME)?.value;
     if (!token) {
-      return NextResponse.json({ user: null }, { status: 200 });
+      return NextResponse.json({ user: null, token: null }, { status: 200 });
     }
 
     // Verify the stored token is still valid against backend /users/me
@@ -86,17 +86,17 @@ export async function GET(req: NextRequest) {
 
     if (!backendRes.ok) {
       // Token expired — clear the stale cookie
-      const res = NextResponse.json({ user: null }, { status: 200 });
+      const res = NextResponse.json({ user: null, token: null }, { status: 200 });
       res.cookies.delete(COOKIE_NAME);
       return res;
     }
 
     const data = await backendRes.json() as { user?: object };
     const user = data.user || data;
-    return NextResponse.json({ user }, { status: 200 });
+    return NextResponse.json({ user, token }, { status: 200 });
   } catch (err) {
     console.error("[session/GET] Error:", err);
-    return NextResponse.json({ user: null }, { status: 200 });
+    return NextResponse.json({ user: null, token: null }, { status: 200 });
   }
 }
 

@@ -75,6 +75,18 @@ interface AiInsightData {
 
 
 
+function formatDeadline(endTime?: string) {
+  if (!endTime) return null;
+  const diff = new Date(endTime).getTime() - Date.now();
+  if (diff <= 0) return "Voting closed";
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+  if (days > 0) return `${days}d ${hours}h left`;
+  if (hours > 0) return `${hours}h ${minutes}m left`;
+  return `${minutes}m left`;
+}
+
 export default function DAOGovernancePage() {
   const { user, activeOrgId, isConnected } = useAuth();
   const [proposals, setProposals] = useState<Proposal[]>(() => {
@@ -276,18 +288,6 @@ export default function DAOGovernancePage() {
   };
 
   const [executingId, setExecutingId] = useState<string | null>(null);
-
-  const formatDeadline = (endTime?: string) => {
-    if (!endTime) return null;
-    const diff = new Date(endTime).getTime() - Date.now();
-    if (diff <= 0) return "Voting closed";
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    if (days > 0) return `${days}d ${hours}h left`;
-    if (hours > 0) return `${hours}h ${minutes}m left`;
-    return `${minutes}m left`;
-  };
 
   const handleExecute = async (p: Proposal) => {
     if (!window.confirm(`Are you sure you want to execute proposal "${p.title}" on-chain?`)) return;

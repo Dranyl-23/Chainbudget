@@ -274,7 +274,7 @@ export default function TransactionsPage() {
     }
     if (filters.range && filters.range !== "all") {
       const now = new Date();
-      let since = new Date();
+      const since = new Date();
       if (filters.range === "24h") since.setDate(now.getDate() - 1);
       else if (filters.range === "7d") since.setDate(now.getDate() - 7);
       else if (filters.range === "30d") since.setDate(now.getDate() - 30);

@@ -317,7 +317,7 @@ function removeFromLocalOutbox(orgId: string, clientMessageId: string) {
 }
 
 export default function OrgChatPage() {
-  const { user, activeOrgId, isConnected } = useAuth();
+  const { user, token: authToken, activeOrgId, isConnected } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [pinnedMessages, setPinnedMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState("");
@@ -653,72 +653,77 @@ export default function OrgChatPage() {
   useEffect(() => {
     let isCancelled = false;
 
-    if (activeOrgId) {
+    if (!activeOrgId) return;
+
+    // Silent Cache Hydration + Background Revalidation via Unified Bootstrap
+    void (async () => {
       // 1. Instant Cache Hydration (0ms display!)
       const cached = getLocalChatCache(activeOrgId);
       if (cached && cached.messages && cached.messages.length > 0) {
-        setMessages(cached.messages);
-        if (cached.pinned) setPinnedMessages(cached.pinned);
-        if (cached.logoUrl) setOrgLogoUrl(cached.logoUrl);
-        setIsLoading(false);
-        setTimeout(() => scrollToBottom("auto"), 20);
+        if (!isCancelled) {
+          setMessages(cached.messages);
+          if (cached.pinned) setPinnedMessages(cached.pinned);
+          if (cached.logoUrl) setOrgLogoUrl(cached.logoUrl);
+          setIsLoading(false);
+          setTimeout(() => scrollToBottom("auto"), 20);
+        }
       } else {
-        setIsLoading(true);
+        if (!isCancelled) {
+          setIsLoading(true);
+        }
       }
 
-      // 2. Silent Background Revalidation via Unified Bootstrap
-      void (async () => {
-        try {
-          const res = await api.get<ChatBootstrapResponse>(`/chat/${activeOrgId}/bootstrap?limit=50`);
-          if (!isCancelled && res.data) {
-            const { messages: serverMsgs = [], pinned = [], organization: org, onlineUserIds: onlineIds = [], hasMore } = res.data;
-            setMessages((prev) => {
-              const optimistic = prev.filter((m) => m._id.startsWith("temp-"));
-              const map = new Map<string, ChatMessage>();
-              for (const m of serverMsgs) {
-                map.set(m._id, m);
+      // 2. Background Revalidation via Unified Bootstrap
+      try {
+        const res = await api.get<ChatBootstrapResponse>(`/chat/${activeOrgId}/bootstrap?limit=50`);
+        if (!isCancelled && res.data) {
+          const { messages: serverMsgs = [], pinned = [], organization: org, onlineUserIds: onlineIds = [], hasMore } = res.data;
+          setMessages((prev) => {
+            const optimistic = prev.filter((m) => m._id.startsWith("temp-"));
+            const map = new Map<string, ChatMessage>();
+            for (const m of serverMsgs) {
+              map.set(m._id, m);
+            }
+            for (const opt of optimistic) {
+              if (!map.has(opt._id)) {
+                map.set(opt._id, opt);
               }
-              for (const opt of optimistic) {
-                if (!map.has(opt._id)) {
-                  map.set(opt._id, opt);
-                }
-              }
-              const merged = Array.from(map.values()).sort(
-                (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-              );
-              setLocalChatCache(activeOrgId, {
-                messages: merged,
-                pinned,
-                logoUrl: org?.logoUrl,
-              });
-              return merged;
+            }
+            const merged = Array.from(map.values()).sort(
+              (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+            );
+            setLocalChatCache(activeOrgId, {
+              messages: merged,
+              pinned,
+              logoUrl: org?.logoUrl,
             });
+            return merged;
+          });
 
-            setPinnedMessages(pinned);
-            if (typeof hasMore === "boolean") setHasMoreOlder(hasMore);
-            if (org?.logoUrl) {
-              setOrgLogoUrl(org.logoUrl);
-            }
-            if (onlineIds) {
-              setOnlineUserIds(onlineIds);
-            }
-            setIsLoading(false);
-            if (!cached || cached.messages.length === 0) {
-              setTimeout(() => scrollToBottom("auto"), 50);
-            }
-            void markMessagesAsSeen();
+          setPinnedMessages(pinned);
+          if (typeof hasMore === "boolean") setHasMoreOlder(hasMore);
+          if (org?.logoUrl) {
+            setOrgLogoUrl(org.logoUrl);
           }
-        } catch (err: unknown) {
-          console.error("[Chat] Failed to bootstrap chat data:", err);
-          if (!isCancelled) {
-            if (!cached) {
-              toast.error("Could not load organization chat history");
-            }
-            setIsLoading(false);
+          if (onlineIds) {
+            setOnlineUserIds(onlineIds);
           }
+          setIsLoading(false);
+          if (!cached || cached.messages.length === 0) {
+            setTimeout(() => scrollToBottom("auto"), 50);
+          }
+          void markMessagesAsSeen();
         }
-      })();
-    }
+      } catch (err: unknown) {
+        console.error("[Chat] Failed to bootstrap chat data:", err);
+        if (!isCancelled) {
+          if (!cached) {
+            toast.error("Could not load organization chat history");
+          }
+          setIsLoading(false);
+        }
+      }
+    })();
 
     return () => {
       isCancelled = true;
@@ -757,156 +762,247 @@ export default function OrgChatPage() {
     }
   }, [activeOrgId]);
 
-  // 2. Connect to Socket.IO for real-time chat updates
+  // 2. Connect to Socket.IO for real-time chat updates with token resolution
   useEffect(() => {
     if (!activeOrgId) return;
 
-    const rawToken = typeof window !== "undefined" ? (localStorage.getItem("cb_token") || localStorage.getItem("token")) : null;
-    const token = (rawToken && rawToken !== "undefined" && rawToken !== "null") ? rawToken : undefined;
+    let socket: Socket | null = null;
+    let isCancelled = false;
 
-    const socket = io(BACKEND_URL, {
-      auth: { token },
-      withCredentials: true,
-      transports: ["websocket", "polling"],
-      reconnection: true,
-      reconnectionAttempts: 15,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      randomizationFactor: 0.5,
-    });
-    socketRef.current = socket;
+    const setupSocket = async () => {
+      let token = authToken;
+      if (!token) {
+        try {
+          const tokenRes = await fetch("/api/auth/token", { cache: "no-store" });
+          if (tokenRes.ok) {
+            const data = await tokenRes.json();
+            token = data.token || undefined;
+          }
+        } catch {
+          // Continue with undefined token (read-only broadcast fallback)
+        }
+      }
 
-    socket.on("connect", () => {
-      setIsSocketConnected(true);
-      socket.emit("join_org", activeOrgId);
-      socket.emit("get_org_online", activeOrgId);
-      void flushOutbox();
-    });
+      if (isCancelled) return;
 
-    socket.on("reconnect", () => {
-      setIsSocketConnected(true);
-      socket.emit("join_org", activeOrgId);
-      socket.emit("get_org_online", activeOrgId);
-      void flushOutbox();
-    });
+      socket = io(BACKEND_URL, {
+        auth: { token },
+        withCredentials: true,
+        transports: ["websocket", "polling"],
+        reconnection: true,
+        reconnectionAttempts: 25,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        randomizationFactor: 0.5,
+      });
+      socketRef.current = socket;
+
+      socket.on("connect", () => {
+        setIsSocketConnected(true);
+        socket?.emit("join_org", activeOrgId);
+        socket?.emit("get_org_online", activeOrgId);
+        if (token) {
+          socket?.emit("authenticate", { token });
+        }
+        void flushOutbox();
+      });
+
+      socket.on("connect_error", (err) => {
+        console.warn("[Chat] Socket connection warning:", err.message);
+      });
+
+      socket.on("reconnect", () => {
+        setIsSocketConnected(true);
+        socket?.emit("join_org", activeOrgId);
+        socket?.emit("get_org_online", activeOrgId);
+        if (token) {
+          socket?.emit("authenticate", { token });
+        }
+        void flushOutbox();
+      });
+
+      socket.on("disconnect", () => {
+        setIsSocketConnected(false);
+      });
+
+      socket.on("org_online_users", (data: { orgId: string; onlineUserIds: string[] }) => {
+        if (data.orgId === activeOrgId && Array.isArray(data.onlineUserIds)) {
+          setOnlineUserIds(data.onlineUserIds);
+        }
+      });
+
+      socket.on("new_org_message", (data: { orgId: string; message: ChatMessage }) => {
+        if (data.orgId === activeOrgId && data.message) {
+          setMessages((prev) => {
+            const tempMsg = prev.find(
+              (m) =>
+                (data.message.clientMessageId && m.clientMessageId === data.message.clientMessageId) ||
+                (data.message.clientMessageId && m._id === data.message.clientMessageId) ||
+                (m._id.startsWith("temp-") && m.content === data.message.content)
+            );
+            if (tempMsg) {
+              return prev.map((m) =>
+                m._id === tempMsg._id
+                  ? { ...data.message, status: "sent" as MessageStatus, _localContent: data.message.content }
+                  : m
+              );
+            }
+            if (prev.some((m) => m._id === data.message._id)) return prev;
+            return [...prev, data.message];
+          });
+          scrollToBottom("smooth");
+          void markMessagesAsSeen();
+
+          // Auto-acknowledge delivery for messages from OTHER users (fire-and-forget)
+          if (data.message.sender?._id !== currentUserId) {
+            api
+              .post(`/chat/${activeOrgId}/messages/${data.message._id}/delivered`)
+              .catch(() => {});
+          }
+        }
+      });
+
+      // Upgrade sender's tick from 'sent' → 'delivered' when recipient's browser receives it
+      socket.on(
+        "org_message_delivered",
+        (data: { orgId: string; messageId: string; user: UserRef }) => {
+          if (data.orgId === activeOrgId && data.user._id !== currentUserId) {
+            setMessages((prev) =>
+              prev.map((m) => {
+                if (m._id !== data.messageId) return m;
+                const alreadyDelivered = m.deliveredTo?.some((u) => u._id === data.user._id);
+                if (alreadyDelivered) return m;
+                return { ...m, deliveredTo: [...(m.deliveredTo || []), data.user] };
+              })
+            );
+          }
+        }
+      );
+
+      socket.on("org_message_reacted", (data: { orgId: string; messageId: string; reactions: ReactionGroup[] }) => {
+        if (data.orgId === activeOrgId) {
+          setMessages((prev) =>
+            prev.map((m) => (m._id === data.messageId ? { ...m, reactions: data.reactions } : m))
+          );
+        }
+      });
+
+      socket.on("org_messages_seen", (data: { orgId: string; userId: string; user: UserRef }) => {
+        if (data.orgId === activeOrgId && data.userId !== currentUserId) {
+          setMessages((prev) =>
+            prev.map((m) => {
+              const alreadySeen = m.seenBy?.some((u) => u._id === data.userId);
+              if (alreadySeen) return m;
+              return { ...m, seenBy: [...(m.seenBy || []), data.user] };
+            })
+          );
+        }
+      });
+
+      socket.on("org_message_pinned", (data: { orgId: string; message: ChatMessage }) => {
+        if (data.orgId === activeOrgId && data.message) {
+          setMessages((prev) =>
+            prev.map((m) => (m._id === data.message._id ? data.message : m))
+          );
+          if (data.message.isPinned) {
+            setPinnedMessages((prev) => [data.message, ...prev.filter((p) => p._id !== data.message._id)]);
+          } else {
+            setPinnedMessages((prev) => prev.filter((p) => p._id !== data.message._id));
+          }
+        }
+      });
+
+      socket.on("org_message_deleted", (data: { orgId: string; messageId: string }) => {
+        if (data.orgId === activeOrgId) {
+          setMessages((prev) => prev.filter((m) => m._id !== data.messageId));
+          setPinnedMessages((prev) => prev.filter((p) => p._id !== data.messageId));
+        }
+      });
+
+      socket.on("org_updated", (data: { orgId: string; logoUrl?: string; name?: string }) => {
+        if (data.orgId === activeOrgId && data.logoUrl) {
+          setOrgLogoUrl(data.logoUrl);
+        }
+      });
+    };
+
+    void setupSocket();
 
     const handleOnline = () => {
       void flushOutbox();
     };
     window.addEventListener("online", handleOnline);
 
-    socket.on("disconnect", () => {
-      setIsSocketConnected(false);
-    });
-
-    socket.on("org_online_users", (data: { orgId: string; onlineUserIds: string[] }) => {
-      if (data.orgId === activeOrgId && Array.isArray(data.onlineUserIds)) {
-        setOnlineUserIds(data.onlineUserIds);
-      }
-    });
-
-    socket.on("new_org_message", (data: { orgId: string; message: ChatMessage }) => {
-      if (data.orgId === activeOrgId && data.message) {
-        setMessages((prev) => {
-          const tempMsg = prev.find(
-            (m) =>
-              (data.message.clientMessageId && m.clientMessageId === data.message.clientMessageId) ||
-              (data.message.clientMessageId && m._id === data.message.clientMessageId) ||
-              (m._id.startsWith("temp-") && m.content === data.message.content)
-          );
-          if (tempMsg) {
-            return prev.map((m) =>
-              m._id === tempMsg._id
-                ? { ...data.message, status: "sent" as MessageStatus, _localContent: data.message.content }
-                : m
-            );
-          }
-          if (prev.some((m) => m._id === data.message._id)) return prev;
-          return [...prev, data.message];
-        });
-        scrollToBottom("smooth");
-        void markMessagesAsSeen();
-
-        // Auto-acknowledge delivery for messages from OTHER users (fire-and-forget)
-        if (data.message.sender?._id !== currentUserId) {
-          api
-            .post(`/chat/${activeOrgId}/messages/${data.message._id}/delivered`)
-            .catch(() => {});
-        }
-      }
-    });
-
-    // Upgrade sender's tick from 'sent' → 'delivered' when recipient's browser receives it
-    socket.on(
-      "org_message_delivered",
-      (data: { orgId: string; messageId: string; user: UserRef }) => {
-        if (data.orgId === activeOrgId && data.user._id !== currentUserId) {
-          setMessages((prev) =>
-            prev.map((m) => {
-              if (m._id !== data.messageId) return m;
-              const alreadyDelivered = m.deliveredTo?.some((u) => u._id === data.user._id);
-              if (alreadyDelivered) return m;
-              return { ...m, deliveredTo: [...(m.deliveredTo || []), data.user] };
-            })
-          );
-        }
-      }
-    );
-
-    socket.on("org_message_reacted", (data: { orgId: string; messageId: string; reactions: ReactionGroup[] }) => {
-      if (data.orgId === activeOrgId) {
-        setMessages((prev) =>
-          prev.map((m) => (m._id === data.messageId ? { ...m, reactions: data.reactions } : m))
-        );
-      }
-    });
-
-    socket.on("org_messages_seen", (data: { orgId: string; userId: string; user: UserRef }) => {
-      if (data.orgId === activeOrgId && data.userId !== currentUserId) {
-        setMessages((prev) =>
-          prev.map((m) => {
-            const alreadySeen = m.seenBy?.some((u) => u._id === data.userId);
-            if (alreadySeen) return m;
-            return { ...m, seenBy: [...(m.seenBy || []), data.user] };
-          })
-        );
-      }
-    });
-
-    socket.on("org_message_pinned", (data: { orgId: string; message: ChatMessage }) => {
-      if (data.orgId === activeOrgId && data.message) {
-        setMessages((prev) =>
-          prev.map((m) => (m._id === data.message._id ? data.message : m))
-        );
-        if (data.message.isPinned) {
-          setPinnedMessages((prev) => [data.message, ...prev.filter((p) => p._id !== data.message._id)]);
-        } else {
-          setPinnedMessages((prev) => prev.filter((p) => p._id !== data.message._id));
-        }
-      }
-    });
-
-    socket.on("org_message_deleted", (data: { orgId: string; messageId: string }) => {
-      if (data.orgId === activeOrgId) {
-        setMessages((prev) => prev.filter((m) => m._id !== data.messageId));
-        setPinnedMessages((prev) => prev.filter((p) => p._id !== data.messageId));
-      }
-    });
-
-    socket.on("org_updated", (data: { orgId: string; logoUrl?: string; name?: string }) => {
-      if (data.orgId === activeOrgId && data.logoUrl) {
-        setOrgLogoUrl(data.logoUrl);
-      }
-    });
-
     return () => {
-      // Properly notify server we are leaving the org room
+      isCancelled = true;
       window.removeEventListener("online", handleOnline);
-      socket.emit("leave_org", activeOrgId);
-      socket.disconnect();
+      if (socket) {
+        socket.emit("leave_org", activeOrgId);
+        socket.disconnect();
+      }
       socketRef.current = null;
     };
-  }, [activeOrgId, currentUserId, markMessagesAsSeen]);
+  }, [activeOrgId, authToken, currentUserId, markMessagesAsSeen, flushOutbox]);
+
+  // Synchronize dynamic socket authentication whenever authToken updates
+  useEffect(() => {
+    if (authToken && socketRef.current?.connected) {
+      socketRef.current.emit("authenticate", { token: authToken });
+    }
+  }, [authToken]);
+
+  // 3. Live background polling sync (every 3.5s) ensuring messages arrive even if WebSocket drops or reconnects
+  useEffect(() => {
+    if (!activeOrgId) return;
+
+    const syncInterval = setInterval(() => {
+      api
+        .get<{ messages: ChatMessage[] }>(`/chat/${activeOrgId}/messages?limit=25`)
+        .then((res) => {
+          const freshList = res.data?.messages || [];
+          if (freshList.length > 0) {
+            setMessages((prev) => {
+              let hasNew = false;
+              const merged = [...prev];
+              for (const fresh of freshList) {
+                const exists = merged.some((m) => m._id === fresh._id);
+                if (!exists) {
+                  // Replace matching temporary optimistic message if any
+                  const tempIdx = merged.findIndex(
+                    (m) =>
+                      (fresh.clientMessageId &&
+                        (m.clientMessageId === fresh.clientMessageId || m._id === fresh.clientMessageId)) ||
+                      ((m._id.startsWith("temp-") || m._id.startsWith("msg-")) &&
+                        m.content === fresh.content &&
+                        Math.abs(new Date(m.createdAt).getTime() - new Date(fresh.createdAt).getTime()) < 60000)
+                  );
+                  if (tempIdx !== -1) {
+                    merged[tempIdx] = { ...fresh, status: "sent" as MessageStatus };
+                    hasNew = true;
+                  } else {
+                    merged.push(fresh);
+                    hasNew = true;
+                  }
+                }
+              }
+              if (!hasNew) return prev;
+              merged.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+              setLocalChatCache(activeOrgId, {
+                messages: merged,
+                pinned: pinnedMessages,
+                logoUrl: orgLogoUrl,
+              });
+              return merged;
+            });
+          }
+        })
+        .catch(() => {});
+    }, 3500);
+
+    return () => {
+      clearInterval(syncInterval);
+    };
+  }, [activeOrgId, pinnedMessages, orgLogoUrl]);
 
   /**
    * Derives the display status of a sent message from its data.

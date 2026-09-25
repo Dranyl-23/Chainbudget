@@ -381,4 +381,5 @@ module.exports = {
   requireSuperAdmin,
   verifyChainBudgetJWT: verifyInternalJWT,
   verifyInternalJWT,
+  verifyAsgardeoJWT,
 };
