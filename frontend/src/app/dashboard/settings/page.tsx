@@ -14,9 +14,9 @@ import {
   Save, Wallet, Upload, User as UserIcon, ShieldCheck, 
   ExternalLink, Copy, Check, CheckCircle2, 
   Sparkles, X, Lock, Key, Clock, ShieldAlert,
-  Bell, Building, Camera
-} from "lucide-react";
+  Bell} from "lucide-react";
 import EmblemRebrandSection from "@/components/EmblemRebrandSection";
+import Portal from "@/components/Portal";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface UserOrgRef {
@@ -918,76 +918,84 @@ export default function SettingsPage() {
 
       {/* ── Security Verification Modal ── */}
       {isSecurityModalOpen && (
-        <div className="fixed inset-0 z-9999 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in">
-          <div className="relative bg-slate-900 border border-slate-700/80 rounded-3xl shadow-2xl w-full max-w-md p-6 md:p-8 animate-in zoom-in-95 duration-200">
-            <button
-              onClick={() => setIsSecurityModalOpen(false)}
-              className="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-800 border border-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
-
-            <div className="flex items-center gap-3.5 mb-5">
-              <div className="w-12 h-12 rounded-2xl bg-orange-500/20 border border-orange-500/40 flex items-center justify-center shrink-0">
-                <Lock className="w-6 h-6 text-orange-400" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-white tracking-tight">
-                  Security Verification
-                </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Confirm identity to export Web3 credentials.
-                </p>
-              </div>
-            </div>
-
-            <p className="text-xs text-slate-300 mb-5 leading-relaxed">
-              Your recovery phrase and private key grant full authority over your on-chain assets. To export your keys, MetaMask will prompt you to cryptographically sign a single-use verification challenge issued by the server.
-            </p>
-
-            <div className="p-3.5 mb-5 rounded-xl bg-orange-500/10 border border-orange-500/30 text-xs text-orange-300 flex items-start gap-2.5">
-              <ShieldCheck className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
-              <span>
-                <strong>Zero-Knowledge Security:</strong> This challenge requires ECDSA signature verification on the server before keys are decrypted.
-              </span>
-            </div>
-
-            {securityError && (
-              <p className="text-xs text-rose-400 font-semibold mb-4 flex items-center gap-1.5 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30">
-                <ShieldAlert className="w-4 h-4 shrink-0" />
-                {securityError}
-              </p>
-            )}
-
-            <div className="flex gap-3 pt-2">
+        <Portal>
+          <div 
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setIsSecurityModalOpen(false);
+            }}
+            className="fixed inset-0 z-9999 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fade-in overflow-y-auto"
+          >
+            <div className="relative bg-slate-900 border border-slate-700/80 rounded-3xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto p-6 md:p-8 animate-in zoom-in-95 duration-200 my-auto">
               <button
-                type="button"
                 onClick={() => setIsSecurityModalOpen(false)}
-                className="flex-1 py-3 px-4 rounded-xl border border-slate-700 bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 font-bold text-xs transition-colors"
+                className="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-800 border border-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors"
+                aria-label="Close"
               >
-                Cancel
+                <X className="w-4 h-4" />
               </button>
-              <button
-                type="button"
-                onClick={() => handleConfirmSecurity()}
-                disabled={isVerifyingSecurity}
-                className="flex-1 py-3 px-4 rounded-xl bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-orange-600/30 transition-all"
-              >
-                {isVerifyingSecurity ? (
-                  <>
-                    <span className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
-                    <span>Signing...</span>
-                  </>
-                ) : (
-                  <>
-                    <Key className="w-4 h-4" />
-                    <span>Sign & Export Keys</span>
-                  </>
-                )}
-              </button>
+
+              <div className="flex items-center gap-3.5 mb-5">
+                <div className="w-12 h-12 rounded-2xl bg-orange-500/20 border border-orange-500/40 flex items-center justify-center shrink-0">
+                  <Lock className="w-6 h-6 text-orange-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white tracking-tight">
+                    Security Verification
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Confirm identity to export Web3 credentials.
+                  </p>
+                </div>
+              </div>
+
+              <p className="text-xs text-slate-300 mb-5 leading-relaxed">
+                Your recovery phrase and private key grant full authority over your on-chain assets. To export your keys, MetaMask will prompt you to cryptographically sign a single-use verification challenge issued by the server.
+              </p>
+
+              <div className="p-3.5 mb-5 rounded-xl bg-orange-500/10 border border-orange-500/30 text-xs text-orange-300 flex items-start gap-2.5">
+                <ShieldCheck className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
+                <span>
+                  <strong>Zero-Knowledge Security:</strong> This challenge requires ECDSA signature verification on the server before keys are decrypted.
+                </span>
+              </div>
+
+              {securityError && (
+                <p className="text-xs text-rose-400 font-semibold mb-4 flex items-center gap-1.5 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30">
+                  <ShieldAlert className="w-4 h-4 shrink-0" />
+                  {securityError}
+                </p>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsSecurityModalOpen(false)}
+                  className="flex-1 py-3 px-4 rounded-xl border border-slate-700 bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 font-bold text-xs transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleConfirmSecurity()}
+                  disabled={isVerifyingSecurity}
+                  className="flex-1 py-3 px-4 rounded-xl bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-orange-600/30 transition-all"
+                >
+                  {isVerifyingSecurity ? (
+                    <>
+                      <span className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+                      <span>Signing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Key className="w-4 h-4" />
+                      <span>Sign & Export Keys</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        </Portal>
       )}
     </div>
   );

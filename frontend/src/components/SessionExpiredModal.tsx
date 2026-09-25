@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { LogOut, AlertTriangle } from "lucide-react";
+import Portal from "@/components/Portal";
 
 export default function SessionExpiredModal() {
   const [show, setShow] = useState(false);
@@ -25,7 +26,8 @@ export default function SessionExpiredModal() {
   };
 
   return (
-    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
+    <Portal>
+      <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-sm p-6 transform transition-all scale-100 animate-in fade-in zoom-in duration-300">
         <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-red-100 mb-6">
@@ -49,6 +51,7 @@ export default function SessionExpiredModal() {
           </button>
         </div>
       </div>
-    </div>
+      </div>
+    </Portal>
   );
 }

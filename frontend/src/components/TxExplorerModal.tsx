@@ -3,6 +3,7 @@ import { X, ExternalLink, Copy, CheckCircle2, Activity, Box, Clock, ShieldCheck,
 import { ethers } from "ethers";
 import { getAmoyProvider } from "@/lib/rpcProvider";
 import { getExplorerTxUrl } from "@/lib/config";
+import Portal from "@/components/Portal";
 
 interface TxExplorerModalProps {
   isOpen: boolean;
@@ -116,13 +117,14 @@ export default function TxExplorerModal({ isOpen, onClose, txHash }: TxExplorerM
   if (!isOpen) return null;
 
   return (
-    <div 
-      className="fixed inset-0 z-60 flex items-center justify-center p-4 animate-fade-in"
-      style={{ background: "rgba(11, 12, 16, 0.75)", backdropFilter: "blur(12px)" }}
-    >
-      <div className="absolute inset-0" onClick={onClose}></div>
+    <Portal>
+      <div 
+        className="fixed inset-0 z-[9999] flex items-center justify-center p-4 animate-fade-in overflow-y-auto"
+        style={{ background: "rgba(11, 12, 16, 0.75)", backdropFilter: "blur(12px)" }}
+      >
+        <div className="absolute inset-0" onClick={onClose}></div>
 
-      <div className="relative w-full max-w-lg glass rounded-2xl p-6 md:p-8 shadow-[0_0_40px_rgba(139,92,246,0.15)] border border-purple-500/30 overflow-hidden">
+        <div className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto glass rounded-2xl p-6 md:p-8 shadow-[0_0_40px_rgba(139,92,246,0.15)] border border-purple-500/30 my-auto">
         
         {/* Header */}
         <div className="flex items-center justify-between mb-6 relative z-10">
@@ -244,7 +246,8 @@ export default function TxExplorerModal({ isOpen, onClose, txHash }: TxExplorerM
             </div>
           ) : null}
         </div>
+        </div>
       </div>
-    </div>
+    </Portal>
   );
 }

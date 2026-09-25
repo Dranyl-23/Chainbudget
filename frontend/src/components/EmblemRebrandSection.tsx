@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { Building, Camera, Upload, Save, Check, CheckCircle2 } from "lucide-react";
+import Portal from "@/components/Portal";
 import toast from "react-hot-toast";
 import api from "@/lib/api";
 import { BACKEND_URL } from "@/lib/config";
@@ -218,51 +219,58 @@ export default function EmblemRebrandSection({
 
       {/* ── Custom Emblem Celebration Modal ── */}
       {showEmblemSuccessModal && (
-        <div className="fixed inset-0 z-9999 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fade-in">
-          <div className="relative bg-[#13121d] border border-purple-500/40 rounded-3xl shadow-[0_0_50px_rgba(168,85,247,0.3)] w-full max-w-sm p-6 text-center animate-modal-pop">
-            <div className="relative mx-auto w-24 h-24 mb-5 flex items-center justify-center">
-              <div className="absolute inset-0 rounded-3xl bg-emerald-500/20 border-2 border-emerald-500/40 animate-ping opacity-60" />
-              <div className="relative w-20 h-20 rounded-2xl bg-white/5 border-2 border-emerald-400 overflow-hidden flex items-center justify-center shadow-[0_0_20px_rgba(16,185,129,0.4)]">
-                {uploadedEmblemUrl || orgLogoPreview ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={uploadedEmblemUrl || orgLogoPreview || ""}
-                    alt="Rebranded Emblem"
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <Building className="w-10 h-10 text-emerald-400" />
-                )}
+        <Portal>
+          <div 
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setShowEmblemSuccessModal(false);
+            }}
+            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fade-in overflow-y-auto"
+          >
+            <div className="relative bg-[#13121d] border border-purple-500/40 rounded-3xl shadow-[0_0_50px_rgba(168,85,247,0.3)] w-full max-w-sm max-h-[90vh] overflow-y-auto p-6 text-center animate-modal-pop my-auto">
+              <div className="relative mx-auto w-24 h-24 mb-5 flex items-center justify-center">
+                <div className="absolute inset-0 rounded-3xl bg-emerald-500/20 border-2 border-emerald-500/40 animate-ping opacity-60" />
+                <div className="relative w-20 h-20 rounded-2xl bg-white/5 border-2 border-emerald-400 overflow-hidden flex items-center justify-center shadow-[0_0_20px_rgba(16,185,129,0.4)]">
+                  {uploadedEmblemUrl || orgLogoPreview ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={uploadedEmblemUrl || orgLogoPreview || ""}
+                      alt="Rebranded Emblem"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <Building className="w-10 h-10 text-emerald-400" />
+                  )}
+                </div>
+                <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center border-2 border-[#13121d] shadow-md">
+                  <Check className="w-4 h-4 stroke-3" />
+                </div>
               </div>
-              <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center border-2 border-[#13121d] shadow-md">
-                <Check className="w-4 h-4 stroke-3" />
+
+              <h3 className="text-xl font-black text-white tracking-tight mb-1">
+                Emblem Rebranded!
+              </h3>
+
+              <div className="inline-block bg-purple-500/10 border border-purple-500/30 px-3 py-1 rounded-full mb-3">
+                <span className="text-xs font-bold text-purple-300">
+                  {orgDetails?.name || "Organization"}
+                </span>
               </div>
+
+              <p className="text-xs text-white/60 leading-relaxed mb-6 px-2">
+                Your new organization logo and custom emblem have been published to IPFS and synchronized across the Public Ledger, Group Chats, and Member Dashboards.
+              </p>
+
+              <button
+                type="button"
+                onClick={() => setShowEmblemSuccessModal(false)}
+                className="w-full py-3 px-4 rounded-xl bg-linear-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white font-bold text-sm shadow-[0_0_20px_rgba(16,185,129,0.4)] transition-all hover:scale-[1.02] flex items-center justify-center gap-2"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                Done & Synchronized
+              </button>
             </div>
-
-            <h3 className="text-xl font-black text-white tracking-tight mb-1">
-              Emblem Rebranded!
-            </h3>
-
-            <div className="inline-block bg-purple-500/10 border border-purple-500/30 px-3 py-1 rounded-full mb-3">
-              <span className="text-xs font-bold text-purple-300">
-                {orgDetails?.name || "Organization"}
-              </span>
-            </div>
-
-            <p className="text-xs text-white/60 leading-relaxed mb-6 px-2">
-              Your new organization logo and custom emblem have been published to IPFS and synchronized across the Public Ledger, Group Chats, and Member Dashboards.
-            </p>
-
-            <button
-              type="button"
-              onClick={() => setShowEmblemSuccessModal(false)}
-              className="w-full py-3 px-4 rounded-xl bg-linear-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white font-bold text-sm shadow-[0_0_20px_rgba(16,185,129,0.4)] transition-all hover:scale-[1.02] flex items-center justify-center gap-2"
-            >
-              <CheckCircle2 className="w-4 h-4" />
-              Done & Synchronized
-            </button>
           </div>
-        </div>
+        </Portal>
       )}
     </>
   );

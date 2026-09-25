@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
+import Portal from "@/components/Portal";
 
 interface WalletMismatchGuideModalProps {
   isOpen: boolean;
@@ -49,8 +50,14 @@ export default function WalletMismatchGuideModal({
   };
 
   return (
-    <div className="fixed inset-0 z-9999 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in">
-      <div className="relative bg-slate-900 border border-slate-700/80 rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden p-6 md:p-8 animate-in zoom-in-95 duration-200">
+    <Portal>
+      <div 
+        onClick={(e) => {
+          if (e.target === e.currentTarget) onClose();
+        }}
+        className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in overflow-y-auto"
+      >
+        <div className="relative bg-slate-900 border border-slate-700/80 rounded-3xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto p-6 md:p-8 animate-in zoom-in-95 duration-200 my-auto">
         {/* Close Button */}
         <button
           onClick={onClose}
@@ -244,7 +251,8 @@ export default function WalletMismatchGuideModal({
             </Link>
           )}
         </div>
+        </div>
       </div>
-    </div>
+    </Portal>
   );
 }
