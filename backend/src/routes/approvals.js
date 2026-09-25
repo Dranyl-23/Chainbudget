@@ -146,6 +146,7 @@ router.post("/:txId", authenticate, requireRole(2), requireIdempotency, async (r
     if (approval && approval[0] && !txn.approvals.includes(approval[0]._id)) {
       txn.approvals.push(approval[0]._id);
     }
+    await txn.save({ session });
 
     const org = txn.organization;
     if (action === "approved") {
@@ -155,8 +156,7 @@ router.post("/:txId", authenticate, requireRole(2), requireIdempotency, async (r
         if (blockchainTxHash) {
           txn.blockchainTxHash = blockchainTxHash;
         }
-      }
-      await txn.save({ session });
+        await txn.save({ session });
 
         // Trigger Gasless Relayer Execution if Smart Contract is linked
         if (org.contractAddress) {
