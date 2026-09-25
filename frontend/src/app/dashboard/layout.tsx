@@ -173,8 +173,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     void fetchPendingCount();
 
+    const handleApprovalsUpdated = () => {
+      void fetchPendingCount();
+    };
+    window.addEventListener("cb_approvals_updated", handleApprovalsUpdated);
+
     return () => {
       isCancelled = true;
+      window.removeEventListener("cb_approvals_updated", handleApprovalsUpdated);
     };
   }, [activeOrgId, roleLevel, pathname]);
 

@@ -119,6 +119,8 @@ export default function ApprovalsPage() {
   const [budgetData, setBudgetData] = useState<BudgetItem[]>([]);
   const [verifiedReceipts, setVerifiedReceipts] = useState<Record<string, boolean>>({});
 
+  const [activeFilter, setActiveFilter] = useState<"all" | "multi_sig" | "requested">("all");
+
   // Wallet Mismatch Interactive Guide Modal
   const [mismatchGuide, setMismatchGuide] = useState<{
     isOpen: boolean;
@@ -131,6 +133,42 @@ export default function ApprovalsPage() {
     activeAddress: "",
   });
 
+  const mapTxListToApprovals = (txList: TransactionApiItem[]): Approval[] => {
+    return txList.map((tx) => {
+      const userVoted =
+        Boolean(tx.hasVoted) ||
+        Boolean(
+          tx.approvedBy?.some(
+            (a) =>
+              (a._id && a._id === user?.id) ||
+              (a.walletAddress &&
+                user?.walletAddress &&
+                a.walletAddress.toLowerCase() === user.walletAddress.toLowerCase())
+          )
+        );
+
+      return {
+        _id: tx._id,
+        description: tx.description,
+        amount: tx.amount,
+        submittedBy: tx.submittedBy,
+        createdAt: tx.createdAt,
+        status: tx.status,
+        votes: tx.approvalCount || 0,
+        required: tx.organization?.requiredApprovals || 2,
+        hasVoted: userVoted,
+        approvedBy: tx.approvedBy,
+        organization: { highValueThreshold: tx.organization?.highValueThreshold || 10000 },
+        onChainTxId: tx.onChainTxId,
+        category: tx.category || tx.budgetCategory || "",
+        type: tx.type,
+        urgency: tx.urgency || "normal",
+        documentUrl: tx.documentUrl,
+        to: tx.to,
+      };
+    });
+  };
+
   useEffect(() => {
     let isCancelled = false;
 
@@ -142,46 +180,22 @@ export default function ApprovalsPage() {
         }
 
         const orgId = activeOrgId;
-        const res = await api.get<TransactionsResponse>("/transactions", {
-          params: { orgId, status: "pending_approval", limit: 100 },
-        });
+        const [pendingRes, requestedRes] = await Promise.all([
+          api.get<TransactionsResponse>("/transactions", {
+            params: { orgId, status: "pending_approval", limit: 100 },
+          }),
+          api.get<TransactionsResponse>("/transactions", {
+            params: { orgId, status: "requested", limit: 100 },
+          }).catch(() => ({ data: { transactions: [] as TransactionApiItem[] } })),
+        ]);
 
-        const txList: TransactionApiItem[] = res.data.transactions || [];
+        const txMap = new Map<string, TransactionApiItem>();
+        (pendingRes.data.transactions || []).forEach((t) => txMap.set(t._id, t));
+        (requestedRes.data.transactions || []).forEach((t) => txMap.set(t._id, t));
+        const txList: TransactionApiItem[] = Array.from(txMap.values());
 
         // Map transactions to approval display format
-        const approvals: Approval[] = txList.map((tx) => {
-          const userVoted =
-            Boolean(tx.hasVoted) ||
-            Boolean(
-              tx.approvedBy?.some(
-                (a) =>
-                  (a._id && a._id === user?.id) ||
-                  (a.walletAddress &&
-                    user?.walletAddress &&
-                    a.walletAddress.toLowerCase() === user.walletAddress.toLowerCase())
-              )
-            );
-
-          return {
-            _id: tx._id,
-            description: tx.description,
-            amount: tx.amount,
-            submittedBy: tx.submittedBy,
-            createdAt: tx.createdAt,
-            status: tx.status,
-            votes: tx.approvalCount || 0,
-            required: tx.organization?.requiredApprovals || 2,
-            hasVoted: userVoted,
-            approvedBy: tx.approvedBy,
-            organization: { highValueThreshold: tx.organization?.highValueThreshold || 10000 },
-            onChainTxId: tx.onChainTxId,
-            category: tx.category || tx.budgetCategory || "",
-            type: tx.type,
-            urgency: tx.urgency || "normal",
-            documentUrl: tx.documentUrl,
-            to: tx.to,
-          };
-        });
+        const approvals: Approval[] = mapTxListToApprovals(txList);
 
         if (!isCancelled) {
           setPendingApprovals(approvals);
@@ -214,49 +228,27 @@ export default function ApprovalsPage() {
     return () => {
       isCancelled = true;
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeOrgId, user?.id, user?.walletAddress]);
 
   const refreshApprovals = async () => {
     if (!activeOrgId) return;
     try {
-      const res = await api.get<TransactionsResponse>("/transactions", {
-        params: { orgId: activeOrgId, status: "pending_approval", limit: 100 },
-      });
-      const txList: TransactionApiItem[] = res.data.transactions || [];
-      const approvals: Approval[] = txList.map((tx) => {
-        const userVoted =
-          Boolean(tx.hasVoted) ||
-          Boolean(
-            tx.approvedBy?.some(
-              (a) =>
-                (a._id && a._id === user?.id) ||
-                (a.walletAddress &&
-                  user?.walletAddress &&
-                  a.walletAddress.toLowerCase() === user.walletAddress.toLowerCase())
-            )
-          );
-
-        return {
-          _id: tx._id,
-          description: tx.description,
-          amount: tx.amount,
-          submittedBy: tx.submittedBy,
-          createdAt: tx.createdAt,
-          status: tx.status,
-          votes: tx.approvalCount || 0,
-          required: tx.organization?.requiredApprovals || 2,
-          hasVoted: userVoted,
-          approvedBy: tx.approvedBy,
-          organization: { highValueThreshold: tx.organization?.highValueThreshold || 10000 },
-          onChainTxId: tx.onChainTxId,
-          category: tx.category || tx.budgetCategory || "",
-          type: tx.type,
-          urgency: tx.urgency || "normal",
-          documentUrl: tx.documentUrl,
-          to: tx.to,
-        };
-      });
+      const [pendingRes, requestedRes] = await Promise.all([
+        api.get<TransactionsResponse>("/transactions", {
+          params: { orgId: activeOrgId, status: "pending_approval", limit: 100 },
+        }),
+        api.get<TransactionsResponse>("/transactions", {
+          params: { orgId: activeOrgId, status: "requested", limit: 100 },
+        }).catch(() => ({ data: { transactions: [] as TransactionApiItem[] } })),
+      ]);
+      const txMap = new Map<string, TransactionApiItem>();
+      (pendingRes.data.transactions || []).forEach((t) => txMap.set(t._id, t));
+      (requestedRes.data.transactions || []).forEach((t) => txMap.set(t._id, t));
+      const txList: TransactionApiItem[] = Array.from(txMap.values());
+      const approvals: Approval[] = mapTxListToApprovals(txList);
       setPendingApprovals(approvals);
+      sessionStorage.setItem("cb_cache_approvals", JSON.stringify(approvals));
     } catch (err: unknown) {
       console.error("Failed to refresh approvals:", err);
     }
@@ -320,6 +312,28 @@ export default function ApprovalsPage() {
     sessionStorage.setItem("cb_action_in_progress", "true");
 
     try {
+      // ── Level 3 Member Request Review ──
+      if (req.status === "requested") {
+        toast.loading("Processing Member Request...", { id: "txToast" });
+        await api.patch(`/transactions/${req._id}/process-request`, { action: "approve" });
+        const isHighValue = req.amount >= (req.organization?.highValueThreshold || 10000);
+        toast.success(
+          isHighValue
+            ? "Request approved! Promoted to 2-of-N Multi-Sig on Polygon Amoy."
+            : "Request approved & recorded on Polygon Amoy!",
+          { id: "txToast" }
+        );
+        confetti({
+          particleCount: 100,
+          spread: 70,
+          origin: { y: 0.6 },
+          colors: ["#6B55D9", "#7DBD9B", "#4F46E5", "#10B981"]
+        });
+        await refreshApprovals();
+        window.dispatchEvent(new CustomEvent("cb_approvals_updated"));
+        return;
+      }
+
       // 1. Proactively refresh the Asgardeo token BEFORE opening MetaMask so that
       //    the token stored in localStorage is as fresh as possible when the backend
       //    POST fires after the user signs.
@@ -435,6 +449,7 @@ export default function ApprovalsPage() {
       });
 
       await refreshApprovals();
+      window.dispatchEvent(new CustomEvent("cb_approvals_updated"));
     } catch (err: unknown) {
       console.error("Approval failed:", err);
       toast.error(getErrorMessage(err, "Failed to approve transaction"), { id: "txToast" });
@@ -453,6 +468,16 @@ export default function ApprovalsPage() {
     sessionStorage.setItem("cb_action_in_progress", "true");
 
     try {
+      // ── Level 3 Member Request Reject ──
+      if (req.status === "requested") {
+        toast.loading("Rejecting Member Request...", { id: "txToast" });
+        await api.patch(`/transactions/${req._id}/process-request`, { action: "reject" });
+        toast.success("Member request rejected.", { id: "txToast" });
+        await refreshApprovals();
+        window.dispatchEvent(new CustomEvent("cb_approvals_updated"));
+        return;
+      }
+
       // 1. Proactively refresh token before opening MetaMask
       await refreshToken();
 
@@ -501,6 +526,7 @@ export default function ApprovalsPage() {
       }
 
       await refreshApprovals();
+      window.dispatchEvent(new CustomEvent("cb_approvals_updated"));
       toast.success("Rejection vote recorded", { id: "txToast" });
     } catch (err: unknown) {
       console.error("Rejection failed:", err);
@@ -512,11 +538,57 @@ export default function ApprovalsPage() {
     }
   };
 
+  const multiSigCount = pendingApprovals.filter((a) => a.status === "pending_approval").length;
+  const requestedCount = pendingApprovals.filter((a) => a.status === "requested").length;
+  const displayedApprovals = pendingApprovals.filter((a) => {
+    if (activeFilter === "multi_sig") return a.status === "pending_approval";
+    if (activeFilter === "requested") return a.status === "requested";
+    return true;
+  });
+
   return (
     <div className="p-4 md:p-8 pb-20 animate-fade-in">
-      <header className="mb-8">
-        <h1 className="text-2xl font-bold mb-1">Pending Approvals</h1>
-        <p className="text-sm text-gray-500">Review and approve high-value transactions (2-of-N Multi-Sig).</p>
+      <header className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold mb-1">Pending Approvals</h1>
+          <p className="text-sm text-gray-500">Review member proposals and approve high-value transactions (2-of-N Multi-Sig).</p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveFilter("all")}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              activeFilter === "all"
+                ? "bg-primary text-white shadow-lg shadow-primary/30"
+                : "glass text-gray-400 hover:text-white border border-white/10"
+            }`}
+          >
+            All Pending ({pendingApprovals.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveFilter("multi_sig")}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              activeFilter === "multi_sig"
+                ? "bg-primary text-white shadow-lg shadow-primary/30"
+                : "glass text-gray-400 hover:text-white border border-white/10"
+            }`}
+          >
+            Multi-Sig ({multiSigCount})
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveFilter("requested")}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              activeFilter === "requested"
+                ? "bg-amber-600 text-white shadow-lg shadow-amber-600/30"
+                : "glass text-gray-400 hover:text-white border border-white/10"
+            }`}
+          >
+            Member Requests ({requestedCount})
+          </button>
+        </div>
       </header>
 
       {error && (
@@ -530,17 +602,30 @@ export default function ApprovalsPage() {
         <TableSkeleton />
       ) : (
         <div className="space-y-4">
-          {pendingApprovals.length > 0 ? (
-            pendingApprovals.map((req) => (
+          {displayedApprovals.length > 0 ? (
+            displayedApprovals.map((req) => (
               <div key={req._id} className="glass p-6 rounded-xl flex flex-col md:flex-row gap-6 items-start md:items-center justify-between">
                 <div className="flex-1">
                   <div className="flex flex-wrap items-center gap-2 mb-2">
-                    {req.hasVoted ? (
+                    {req.status === "requested" ? (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/15 border border-amber-500/30 text-amber-400 whitespace-nowrap">
+                        <Clock className="w-3.5 h-3.5" /> Member Request (Level 3)
+                      </span>
+                    ) : req.hasVoted ? (
                       <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 border border-emerald-500/30 text-emerald-400">
                         <CheckCircle2 className="w-3.5 h-3.5" /> Approved by You ({req.votes} of {req.required} Signed)
                       </span>
                     ) : (
                       <span className="badge badge-pending whitespace-nowrap"><Clock className="w-3 h-3" /> Action Required</span>
+                    )}
+                    {req.type && (
+                      <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                        req.type === "income"
+                          ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                          : "bg-rose-500/15 text-rose-400 border border-rose-500/30"
+                      }`}>
+                        {req.type}
+                      </span>
                     )}
                     {req.urgency === "urgent" && (
                       <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-red-100 text-red-700 animate-pulse">
@@ -551,21 +636,32 @@ export default function ApprovalsPage() {
                   </div>
                   <h3 className="text-lg font-medium text-gray-700">{req.description}</h3>
                   <p className="text-sm text-gray-400 mt-1">
-                    Amount exceeds the high-value threshold of ₱{Math.round(req.organization.highValueThreshold).toLocaleString()}.
+                    {req.status === "requested"
+                      ? `Member proposal submitted by ${req.submittedBy?.displayName || "a member"} awaiting Officer review.`
+                      : `Amount exceeds the high-value threshold of ₱${Math.round(req.organization.highValueThreshold).toLocaleString()}.`}
                   </p>
                   
-                  <div className="mt-4 flex items-center gap-3">
-                    <div className="text-xs font-semibold uppercase text-gray-500 tracking-wider">Approval Progress</div>
-                    <div className="flex items-center gap-1">
-                      {Array.from({ length: req.required }).map((_, i) => (
-                        <div 
-                          key={i} 
-                          className={`h-2 rounded-full w-8 ${i < req.votes ? "bg-primary" : "bg-[#e8e1ff]"}`} 
-                        />
-                      ))}
+                  {req.status === "requested" ? (
+                    <div className="mt-4 flex flex-wrap items-center gap-2">
+                      <span className="text-xs font-semibold uppercase text-amber-400 tracking-wider">Stage 1: Officer Review</span>
+                      <span className="text-xs text-gray-400">
+                        • {req.amount >= req.organization.highValueThreshold ? "Approving promotes this request to 2-of-N Multi-Sig" : "Approving finalizes & records on Polygon Amoy"}
+                      </span>
                     </div>
-                    <span className="text-xs font-medium text-primary">{req.votes} of {req.required} required</span>
-                  </div>
+                  ) : (
+                    <div className="mt-4 flex items-center gap-3">
+                      <div className="text-xs font-semibold uppercase text-gray-500 tracking-wider">Approval Progress</div>
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: req.required }).map((_, i) => (
+                          <div 
+                            key={i} 
+                            className={`h-2 rounded-full w-8 ${i < req.votes ? "bg-primary" : "bg-[#e8e1ff]"}`} 
+                          />
+                        ))}
+                      </div>
+                      <span className="text-xs font-medium text-primary">{req.votes} of {req.required} required</span>
+                    </div>
+                  )}
 
                   {/* Budget Overspend Warning */}
                   {req.type === "expense" && req.category && (() => {
@@ -617,7 +713,7 @@ export default function ApprovalsPage() {
                     return null;
                   })()}
 
-                  {/* Receipt Verification Checkbox */}
+                  {/* Receipt / Proposal Verification Checkbox */}
                   <label className="mt-4 flex items-center gap-3 p-3 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors select-none">
                     <input
                       type="checkbox"
@@ -626,7 +722,9 @@ export default function ApprovalsPage() {
                       className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary accent-[#6B55D9]"
                     />
                     <div>
-                      <p className="text-sm font-medium text-gray-700">I have verified the attached receipt/document</p>
+                      <p className="text-sm font-medium text-gray-700">
+                        {req.documentUrl ? "I have verified the attached receipt/document" : "I have reviewed and verified this proposal"}
+                      </p>
                       <p className="text-[10px] text-gray-400">Required before approving this transaction</p>
                     </div>
                     {req.documentUrl && (
@@ -645,7 +743,7 @@ export default function ApprovalsPage() {
 
                 <div className="flex flex-col items-end gap-3 w-full md:w-auto">
                   <div className="text-2xl font-bold text-gray-800">₱{Math.round(req.amount).toLocaleString()}</div>
-                  {req.hasVoted ? (
+                  {req.status !== "requested" && req.hasVoted ? (
                     <div className="flex flex-col items-end gap-1.5 w-full md:w-auto">
                       <div className="px-4 py-2.5 rounded-xl bg-purple-500/15 border border-purple-500/35 text-purple-400 font-bold text-xs flex items-center gap-2 shadow-sm">
                         <CheckCircle2 className="w-4 h-4 text-emerald-400" />
@@ -673,12 +771,17 @@ export default function ApprovalsPage() {
                           className="flex-1 md:flex-none btn-primary py-2 px-4 whitespace-nowrap disabled:opacity-50"
                         >
                           {actionLoading === req._id ? "Processing..." : (
-                            <span className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4" /> Approve</span>
+                            <span className="flex items-center gap-2">
+                              <CheckCircle2 className="w-4 h-4" />
+                              {req.status === "requested" ? "Approve Request" : "Approve"}
+                            </span>
                           )}
                         </button>
                       </div>
                       {!verifiedReceipts[req._id] && (
-                        <p className="text-[10px] text-amber-600 w-full text-center mt-1">✓ Verify receipt first</p>
+                        <p className="text-[10px] text-amber-600 w-full text-center mt-1">
+                          ✓ {req.documentUrl ? "Verify receipt first" : "Confirm review first"}
+                        </p>
                       )}
                     </>
                   )}
@@ -692,7 +795,7 @@ export default function ApprovalsPage() {
               </div>
               <h3 className="text-xl font-bold text-white mb-2">You&apos;re all caught up!</h3>
               <p className="text-sm text-gray-400 max-w-sm mx-auto">
-                There are no pending high-value transactions requiring your approval at this time.
+                There are no pending transactions or member requests requiring your approval at this time.
               </p>
             </div>
           )}

@@ -89,11 +89,22 @@ export default function ApprovalsScreen() {
   const fetchPending = async (orgId: string) => {
     if (pendingTx.length === 0) setLoading(true);
     try {
-      const res = await api.get(`/transactions?orgId=${orgId}&status=pending_approval&limit=100`);
-      const list =
-        res.data.transactions ||
-        res.data.data ||
-        (Array.isArray(res.data) ? res.data : []);
+      const [pendingRes, requestedRes] = await Promise.all([
+        api.get(`/transactions?orgId=${orgId}&status=pending_approval&limit=100`),
+        api.get(`/transactions?orgId=${orgId}&status=requested&limit=100`).catch(() => ({ data: { transactions: [] } })),
+      ]);
+      const pendingList =
+        pendingRes.data.transactions ||
+        pendingRes.data.data ||
+        (Array.isArray(pendingRes.data) ? pendingRes.data : []);
+      const requestedList =
+        requestedRes.data.transactions ||
+        requestedRes.data.data ||
+        (Array.isArray(requestedRes.data) ? requestedRes.data : []);
+      const txMap = new Map<string, any>();
+      pendingList.forEach((t: any) => txMap.set(t._id, t));
+      requestedList.forEach((t: any) => txMap.set(t._id, t));
+      const list = Array.from(txMap.values());
       setPendingTx(list);
       setCachedApprovals(orgId, list);
       Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
@@ -246,6 +257,32 @@ export default function ApprovalsScreen() {
     });
     await triggerSuccessHaptic();
 
+    // ── Member Request (Level 3) Direct Officer Review ────────────────────────
+    if (tx.status === 'requested') {
+      try {
+        setSigningTxId(tx._id);
+        await api.patch(`/transactions/${tx._id}/process-request`, {
+          action: action === 'approved' ? 'approve' : 'reject',
+        });
+        showToast(
+          action === 'approved'
+            ? 'Member request approved & synced!'
+            : 'Member request rejected.',
+          'success'
+        );
+        if (activeOrgId) fetchPending(activeOrgId);
+      } catch (err: any) {
+        console.error("Process request error:", err);
+        setPendingTx(previousTxList);
+        setCelebration({ visible: false, title: '', subtitle: '' });
+        await triggerErrorHaptic();
+        showToast(err.response?.data?.error || err.message || "Failed to process request. Reverted.", 'error');
+      } finally {
+        setSigningTxId(null);
+      }
+      return;
+    }
+
     // ── 2. Background Cryptographic Signing & Network Sync ───────────────────
     try {
       setSigningTxId(tx._id);
@@ -343,8 +380,20 @@ export default function ApprovalsScreen() {
             <Text style={{ color: colors.primary }} className="font-extrabold text-xl">₱{tx.amount?.toLocaleString()}</Text>
           </TouchableOpacity>
 
-          {/* Badges: Category, Urgency */}
+          {/* Badges: Member Request, Category, Urgency */}
           <View className="flex-row items-center gap-2 mb-3 flex-wrap">
+            {tx.status === 'requested' && (
+              <View
+                style={{
+                  backgroundColor: 'rgba(245, 158, 11, 0.15)',
+                  borderColor: 'rgba(245, 158, 11, 0.4)',
+                }}
+                className="px-2.5 py-0.5 rounded-full border flex-row items-center"
+              >
+                <Ionicons name="time" size={10} color="#F59E0B" style={{ marginRight: 3 }} />
+                <Text style={{ color: '#F59E0B' }} className="text-[10px] font-bold">Member Request (Level 3)</Text>
+              </View>
+            )}
             {tx.category && (
               <View style={{ backgroundColor: colors.cardGlass, borderColor: colors.borderSubtle }} className="px-2.5 py-0.5 rounded-full border">
                 <Text style={{ color: colors.textSecondary }} className="text-[10px] font-semibold">{tx.category}</Text>
@@ -370,21 +419,35 @@ export default function ApprovalsScreen() {
             )}
           </View>
 
-          {/* Approval Threshold Progress Bar */}
-          <View style={{ backgroundColor: colors.cardGlass, borderColor: colors.borderSubtle }} className="p-3 rounded-xl border mb-3">
-            <View className="flex-row justify-between items-center mb-1.5">
-              <View className="flex-row items-center gap-1.5">
-                <Ionicons name="shield-checkmark-outline" size={14} color={colors.primary} />
-                <Text style={{ color: colors.textSecondary }} className="text-xs font-semibold">Approval Progress</Text>
+          {/* Approval Threshold Progress Bar or Member Request Stage */}
+          {tx.status === 'requested' ? (
+            <View style={{ backgroundColor: colors.cardGlass, borderColor: 'rgba(245, 158, 11, 0.3)' }} className="p-3 rounded-xl border mb-3">
+              <View className="flex-row justify-between items-center">
+                <View className="flex-row items-center gap-1.5">
+                  <Ionicons name="shield-outline" size={14} color="#F59E0B" />
+                  <Text style={{ color: '#F59E0B' }} className="text-xs font-semibold">Stage 1: Officer Review</Text>
+                </View>
+                <Text style={{ color: colors.textMuted }} className="text-xs">
+                  {tx.amount >= (tx.organization?.highValueThreshold || 10000) ? "Promotes to Multi-Sig" : "Direct Execution"}
+                </Text>
               </View>
-              <Text style={{ color: colors.primary }} className="text-xs font-bold">
-                {currentApprovals} of {requiredApprovals} Signed
-              </Text>
             </View>
-            <View style={{ height: 6, backgroundColor: isDark ? 'rgba(0,0,0,0.5)' : colors.backgroundSecondary, borderRadius: 3, overflow: 'hidden' }}>
-              <View style={{ width: `${pct}%`, height: '100%', backgroundColor: pct >= 100 ? colors.success : colors.primary, borderRadius: 3 }} />
+          ) : (
+            <View style={{ backgroundColor: colors.cardGlass, borderColor: colors.borderSubtle }} className="p-3 rounded-xl border mb-3">
+              <View className="flex-row justify-between items-center mb-1.5">
+                <View className="flex-row items-center gap-1.5">
+                  <Ionicons name="shield-checkmark-outline" size={14} color={colors.primary} />
+                  <Text style={{ color: colors.textSecondary }} className="text-xs font-semibold">Approval Progress</Text>
+                </View>
+                <Text style={{ color: colors.primary }} className="text-xs font-bold">
+                  {currentApprovals} of {requiredApprovals} Signed
+                </Text>
+              </View>
+              <View style={{ height: 6, backgroundColor: isDark ? 'rgba(0,0,0,0.5)' : colors.backgroundSecondary, borderRadius: 3, overflow: 'hidden' }}>
+                <View style={{ width: `${pct}%`, height: '100%', backgroundColor: pct >= 100 ? colors.success : colors.primary, borderRadius: 3 }} />
+              </View>
             </View>
-          </View>
+          )}
 
           {/* Already voted banner or Action Buttons */}
           {hasVoted ? (
@@ -457,7 +520,9 @@ export default function ApprovalsScreen() {
                 ) : (
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <Ionicons name="checkmark-circle" size={18} color={colors.success} style={{ marginRight: 6 }} />
-                    <Text style={{ color: colors.success }} className="font-bold">Approve</Text>
+                    <Text style={{ color: colors.success }} className="font-bold">
+                      {tx.status === 'requested' ? 'Approve Request' : 'Approve'}
+                    </Text>
                   </View>
                 )}
               </TouchableOpacity>

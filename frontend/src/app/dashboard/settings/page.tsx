@@ -70,14 +70,6 @@ function formatAvatarUrl(url?: string) {
   return `${backendBase}${url.startsWith("/") ? "" : "/"}${url}`;
 }
 
-function formatOrgLogo(url?: string) {
-  if (!url) return null;
-  if (url.startsWith("data:")) return url;
-  if (url.startsWith("http://") || url.startsWith("https://")) return url;
-  const backendBase = process.env.NEXT_PUBLIC_API_URL?.replace("/api", "") || "https://chainbudget-api.fly.dev";
-  return `${backendBase}${url.startsWith("/") ? "" : "/"}${url}`;
-}
-
 export default function SettingsPage() {
   const { user, refreshUser, activeOrgId } = useAuth();
   
