@@ -21,30 +21,50 @@ let signer = null;
 // as amountWei. Always convert: amountWei = phpAmount * conversionRate.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Initialize the provider, signer, and contract instance
-const initBlockchain = () => {
-  if (contract) return; // Already initialized
+const RPC_ENDPOINTS = [
+  "https://polygon-amoy-bor-rpc.publicnode.com",
+  "https://rpc-amoy.polygon.technology",
+  "https://polygon-amoy.drpc.org",
+];
 
-  const rpcUrl = process.env.AMOY_RPC_URL || "https://polygon-amoy-bor-rpc.publicnode.com";
+let currentRpcIndex = 0;
+
+const getActiveRpcUrl = () => {
+  const envUrl = process.env.AMOY_RPC_URL;
+  if (envUrl && !envUrl.includes("tenderly")) return envUrl;
+  return RPC_ENDPOINTS[currentRpcIndex % RPC_ENDPOINTS.length];
+};
+
+/// Initialize the provider, signer, and contract instance
+const initBlockchain = (forceRotate = false) => {
+  if (contract && !forceRotate) return;
+
+  if (forceRotate) {
+    currentRpcIndex++;
+    contract = null;
+    provider = null;
+    signer = null;
+  }
+
+  const rpcUrl = getActiveRpcUrl();
   const privateKey = process.env.BACKEND_WALLET_PRIVATE_KEY;
   const contractAddress = process.env.CONTRACT_ADDRESS;
 
-  if (!rpcUrl || !privateKey || !contractAddress) {
+  if (!privateKey || !contractAddress) {
     console.warn(
-      "Blockchain service: Missing env vars (AMOY_RPC_URL, BACKEND_WALLET_PRIVATE_KEY, CONTRACT_ADDRESS). Blockchain calls will be skipped."
+      "Blockchain service: Missing env vars (BACKEND_WALLET_PRIVATE_KEY, CONTRACT_ADDRESS). Blockchain calls will be skipped."
     );
     return;
   }
 
-  provider = new ethers.JsonRpcProvider(rpcUrl, 80002, { staticNetwork: true });
-  signer = new ethers.Wallet(privateKey, provider);
-  contract = new ethers.Contract(
-    contractAddress,
-    ChainBudgetABI.abi,
-    signer
-  );
-
-  console.log("Blockchain service initialized. Contract:", contractAddress);
+  try {
+    provider = new ethers.JsonRpcProvider(rpcUrl, 80002, { staticNetwork: true });
+    signer = new ethers.Wallet(privateKey, provider);
+    contract = new ethers.Contract(contractAddress, ChainBudgetABI.abi, signer);
+    console.log(`Blockchain service initialized on ${rpcUrl}. Contract:`, contractAddress);
+  } catch (err) {
+    console.warn(`Failed to connect to ${rpcUrl}:`, err.message);
+  }
 };
 
 /// Record a transaction reference on-chain
@@ -95,6 +115,7 @@ const recordTransactionOnChain = async (payload, amount, toAddress, isHighValue,
     };
   } catch (error) {
     console.error("Blockchain recordTransaction error:", error.message);
+    initBlockchain(true);
     throw error; // Re-throw so caller can handle
   }
 };
