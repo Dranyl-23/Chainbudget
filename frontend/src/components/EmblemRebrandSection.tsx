@@ -224,7 +224,7 @@ export default function EmblemRebrandSection({
             onClick={(e) => {
               if (e.target === e.currentTarget) setShowEmblemSuccessModal(false);
             }}
-            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fade-in overflow-y-auto"
+            className="fixed inset-0 z-9999 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fade-in overflow-y-auto"
           >
             <div className="relative bg-[#13121d] border border-purple-500/40 rounded-3xl shadow-[0_0_50px_rgba(168,85,247,0.3)] w-full max-w-sm max-h-[90vh] overflow-y-auto p-6 text-center animate-modal-pop my-auto">
               <div className="relative mx-auto w-24 h-24 mb-5 flex items-center justify-center">
