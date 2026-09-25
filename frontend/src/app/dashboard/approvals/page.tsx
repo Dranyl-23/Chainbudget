@@ -142,8 +142,8 @@ export default function ApprovalsPage() {
             (a) =>
               (a._id && a._id === user?.id) ||
               (a.walletAddress &&
-                user?.walletAddress &&
-                a.walletAddress.toLowerCase() === user.walletAddress.toLowerCase())
+                ((user?.walletAddress && a.walletAddress.toLowerCase() === user.walletAddress.toLowerCase()) ||
+                  Boolean(user?.linkedWallets?.some((w) => w.toLowerCase() === a.walletAddress?.toLowerCase()))))
           )
         );
 
@@ -229,7 +229,7 @@ export default function ApprovalsPage() {
       isCancelled = true;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeOrgId, user?.id, user?.walletAddress]);
+  }, [activeOrgId, user?.id, user?.walletAddress, user?.linkedWallets]);
 
   const refreshApprovals = async () => {
     if (!activeOrgId) return;
@@ -262,15 +262,18 @@ export default function ApprovalsPage() {
     const signer = await provider.getSigner();
     const activeAddress = await signer.getAddress();
 
-    if (user?.walletAddress && activeAddress.toLowerCase() !== user.walletAddress.toLowerCase()) {
+    const isPrimary = Boolean(user?.walletAddress && activeAddress.toLowerCase() === user.walletAddress.toLowerCase());
+    const isLinked = Boolean(user?.linkedWallets?.some((w: string) => w.toLowerCase() === activeAddress.toLowerCase()));
+
+    if (!isPrimary && !isLinked) {
       setMismatchGuide({
         isOpen: true,
-        expectedAddress: user.walletAddress,
+        expectedAddress: user?.walletAddress || "",
         activeAddress,
         targetTx: req,
       });
       throw new Error(
-        `MetaMask account mismatch! Active MetaMask wallet is ${activeAddress.slice(0, 6)}...${activeAddress.slice(-4)}, but your logged-in account is ${user.walletAddress.slice(0, 6)}...${user.walletAddress.slice(-4)}.`
+        `MetaMask account mismatch! Active MetaMask wallet is ${activeAddress.slice(0, 6)}...${activeAddress.slice(-4)}, but your logged-in account is ${user?.walletAddress ? user.walletAddress.slice(0, 6) + "..." + user.walletAddress.slice(-4) : "not set"}.`
       );
     }
     

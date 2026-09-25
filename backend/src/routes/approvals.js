@@ -72,6 +72,7 @@ router.post("/:txId", authenticate, requireRole(2), requireIdempotency, async (r
     //
     // Fix: always use txn.amount for amountWei and derive `to` from the
     // transaction's stored submittedBy wallet — never from the request body.
+    let recoveredAddress;
     try {
       const domain = { name: "ChainBudget", version: "1" };
       const types = {
@@ -105,9 +106,13 @@ router.post("/:txId", authenticate, requireRole(2), requireIdempotency, async (r
         amountWei: txn.amount.toString(), // Server-sourced only — never from client
       };
       
-      const recoveredAddress = ethers.verifyTypedData(domain, types, message, signature);
+      recoveredAddress = ethers.verifyTypedData(domain, types, message, signature);
       console.log(`[Approval] Verification: Recovered=${recoveredAddress}, UserWallet=${req.user.walletAddress}`);
-      if (recoveredAddress.toLowerCase() !== req.user.walletAddress.toLowerCase()) {
+
+      const isPrimary = Boolean(req.user.walletAddress && recoveredAddress.toLowerCase() === req.user.walletAddress.toLowerCase());
+      const isLinked = Array.isArray(req.user.linkedWallets) && req.user.linkedWallets.some(w => w.toLowerCase() === recoveredAddress.toLowerCase());
+
+      if (!isPrimary && !isLinked) {
         await session.abortTransaction();
         return res.status(401).json({ error: "Cryptographic signature verification failed. Wallet mismatch." });
       }
@@ -125,7 +130,7 @@ router.post("/:txId", authenticate, requireRole(2), requireIdempotency, async (r
         approver: req.user._id,
         action,
         comment,
-        walletAddress: req.user.walletAddress,
+        walletAddress: recoveredAddress.toLowerCase(),
         digitalSignature: signature,
       }],
       { session }
@@ -236,7 +241,7 @@ router.post("/:txId", authenticate, requireRole(2), requireIdempotency, async (r
       [{
         organization: org._id,
         actor: req.user._id,
-        actorWallet: req.user.walletAddress,
+        actorWallet: recoveredAddress ? recoveredAddress.toLowerCase() : req.user.walletAddress,
         action: `transaction.${action}`,
         targetType: "Transaction",
         targetId: txn._id,
