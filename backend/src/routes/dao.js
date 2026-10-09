@@ -213,7 +213,7 @@ router.put("/proposals/:id/sync", authenticate, async (req, res) => {
 
     // Authorization check: User must be Level <= 2 in the organization or SuperAdmin
     const roleLevel = req.user.getRoleInOrg(proposal.organization);
-    const isCreator = proposal.proposer && proposal.proposer.toString() === req.user._id.toString();
+    const isCreator = proposal.creator && proposal.creator.toString() === req.user._id.toString();
     if (!req.user.isSuperAdmin && (roleLevel === null || roleLevel > 2) && !isCreator) {
       return res.status(403).json({ error: "Access denied. Insufficient permissions to sync proposal." });
     }

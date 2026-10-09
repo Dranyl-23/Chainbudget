@@ -52,6 +52,20 @@ router.post("/:txId", authenticate, requireRole(2), requireIdempotency, async (r
       return res.status(403).json({ error: "Transaction does not belong to this organization" });
     }
 
+    // Maker-checker: the submitter of a transaction may not approve their own request.
+    // Safety valve: if the org has too few OTHER eligible approvers (L1/L2) to ever reach
+    // requiredApprovals, the rule is waived so the transaction can't be deadlocked.
+    if (action === "approved" && txn.submittedBy && txn.submittedBy.toString() === req.user._id.toString()) {
+      const otherApprovers = await User.countDocuments({
+        _id: { $ne: req.user._id },
+        memberships: { $elemMatch: { organization: txn.organization._id, roleLevel: { $lte: 2 }, isActive: true } },
+      }).session(session);
+      if (otherApprovers >= (txn.organization.requiredApprovals || 1)) {
+        await session.abortTransaction();
+        return res.status(403).json({ error: "You cannot approve a transaction you submitted. Another approver must sign it." });
+      }
+    }
+
     // Prevent duplicate votes (within transaction lock)
     const existing = await Approval.findOne({
       transaction: txn._id,
