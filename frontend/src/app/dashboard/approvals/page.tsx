@@ -10,7 +10,6 @@ import toast from "react-hot-toast";
 import TableSkeleton from "@/components/TableSkeleton";
 import WalletMismatchGuideModal from "@/components/WalletMismatchGuideModal";
 import confetti from "canvas-confetti";
-import axios from "axios";
 import { BACKEND_URL } from "@/lib/config";
 import { getErrorMessage } from "@/lib/utils";
 
@@ -730,7 +729,7 @@ export default function ApprovalsPage() {
                       type="checkbox"
                       checked={verifiedReceipts[req._id] || false}
                       onChange={(e) => setVerifiedReceipts((prev) => ({ ...prev, [req._id]: e.target.checked }))}
-                      className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary accent-[#6B55D9]"
+                      className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary accent-primary"
                     />
                     <div>
                       <p className="text-sm font-medium text-gray-700">

@@ -5,7 +5,7 @@
 | Field | Value |
 | :--- | :--- |
 | **Document ID** | CB-SRS-2026-001 |
-| **Version** | 1.1 (baseline from source code analysis; v1.1 marks maker-checker enforcement and DAO `/sync` fix as implemented) |
+| **Version** | 1.0 (baseline derived from source code analysis) |
 | **Date** | 2026-10-09 |
 | **Project Type** | Capstone Project |
 | **Authors** | Alfie Lynard Polacas & ChainBudget Engineering Team |
@@ -285,7 +285,6 @@ stateDiagram-v2
 | FR-APR-08 | The mobile app shall provide swipeable approval cards, a biometric-gated confirm modal and an optimistic UI with rollback on failure. | M | ✔ |
 | FR-APR-09 | When a threshold is met and the org has a `contractAddress`, the backend shall attempt **gasless relayer execution** via `executeWithSignatures` (disabled when `NODE_ENV=production`, see L-01). | M | ◐ |
 | FR-APR-10 | Approvers/submitters shall receive push notifications when a transaction is approved/rejected. | M | ✔ |
-| FR-APR-11 | **Maker-checker:** the system shall reject (HTTP 403) an `approved` vote cast by the transaction's submitter, unless the organization has fewer other active L1/L2 members than `requiredApprovals` (deadlock safeguard). Rejections by the submitter remain allowed. | H | ✔ |
 
 ### 3.5 Budget Management
 
@@ -597,9 +596,9 @@ sequenceDiagram
 | **L-01** | 🔴 | **Amounts are symbolic; no real money movement.** On-chain `amount` is the raw PHP integer; there is no PHP↔MATIC conversion or bank/e-wallet integration. The Treasury relayer execution is deliberately **blocked when `NODE_ENV=production`**. ChainBudget is an accountability/transparency ledger, not a payment processor. | `blockchain.js` CRIT-5 comment; `approvals.js` production guard |
 | **L-02** | 🔴 | **Trusted backend relayer.** `recordTransaction` is `onlyOwner`; the backend wallet writes all records, so an on-chain record proves *what the server recorded*, not independent user intent. Off-chain DB is the source of truth. | `ChainBudget.sol`; blockchain failures are swallowed so workflows continue |
 | **L-03** | 🟡 | **Single global contract.** `blockchain.js` uses one `CONTRACT_ADDRESS`; `Organization.contractAddress` exists but is not used for per-org recording. On-chain approver set is not auto-synced with DB roles (changes in roles do not update `isApprover`). | Multi-tenant isolation is application-level only |
-| **L-04** | 🟢 | **Maker-checker (segregation of duties) — mitigated in v1.1.** The approval route now rejects an `approved` vote (HTTP 403) when the voter is the transaction's `submittedBy`. *Residual limitation:* the rule is waived when the organization has fewer other active L1/L2 members than `requiredApprovals` (to prevent deadlock), and it does not cover the officer who processed an L3 member's request via `process-request`. Rejections by the submitter remain allowed. | `approvals.js` maker-checker guard (before duplicate-vote check) |
+| **L-04** | 🟡 | **No maker-checker (segregation of duties) enforcement.** The approval route does not prevent the submitter of a high-value transaction (if L1/L2) from also being one of the approvers. | `approvals.js` has no `submittedBy ≠ approver` check |
 | **L-05** | 🟡 | **Low-value path bypasses multi-sig.** Items below threshold are auto-approved when created by L1/L2 or approved by a single officer when requested by L3. | `transactions.js` status logic |
-| **L-06** | 🟡 | **DAO is off-chain in practice.** Votes/tallies live in MongoDB; the on-chain DAO contract is not wired into the voting route; no quorum on the backend; any active member (including L4 viewers) may vote; "execute" only changes status and does not disburse funds. | `dao.js` ("TBD in future iterations"). The former `/sync` bug (`proposal.proposer` instead of schema field `creator`) was fixed in v1.1 |
+| **L-06** | 🟡 | **DAO is off-chain in practice.** Votes/tallies live in MongoDB; the on-chain DAO contract is not wired into the voting route; no quorum on the backend; any active member (including L4 viewers) may vote; "execute" only changes status and does not disburse funds. | `dao.js` ("TBD in future iterations"); `/sync` references `proposal.proposer`, a field that does not exist in the schema (`creator`) — latent bug |
 | **L-07** | 🟡 | **Custodial web wallets.** Asgardeo-provisioned wallets keep an encrypted private key on the server (decryptable by the backend secret). Only the mobile wallet is truly non-custodial. | `User.encryptedPrivateKey`, `/auth/keys/export` |
 | **L-08** | 🟡 | **Wallet-mapping friction.** Approvers must sign with their primary or a *linked* wallet; otherwise a mismatch occurs (addressed by linked-wallet support, but linking is a manual step). | Resolved partially in `approvals/page.tsx` & `approvals.js` |
 | **L-09** | 🟡 | **Escrow has no timeout/refund path** and depends on the payee being a wallet holder or owner-recorded off-chain evidence. | `security_assessment.md` GAP-13 |
@@ -651,7 +650,7 @@ sequenceDiagram
 | Priority | Enhancement |
 | :---: | :--- |
 | H | Mainnet / Polygon PoS deployment with audited contracts; PHP↔stablecoin/MATIC conversion & real treasury disbursement; per-organization contract deployment. |
-| H | Extend maker-checker to the officer who processed an L3 request; on-chain approver sync with DB roles; independent smart-contract audit. |
+| H | Maker-checker enforcement; on-chain approver sync with DB roles; independent smart-contract audit. |
 | H | httpOnly-cookie sessions, refresh-token rotation/blacklist, KMS-backed relayer key, stricter CSP (nonces). |
 | M | True on-chain DAO voting, quorum enforcement and executable treasury proposals. |
 | M | Escrow timeouts/refunds and dispute resolution. |
@@ -721,4 +720,4 @@ Chainbudgets/
 
 ---
 
-*End of Document — CB-SRS-2026-001 v1.1*
+*End of Document — CB-SRS-2026-001 v1.0*
