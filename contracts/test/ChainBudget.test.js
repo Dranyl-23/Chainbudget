@@ -432,4 +432,121 @@ describe("ChainBudget System Suite", function () {
       ).to.be.revertedWith("ChainBudget: amount must be > 0");
     });
   });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 9. ChainBudgetTreasury Off-Chain Multi-Sig Verification (executeWithSignatures)
+  // ═══════════════════════════════════════════════════════════════════════════
+  describe("ChainBudgetTreasury Off-Chain Multi-Sig Execution", function () {
+    let treasury;
+    let domain;
+    const types = {
+      Approval: [
+        { name: "action", type: "string" },
+        { name: "txId", type: "string" },
+        { name: "amount", type: "string" },
+        { name: "description", type: "string" },
+        { name: "to", type: "address" },
+        { name: "amountWei", type: "uint256" },
+      ],
+    };
+
+    beforeEach(async function () {
+      const TreasuryFactory = await ethers.getContractFactory("ChainBudgetTreasury");
+      treasury = await TreasuryFactory.deploy(
+        [approver1.address, approver2.address],
+        2
+      );
+      await treasury.waitForDeployment();
+
+      // Fund treasury vault with 2 ETH
+      await owner.sendTransaction({
+        to: await treasury.getAddress(),
+        value: ethers.parseEther("2.0"),
+      });
+
+      const network = await ethers.provider.getNetwork();
+      domain = {
+        name: "ChainBudget",
+        version: "1",
+        chainId: network.chainId,
+        verifyingContract: await treasury.getAddress(),
+      };
+    });
+
+    it("Should execute transaction with 2 valid EIP-712 approver signatures and block replay", async function () {
+      const txId = "66c000000000000000000999";
+      const amountStr = "25000";
+      const amountWei = ethers.parseEther("0.5");
+      const description = "Equipment purchase";
+
+      const value = {
+        action: "APPROVED",
+        txId,
+        amount: amountStr,
+        description,
+        to: supplier.address,
+        amountWei,
+      };
+
+      const sig1 = await approver1.signTypedData(domain, types, value);
+      const sig2 = await approver2.signTypedData(domain, types, value);
+
+      await expect(
+        treasury.executeWithSignatures(
+          "APPROVED",
+          txId,
+          amountStr,
+          amountWei,
+          description,
+          supplier.address,
+          [sig1, sig2]
+        )
+      ).to.emit(treasury, "TransactionExecuted");
+
+      expect(await treasury.executedTransactions(txId)).to.be.true;
+
+      // Replay with same txId must revert
+      await expect(
+        treasury.executeWithSignatures(
+          "APPROVED",
+          txId,
+          amountStr,
+          amountWei,
+          description,
+          supplier.address,
+          [sig1, sig2]
+        )
+      ).to.be.revertedWith("Treasury: Transaction already executed");
+    });
+
+    it("Should reject duplicate EIP-712 signatures from the same approver", async function () {
+      const txId = "66c000000000000000000998";
+      const amountStr = "25000";
+      const amountWei = ethers.parseEther("0.5");
+      const description = "Equipment purchase";
+
+      const value = {
+        action: "APPROVED",
+        txId,
+        amount: amountStr,
+        description,
+        to: supplier.address,
+        amountWei,
+      };
+
+      const sig1 = await approver1.signTypedData(domain, types, value);
+
+      await expect(
+        treasury.executeWithSignatures(
+          "APPROVED",
+          txId,
+          amountStr,
+          amountWei,
+          description,
+          supplier.address,
+          [sig1, sig1]
+        )
+      ).to.be.revertedWith("Treasury: Not enough valid unique signatures from approvers");
+    });
+  });
 });

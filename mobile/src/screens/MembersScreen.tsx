@@ -374,7 +374,7 @@ export default function MembersScreen() {
                 {' '}to remove a member.
               </Text>
             </View>
-          ) : null}
+          ) : undefined}
           ListEmptyComponent={
             <View className="items-center justify-center py-12">
               <Ionicons name="people-outline" size={50} color={colors.textMuted} />

@@ -325,6 +325,58 @@ async function cacheMessageBatch(orgId, messages) {
   }
 }
 
+/**
+ * Invalidates the Redis L1 message cache for an organization when messages are mutated
+ * (e.g. deleted, pinned/unpinned, reacted to, or read-receipts updated).
+ * @param {string} orgId
+ */
+async function invalidateChatCache(orgId) {
+  if (!isRedisAvailable() || !orgId) return;
+  try {
+    await redisClient.del(`chat:msgs:${orgId}`);
+  } catch (err) {
+    console.warn("[Redis:invalidateChatCache]", err.message);
+  }
+}
+
+/**
+ * Distributed lock helper (SET NX EX) to coordinate background workers across instances.
+ * Falls back to true (single-node mode) if Redis is not connected.
+ * @param {string} lockKey
+ * @param {number} ttlSeconds
+ * @returns {Promise<string|null>} Lock token if acquired, or null if held by another node
+ */
+async function acquireLock(lockKey, ttlSeconds = 45) {
+  const token = `${process.pid}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+  if (!isRedisAvailable()) {
+    return token;
+  }
+  try {
+    const res = await redisClient.set(`lock:${lockKey}`, token, "EX", ttlSeconds, "NX");
+    return res === "OK" ? token : null;
+  } catch (err) {
+    console.warn("[Redis:acquireLock]", err.message);
+    return token;
+  }
+}
+
+/**
+ * Releases a distributed lock if owned by the caller token.
+ * @param {string} lockKey
+ * @param {string} token
+ */
+async function releaseLock(lockKey, token) {
+  if (!isRedisAvailable() || !token) return;
+  try {
+    const current = await redisClient.get(`lock:${lockKey}`);
+    if (current === token) {
+      await redisClient.del(`lock:${lockKey}`);
+    }
+  } catch (err) {
+    console.warn("[Redis:releaseLock]", err.message);
+  }
+}
+
 // ── Presence Tracking ────────────────────────────────────────────────────────
 
 /**
@@ -413,6 +465,9 @@ module.exports = {
   getCachedMessages,
   cacheMessage,
   cacheMessageBatch,
+  invalidateChatCache,
+  acquireLock,
+  releaseLock,
   addOrgOnlineUser,
   removeOrgOnlineUser,
   getOrgOnlineUsers,

@@ -180,10 +180,10 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
   return (
     <Animated.View style={[styles.container, { opacity: containerFade, paddingTop: insets.top }]}>
       {/* ── ATMOSPHERIC BACKGROUND ── */}
-      <View style={StyleSheet.absoluteFillObject}>
+      <View style={StyleSheet.absoluteFill}>
         <LinearGradient
           colors={['#03020A', '#070617', '#020108']}
-          style={StyleSheet.absoluteFillObject}
+          style={StyleSheet.absoluteFill}
           locations={[0, 0.5, 1]}
         />
 
@@ -264,7 +264,7 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
                   colors={['transparent', 'rgba(255, 255, 255, 0.65)', 'transparent']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
-                  style={StyleSheet.absoluteFillObject}
+                  style={StyleSheet.absoluteFill}
                 />
               </Animated.View>
             </Animated.View>
@@ -320,7 +320,7 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
                 colors={['#00E5FF', '#8B5CF6', '#EC4899', '#10B981']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
-                style={StyleSheet.absoluteFillObject}
+                style={StyleSheet.absoluteFill}
               />
             </Animated.View>
           </View>

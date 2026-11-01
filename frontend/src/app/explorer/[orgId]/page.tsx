@@ -38,8 +38,8 @@ function DetailOrgLogo({ logoUrl, name, size = "large" }: { logoUrl?: string; na
 
   if (error || !logoUrl) {
     return (
-      <div className={`w-full h-full bg-linear-to-br from-purple-600/30 to-cyan-600/30 flex items-center justify-center text-white font-extrabold ${size === "small" ? "text-sm rounded-lg" : "text-3xl rounded-xl"} shadow-inner`}>
-        <span className="drop-shadow-md">{initial}</span>
+      <div className={`w-full h-full bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300 font-bold ${size === "small" ? "text-sm rounded-lg" : "text-2xl rounded-xl"}`}>
+        <span>{initial}</span>
       </div>
     );
   }
@@ -92,7 +92,6 @@ export default function PublicDashboardPage() {
         const orgData = orgRes.data;
         setOrg(orgData);
 
-        // Fetch live balance if contract address exists
         if (orgData.contractAddress) {
           try {
             const provider = getAmoyProvider();
@@ -109,8 +108,8 @@ export default function PublicDashboardPage() {
             api.get(`/public/organizations/${orgId}/transactions`),
             api.get(`/public/organizations/${orgId}/budget`)
           ]);
-          setTransactions(txsRes.data);
-          setBudgets(budgetRes.data);
+          setTransactions(txsRes.data || []);
+          setBudgets(budgetRes.data || []);
         } else {
           setTransactions([]);
           setBudgets([]);
@@ -128,30 +127,29 @@ export default function PublicDashboardPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#050505] flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin" />
+      <div className="min-h-screen bg-[#09090b] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-zinc-700 border-t-white rounded-full animate-spin" />
       </div>
     );
   }
 
   if (error || !org) {
     return (
-      <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center text-center p-6 text-white">
-        <AlertTriangle className="w-16 h-16 text-fuchsia-500 mb-4" />
-        <h1 className="text-2xl font-bold mb-2">Organization Not Found</h1>
-        <p className="text-white/50 mb-8">{error}</p>
-        <Link href="/explorer" className="btn-primary py-3 px-6 inline-flex items-center gap-2">
-          <ArrowLeft className="w-4 h-4" /> Back to Explorer
+      <div className="min-h-screen bg-[#09090b] flex flex-col items-center justify-center text-center p-6 text-white">
+        <AlertTriangle className="w-10 h-10 text-rose-400 mb-3" />
+        <h1 className="text-lg font-semibold mb-1">Organization Not Found</h1>
+        <p className="text-zinc-400 text-xs mb-5 max-w-sm">{error}</p>
+        <Link href="/explorer" className="px-4 py-2 bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-semibold rounded-lg inline-flex items-center gap-2 transition-colors">
+          <ArrowLeft className="w-3.5 h-3.5" /> Back to Explorer
         </Link>
       </div>
     );
   }
 
-  const getScoreColor = (score: number) => {
-    if (score >= 90) return "text-green-400 border-green-400/50 shadow-[0_0_15px_rgba(74,222,128,0.2)]";
-    if (score >= 70) return "text-cyan-400 border-cyan-400/50 shadow-[0_0_15px_rgba(34,211,238,0.2)]";
-    if (score >= 50) return "text-yellow-400 border-yellow-400/50 shadow-[0_0_15px_rgba(250,204,21,0.2)]";
-    return "text-red-400 border-red-400/50 shadow-[0_0_15px_rgba(248,113,113,0.2)]";
+  const getScoreDotColor = (score: number) => {
+    if (score >= 80) return "bg-emerald-400";
+    if (score >= 50) return "bg-zinc-400";
+    return "bg-rose-400";
   };
 
   const totalAllocated = budgets.reduce((acc, b) => acc + b.allocated, 0);
@@ -159,192 +157,207 @@ export default function PublicDashboardPage() {
   const totalBudgetPercentage = totalAllocated > 0 ? Math.min(100, Math.round((totalSpent / totalAllocated) * 100)) : 0;
 
   return (
-    <main className="min-h-screen bg-[#050505] text-white">
-      {/* ── Top Nav ── */}
-      <nav className="flex items-center justify-between px-6 py-4 border-b border-white/5 bg-black/50 backdrop-blur-md sticky top-0 z-50">
-        <Link href="/explorer" className="flex items-center gap-2 hover:opacity-80 transition-opacity text-white/70 hover:text-white">
-          <ArrowLeft className="w-5 h-5" />
-          <span className="font-bold tracking-tight hidden sm:inline">Back to Explorer</span>
+    <main className="min-h-screen bg-[#09090b] text-white">
+      {/* ── Top Navigation Bar ── */}
+      <nav className="flex items-center justify-between px-6 py-3.5 border-b border-zinc-800 bg-[#09090b]/90 backdrop-blur-md sticky top-0 z-50">
+        <Link href="/explorer" className="flex items-center gap-1.5 text-zinc-400 hover:text-white transition-colors text-xs font-medium">
+          <ArrowLeft className="w-3.5 h-3.5" />
+          <span>Back to Explorer</span>
         </Link>
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg overflow-hidden bg-white/5 border border-white/10 shrink-0">
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-lg overflow-hidden bg-zinc-900 border border-zinc-800 shrink-0">
             <DetailOrgLogo logoUrl={org.logoUrl} name={org.name} size="small" />
           </div>
-          <span className="font-bold tracking-tight text-white">{org.name}</span>
+          <span className="font-semibold text-xs tracking-tight text-white">{org.name}</span>
         </div>
       </nav>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 md:py-12">
-        {/* ── Header Profile ── */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 mb-12">
-          <div className="flex items-center gap-6">
-            <div className="w-24 h-24 md:w-32 md:h-32 rounded-2xl bg-white/5 border border-white/10 p-2 shrink-0 overflow-hidden">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 md:py-8 space-y-5">
+        {/* ── Header Profile Card ── */}
+        <div className="bg-[#121215] border border-zinc-800 rounded-xl p-5 md:p-6 flex flex-col md:flex-row md:items-center justify-between gap-5 shadow-sm">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 md:w-20 md:h-20 rounded-xl bg-zinc-900 border border-zinc-800 p-2 shrink-0 overflow-hidden">
               <DetailOrgLogo logoUrl={org.logoUrl} name={org.name} size="large" />
             </div>
             <div>
-              <div className="flex items-center gap-2 mb-2">
-                <span className="px-2 py-1 rounded bg-white/5 text-[10px] font-bold text-white/50 uppercase tracking-widest border border-white/10">
+              <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                <span className="px-2 py-0.5 rounded bg-zinc-900 text-[10px] font-medium text-zinc-400 uppercase tracking-wider border border-zinc-800">
                   {org.type ? org.type.replace('_', ' ') : 'ORG'}
                 </span>
-                <a href={getExplorerAddressUrl(org.contractAddress)} target="_blank" rel="noopener noreferrer" className="px-2 py-1 rounded bg-purple-500/10 text-[10px] font-bold text-purple-400 uppercase tracking-widest border border-purple-500/20 flex items-center gap-1 hover:bg-purple-500/20 transition-colors">
-                  <LinkIcon className="w-3 h-3" /> Contract Linked
+                <a 
+                  href={getExplorerAddressUrl(org.contractAddress)} 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="px-2 py-0.5 rounded bg-zinc-900 text-[10px] font-medium text-zinc-300 uppercase tracking-wider border border-zinc-800 flex items-center gap-1 hover:text-white transition-colors"
+                >
+                  <LinkIcon className="w-2.5 h-2.5 text-zinc-400" /> Polygon Amoy
                 </a>
               </div>
-              <h1 className="text-3xl md:text-5xl font-black tracking-tight drop-shadow-md mb-2">{org.name || "Unknown Organization"}</h1>
-              <p className="text-white/60 max-w-2xl">{org.description || "Public organization ledger."}</p>
+              <h1 className="text-lg md:text-2xl font-semibold tracking-tight text-white mb-1">{org.name || "Unknown Organization"}</h1>
+              <p className="text-xs text-zinc-400 max-w-xl leading-relaxed">{org.description || "Public verified organization ledger on Polygon."}</p>
             </div>
           </div>
 
-          <div className={`p-6 rounded-2xl glass border ${getScoreColor(org.transparencyScore || 0)} flex flex-col items-center justify-center min-w-50`}>
-            <span className="text-[10px] uppercase tracking-widest font-bold mb-1 opacity-70">Transparency Score</span>
-            <div className="text-5xl font-black tracking-tighter drop-shadow-lg">{org.transparencyScore || 0}%</div>
+          <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800 flex flex-col items-center justify-center min-w-32 text-center shadow-xs">
+            <span className="text-[10px] uppercase tracking-wider font-medium mb-1 text-zinc-400 flex items-center gap-1.5">
+              <span className={`w-1.5 h-1.5 rounded-full ${getScoreDotColor(org.transparencyScore || 0)}`} />
+              Transparency Score
+            </span>
+            <div className="text-2xl font-bold font-mono text-white">{org.transparencyScore || 0}%</div>
           </div>
         </div>
 
         {org.isPrivate ? (
-          <div className="glass rounded-2xl p-12 lg:p-20 text-center border border-white/5 flex flex-col items-center justify-center mt-8">
-            <div className="w-24 h-24 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mb-6 shadow-[inset_0_0_20px_rgba(255,255,255,0.05)]">
-              <Lock className="w-10 h-10 text-white/30" />
+          <div className="bg-[#121215] rounded-xl p-10 text-center border border-zinc-800 flex flex-col items-center justify-center shadow-sm">
+            <div className="w-12 h-12 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mb-3 text-zinc-400">
+              <Lock className="w-5 h-5" />
             </div>
-            <h2 className="text-3xl font-bold text-white mb-3 tracking-tight">Private Organization</h2>
-            <p className="text-white/50 max-w-md mx-auto text-lg leading-relaxed">
-              This organization has restricted public access. Only authorized members can view the treasury balance, budget utilization, and transaction ledger.
+            <h2 className="text-base font-semibold text-white mb-1">Private Institutional Ledger</h2>
+            <p className="text-xs text-zinc-400 max-w-md mx-auto leading-relaxed">
+              This organization has restricted public access. Only authenticated active members can inspect treasury balances, budget lines, and transactions.
             </p>
-            <Link href="/dashboard" className="mt-8 px-6 py-3 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl transition-colors border border-white/10">
+            <Link href="/dashboard" className="mt-5 px-4 py-2 bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-semibold rounded-lg transition-colors shadow-xs">
               Go to Member Dashboard
             </Link>
           </div>
         ) : (
           <>
             {/* ── Overview Stats ── */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-              {/* Live Balance */}
-              <div className="glass rounded-2xl p-6 lg:p-8 flex flex-col border border-white/5 relative overflow-hidden group">
-                <div className="absolute -right-10 -top-10 w-40 h-40 bg-cyan-500/10 blur-[50px] rounded-full pointer-events-none group-hover:bg-cyan-500/20 transition-colors duration-500" />
-                <div className="flex items-center gap-2 mb-6 relative z-10">
-                  <Activity className="w-5 h-5 text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
-                  <h3 className="text-sm font-bold text-white/50 uppercase tracking-widest">Public Treasury Balance</h3>
-                </div>
-                <div className="flex-1 flex flex-col justify-center relative z-10">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-5xl md:text-6xl font-black text-transparent bg-clip-text bg-linear-to-r from-cyan-300 to-cyan-500 drop-shadow-lg">
-                      {balance || "0.0000"}
-                    </span>
-                    <span className="text-xl font-bold text-cyan-500/50">POL</span>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+              {/* Live Balance Card */}
+              <div className="bg-[#121215] rounded-xl p-5 flex flex-col justify-between border border-zinc-800 shadow-sm">
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <Activity className="w-4 h-4 text-zinc-400" />
+                    <h3 className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Treasury Vault Balance</h3>
                   </div>
+                  <div className="py-1">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-3xl font-bold text-white font-mono tracking-tight">
+                        {balance || "0.0000"}
+                      </span>
+                      <span className="text-sm font-semibold text-zinc-400 font-mono">POL</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t border-zinc-800/80 mt-3">
                   {org.contractAddress ? (
-                    <p className="text-xs text-white/30 mt-4 flex items-center gap-1 font-mono">
-                      {org.contractAddress.slice(0, 8)}...{org.contractAddress.slice(-6)}
-                      <a href={getExplorerAddressUrl(org.contractAddress)} target="_blank" rel="noopener noreferrer" className="ml-2 text-fuchsia-400 hover:text-fuchsia-300 underline">View on Explorer</a>
-                    </p>
+                    <div className="text-[11px] text-zinc-400 flex items-center justify-between font-mono">
+                      <span>{org.contractAddress.slice(0, 8)}...{org.contractAddress.slice(-6)}</span>
+                      <a href={getExplorerAddressUrl(org.contractAddress)} target="_blank" rel="noopener noreferrer" className="text-zinc-200 hover:text-white hover:underline flex items-center gap-1">
+                        PolygonScan <ExternalLink className="w-2.5 h-2.5" />
+                      </a>
+                    </div>
                   ) : (
-                    <p className="text-xs text-yellow-500/70 mt-4">
-                      Using Master Protocol Vault (<a href={getExplorerAddressUrl()} target="_blank" rel="noopener noreferrer" className="text-fuchsia-400 underline">Explorer</a>)
+                    <p className="text-[11px] text-zinc-400">
+                      Master Vault (<a href={getExplorerAddressUrl()} target="_blank" rel="noopener noreferrer" className="text-zinc-200 underline">PolygonScan</a>)
                     </p>
                   )}
                 </div>
               </div>
 
-              {/* Budget Overview */}
-              <div className="lg:col-span-2 glass rounded-2xl p-6 lg:p-8 border border-white/5 relative overflow-hidden">
-                <div className="flex items-center justify-between mb-8">
-                  <div className="flex items-center gap-2">
-                    <ShieldCheck className="w-5 h-5 text-fuchsia-400 drop-shadow-[0_0_8px_rgba(217,70,239,0.8)]" />
-                    <h3 className="text-sm font-bold text-white/50 uppercase tracking-widest">Public Budget Utilization</h3>
+              {/* Budget Overview Card */}
+              <div className="lg:col-span-2 bg-[#121215] rounded-xl p-5 border border-zinc-800 shadow-sm flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="w-4 h-4 text-zinc-400" />
+                      <h3 className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Budget Allocation Utilization</h3>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-xs text-zinc-500 mr-1.5">Total Cap:</span>
+                      <span className="text-xs font-semibold text-white font-mono">₱{(totalAllocated || 0).toLocaleString()}</span>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-xs text-white/40 font-bold uppercase tracking-widest mb-1">Total Allocated</p>
-                    <p className="text-lg font-bold text-white">₱{(totalAllocated || 0).toLocaleString()}</p>
-                  </div>
-                </div>
 
-                <div className="mb-6">
-                  <div className="flex justify-between text-sm font-bold mb-2">
-                    <span className="text-white/70">Total Spend</span>
-                    <span className="text-fuchsia-400">{totalBudgetPercentage || 0}%</span>
-                  </div>
-                  <div className="w-full bg-white/5 rounded-full h-3 overflow-hidden border border-white/10">
-                    <div 
-                      className="bg-linear-to-r from-purple-500 to-fuchsia-500 h-full rounded-full relative"
-                      style={{ width: `${totalBudgetPercentage || 0}%` }}
-                    >
-                      <div className="absolute inset-0 bg-white/20 w-full h-full animate-[shimmer_2s_infinite]" />
+                  <div className="mb-4 space-y-1.5">
+                    <div className="flex justify-between text-xs font-mono">
+                      <span className="text-zinc-400">Disbursed Funds: ₱{(totalSpent || 0).toLocaleString()}</span>
+                      <span className="text-zinc-200 font-medium">{totalBudgetPercentage || 0}%</span>
+                    </div>
+                    <div className="w-full bg-zinc-800 rounded-full h-1.5 overflow-hidden">
+                      <div 
+                        className="bg-white h-full rounded-full transition-all duration-300"
+                        style={{ width: `${totalBudgetPercentage || 0}%` }}
+                      />
                     </div>
                   </div>
                 </div>
 
-                {/* Top Categories */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                {/* Top Categories Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-3 border-t border-zinc-800/80">
                   {(budgets || []).slice(0, 4).map((b) => (
-                    <div key={b._id} className="bg-white/5 rounded-xl p-3 border border-white/5">
-                      <p className="text-xs text-white/50 font-bold uppercase truncate mb-1" title={b.name || "Budget"}>{b.name || "Budget"}</p>
-                      <p className="text-sm font-bold text-white">₱{(b.spent || 0).toLocaleString()}</p>
+                    <div key={b._id} className="bg-zinc-900 rounded-lg p-2.5 border border-zinc-800">
+                      <p className="text-[10px] text-zinc-400 font-medium uppercase truncate mb-0.5" title={b.name || "Budget"}>{b.name || "Budget"}</p>
+                      <p className="text-xs font-semibold text-white font-mono">₱{(b.spent || 0).toLocaleString()}</p>
                     </div>
                   ))}
                   {(!budgets || budgets.length === 0) && (
-                    <div className="col-span-full text-center text-sm text-white/30 py-4">No public budget data available.</div>
+                    <div className="col-span-full text-center text-xs text-zinc-500 py-2">No public budget line items registered.</div>
                   )}
                 </div>
               </div>
             </div>
 
-            {/* ── Public Ledger ── */}
-            <div className="glass rounded-2xl p-6 lg:p-8 border border-white/5">
-              <div className="flex items-center justify-between mb-8">
+            {/* ── Public Verified Ledger Table ── */}
+            <div className="bg-[#121215] rounded-xl border border-zinc-800 shadow-sm overflow-hidden">
+              <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
                 <div>
-                  <h2 className="text-xl font-bold text-white mb-1">Verified Public Ledger</h2>
-                  <p className="text-sm text-white/50">Only transactions recorded and verified on the blockchain are shown here.</p>
+                  <h2 className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">Verified Public Ledger</h2>
+                  <p className="text-[11px] text-zinc-500">Immutable cryptographic record of disbursements and receipts</p>
                 </div>
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
+                <table className="w-full text-left text-xs">
                   <thead>
-                    <tr className="border-b border-white/10 text-xs uppercase tracking-widest text-white/40">
-                      <th className="pb-4 font-bold pl-2">Date</th>
-                      <th className="pb-4 font-bold">Description</th>
-                      <th className="pb-4 font-bold">Category</th>
-                      <th className="pb-4 font-bold text-right">Amount</th>
-                      <th className="pb-4 font-bold text-center pr-2">Proof</th>
+                    <tr className="border-b border-zinc-800 bg-[#0e0e11] text-zinc-400 text-[11px] font-medium uppercase tracking-wider">
+                      <th className="p-3 pl-4">Date</th>
+                      <th className="p-3">Description</th>
+                      <th className="p-3">Category</th>
+                      <th className="p-3 text-right">Amount</th>
+                      <th className="p-3 text-center pr-4">Proof</th>
                     </tr>
                   </thead>
-                  <tbody className="text-sm">
+                  <tbody className="divide-y divide-zinc-800/80">
                     {(!transactions || transactions.length === 0) ? (
                       <tr>
-                        <td colSpan={5} className="py-12 text-center text-white/30">
+                        <td colSpan={5} className="py-8 text-center text-zinc-500 text-xs">
                           No verified on-chain transactions yet.
                         </td>
                       </tr>
                     ) : (
                       transactions.map((tx) => (
-                        <tr key={tx._id} className="border-b border-white/5 hover:bg-white/2 transition-colors group">
-                          <td className="py-4 pl-2 text-white/60 whitespace-nowrap">
+                        <tr key={tx._id} className="hover:bg-zinc-900/50 transition-colors">
+                          <td className="p-3 pl-4 text-zinc-500 font-mono whitespace-nowrap">
                             {tx.createdAt ? new Date(tx.createdAt).toLocaleDateString() : "Unknown"}
                           </td>
-                          <td className="py-4 text-white font-medium">
+                          <td className="p-3 text-zinc-200 font-medium">
                             {tx.description || "No description"}
                           </td>
-                          <td className="py-4">
-                            <span className="px-2 py-1 rounded bg-white/5 text-[10px] uppercase tracking-widest text-white/50 border border-white/10">
-                              {tx.category || "Uncategorized"}
+                          <td className="p-3">
+                            <span className="px-2 py-0.5 rounded bg-zinc-900 text-[10px] text-zinc-400 border border-zinc-800">
+                              {tx.category || "General"}
                             </span>
                           </td>
-                          <td className={`py-4 text-right font-bold whitespace-nowrap ${tx.type === "income" ? "text-green-400" : "text-white"}`}>
+                          <td className={`p-3 text-right font-semibold font-mono whitespace-nowrap ${tx.type === "income" ? "text-emerald-400" : "text-zinc-200"}`}>
                             {tx.type === "income" ? "+" : "-"}₱{(tx.amount || 0).toLocaleString()}
                           </td>
-                          <td className="py-4 text-center pr-2">
+                          <td className="p-3 text-center pr-4">
                             {tx.blockchainTxHash ? (
                               <a 
                                 href={getExplorerTxUrl(tx.blockchainTxHash)} 
                                 target="_blank" 
                                 rel="noopener noreferrer"
-                                className="inline-flex items-center justify-center p-1.5 rounded-lg bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 transition-colors border border-cyan-500/20"
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-zinc-900 text-zinc-300 hover:text-white transition-colors border border-zinc-800 text-[10px] font-mono"
                                 title="Verify on Polygonscan"
                               >
-                                <ExternalLink className="w-4 h-4" />
+                                <span>Verify</span>
+                                <ExternalLink className="w-2.5 h-2.5" />
                               </a>
                             ) : (
-                              <span className="text-white/20">-</span>
+                              <span className="text-zinc-600">-</span>
                             )}
                           </td>
                         </tr>
@@ -358,13 +371,6 @@ export default function PublicDashboardPage() {
         )}
 
       </div>
-
-      <style jsx global>{`
-        @keyframes shimmer {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(100%); }
-        }
-      `}</style>
     </main>
   );
 }

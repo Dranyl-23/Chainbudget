@@ -89,7 +89,7 @@ export default function LoginScreen({ navigation }: any) {
         />
         <LinearGradient 
           colors={['rgba(9,9,11,0.4)', 'rgba(9,9,11,0.8)', '#09090b']} 
-          style={StyleSheet.absoluteFillObject} 
+          style={StyleSheet.absoluteFill} 
         />
 
         {/* Logo / Icon */}

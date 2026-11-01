@@ -39,19 +39,19 @@ export default function CookiePrivacyBanner() {
       aria-label="Privacy and Cookie Notice"
       className="fixed bottom-4 left-4 right-4 md:left-8 md:right-auto md:max-w-md z-50 animate-in fade-in slide-in-from-bottom-5 duration-300"
     >
-      <div className="bg-[#12072B]/95 border border-purple-500/30 rounded-2xl p-4 md:p-5 shadow-[0_10px_35px_rgba(0,0,0,0.6)] backdrop-blur-xl text-white">
+      <div className="bg-[#121215] border border-zinc-800 rounded-xl p-4 shadow-2xl text-white">
         <div className="flex items-start gap-3">
-          <div className="w-8 h-8 rounded-xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center shrink-0 mt-0.5">
-            <ShieldCheck className="w-4 h-4 text-purple-300" />
+          <div className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center shrink-0 mt-0.5">
+            <ShieldCheck className="w-4 h-4 text-zinc-300" />
           </div>
-          <div className="flex-1 text-xs leading-relaxed text-white/80">
-            <div className="font-bold text-white text-sm mb-1">Data Privacy & Security Notice</div>
+          <div className="flex-1 text-xs leading-relaxed text-zinc-400">
+            <div className="font-semibold text-white text-xs mb-1">Data Privacy & Security Notice</div>
             We process minimal data strictly necessary for Web3 authentication and multi-signature budget management in compliance with the{" "}
-            <Link href="/privacy" className="text-fuchsia-400 font-semibold hover:underline">
+            <Link href="/privacy" className="text-zinc-200 font-medium underline hover:text-white">
               Philippine Data Privacy Act (RA 10173)
             </Link>{" "}
             and{" "}
-            <Link href="/help" className="text-cyan-400 font-semibold hover:underline">
+            <Link href="/help" className="text-zinc-200 font-medium underline hover:text-white">
               RA 10175
             </Link>
             . No private keys are ever stored.
@@ -59,22 +59,22 @@ export default function CookiePrivacyBanner() {
           <button
             onClick={() => setIsVisible(false)}
             aria-label="Dismiss notice"
-            className="text-white/40 hover:text-white transition-colors p-1"
+            className="text-zinc-500 hover:text-white transition-colors p-1"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="mt-3.5 pt-3 border-t border-white/10 flex items-center justify-between gap-3">
+        <div className="mt-3 pt-3 border-t border-zinc-800 flex items-center justify-between gap-3">
           <Link
             href="/privacy"
-            className="text-[11px] text-white/60 hover:text-white transition-colors underline"
+            className="text-[11px] text-zinc-400 hover:text-white transition-colors underline"
           >
             Read Privacy Notice
           </Link>
           <button
             onClick={handleAccept}
-            className="px-4 py-1.5 rounded-lg bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-bold text-xs transition-all shadow-md"
+            className="px-3.5 py-1.5 rounded-lg bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs transition-colors"
           >
             Acknowledge & Accept
           </button>

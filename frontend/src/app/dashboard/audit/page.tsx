@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { ShieldAlert, Activity, User, FileText, CheckCircle, XCircle, Download, BookOpen, Filter, Calendar } from "lucide-react";
+import { ShieldAlert, Activity, User, FileText, CheckCircle, XCircle, Download, BookOpen, Filter, ExternalLink } from "lucide-react";
 import api from "@/lib/api";
 import { exportToCSV } from "@/lib/exportUtils";
 import { getExplorerTxUrl } from "@/lib/config";
 import Portal from "@/components/Portal";
+import TableSkeleton from "@/components/TableSkeleton";
+import CustomSelect from "@/components/CustomSelect";
 import axios from "axios";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -117,17 +119,17 @@ export default function AuditPage() {
   }, [activeOrgId, actionFilter, rangeFilter]);
 
   const getActionIcon = (action: string) => {
-    if (action.includes("approve")) return <CheckCircle className="w-4 h-4 text-green-400 drop-shadow-[0_0_8px_rgba(74,222,128,0.8)]" />;
-    if (action.includes("reject")) return <XCircle className="w-4 h-4 text-red-400 drop-shadow-[0_0_8px_rgba(248,113,113,0.8)]" />;
-    if (action.includes("create")) return <FileText className="w-4 h-4 text-fuchsia-400 drop-shadow-[0_0_8px_rgba(217,70,239,0.8)]" />;
-    return <Activity className="w-4 h-4 text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]" />;
+    if (action.includes("approve")) return <CheckCircle className="w-3 h-3 text-emerald-400" />;
+    if (action.includes("reject")) return <XCircle className="w-3 h-3 text-rose-400" />;
+    if (action.includes("create")) return <FileText className="w-3 h-3 text-zinc-300" />;
+    return <Activity className="w-3 h-3 text-zinc-400" />;
   };
 
   const getActionColor = (action: string) => {
-    if (action.includes("approve")) return "bg-green-500/10 border-green-400/30 text-green-300";
-    if (action.includes("reject")) return "bg-red-500/10 border-red-400/30 text-red-300";
-    if (action.includes("create")) return "bg-fuchsia-500/10 border-fuchsia-400/30 text-fuchsia-300";
-    return "bg-cyan-500/10 border-cyan-400/30 text-cyan-300";
+    if (action.includes("approve")) return "bg-zinc-900 border-zinc-700 text-emerald-400";
+    if (action.includes("reject")) return "bg-zinc-900 border-zinc-700 text-rose-400";
+    if (action.includes("create")) return "bg-zinc-900 border-zinc-800 text-zinc-200";
+    return "bg-zinc-900 border-zinc-800 text-zinc-300";
   };
 
   const handleExport = (format: "csv" | "pdf") => {
@@ -162,7 +164,7 @@ export default function AuditPage() {
   const isAuthorized = user?.isSuperAdmin || (membership && membership.roleLevel <= 2);
 
   const formatDetails = (details: unknown) => {
-    if (!details) return <span className="text-white/40 italic">No details</span>;
+    if (!details) return <span className="text-zinc-600 italic">No details</span>;
 
     let parsedDetails: Record<string, unknown> | null = null;
 
@@ -172,10 +174,10 @@ export default function AuditPage() {
         if (typeof parsed === "object" && parsed !== null) {
           parsedDetails = parsed as Record<string, unknown>;
         } else {
-          return <span className="text-white/70">{details}</span>;
+          return <span className="text-zinc-300">{details}</span>;
         }
       } catch {
-        return <span className="text-white/70">{details}</span>;
+        return <span className="text-zinc-300">{details}</span>;
       }
     } else if (typeof details === "object" && details !== null) {
       parsedDetails = details as Record<string, unknown>;
@@ -183,19 +185,40 @@ export default function AuditPage() {
 
     if (parsedDetails) {
       return (
-        <div className="flex flex-wrap gap-1.5 mt-1">
+        <div className="flex flex-wrap gap-1.5 my-0.5">
           {Object.entries(parsedDetails).map(([key, value]) => {
             const formattedKey = key.replace(/([A-Z])/g, " $1").replace(/^./, (str) => str.toUpperCase());
-            let formattedValue = String(value);
+            let formattedValue = String(value ?? "");
             if (key === "amount" && typeof value === "number") {
               formattedValue = `₱${value.toLocaleString()}`;
             } else if (typeof value === "boolean") {
               formattedValue = value ? "Yes" : "No";
             }
+
+            const isUrl = formattedValue.startsWith("http");
+            const isHash = formattedValue.length > 20 && !isUrl;
+
             return (
-              <span key={key} className="bg-white/5 border border-white/10 px-2 py-0.5 rounded text-[10px] text-white/70 shadow-sm whitespace-nowrap">
-                <strong className="text-white mr-1">{formattedKey}:</strong>
-                <span className="font-mono text-cyan-300">{formattedValue}</span>
+              <span key={key} className="inline-flex items-center gap-1 bg-zinc-900 border border-zinc-800/80 px-2 py-0.5 rounded text-[10px] text-zinc-400">
+                <span className="font-medium text-zinc-400">{formattedKey}:</span>
+                {isUrl ? (
+                  <a 
+                    href={formattedValue} 
+                    target="_blank" 
+                    rel="noreferrer" 
+                    className="text-zinc-200 hover:text-white underline inline-flex items-center gap-1 font-mono font-medium max-w-44 truncate"
+                    title={formattedValue}
+                  >
+                    <span>{formattedValue.split("/").pop() || "View Link"}</span>
+                    <ExternalLink className="w-2.5 h-2.5 shrink-0" />
+                  </a>
+                ) : isHash ? (
+                  <span className="font-mono text-zinc-200" title={formattedValue}>
+                    {`${formattedValue.slice(0, 10)}...${formattedValue.slice(-6)}`}
+                  </span>
+                ) : (
+                  <span className="font-mono text-zinc-200">{formattedValue}</span>
+                )}
               </span>
             );
           })}
@@ -203,68 +226,85 @@ export default function AuditPage() {
       );
     }
 
-    return <span className="text-white/70">{String(details)}</span>;
+    return <span className="text-zinc-300">{String(details)}</span>;
   };
 
   if (!isAuthorized && !loading) {
     return (
-      <div className="p-8 text-center animate-fade-in flex flex-col items-center justify-center min-h-[60vh]">
-        <div className="relative mb-6">
-          <div className="absolute inset-0 bg-red-500/20 blur-xl rounded-full animate-pulse" />
-          <ShieldAlert className="w-20 h-20 text-red-500 relative z-10 drop-shadow-[0_0_15px_rgba(248,113,113,0.8)]" />
+      <div className="p-8 text-center animate-fade-in flex flex-col items-center justify-center min-h-[55vh]">
+        <div className="bg-[#121215] border border-zinc-800 p-8 rounded-xl max-w-md w-full shadow-xs">
+          <div className="w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mx-auto mb-4 text-zinc-400">
+            <ShieldAlert className="w-5 h-5" />
+          </div>
+          <h2 className="text-base font-semibold text-white mb-1">Access Denied</h2>
+          <p className="text-xs text-zinc-400 leading-relaxed">
+            Only authorized executives (Level 1 &amp; Level 2) can inspect the immutable cryptographic Audit Trail to safeguard system integrity.
+          </p>
         </div>
-        <h2 className="text-3xl font-black text-white mb-2 tracking-tight">Access Denied</h2>
-        <p className="text-white/50 max-w-md mx-auto">Only authorized executives (Level 1 & 2) can view the immutable System Audit Trail to prevent internal reconnaissance.</p>
       </div>
     );
   }
 
   return (
-    <div className="p-4 md:p-8 pb-20 animate-fade-in w-full max-w-7xl mx-auto">
-      <header className="mb-8 flex flex-col md:flex-row md:justify-between md:items-start gap-4">
+    <div className="p-4 md:p-8 pb-20 animate-fade-in w-full max-w-7xl mx-auto space-y-6">
+      {/* ── Page Header ── */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-800 pb-5">
         <div>
-          <h1 className="text-3xl font-black mb-2 flex items-center gap-3 drop-shadow-md">
-            <BookOpen className="w-8 h-8 text-fuchsia-400 drop-shadow-[0_0_15px_rgba(217,70,239,0.8)]" />
-            <span className="bg-clip-text text-transparent bg-linear-to-r from-white to-white/70">
-              System Audit Trail
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-300 bg-zinc-800 border border-zinc-700 px-2 py-0.5 rounded-full">
+              Cryptographic Accountability
             </span>
+            <span className="text-[11px] text-zinc-500">Append-Only Event Store</span>
+          </div>
+          <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+            <BookOpen className="w-6 h-6 text-zinc-300" />
+            System Audit Trail
           </h1>
-          <p className="text-sm text-white/50 max-w-xl">
-            Immutable cryptographic record of all executive actions, approvals, and blockchain verifications within the system.
+          <p className="text-xs md:text-sm text-zinc-400 mt-1 max-w-2xl">
+            Verifiable log of all executive actions, multi-sig approvals, and Polygon blockchain interactions.
           </p>
         </div>
-        <div className="flex gap-3">
-          <button onClick={() => handleExport("csv")} className="btn glass border border-white/10 hover:border-cyan-400/50 hover:bg-white/5 text-white text-sm flex items-center gap-2 rounded-xl px-5 py-2.5 font-bold transition-all shadow-[0_0_15px_rgba(255,255,255,0.05)]">
-            <Download className="w-4 h-4 text-cyan-400" /> Export CSV
+
+        {/* Export Buttons */}
+        <div className="flex items-center gap-2 shrink-0 self-start md:self-auto">
+          <button 
+            onClick={() => handleExport("csv")} 
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white text-xs font-semibold transition-all cursor-pointer"
+          >
+            <Download className="w-3.5 h-3.5 text-zinc-400" /> Export CSV
           </button>
-          <button onClick={() => handleExport("pdf")} className="btn glass border border-fuchsia-500/50 bg-linear-to-r from-fuchsia-600/40 to-purple-600/40 hover:from-fuchsia-500/60 hover:to-purple-500/60 text-white text-sm flex items-center gap-2 rounded-xl px-5 py-2.5 font-bold transition-all shadow-[0_0_20px_rgba(217,70,239,0.3)]">
-            <FileText className="w-4 h-4 text-white" /> Export PDF
+          <button 
+            onClick={() => handleExport("pdf")} 
+            className="btn-primary inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer"
+          >
+            <FileText className="w-3.5 h-3.5" /> Export PDF
           </button>
         </div>
-      </header>
+      </div>
 
       {/* ── Filters Bar ── */}
-      <div className="mb-6 flex flex-wrap items-center gap-3">
-        {/* Action Type Filter */}
-        <div className="flex items-center gap-2 glass px-3 py-1.5 rounded-xl border border-white/10">
-          <Filter className="w-3.5 h-3.5 text-cyan-400" />
-          <select
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-[#121215] p-2 rounded-xl border border-zinc-800">
+        {/* Action Type Select */}
+        <div className="w-full sm:w-48">
+          <CustomSelect
+            size="sm"
             value={actionFilter}
-            onChange={(e) => setActionFilter(e.target.value)}
-            className="bg-transparent text-xs text-white focus:outline-none cursor-pointer"
-          >
-            <option value="all" className="bg-[#160B2E] text-white">All Actions</option>
-            <option value="approve" className="bg-[#160B2E] text-white">Approvals</option>
-            <option value="reject" className="bg-[#160B2E] text-white">Rejections</option>
-            <option value="create" className="bg-[#160B2E] text-white">Creations</option>
-            <option value="transaction" className="bg-[#160B2E] text-white">Transactions</option>
-            <option value="budget" className="bg-[#160B2E] text-white">Budget</option>
-            <option value="member" className="bg-[#160B2E] text-white">Members</option>
-          </select>
+            onChange={(val) => setActionFilter(val)}
+            options={[
+              { value: "all", label: "All Event Types" },
+              { value: "approve", label: "Approvals" },
+              { value: "reject", label: "Rejections" },
+              { value: "create", label: "Creations" },
+              { value: "transaction", label: "Transactions" },
+              { value: "budget", label: "Budget Adjustments" },
+              { value: "member", label: "Member Updates" },
+            ]}
+            placeholder="All Event Types"
+          />
         </div>
 
-        {/* Date Range Filter */}
-        <div className="flex items-center gap-1 glass p-1 rounded-xl border border-white/10">
+        {/* Date Range Segmented Controls */}
+        <div className="flex items-center gap-1 overflow-x-auto p-0.5 custom-scrollbar w-full sm:w-auto">
           {[
             { key: "all", label: "All Time" },
             { key: "24h", label: "Today" },
@@ -275,10 +315,10 @@ export default function AuditPage() {
             <button
               key={item.key}
               onClick={() => setRangeFilter(item.key)}
-              className={`px-3 py-1 text-xs rounded-lg font-medium transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap cursor-pointer ${
                 rangeFilter === item.key
-                  ? "bg-fuchsia-600 text-white shadow-md shadow-fuchsia-600/30"
-                  : "text-gray-400 hover:text-white hover:bg-white/5"
+                  ? "bg-zinc-800 text-white shadow-xs"
+                  : "text-zinc-400 hover:text-white hover:bg-zinc-800/40"
               }`}
             >
               {item.label}
@@ -288,59 +328,53 @@ export default function AuditPage() {
       </div>
 
       {error && (
-        <div className="mb-6 p-4 glass bg-red-500/10 border border-red-500/30 rounded-xl text-sm text-red-400 shadow-[0_0_20px_rgba(248,113,113,0.2)] flex items-center gap-3">
-          <ShieldAlert className="w-5 h-5 shrink-0" />
+        <div className="p-3.5 bg-rose-500/10 border border-rose-500/20 rounded-lg text-xs text-rose-400 flex items-center gap-2.5">
+          <ShieldAlert className="w-4 h-4 shrink-0" />
           {error}
         </div>
       )}
 
+      {/* ── Table Container ── */}
       {loading ? (
-        <div className="space-y-4">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="h-20 w-full glass rounded-xl border border-white/5 relative overflow-hidden">
-              <div className="absolute inset-0 bg-linear-to-r from-transparent via-cyan-500/10 to-transparent -translate-x-full animate-[shimmer_1.5s_infinite]" />
-            </div>
-          ))}
-        </div>
+        <TableSkeleton />
       ) : (
-        <div className="glass rounded-2xl overflow-hidden shadow-[0_0_40px_rgba(139,92,246,0.1)] border border-purple-500/20 relative">
-          <div className="absolute inset-0 bg-linear-to-br from-fuchsia-500/5 to-cyan-500/5 pointer-events-none" />
-          
+        <div className="bg-[#121215] border border-zinc-800 rounded-xl overflow-hidden shadow-xs">
           {logs.length === 0 ? (
-            <div className="p-16 text-center text-white/50 relative z-10">
-              <div className="w-20 h-20 mx-auto bg-white/5 rounded-full flex items-center justify-center mb-4 border border-white/10">
-                <Activity className="w-10 h-10 text-cyan-500/50" />
+            <div className="py-16 text-center text-zinc-400 p-8">
+              <div className="w-10 h-10 mx-auto bg-zinc-900 rounded-xl flex items-center justify-center mb-3 border border-zinc-800 text-zinc-500">
+                <Activity className="w-5 h-5" />
               </div>
-              <p className="text-lg">No audit logs found for this organization.</p>
+              <h3 className="text-white font-semibold text-sm mb-1">No audit logs found</h3>
+              <p className="text-xs text-zinc-500">No immutable events recorded for this organization during the selected period.</p>
             </div>
           ) : (
-            <div className="overflow-x-auto relative z-10">
-              <table className="w-full text-left text-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
                 <thead>
-                  <tr className="border-b border-purple-500/20 bg-[#160B2E]/80 backdrop-blur-md">
-                    <th className="p-4 font-bold text-white/60 uppercase tracking-widest text-xs">Timestamp</th>
-                    <th className="p-4 font-bold text-white/60 uppercase tracking-widest text-xs">Actor</th>
-                    <th className="p-4 font-bold text-white/60 uppercase tracking-widest text-xs">Action</th>
-                    <th className="p-4 font-bold text-white/60 uppercase tracking-widest text-xs">Details</th>
-                    <th className="p-4 font-bold text-white/60 uppercase tracking-widest text-xs text-right pr-6">Chain Data</th>
+                  <tr className="border-b border-zinc-800 bg-zinc-900/60 text-zinc-400 uppercase tracking-wider text-[10px] font-semibold">
+                    <th className="p-3.5">Timestamp</th>
+                    <th className="p-3.5">Actor</th>
+                    <th className="p-3.5">Action</th>
+                    <th className="p-3.5">Audit Context</th>
+                    <th className="p-3.5 text-right pr-6">Proof / Hash</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/5">
+                <tbody className="divide-y divide-zinc-800 text-zinc-300">
                   {logs.map((log) => (
-                    <tr key={log._id} className="hover:bg-white/5 transition-colors group">
-                      <td className="p-4 align-top whitespace-nowrap text-xs text-white/50 font-mono">
+                    <tr key={log._id} className="hover:bg-zinc-800/40 transition-colors">
+                      <td className="p-3.5 align-top whitespace-nowrap text-zinc-400 font-mono text-[11px]">
                         {new Date(log.createdAt).toLocaleString()}
                       </td>
-                      <td className="p-4 align-top">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0 shadow-[inset_0_0_10px_rgba(255,255,255,0.05)]">
-                            <User className="w-4 h-4 text-fuchsia-400 drop-shadow-[0_0_8px_rgba(217,70,239,0.8)]" />
+                      <td className="p-3.5 align-top">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-7 h-7 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center shrink-0">
+                            <User className="w-3.5 h-3.5 text-zinc-300" />
                           </div>
                           <div>
-                            <p className="font-bold text-white group-hover:text-fuchsia-300 transition-colors">
+                            <p className="font-semibold text-white text-xs">
                               {log.actor?.displayName || "System"}
                             </p>
-                            <p className="text-[10px] text-cyan-400/70 font-mono tracking-widest mt-0.5">
+                            <p className="text-[10px] text-zinc-500 font-mono">
                               {log.actor?.walletAddress 
                                 ? `${log.actor.walletAddress.slice(0, 6)}...${log.actor.walletAddress.slice(-4)}`
                                 : "N/A"}
@@ -348,30 +382,34 @@ export default function AuditPage() {
                           </div>
                         </div>
                       </td>
-                      <td className="p-4 align-top">
-                        <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-bold uppercase tracking-widest ${getActionColor(log.action)} shadow-[0_0_15px_rgba(255,255,255,0.05)]`}>
+                      <td className="p-3.5 align-top whitespace-nowrap">
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-medium uppercase tracking-wider ${getActionColor(log.action)}`}>
                           {getActionIcon(log.action)}
                           {log.action.replace("transaction.", "").replace("user.", "").replace("_", " ")}
-                        </div>
+                        </span>
                       </td>
-                      <td className="p-4 align-top text-white/70 text-xs">
+                      <td className="p-3.5 align-top text-zinc-300 max-w-md">
                         {formatDetails(log.details)}
                       </td>
-                      <td className="p-4 align-top text-right pr-6">
+                      <td className="p-3.5 align-top text-right pr-6 whitespace-nowrap">
                         {log.blockchainTxHash ? (
-                          <div className="flex items-center justify-end gap-2">
-                            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_8px_rgba(34,211,238,0.8)] shrink-0" />
+                          <div className="flex items-center justify-end">
                             <a 
                               href={getExplorerTxUrl(log.blockchainTxHash)}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-xs font-mono text-cyan-400 hover:text-cyan-300 hover:underline truncate max-w-30 block"
+                              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white hover:border-zinc-700 font-mono text-[10px] transition-colors"
+                              title="View on PolygonScan"
                             >
-                              {log.blockchainTxHash.slice(0, 10)}...
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                              <span>{log.blockchainTxHash.slice(0, 6)}...{log.blockchainTxHash.slice(-4)}</span>
+                              <ExternalLink className="w-2.5 h-2.5 text-zinc-500" />
                             </a>
                           </div>
                         ) : (
-                          <span className="text-[10px] text-white/20 font-mono italic uppercase tracking-widest">Off-chain event</span>
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-zinc-900/40 border border-zinc-800/60 text-zinc-500 font-mono text-[10px] uppercase tracking-wider">
+                            Off-chain
+                          </span>
                         )}
                       </td>
                     </tr>

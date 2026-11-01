@@ -1,4 +1,4 @@
-﻿const Transaction = require("../models/Transaction");
+const Transaction = require("../models/Transaction");
 const Organization = require("../models/Organization");
 const Budget = require("../models/Budget");
 const Approval = require("../models/Approval");
@@ -25,7 +25,7 @@ class TransactionService {
     const requiredCount = organization.requiredApprovals || 2;
     const approvalCount = await Approval.countDocuments({
       transaction: transactionId,
-      status: "approved",
+      $or: [{ action: "approved" }, { status: "approved" }],
     });
     return approvalCount >= requiredCount;
   }
@@ -62,6 +62,8 @@ class TransactionService {
             await Transaction.findByIdAndUpdate(txn._id, {
               blockchainTxHash: result.blockchainTxHash,
               onChainTxId: result.onChainTxId,
+              dataHash: result.dataHash,
+              isRecordedOnChain: true,
               isBlockchainPending: false,
             });
 
@@ -92,8 +94,7 @@ class TransactionService {
 
     const query = {
       organization: organizationId,
-      category: budgetCategory,
-      isActive: true,
+      $or: [{ name: budgetCategory }, { category: budgetCategory }],
     };
 
     const update = {

@@ -20,82 +20,89 @@
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
-import Constants from 'expo-constants';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
+import { isRunningInExpoGo } from 'expo';
 import api from './api';
 import { API_URL } from './api';
 
 // ── Expo Go guard ─────────────────────────────────────────────────────────────
-// Remote push notifications were removed from Expo Go in SDK 53.
+// Remote push notifications and notification channels were removed from Expo Go in SDK 53+.
 // All push code is silently skipped when running in Expo Go so the app
 // doesn't generate console errors during development.
 // In a development build (npx expo run:android / run:ios) or production
 // binary, IS_EXPO_GO is false and push notifications work fully.
-const IS_EXPO_GO = Constants.appOwnership === 'expo';
+export const IS_EXPO_GO =
+  isRunningInExpoGo() ||
+  (Constants as any).appOwnership === 'expo' ||
+  Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
 
 // ── Foreground notification behavior ──────────────────────────────────────────
 // Show notifications even when the app is in the foreground.
 // Guarded: setNotificationHandler is what triggers warnOfExpoGoPushUsage in Expo Go.
 if (!IS_EXPO_GO) {
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldPlaySound: true,
-      shouldSetBadge: true,
-      shouldShowBanner: true,
-      shouldShowList: true,
-    }),
-  });
+  try {
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+  } catch (err) {
+    console.warn('[Notifications] setNotificationHandler skipped:', err);
+  }
 }
 
 // ── Android notification channel ──────────────────────────────────────────────
 // Required on Android 8+ (API 26+). Without a channel, no notifications appear.
 export async function setupAndroidNotificationChannel() {
-  // No-op in Expo Go — channel setup is only meaningful in dev/production builds
+  // No-op in Expo Go — channel setup is only supported in dev/production builds
   if (IS_EXPO_GO) return;
 
   if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('default', {
-      name: 'General Alerts',
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#a21caf',
-      sound: 'default',
-    });
+    try {
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'General Alerts',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#a21caf',
+      });
 
-    await Notifications.setNotificationChannelAsync('chainbudget-default', {
-      name: 'ChainBudget Alerts',
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#a21caf', // ChainBudget fuchsia accent
-      sound: 'default',
-    });
+      await Notifications.setNotificationChannelAsync('chainbudget-default', {
+        name: 'ChainBudget Alerts',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#a21caf', // ChainBudget fuchsia accent
+      });
 
-    await Notifications.setNotificationChannelAsync('chainbudget-approvals', {
-      name: 'Approval Requests',
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 500, 200, 500],
-      lightColor: '#22c55e',
-      sound: 'default',
-      description: 'High-priority notifications for pending transaction approvals',
-    });
+      await Notifications.setNotificationChannelAsync('chainbudget-approvals', {
+        name: 'Approval Requests',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 500, 200, 500],
+        lightColor: '#22c55e',
+        description: 'High-priority notifications for pending transaction approvals',
+      });
 
-    await Notifications.setNotificationChannelAsync('chainbudget-dao', {
-      name: 'DAO Governance & Voting',
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 400, 200, 400],
-      lightColor: '#8b5cf6',
-      sound: 'default',
-      description: 'Alerts for new DAO proposals and voting rounds',
-    });
+      await Notifications.setNotificationChannelAsync('chainbudget-dao', {
+        name: 'DAO Governance & Voting',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 400, 200, 400],
+        lightColor: '#8b5cf6',
+        description: 'Alerts for new DAO proposals and voting rounds',
+      });
 
-    await Notifications.setNotificationChannelAsync('chainbudget-chat', {
-      name: 'Organization Chat Messages',
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 250, 150, 250],
-      lightColor: '#38bdf8', // Sky/Cyan accent
-      sound: 'default',
-      description: 'Real-time organization chat messages and mentions',
-    });
+      await Notifications.setNotificationChannelAsync('chainbudget-chat', {
+        name: 'Organization Chat Messages',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 150, 250],
+        lightColor: '#38bdf8', // Sky/Cyan accent
+        description: 'Real-time organization chat messages and mentions',
+      });
+    } catch (err) {
+      console.warn('[Notifications] setupAndroidNotificationChannel skipped or not supported:', err);
+    }
   }
 }
 

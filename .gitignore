@@ -90,3 +90,5 @@ Thumbs.db
 # Test Coverage
 coverage/
 lcov.info
+scratch/
+docs/

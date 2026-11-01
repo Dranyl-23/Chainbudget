@@ -320,7 +320,7 @@ const styles = StyleSheet.create({
   skipBtn: { alignItems: 'center', paddingVertical: 8 },
   skipBtnText: { color: 'rgba(255,255,255,0.35)', fontSize: 14 },
   privacyShield: {
-    ...StyleSheet.absoluteFillObject,
+    ...(StyleSheet.absoluteFill as object),
     backgroundColor: '#09090b',
     zIndex: 9999,
     justifyContent: 'center',

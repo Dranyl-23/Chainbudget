@@ -87,7 +87,7 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
   const [maskBalance, setMaskBalanceState] = useState(false);
 
   const backgroundTimeRef = useRef<number | null>(null);
-  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  const appStateRef = useRef<AppStateStatus>((AppState.currentState as AppStateStatus) || 'active');
 
   // Load user preferences on mount and when user session changes
   useEffect(() => {

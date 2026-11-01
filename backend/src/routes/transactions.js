@@ -593,11 +593,17 @@ router.patch("/:id/process-request", authenticate, async (req, res) => {
 /// GET /api/transactions/public-overview — Get public stats and recent transactions
 router.get("/public-overview", async (req, res) => {
   try {
-    // High-performance aggregation pipeline running inside MongoDB engine
-    const [statsResult, activeOrgs, recentTxns] = await Promise.all([
+    const publicOrgs = await Organization.find({ isActive: true, isPrivate: { $ne: true } })
+      .select("_id")
+      .lean();
+    const publicOrgIds = publicOrgs.map((o) => o._id);
+
+    // High-performance aggregation pipeline running inside MongoDB engine (scoped to public orgs)
+    const [statsResult, recentTxns] = await Promise.all([
       Transaction.aggregate([
         {
           $match: {
+            organization: { $in: publicOrgIds },
             blockchainTxHash: { $exists: true, $ne: null },
           },
         },
@@ -609,28 +615,31 @@ router.get("/public-overview", async (req, res) => {
           },
         },
       ]),
-      Organization.countDocuments({ isActive: true }),
       Transaction.find({
+        organization: { $in: publicOrgIds },
         blockchainTxHash: { $exists: true, $ne: null },
       })
         .sort({ createdAt: -1 })
         .limit(5)
-        .populate("organization", "name")
+        .populate("organization", "name isPrivate")
         .lean(),
     ]);
 
+    const activeOrgs = publicOrgIds.length;
     const totalVerified = statsResult[0]?.totalVerified || 0;
     const totalFunds = statsResult[0]?.totalFunds || 0;
 
-    const formattedRecent = recentTxns.map((txn) => ({
-      txHash: txn.blockchainTxHash,
-      amount: txn.amount,
-      description: txn.description,
-      category: txn.category || "Uncategorized",
-      status: txn.status === "approved" ? "Approved" : txn.status === "rejected" ? "Rejected" : "Pending",
-      organization: txn.organization?.name || "Unknown",
-      date: txn.createdAt,
-    }));
+    const formattedRecent = recentTxns
+      .filter((txn) => !txn.organization?.isPrivate)
+      .map((txn) => ({
+        txHash: txn.blockchainTxHash,
+        amount: txn.amount,
+        description: txn.description,
+        category: txn.category || "Uncategorized",
+        status: txn.status === "approved" ? "Approved" : txn.status === "rejected" ? "Rejected" : "Pending",
+        organization: txn.organization?.name || "Unknown",
+        date: txn.createdAt,
+      }));
 
     res.json({
       stats: {
@@ -659,10 +668,14 @@ router.get("/public/:hash", async (req, res) => {
         { referenceNumber: hash },
         ...idFilter,
       ]
-    }).populate("organization", "name");
+    }).populate("organization", "name isPrivate");
 
     if (!txn) {
       return res.status(404).json({ error: "Transaction not found" });
+    }
+
+    if (txn.organization && txn.organization.isPrivate) {
+      return res.status(403).json({ error: "This transaction belongs to a private organization" });
     }
 
     // Return safe public fields only

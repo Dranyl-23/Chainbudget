@@ -120,46 +120,46 @@ export default function EmblemRebrandSection({
 
   return (
     <>
-      <div className="glass p-6 rounded-2xl border border-purple-500/20 w-full shadow-[0_0_30px_rgba(168,85,247,0.08)] relative overflow-hidden">
-        <div className="flex items-center justify-between mb-4 border-b border-purple-500/10 pb-3">
+      <div className="bg-[#121215] border border-zinc-800 rounded-xl p-5 md:p-6 shadow-xs w-full relative overflow-hidden">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5 pb-3.5 border-b border-zinc-800">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center">
-              <Building className="w-5 h-5 text-purple-400" />
+            <div className="w-8 h-8 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-300">
+              <Building className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-base sm:text-lg font-bold text-gray-800 dark:text-white">
-                Organization Branding & Emblem
+              <h2 className="text-sm font-semibold text-white">
+                Organization Branding &amp; Emblem
               </h2>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Rebrand or update your custom organization logo across Web, Mobile & Public Ledger.
+              <p className="text-[11px] text-zinc-400">
+                Rebrand or update your custom organization logo across Web, Mobile &amp; Public Ledger.
               </p>
             </div>
           </div>
-          <span className="text-[10px] uppercase font-mono font-bold px-2.5 py-1 rounded-full bg-purple-500/10 border border-purple-500/30 text-purple-400">
+          <span className="text-[10px] uppercase font-mono font-medium px-2 py-0.5 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-300">
             {badgeLabel}
           </span>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-center gap-6 pt-2">
+        <div className="flex flex-col sm:flex-row items-center gap-5 pt-1">
           <div className="relative group shrink-0">
-            <div className="w-24 h-24 rounded-2xl bg-white/5 border-2 border-dashed border-purple-500/40 p-1.5 flex items-center justify-center overflow-hidden shadow-inner">
+            <div className="w-20 h-20 rounded-xl bg-zinc-900 border border-dashed border-zinc-700 p-1 flex items-center justify-center overflow-hidden">
               {orgLogoPreview && !hasImgError ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={orgLogoPreview}
                   alt="Org Emblem"
-                  className="w-full h-full object-cover rounded-xl"
+                  className="w-full h-full object-cover rounded-lg"
                   onError={() => setHasImgError(true)}
                 />
               ) : (
-                <div className="flex flex-col items-center justify-center text-purple-400">
-                  <Building className="w-8 h-8 opacity-60 mb-1" />
-                  <span className="text-[10px] text-white/40 font-bold">No Emblem</span>
+                <div className="flex flex-col items-center justify-center text-zinc-500">
+                  <Building className="w-6 h-6 opacity-60 mb-0.5" />
+                  <span className="text-[10px] text-zinc-500 font-medium">No Emblem</span>
                 </div>
               )}
             </div>
-            <label className="absolute -bottom-2 -right-2 p-2 rounded-full bg-purple-600 hover:bg-purple-500 text-white cursor-pointer shadow-lg transition-all hover:scale-105 border border-purple-400/50">
-              <Camera className="w-4 h-4" />
+            <label className="absolute -bottom-1.5 -right-1.5 p-1.5 rounded-full bg-white text-zinc-950 cursor-pointer shadow-sm transition-transform hover:scale-105 border border-zinc-300">
+              <Camera className="w-3.5 h-3.5" />
               <input
                 type="file"
                 accept="image/png, image/jpeg, image/webp"
@@ -169,21 +169,21 @@ export default function EmblemRebrandSection({
             </label>
           </div>
 
-          <div className="flex-1 w-full space-y-3 text-center sm:text-left">
+          <div className="flex-1 w-full space-y-2.5 text-center sm:text-left">
             <div>
-              <h3 className="text-sm font-bold text-gray-800 dark:text-white flex items-center justify-center sm:justify-start gap-2">
+              <h3 className="text-sm font-semibold text-white flex items-center justify-center sm:justify-start gap-2">
                 {orgDetails?.name || "Organization"}
-                <span className="text-[11px] font-normal text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-md border border-purple-500/20">
+                <span className="text-[10px] font-medium text-zinc-400 bg-zinc-800 px-2 py-0.5 rounded border border-zinc-700">
                   {orgDetails?.type ? orgDetails.type.replace("_", " ") : "DAO"}
                 </span>
               </h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              <p className="text-xs text-zinc-400 mt-0.5">
                 Upload a high-resolution square image (PNG, JPG, WebP) to establish your organization&apos;s Web3 emblem and on-chain identity.
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3 pt-1 justify-center sm:justify-start">
-              <label className="btn-secondary py-2 px-4 text-xs font-bold flex items-center justify-center gap-2 cursor-pointer">
+            <div className="flex flex-wrap items-center gap-2.5 pt-1 justify-center sm:justify-start">
+              <label className="px-3.5 py-1.5 rounded-lg border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition-colors">
                 <Upload className="w-3.5 h-3.5" />
                 Choose New File
                 <input
@@ -198,11 +198,11 @@ export default function EmblemRebrandSection({
                 type="button"
                 onClick={handleRebrandOrgLogo}
                 disabled={isUploadingOrgLogo || !orgLogoFile}
-                className="btn-primary py-2 px-5 text-xs font-bold flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(168,85,247,0.3)] hover:shadow-[0_0_25px_rgba(168,85,247,0.5)] disabled:opacity-50"
+                className="btn-primary py-1.5 px-4 text-xs font-semibold flex items-center justify-center gap-1.5 disabled:opacity-50"
               >
                 {isUploadingOrgLogo ? (
                   <>
-                    <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span className="w-3.5 h-3.5 border-2 border-zinc-900 border-t-transparent rounded-full animate-spin" />
                     <span>Publishing...</span>
                   </>
                 ) : (
@@ -224,12 +224,11 @@ export default function EmblemRebrandSection({
             onClick={(e) => {
               if (e.target === e.currentTarget) setShowEmblemSuccessModal(false);
             }}
-            className="fixed inset-0 z-9999 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fade-in overflow-y-auto"
+            className="fixed inset-0 z-9999 flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm animate-fade-in overflow-y-auto"
           >
-            <div className="relative bg-[#13121d] border border-purple-500/40 rounded-3xl shadow-[0_0_50px_rgba(168,85,247,0.3)] w-full max-w-sm max-h-[90vh] overflow-y-auto p-6 text-center animate-modal-pop my-auto">
-              <div className="relative mx-auto w-24 h-24 mb-5 flex items-center justify-center">
-                <div className="absolute inset-0 rounded-3xl bg-emerald-500/20 border-2 border-emerald-500/40 animate-ping opacity-60" />
-                <div className="relative w-20 h-20 rounded-2xl bg-white/5 border-2 border-emerald-400 overflow-hidden flex items-center justify-center shadow-[0_0_20px_rgba(16,185,129,0.4)]">
+            <div className="relative bg-[#121215] border border-zinc-800 rounded-xl shadow-xl w-full max-w-sm max-h-[90vh] overflow-y-auto p-5 text-center animate-modal-pop my-auto">
+              <div className="relative mx-auto w-20 h-20 mb-4 flex items-center justify-center">
+                <div className="relative w-18 h-18 rounded-xl bg-zinc-900 border border-zinc-700 overflow-hidden flex items-center justify-center shadow-xs">
                   {uploadedEmblemUrl || orgLogoPreview ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -238,35 +237,35 @@ export default function EmblemRebrandSection({
                       className="w-full h-full object-cover"
                     />
                   ) : (
-                    <Building className="w-10 h-10 text-emerald-400" />
+                    <Building className="w-8 h-8 text-zinc-400" />
                   )}
                 </div>
-                <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center border-2 border-[#13121d] shadow-md">
-                  <Check className="w-4 h-4 stroke-3" />
+                <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center border-2 border-[#121215] shadow-xs">
+                  <Check className="w-3.5 h-3.5" />
                 </div>
               </div>
 
-              <h3 className="text-xl font-black text-white tracking-tight mb-1">
-                Emblem Rebranded!
+              <h3 className="text-base font-bold text-white tracking-tight mb-1">
+                Emblem Rebranded
               </h3>
 
-              <div className="inline-block bg-purple-500/10 border border-purple-500/30 px-3 py-1 rounded-full mb-3">
-                <span className="text-xs font-bold text-purple-300">
+              <div className="inline-block bg-zinc-800 border border-zinc-700 px-2.5 py-0.5 rounded-full mb-2.5">
+                <span className="text-xs font-medium text-zinc-300">
                   {orgDetails?.name || "Organization"}
                 </span>
               </div>
 
-              <p className="text-xs text-white/60 leading-relaxed mb-6 px-2">
+              <p className="text-xs text-zinc-400 leading-relaxed mb-5 px-1">
                 Your new organization logo and custom emblem have been published to IPFS and synchronized across the Public Ledger, Group Chats, and Member Dashboards.
               </p>
 
               <button
                 type="button"
                 onClick={() => setShowEmblemSuccessModal(false)}
-                className="w-full py-3 px-4 rounded-xl bg-linear-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white font-bold text-sm shadow-[0_0_20px_rgba(16,185,129,0.4)] transition-all hover:scale-[1.02] flex items-center justify-center gap-2"
+                className="btn-primary w-full py-2.5 px-4 rounded-lg font-semibold text-xs transition-all flex items-center justify-center gap-2"
               >
                 <CheckCircle2 className="w-4 h-4" />
-                Done & Synchronized
+                Done &amp; Synchronized
               </button>
             </div>
           </div>

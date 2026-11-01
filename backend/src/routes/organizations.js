@@ -118,11 +118,24 @@ router.get("/:orgId", authenticate, requireRole(4), async (req, res) => {
 /// GET /api/organizations/:orgId/members — List members of an org
 router.get("/:orgId/members", authenticate, requireRole(4), async (req, res) => {
   try {
+    const targetOrgId = req.params.orgId.toString();
     const users = await User.find({
       "memberships.organization": req.params.orgId,
       "memberships.isActive": true,
-    }).select("-nonce");
-    res.json(users);
+    })
+      .select("-nonce -nonceExpiresAt -pushTokens -notificationPreferences -encryptedPrivateKey -encryptedMnemonic -keyExportNonce -keyExportNonceExpiresAt")
+      .lean();
+
+    const scopedUsers = req.user.isSuperAdmin
+      ? users
+      : users.map((u) => ({
+          ...u,
+          memberships: (u.memberships || []).filter(
+            (m) => (m.organization?._id || m.organization)?.toString() === targetOrgId
+          ),
+        }));
+
+    res.json(scopedUsers);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -179,8 +192,8 @@ router.post("/:orgId/submit-liquidation", authenticate, requireRole(2), async (r
   }
 });
 
-/// POST /api/organizations/:orgId/approve-liquidation — SuperAdmin approves & replenishes
-router.post("/:orgId/approve-liquidation", authenticate, async (req, res) => {
+/// POST /api/organizations/:orgId/approve-liquidation (and /:orgId/liquidate/approve) — SuperAdmin approves & replenishes
+router.post(["/:orgId/approve-liquidation", "/:orgId/liquidate/approve"], authenticate, async (req, res) => {
   try {
     // Only SuperAdmin can approve
     if (!req.user.isSuperAdmin) {
@@ -202,8 +215,8 @@ router.post("/:orgId/approve-liquidation", authenticate, async (req, res) => {
       submittedBy: req.user._id, // SuperAdmin triggered
       type: "income",
       amount: org.subsidyAmount || 50000,
-      description: "Automated Semester Subsidy Replenishment",
-      category: "University Subsidy",
+      description: org.type === "student_org" ? "Automated Semester Subsidy Replenishment" : "Automated Budget Replenishment & Audit Clearance",
+      category: org.type === "student_org" ? "University Subsidy" : "Budget Replenishment",
       isHighValue: false,
       status: "approved",
       executed: true

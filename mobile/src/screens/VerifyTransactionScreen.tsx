@@ -154,7 +154,7 @@ export default function VerifyTransactionScreen() {
       <Modal visible={isScanning} animationType="slide" transparent={false}>
         <View className="flex-1 bg-black">
           <CameraView
-            style={StyleSheet.absoluteFillObject}
+            style={StyleSheet.absoluteFill}
             facing="back"
             barcodeScannerSettings={{
               barcodeTypes: ['qr'],

@@ -18,6 +18,7 @@ import {
   ArrowLeft,
   ExternalLink,
   LifeBuoy,
+  BookOpen,
   Lock,
   FileText,
   Code2,
@@ -171,57 +172,64 @@ export default function HelpFaqPage() {
   });
 
   return (
-    <main className="min-h-screen bg-[#0A0216] text-white relative overflow-hidden flex flex-col">
-      {/* ── Background Glows ── */}
-      <div className="absolute top-[-10%] left-[-10%] w-[60vw] h-[60vw] rounded-full bg-fuchsia-600/20 blur-[140px] pointer-events-none mix-blend-screen" />
-      <div className="absolute top-[30%] right-[-10%] w-[50vw] h-[50vw] rounded-full bg-cyan-600/20 blur-[140px] pointer-events-none mix-blend-screen" />
-
+    <main className="min-h-screen bg-[#09090b] text-white relative overflow-hidden flex flex-col">
       {/* ── Header Bar ── */}
-      <header className="relative z-20 border-b border-white/10 backdrop-blur-xl bg-[#0A0216]/70 px-4 md:px-8 py-4 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2.5 text-white hover:text-fuchsia-400 transition-colors">
-          <ArrowLeft className="w-5 h-5" />
-          <span className="text-sm font-semibold">Back to Home</span>
+      <header className="relative z-20 border-b border-zinc-800 bg-[#09090b]/90 backdrop-blur-md px-4 md:px-8 py-3.5 flex items-center justify-between">
+        <Link href="/" className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors">
+          <ArrowLeft className="w-4 h-4" />
+          <span className="text-xs font-medium">Back to Home</span>
         </Link>
         <div className="flex items-center gap-2">
-          <img src="/3D-Chainbudget.png" alt="ChainBudget" className="w-8 h-8 object-contain" />
-          <span className="font-extrabold tracking-tight text-white">
-            CHAIN<span className="text-fuchsia-400">BUDGET</span> <span className="text-xs text-white/50 font-normal">Help Center</span>
+          <img src="/3D-Chainbudget.png" alt="ChainBudget" className="w-7 h-7 object-contain" />
+          <span className="font-semibold text-sm tracking-tight text-white">
+            ChainBudget <span className="text-xs text-zinc-500 font-normal">Help Center</span>
           </span>
         </div>
         <Link
           href="/privacy"
-          className="text-xs text-white/70 hover:text-white border border-white/10 px-3 py-1.5 rounded-full hover:bg-white/5 transition-all"
+          className="text-xs text-zinc-400 hover:text-white border border-zinc-800 px-3 py-1 rounded-lg hover:bg-zinc-900 transition-colors"
         >
           Data Privacy Notice
         </Link>
       </header>
 
       {/* ── Hero Section ── */}
-      <section className="relative z-10 max-w-4xl mx-auto px-4 pt-12 pb-8 text-center">
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-fuchsia-500/10 border border-fuchsia-500/30 text-fuchsia-300 text-xs font-semibold uppercase tracking-wider mb-4">
-          <LifeBuoy className="w-4 h-4" /> Help & Knowledge Base
+      <section className="relative z-10 max-w-4xl mx-auto px-4 pt-10 pb-6 text-center">
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-400 text-[11px] font-medium uppercase tracking-wider mb-3">
+          <LifeBuoy className="w-3.5 h-3.5 text-zinc-400" /> Help & Knowledge Base
         </div>
-        <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight mb-3">
-          How can we <span className="text-transparent bg-clip-text bg-gradient-to-r from-fuchsia-400 via-purple-300 to-cyan-400">help you?</span>
+        <h1 className="text-2xl md:text-4xl font-semibold tracking-tight text-white mb-2">
+          How can we help you?
         </h1>
-        <p className="text-white/60 text-sm md:text-base max-w-2xl mx-auto mb-8">
-          Answers to frequently asked questions regarding non-custodial Web3 identity, multi-sig approvals, DAO governance, and troubleshooting.
+        <p className="text-zinc-400 text-xs md:text-sm max-w-xl mx-auto mb-6">
+          Frequently asked questions regarding Web3 identity, multi-sig approvals, DAO governance, and troubleshooting.
         </p>
 
         {/* Search Bar */}
-        <div className="relative max-w-2xl mx-auto mb-8">
-          <Search className="w-5 h-5 text-white/40 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+        <div className="relative max-w-xl mx-auto mb-4">
+          <Search className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
             placeholder="Search questions, keywords, errors (e.g. 'CSRF', 'Multi-sig', 'Amoy')..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-12 pr-4 py-3.5 rounded-2xl bg-white/5 border border-white/10 text-white placeholder-white/40 focus:outline-none focus:border-fuchsia-500/60 focus:ring-2 focus:ring-fuchsia-500/20 transition-all text-sm backdrop-blur-md"
+            className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-[#121215] border border-zinc-800 text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500 transition-colors text-xs"
           />
         </div>
 
+        {/* Quick link to Tutorials */}
+        <div className="flex items-center justify-center gap-2 mb-6">
+          <Link
+            href="/tutorials"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-xs text-zinc-300 hover:text-white transition-colors"
+          >
+            <BookOpen className="w-3.5 h-3.5 text-zinc-400" />
+            <span>Looking for guides? View Step-by-Step Tutorials &amp; Video &rarr;</span>
+          </Link>
+        </div>
+
         {/* Category Pills */}
-        <div className="flex flex-wrap items-center justify-center gap-2 mb-8">
+        <div className="flex flex-wrap items-center justify-center gap-1.5 mb-6">
           {CATEGORIES.map((cat) => {
             const Icon = cat.icon;
             const isSelected = selectedCategory === cat.id;
@@ -232,10 +240,10 @@ export default function HelpFaqPage() {
                   setSelectedCategory(cat.id);
                   setOpenIndex(null);
                 }}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all border ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
                   isSelected
-                    ? "bg-fuchsia-600 text-white border-fuchsia-500 shadow-[0_0_15px_rgba(217,70,239,0.35)]"
-                    : "bg-white/5 text-white/70 border-white/10 hover:bg-white/10 hover:text-white"
+                    ? "bg-white text-zinc-950 font-semibold border-white"
+                    : "bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-white hover:bg-zinc-850"
                 }`}
               >
                 <Icon className="w-3.5 h-3.5" />
@@ -247,13 +255,13 @@ export default function HelpFaqPage() {
       </section>
 
       {/* ── FAQ Accordion Section ── */}
-      <section className="relative z-10 max-w-4xl mx-auto px-4 pb-16 flex-1 w-full">
-        <div className="space-y-3">
+      <section className="relative z-10 max-w-4xl mx-auto px-4 pb-12 flex-1 w-full">
+        <div className="space-y-2.5">
           {filteredFaqs.length === 0 ? (
-            <div className="text-center py-16 bg-white/5 border border-white/10 rounded-3xl p-8">
-              <HelpCircle className="w-12 h-12 text-white/30 mx-auto mb-3" />
-              <h3 className="text-lg font-bold text-white mb-1">No matching questions found</h3>
-              <p className="text-white/50 text-sm">Try searching for a different keyword or browse all topics.</p>
+            <div className="text-center py-12 bg-[#121215] border border-zinc-800 rounded-xl p-6">
+              <HelpCircle className="w-10 h-10 text-zinc-600 mx-auto mb-2" />
+              <h3 className="text-sm font-semibold text-white mb-1">No matching questions found</h3>
+              <p className="text-zinc-500 text-xs">Try searching for a different keyword or browse all topics.</p>
             </div>
           ) : (
             filteredFaqs.map((faq, idx) => {
@@ -261,26 +269,26 @@ export default function HelpFaqPage() {
               return (
                 <div
                   key={idx}
-                  className={`rounded-2xl border transition-all overflow-hidden ${
+                  className={`rounded-xl border transition-colors overflow-hidden ${
                     isOpen
-                      ? "bg-white/[0.07] border-fuchsia-500/40 shadow-[0_0_20px_rgba(217,70,239,0.15)]"
-                      : "bg-white/5 border-white/10 hover:border-white/20"
+                      ? "bg-[#121215] border-zinc-700"
+                      : "bg-[#121215] border-zinc-800 hover:border-zinc-700"
                   }`}
                 >
                   <button
                     onClick={() => setOpenIndex(isOpen ? null : idx)}
-                    className="w-full text-left px-5 py-4 flex items-center justify-between gap-4 font-semibold text-sm md:text-base text-white hover:text-fuchsia-300 transition-colors"
+                    className="w-full text-left px-4 py-3.5 flex items-center justify-between gap-4 font-medium text-xs md:text-sm text-zinc-200 hover:text-white transition-colors"
                   >
                     <span>{faq.question}</span>
                     {isOpen ? (
-                      <ChevronUp className="w-5 h-5 text-fuchsia-400 shrink-0" />
+                      <ChevronUp className="w-4 h-4 text-zinc-400 shrink-0" />
                     ) : (
-                      <ChevronDown className="w-5 h-5 text-white/40 shrink-0" />
+                      <ChevronDown className="w-4 h-4 text-zinc-500 shrink-0" />
                     )}
                   </button>
 
                   {isOpen && (
-                    <div className="px-5 pb-5 pt-1 text-white/70 text-xs md:text-sm leading-relaxed border-t border-white/5">
+                    <div className="px-4 pb-4 pt-1 text-zinc-400 text-xs leading-relaxed border-t border-zinc-800/80">
                       {faq.answer}
                     </div>
                   )}
@@ -291,37 +299,36 @@ export default function HelpFaqPage() {
         </div>
 
         {/* ── Support Channels Card ── */}
-        <div className="mt-12 bg-gradient-to-br from-purple-950/40 to-fuchsia-950/40 border border-fuchsia-500/30 rounded-3xl p-6 md:p-8 backdrop-blur-xl">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+        <div className="mt-8 bg-[#121215] border border-zinc-800 rounded-xl p-5 md:p-6 shadow-sm">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-5">
             <div>
-              <h3 className="text-xl font-bold text-white mb-2">Still need help?</h3>
-              <p className="text-white/60 text-xs md:text-sm max-w-lg">
+              <h3 className="text-base font-semibold text-white mb-1">Still need help?</h3>
+              <p className="text-zinc-400 text-xs max-w-lg">
                 Our support team and open-source developer community are available to assist with onboarding, smart contract integrations, or technical anomalies.
               </p>
             </div>
-            <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto shrink-0">
+            <div className="flex flex-col sm:flex-row gap-2.5 w-full md:w-auto shrink-0">
               <a
                 href="mailto:support@chainbudget.org"
-                className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-semibold text-xs md:text-sm transition-all shadow-lg"
+                className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs transition-colors"
               >
-                <Mail className="w-4 h-4" /> Email Support
+                <Mail className="w-3.5 h-3.5" /> Email Support
               </a>
               <a
                 href="https://github.com/Dranyl-23/Chainbudget"
                 target="_blank"
                 rel="noreferrer"
-                className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white font-semibold text-xs md:text-sm transition-all border border-white/10"
+                className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-200 font-medium text-xs transition-colors border border-zinc-800"
               >
-                <Code2 className="w-4 h-4" /> GitHub Project
+                <Code2 className="w-3.5 h-3.5" /> GitHub Project
               </a>
-
             </div>
           </div>
         </div>
       </section>
 
       {/* ── Footer ── */}
-      <footer className="relative z-10 text-center py-6 text-xs text-white/40 border-t border-white/5 bg-[#05010B]/50 backdrop-blur-md">
+      <footer className="relative z-10 text-center py-5 text-xs text-zinc-500 border-t border-zinc-800 bg-[#09090b]">
         ChainBudget · Aligned with RA 10175 (Cybercrime Prevention) & RA 10173 (Data Privacy Act)
       </footer>
     </main>

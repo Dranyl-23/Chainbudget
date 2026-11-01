@@ -8,11 +8,6 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "backgroundColor": "#09090b",
-    "splash": {
-      "image": "./assets/3D-Chainbudget.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#05040F"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.chainbudget.app",
@@ -39,10 +34,6 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "notification": {
-      "icon": "./assets/android-icon-monochrome.png",
-      "color": "#a21caf"
-    },
     "plugins": [
       "expo-secure-store",
       [
@@ -57,6 +48,15 @@
         {
           "icon": "./assets/android-icon-monochrome.png",
           "color": "#a21caf"
+        }
+      ],
+      "expo-status-bar",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/3D-Chainbudget.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#05040F"
         }
       ]
     ],

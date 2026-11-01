@@ -416,7 +416,7 @@ export default function OrgChatScreen() {
   const [onlineUserIds, setOnlineUserIds] = useState<string[]>([]);
 
   const flatListRef = useRef<FlatList>(null);
-  const textInputRef = useRef<TextInput>(null);
+  const textInputRef = useRef<any>(null);
 
   useEffect(() => {
     if (route.params?.initialSearch) {
@@ -1862,7 +1862,7 @@ export default function OrgChatScreen() {
                 <View style={{ paddingVertical: 10, alignItems: 'center', justifyContent: 'center' }}>
                   <ActivityIndicator size="small" color={colors.primary} />
                 </View>
-              ) : null
+              ) : undefined
             }
             onScroll={(event) => {
               const offsetY = event.nativeEvent.contentOffset.y;

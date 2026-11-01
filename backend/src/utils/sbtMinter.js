@@ -1,7 +1,8 @@
 const { ethers } = require("ethers");
 
 const sbtAbi = [
-  "function mintMembership(address to, string memory orgId) external returns (uint256)"
+  "function mintMembership(address to, string memory orgId) external returns (uint256)",
+  "event MembershipMinted(address indexed to, uint256 indexed tokenId, string orgId)"
 ];
 
 async function mintSBT(walletAddress, orgId) {
@@ -25,12 +26,24 @@ async function mintSBT(walletAddress, orgId) {
     const tx = await sbtContract.mintMembership(walletAddress, orgId.toString());
     const receipt = await tx.wait();
     
-    console.log(`SBT Minted successfully! TX Hash: ${receipt.hash}`);
+    let mintedTokenId = null;
+    if (receipt && Array.isArray(receipt.logs)) {
+      for (const log of receipt.logs) {
+        try {
+          const parsed = sbtContract.interface.parseLog(log);
+          if (parsed && parsed.name === "MembershipMinted") {
+            mintedTokenId = parsed.args.tokenId.toString();
+            break;
+          }
+        } catch {
+          // Ignore logs from other contracts
+        }
+      }
+    }
+
+    console.log(`SBT Minted successfully! TX Hash: ${receipt.hash}${mintedTokenId ? ` (Token ID: #${mintedTokenId})` : ""}`);
     
-    // Normally we'd parse the event to get the tokenId, but since it's an auto-incrementing ID
-    // and we don't strictly need it in the DB to prove ownership (the blockchain is the truth),
-    // we can just return success.
-    return receipt.hash;
+    return mintedTokenId ? `#${mintedTokenId} (${receipt.hash})` : receipt.hash;
   } catch (error) {
     console.error("Failed to mint SBT:", error.message || error);
     return null;

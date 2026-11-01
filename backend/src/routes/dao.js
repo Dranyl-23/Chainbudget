@@ -19,8 +19,8 @@ router.get("/proposals", authenticate, async (req, res) => {
     const { orgId } = req.query;
     if (!orgId) return res.status(400).json({ error: "Missing orgId" });
 
-    // Validate membership
-    if (!req.user.memberships.some(m => m.organization.toString() === orgId)) {
+    // Validate active membership
+    if (!req.user.isSuperAdmin && !req.user.memberships.some(m => m.isActive !== false && m.organization.toString() === orgId)) {
       return res.status(403).json({ error: "Not a member of this organization" });
     }
 
@@ -84,14 +84,16 @@ router.post("/proposals", authenticate, async (req, res) => {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
-    // Must be member
-    const membership = req.user.memberships.find(m => m.organization.toString() === targetOrgId.toString());
-    if (!membership) {
+    // Must be active member
+    const membership = req.user.memberships.find(
+      (m) => m.isActive !== false && m.organization.toString() === targetOrgId.toString()
+    );
+    if (!membership && !req.user.isSuperAdmin) {
       return res.status(403).json({ error: "Not a member" });
     }
 
     // Optional: Only President (Level 1) or Treasurer (Level 2) can create proposals
-    if (membership.roleLevel > 2) {
+    if (!req.user.isSuperAdmin && membership.roleLevel > 2) {
       return res.status(403).json({ error: "Only admins can create proposals" });
     }
 
@@ -244,6 +246,10 @@ router.post("/proposals/:id/vote", authenticate, async (req, res) => {
       return res.status(400).json({ error: "Voting is closed for this proposal" });
     }
 
+    if (proposal.endTime && new Date() > new Date(proposal.endTime)) {
+      return res.status(400).json({ error: "Voting period has expired for this proposal" });
+    }
+
     // B-8 FIX: Check if user is an active member of the organization (or super admin)
     const roleLevel = req.user.getRoleInOrg(proposal.organization);
     if (!req.user.isSuperAdmin && roleLevel === null) {
@@ -294,6 +300,10 @@ router.post("/proposals/:id/execute", authenticate, async (req, res) => {
 
     if (proposal.status === "executed") {
       return res.status(400).json({ error: "Proposal has already been executed" });
+    }
+
+    if (proposal.status === "cancelled" || proposal.status === "rejected") {
+      return res.status(400).json({ error: `Cannot execute a ${proposal.status} proposal` });
     }
 
     // Tally votes

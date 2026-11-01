@@ -21,7 +21,7 @@ import { OrgProvider } from './src/context/OrgContext';
 import { SocketProvider } from './src/context/SocketContext';
 import { AppLockProvider } from './src/context/AppLockContext';
 import AppLockOverlay from './src/components/AppLockOverlay';
-import { setupAndroidNotificationChannel } from './src/lib/notifications';
+import { setupAndroidNotificationChannel, IS_EXPO_GO } from './src/lib/notifications';
 import { pruneExpiredCache } from './src/lib/cache';
 
 import { ToastProvider } from './src/context/ToastContext';
@@ -86,7 +86,7 @@ function AuthNavigator() {
           <AuthStack.Screen name="HelpFaq" component={HelpFaqScreen} />
           <AuthStack.Screen name="DataPrivacy" component={DataPrivacyScreen} />
         </AuthStack.Navigator>
-        <StatusBar style="light" translucent={true} />
+        <StatusBar style="light" />
       </NavigationContainer>
     </View>
   );
@@ -193,31 +193,36 @@ export default function App() {
 
     // ── Push Notifications: Android channel setup ───────────────────────────
     // Must be called before any notifications are shown. Safe to call on iOS too.
-    setupAndroidNotificationChannel();
+    setupAndroidNotificationChannel().catch((err) => {
+      console.warn('[Push] Channel setup caught:', err);
+    });
 
     // ── Push Notifications: Tap-to-navigate handler ─────────────────────────
     // When the user taps a push notification, this listener fires with the
     // notification data. We deep-link to the relevant screen.
     // Skipped in Expo Go — push notifications are not supported there since SDK 53.
-    const IS_EXPO_GO = Constants.appOwnership === 'expo';
     let subscription: Notifications.EventSubscription | null = null;
 
     if (!IS_EXPO_GO) {
-      subscription = Notifications.addNotificationResponseReceivedListener((response) => {
-        const data = response.notification.request.content.data as Record<string, any>;
+      try {
+        subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+          const data = response.notification.request.content.data as Record<string, any>;
 
-        if (!navigationRef.current) return;
+          if (!navigationRef.current) return;
 
-        if (data?.txId) {
-          navigationRef.current.dispatch(CommonActions.navigate('TransactionDetail', { txId: data.txId }));
-        } else if (data?.screen === 'Approvals') {
-          navigationRef.current.dispatch(CommonActions.navigate('MainTabs', { screen: 'Inbox' }));
-        } else if (data?.screen === 'DAO') {
-          navigationRef.current.dispatch(CommonActions.navigate('MainTabs', { screen: 'DAO' }));
-        } else if (data?.screen === 'OrgChat' || data?.orgId) {
-          navigationRef.current.dispatch(CommonActions.navigate('OrgChat', { orgId: data.orgId }));
-        }
-      });
+          if (data?.txId) {
+            navigationRef.current.dispatch(CommonActions.navigate('TransactionDetail', { txId: data.txId }));
+          } else if (data?.screen === 'Approvals') {
+            navigationRef.current.dispatch(CommonActions.navigate('MainTabs', { screen: 'Inbox' }));
+          } else if (data?.screen === 'DAO') {
+            navigationRef.current.dispatch(CommonActions.navigate('MainTabs', { screen: 'DAO' }));
+          } else if (data?.screen === 'OrgChat' || data?.orgId) {
+            navigationRef.current.dispatch(CommonActions.navigate('OrgChat', { orgId: data.orgId }));
+          }
+        });
+      } catch (err) {
+        console.warn('[Push] Response listener skipped:', err);
+      }
     }
 
     return () => subscription?.remove();

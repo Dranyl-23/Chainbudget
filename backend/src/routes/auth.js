@@ -357,9 +357,16 @@ router.post("/keys/export", authenticate, keyExportRateLimiter, async (req, res)
     if (!user.isActive) return res.status(401).json({ error: "Account is inactive" });
 
     const isAutoWallet = user.walletType === "asgardeo_generated" || user.walletType === "embedded_bip44" || Boolean(user.encryptedPrivateKey);
+    const requiresSignatureChallenge = Boolean(signature) || Boolean(user.keyExportNonce) || !isAutoWallet;
+    let recoveredAddress = null;
 
-    // If external wallet or challenge was explicitly requested with signature, verify signature
-    if (!isAutoWallet && signature) {
+    // Verify signature whenever a challenge is active, a signature is provided, or the wallet is non-custodial
+    if (requiresSignatureChallenge) {
+      if (!signature) {
+        return res.status(401).json({
+          error: "Digital signature required to export keys. Please sign the challenge from POST /api/auth/keys/challenge.",
+        });
+      }
       if (!user.keyExportNonce || !user.keyExportNonceExpiresAt) {
         return res.status(401).json({
           error: "No active export challenge found. Please call POST /api/auth/keys/challenge first.",
@@ -375,7 +382,6 @@ router.post("/keys/export", authenticate, keyExportRateLimiter, async (req, res)
         });
       }
 
-      let recoveredAddress;
       try {
         recoveredAddress = ethers.verifyMessage(user.keyExportNonce, signature);
       } catch (sigErr) {
@@ -383,7 +389,11 @@ router.post("/keys/export", authenticate, keyExportRateLimiter, async (req, res)
         return res.status(401).json({ error: "Invalid digital signature format." });
       }
 
-      if (recoveredAddress.toLowerCase() !== user.walletAddress.toLowerCase()) {
+      const recoveredLower = recoveredAddress.toLowerCase();
+      const primaryMatch = user.walletAddress && recoveredLower === user.walletAddress.toLowerCase();
+      const linkedMatch = Array.isArray(user.linkedWallets) && user.linkedWallets.some((w) => w.toLowerCase() === recoveredLower);
+
+      if (!primaryMatch && !linkedMatch) {
         await logFailedExportAttempt(user, req, `Wallet mismatch: recovered=${recoveredAddress}`);
         return res.status(401).json({
           error: "Signature verification failed. The signature does not match your registered wallet address.",
@@ -558,7 +568,9 @@ router.post("/link-wallet", authenticate, verifyRateLimiter, async (req, res) =>
     }
 
     // Check if wallet is already linked to another user
-    const existing = await User.findOne({ walletAddress: wallet });
+    const existing = await User.findOne({
+      $or: [{ walletAddress: wallet }, { linkedWallets: wallet }],
+    });
     if (existing && existing._id.toString() !== req.user._id.toString()) {
       // If it's a dummy user (created via invite without Asgardeo ID), merge it!
       if (!existing.asgardeoId) {
@@ -575,9 +587,26 @@ router.post("/link-wallet", authenticate, verifyRateLimiter, async (req, res) =>
       }
     }
 
-    // Link wallet
-    req.user.walletAddress = wallet;
+    // Link wallet: preserve existing primary walletAddress unless none is set or replacePrimary is requested
+    if (!req.user.walletAddress) {
+      req.user.walletAddress = wallet;
+    } else if (req.user.walletAddress.toLowerCase() !== wallet) {
+      if (!Array.isArray(req.user.linkedWallets)) {
+        req.user.linkedWallets = [];
+      }
+      if (req.body.replacePrimary === true) {
+        const previousPrimary = req.user.walletAddress.toLowerCase();
+        if (!req.user.linkedWallets.includes(previousPrimary)) {
+          req.user.linkedWallets.push(previousPrimary);
+        }
+        req.user.walletAddress = wallet;
+        req.user.linkedWallets = req.user.linkedWallets.filter((w) => w !== wallet);
+      } else if (!req.user.linkedWallets.includes(wallet)) {
+        req.user.linkedWallets.push(wallet);
+      }
+    }
     req.user.nonce = null; // consume nonce
+    req.user.nonceExpiresAt = null;
     req.user.lastLogin = new Date();
     await req.user.save();
 

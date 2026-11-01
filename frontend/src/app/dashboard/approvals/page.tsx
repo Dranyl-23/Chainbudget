@@ -2,7 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { CheckCircle2, XCircle, Clock, AlertCircle, AlertTriangle, TrendingDown } from "lucide-react";
+import {
+  CheckCircle2, XCircle, Clock, AlertCircle, AlertTriangle,
+  TrendingDown, ShieldCheck, FileText, ExternalLink,
+  ChevronRight, Sparkles, User, ArrowUpRight, ArrowDownRight
+} from "lucide-react";
 import { ethers } from "ethers";
 import ChainBudgetABI from "@/lib/ChainBudget.json";
 import api from "@/lib/api";
@@ -87,8 +91,6 @@ interface RpcError {
   message?: string;
 }
 
-
-
 function getRpcErrorCode(err: unknown): number | undefined {
   if (typeof err === "object" && err !== null && "code" in err) {
     const rpcErr = err as RpcError;
@@ -99,6 +101,7 @@ function getRpcErrorCode(err: unknown): number | undefined {
 
 export default function ApprovalsPage() {
   const { activeOrgId, refreshToken, user } = useAuth();
+  
   const [pendingApprovals, setPendingApprovals] = useState<Approval[]>(() => {
     if (typeof window !== "undefined") {
       const cached = sessionStorage.getItem("cb_cache_approvals");
@@ -112,12 +115,12 @@ export default function ApprovalsPage() {
     }
     return [];
   });
+
   const [loading, setLoading] = useState(pendingApprovals.length === 0);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [budgetData, setBudgetData] = useState<BudgetItem[]>([]);
   const [verifiedReceipts, setVerifiedReceipts] = useState<Record<string, boolean>>({});
-
   const [activeFilter, setActiveFilter] = useState<"all" | "multi_sig" | "requested">("all");
 
   // Wallet Mismatch Interactive Guide Modal
@@ -193,7 +196,6 @@ export default function ApprovalsPage() {
         (requestedRes.data.transactions || []).forEach((t) => txMap.set(t._id, t));
         const txList: TransactionApiItem[] = Array.from(txMap.values());
 
-        // Map transactions to approval display format
         const approvals: Approval[] = mapTxListToApprovals(txList);
 
         if (!isCancelled) {
@@ -308,9 +310,6 @@ export default function ApprovalsPage() {
   const handleApprove = async (req: Approval) => {
     if (!activeOrgId) return;
     setActionLoading(req._id);
-
-    // ── Guard: tell the global 401 interceptor not to trigger session-expired ──
-    // while this action is in flight. The flag is always cleared in finally.
     sessionStorage.setItem("cb_action_in_progress", "true");
 
     try {
@@ -340,15 +339,10 @@ export default function ApprovalsPage() {
         return;
       }
 
-      // 1. Proactively refresh the Asgardeo token BEFORE opening MetaMask so that
-      //    the token stored in localStorage is as fresh as possible when the backend
-      //    POST fires after the user signs.
       await refreshToken();
-
-      // 2. Request EIP-712 Web3 Signature (opens MetaMask)
       const signature = await requestSignature("approved", req);
 
-      // 3. Optional on-chain smart-contract approval (only when tx has an onChainTxId)
+      // On-chain smart-contract approval (when tx has an onChainTxId)
       if (req.onChainTxId && typeof window !== "undefined" && window.ethereum) {
         toast.loading("Connecting to Network...", { id: "txToast" });
 
@@ -396,15 +390,12 @@ export default function ApprovalsPage() {
           console.error("On-chain approval failed:", errMsg);
           toast.error("MetaMask approval failed or was cancelled.", { id: "txToast" });
           setActionLoading(null);
-          return; // STOP — do NOT call backend if MetaMask was cancelled
+          return;
         }
       }
 
-      // 4. Refresh the token again right before the backend POST — the MetaMask
-      //    popup may have been open for several minutes, the token could have expired.
       await refreshToken();
 
-      // 5. Helper to build the backend POST payload
       const approvalPayload = {
         action: "approved",
         comment: "Approved via dashboard",
@@ -414,12 +405,10 @@ export default function ApprovalsPage() {
         amountWei: req.amount.toString(),
       };
 
-      // 6. Call backend — retry once on 401 after a final token refresh attempt
       toast.loading("Recording approval...", { id: "txToast" });
       try {
         await api.post(`/approvals/${req._id}`, approvalPayload);
       } catch (postErr: unknown) {
-        // On a 401, attempt one token refresh and retry before giving up
         if (
           postErr &&
           typeof postErr === "object" &&
@@ -429,7 +418,6 @@ export default function ApprovalsPage() {
           console.warn("[Approvals] 401 on first attempt — refreshing token and retrying...");
           const newToken = await refreshToken();
           if (!newToken) {
-            // Genuinely cannot renew the session — show session expired and bail
             sessionStorage.removeItem("cb_action_in_progress");
             if (!sessionStorage.getItem("session_expired_alert")) {
               sessionStorage.setItem("session_expired_alert", "true");
@@ -439,10 +427,9 @@ export default function ApprovalsPage() {
             }
             return;
           }
-          // Retry with fresh token (interceptor will attach it from localStorage)
           await api.post(`/approvals/${req._id}`, approvalPayload);
         } else {
-          throw postErr; // Not a 401 — re-throw for the outer catch
+          throw postErr;
         }
       }
 
@@ -460,7 +447,6 @@ export default function ApprovalsPage() {
       console.error("Approval failed:", err);
       toast.error(getErrorMessage(err, "Failed to approve transaction"), { id: "txToast" });
     } finally {
-      // Always clear the action guard so the global 401 interceptor works normally again
       sessionStorage.removeItem("cb_action_in_progress");
       setActionLoading(null);
     }
@@ -469,12 +455,9 @@ export default function ApprovalsPage() {
   const handleReject = async (req: Approval) => {
     if (!activeOrgId) return;
     setActionLoading(req._id);
-
-    // ── Guard: tell the global 401 interceptor not to trigger session-expired ──
     sessionStorage.setItem("cb_action_in_progress", "true");
 
     try {
-      // ── Level 3 Member Request Reject ──
       if (req.status === "requested") {
         toast.loading("Rejecting Member Request...", { id: "txToast" });
         await api.patch(
@@ -488,13 +471,8 @@ export default function ApprovalsPage() {
         return;
       }
 
-      // 1. Proactively refresh token before opening MetaMask
       await refreshToken();
-
-      // 2. Request EIP-712 Web3 Signature (opens MetaMask)
       const signature = await requestSignature("rejected", req);
-
-      // 3. Refresh token again right before the backend POST
       await refreshToken();
 
       const rejectionPayload = {
@@ -506,7 +484,6 @@ export default function ApprovalsPage() {
         amountWei: req.amount.toString(),
       };
 
-      // 4. Call backend — retry once on 401
       toast.loading("Recording rejection...", { id: "txToast" });
       try {
         await api.post(`/approvals/${req._id}`, rejectionPayload);
@@ -542,7 +519,6 @@ export default function ApprovalsPage() {
       console.error("Rejection failed:", err);
       toast.error(getErrorMessage(err, "Failed to reject transaction"), { id: "txToast" });
     } finally {
-      // Always clear the action guard
       sessionStorage.removeItem("cb_action_in_progress");
       setActionLoading(null);
     }
@@ -550,6 +526,7 @@ export default function ApprovalsPage() {
 
   const multiSigCount = pendingApprovals.filter((a) => a.status === "pending_approval").length;
   const requestedCount = pendingApprovals.filter((a) => a.status === "requested").length;
+  
   const displayedApprovals = pendingApprovals.filter((a) => {
     if (activeFilter === "multi_sig") return a.status === "pending_approval";
     if (activeFilter === "requested") return a.status === "requested";
@@ -557,54 +534,77 @@ export default function ApprovalsPage() {
   });
 
   return (
-    <div className="p-4 md:p-8 pb-20 animate-fade-in">
-      <header className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div className="space-y-6 pb-16 animate-fade-in">
+      
+      {/* ── Page Header & Segmented Tabs ── */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-white/[0.06]">
         <div>
-          <h1 className="text-2xl font-bold mb-1">Pending Approvals</h1>
-          <p className="text-sm text-gray-500">Review member proposals and approve high-value transactions (2-of-N Multi-Sig).</p>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl md:text-2xl font-bold tracking-tight text-white">
+              Multi-Sig Approvals & Review
+            </h2>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-800 border border-zinc-700 text-zinc-300">
+              Governance
+            </span>
+          </div>
+          <p className="text-xs md:text-sm text-zinc-400 mt-1">
+            Review member fund requests and execute cryptographic 2-of-N co-signatures on Polygon Amoy.
+          </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        {/* Studio Admin Style Segmented Control Tabs */}
+        <div className="inline-flex p-1 rounded-lg bg-zinc-900 border border-zinc-800">
           <button
             type="button"
             onClick={() => setActiveFilter("all")}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${
               activeFilter === "all"
-                ? "bg-primary text-white shadow-lg shadow-primary/30"
-                : "glass text-gray-400 hover:text-white border border-white/10"
+                ? "bg-zinc-800 text-white font-semibold"
+                : "text-zinc-400 hover:text-white"
             }`}
           >
-            All Pending ({pendingApprovals.length})
+            <span>All Pending</span>
+            <span className="px-1.5 py-0.2 rounded text-[10px] bg-zinc-950 text-zinc-300 font-mono">
+              {pendingApprovals.length}
+            </span>
           </button>
+
           <button
             type="button"
             onClick={() => setActiveFilter("multi_sig")}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${
               activeFilter === "multi_sig"
-                ? "bg-primary text-white shadow-lg shadow-primary/30"
-                : "glass text-gray-400 hover:text-white border border-white/10"
+                ? "bg-zinc-800 text-white font-semibold"
+                : "text-zinc-400 hover:text-white"
             }`}
           >
-            Multi-Sig ({multiSigCount})
+            <span>Multi-Sig Queue</span>
+            <span className="px-1.5 py-0.2 rounded text-[10px] bg-zinc-950 text-zinc-300 font-mono">
+              {multiSigCount}
+            </span>
           </button>
+
           <button
             type="button"
             onClick={() => setActiveFilter("requested")}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${
               activeFilter === "requested"
-                ? "bg-amber-600 text-white shadow-lg shadow-amber-600/30"
-                : "glass text-gray-400 hover:text-white border border-white/10"
+                ? "bg-zinc-800 text-white font-semibold"
+                : "text-zinc-400 hover:text-white"
             }`}
           >
-            Member Requests ({requestedCount})
+            <span>Member Requests</span>
+            <span className="px-1.5 py-0.2 rounded text-[10px] bg-zinc-950 text-zinc-300 font-mono">
+              {requestedCount}
+            </span>
           </button>
         </div>
-      </header>
+      </div>
 
       {error && (
-        <div className="mb-6 p-4 bg-danger/10 border border-danger/20 rounded-lg flex gap-3">
-          <AlertCircle className="w-5 h-5 text-danger shrink-0 mt-0.5" />
-          <p className="text-sm text-danger">{error}</p>
+        <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/25 flex items-center gap-3 text-rose-300 text-xs">
+          <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+          <span>{error}</span>
         </div>
       )}
 
@@ -614,66 +614,88 @@ export default function ApprovalsPage() {
         <div className="space-y-4">
           {displayedApprovals.length > 0 ? (
             displayedApprovals.map((req) => (
-              <div key={req._id} className="glass p-6 rounded-xl flex flex-col md:flex-row gap-6 items-start md:items-center justify-between">
-                <div className="flex-1">
-                  <div className="flex flex-wrap items-center gap-2 mb-2">
+              <div 
+                key={req._id} 
+                className="p-4 md:p-5 rounded-xl bg-[#121215] border border-zinc-800 hover:border-zinc-700 transition-colors flex flex-col md:flex-row gap-5 items-start md:items-center justify-between"
+              >
+                <div className="flex-1 min-w-0 space-y-2.5">
+                  
+                  {/* Status Pills & Meta Row */}
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
                     {req.status === "requested" ? (
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/15 border border-amber-500/30 text-amber-400 whitespace-nowrap">
-                        <Clock className="w-3.5 h-3.5" /> Member Request (Level 3)
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                        <Clock className="w-3 h-3" /> Member Request (Level 3)
                       </span>
                     ) : req.hasVoted ? (
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 border border-emerald-500/30 text-emerald-400">
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Approved by You ({req.votes} of {req.required} Signed)
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                        <CheckCircle2 className="w-3 h-3" /> Signed by You ({req.votes}/{req.required})
                       </span>
                     ) : (
-                      <span className="badge badge-pending whitespace-nowrap"><Clock className="w-3 h-3" /> Action Required</span>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-white/[0.08] border border-white/[0.15] text-white">
+                        <Clock className="w-3 h-3" /> Action Required (2-of-N Multi-Sig)
+                      </span>
                     )}
+
                     {req.type && (
-                      <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
-                        req.type === "income"
-                          ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
-                          : "bg-rose-500/15 text-rose-400 border border-rose-500/30"
+                      <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
+                        req.type === "income" 
+                          ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" 
+                          : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
                       }`}>
                         {req.type}
                       </span>
                     )}
+
                     {req.urgency === "urgent" && (
-                      <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-red-100 text-red-700 animate-pulse">
+                      <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-rose-500/15 text-rose-400 border border-rose-500/30">
                         Urgent
                       </span>
                     )}
-                    <span className="text-xs text-gray-500">Submitted {new Date(req.createdAt).toLocaleDateString()} by {req.submittedBy?.displayName || "Unknown"}</span>
+
+                    <span className="text-zinc-500 text-xs">
+                      Submitted {new Date(req.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })} by{" "}
+                      <strong className="text-zinc-300">{req.submittedBy?.displayName || "Member"}</strong>
+                    </span>
                   </div>
-                  <h3 className="text-lg font-medium text-gray-700">{req.description}</h3>
-                  <p className="text-sm text-gray-400 mt-1">
-                    {req.status === "requested"
-                      ? `Member proposal submitted by ${req.submittedBy?.displayName || "a member"} awaiting Officer review.`
-                      : `Amount exceeds the high-value threshold of ₱${Math.round(req.organization.highValueThreshold).toLocaleString()}.`}
-                  </p>
-                  
-                  {req.status === "requested" ? (
-                    <div className="mt-4 flex flex-wrap items-center gap-2">
-                      <span className="text-xs font-semibold uppercase text-amber-400 tracking-wider">Stage 1: Officer Review</span>
-                      <span className="text-xs text-gray-400">
-                        • {req.amount >= req.organization.highValueThreshold ? "Approving promotes this request to 2-of-N Multi-Sig" : "Approving finalizes & records on Polygon Amoy"}
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="mt-4 flex items-center gap-3">
-                      <div className="text-xs font-semibold uppercase text-gray-500 tracking-wider">Approval Progress</div>
+
+                  {/* Title & Description */}
+                  <div>
+                    <h3 className="text-sm md:text-base font-bold text-white tracking-tight">
+                      {req.description}
+                    </h3>
+                    <p className="text-xs text-zinc-400 mt-0.5 leading-relaxed">
+                      {req.status === "requested"
+                        ? `Awaiting officer review to authorize entry into financial ledger.`
+                        : `High-value disbursement requiring 2-of-N cryptographic signatures under EIP-712 protocol.`}
+                    </p>
+                  </div>
+
+                  {/* Progress Indicator Meter */}
+                  {req.status !== "requested" ? (
+                    <div className="flex items-center gap-2.5 pt-0.5">
+                      <span className="text-[11px] font-medium text-zinc-400">Signatures:</span>
                       <div className="flex items-center gap-1">
                         {Array.from({ length: req.required }).map((_, i) => (
                           <div 
                             key={i} 
-                            className={`h-2 rounded-full w-8 ${i < req.votes ? "bg-primary" : "bg-[#e8e1ff]"}`} 
+                            className={`h-1.5 rounded-full w-8 transition-all ${
+                              i < req.votes ? "bg-white" : "bg-zinc-800"
+                            }`} 
                           />
                         ))}
                       </div>
-                      <span className="text-xs font-medium text-primary">{req.votes} of {req.required} required</span>
+                      <span className="text-xs font-mono font-bold text-white">
+                        {req.votes} of {req.required} Required
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5 text-xs text-amber-400/90 pt-0.5">
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Stage 1 Review: Approval promotes transaction or records directly on-chain.</span>
                     </div>
                   )}
 
-                  {/* Budget Overspend Warning */}
+                  {/* Budget Headroom / Overspend Alert */}
                   {req.type === "expense" && req.category && (() => {
                     const budget = budgetData.find((b) => b.name.toLowerCase() === (req.category || "").toLowerCase());
                     if (!budget) return null;
@@ -684,38 +706,17 @@ export default function ApprovalsPage() {
 
                     if (wouldOverspend) {
                       return (
-                        <div className="mt-4 p-3 bg-red-950/40 border border-red-500/30 rounded-lg">
-                          <div className="flex items-start gap-2">
-                            <AlertTriangle className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
-                            <div>
-                              <p className="text-sm font-semibold text-red-300">Budget Overspend Warning</p>
-                              <p className="text-xs text-red-400 mt-1">
-                                Approving this will exceed the <strong>&quot;{budget.name}&quot;</strong> budget.
-                                Currently ₱{Math.round(budget.spent).toLocaleString()} of ₱{Math.round(budget.allocated).toLocaleString()} used ({usageBefore}%).
-                                After approval: <strong>₱{Math.round(budget.spent + req.amount).toLocaleString()} ({usageAfter}%)</strong> — over by ₱{Math.round(req.amount - remaining).toLocaleString()}.
-                              </p>
-                              <div className="mt-2 w-full bg-red-950/60 border border-red-500/20 rounded-full h-2 overflow-hidden">
-                                <div className="h-full rounded-full bg-red-500 transition-all" style={{ width: `${Math.min(usageAfter, 100)}%` }} />
-                              </div>
-                            </div>
+                        <div className="p-3 bg-rose-500/10 border border-rose-500/25 rounded-xl text-xs space-y-1.5">
+                          <div className="flex items-center gap-2 text-rose-300 font-bold">
+                            <AlertTriangle className="w-4 h-4 text-rose-400" />
+                            <span>Budget Overspend Warning</span>
                           </div>
-                        </div>
-                      );
-                    } else if (usageAfter >= 80) {
-                      return (
-                        <div className="mt-4 p-3 bg-amber-950/40 border border-amber-500/30 rounded-lg">
-                          <div className="flex items-start gap-2">
-                            <TrendingDown className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
-                            <div>
-                              <p className="text-sm font-semibold text-amber-300">Budget Running Low</p>
-                              <p className="text-xs text-amber-400 mt-1">
-                                After approval, <strong>&quot;{budget.name}&quot;</strong> will be at {usageAfter}% utilization.
-                                Remaining: ₱{Math.round(remaining - req.amount).toLocaleString()} of ₱{Math.round(budget.allocated).toLocaleString()}.
-                              </p>
-                              <div className="mt-2 w-full bg-amber-950/60 border border-amber-500/20 rounded-full h-2 overflow-hidden">
-                                <div className="h-full rounded-full bg-amber-500 transition-all" style={{ width: `${Math.min(usageAfter, 100)}%` }} />
-                              </div>
-                            </div>
+                          <p className="text-zinc-300">
+                            Approving this <strong>₱{req.amount.toLocaleString()}</strong> expense will exceed the <strong>{budget.name}</strong> envelope (₱{budget.allocated.toLocaleString()} cap).
+                          </p>
+                          <div className="flex items-center gap-3 pt-1 text-[11px] font-mono">
+                            <span className="text-zinc-400">Current: {usageBefore}%</span>
+                            <span className="text-rose-400 font-bold">Projected: {usageAfter}%</span>
                           </div>
                         </div>
                       );
@@ -723,96 +724,104 @@ export default function ApprovalsPage() {
                     return null;
                   })()}
 
-                  {/* Receipt / Proposal Verification Checkbox */}
-                  <label className="mt-4 flex items-center gap-3 p-3 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors select-none">
-                    <input
-                      type="checkbox"
-                      checked={verifiedReceipts[req._id] || false}
-                      onChange={(e) => setVerifiedReceipts((prev) => ({ ...prev, [req._id]: e.target.checked }))}
-                      className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary accent-primary"
-                    />
-                    <div>
-                      <p className="text-sm font-medium text-gray-700">
-                        {req.documentUrl ? "I have verified the attached receipt/document" : "I have reviewed and verified this proposal"}
-                      </p>
-                      <p className="text-[10px] text-gray-400">Required before approving this transaction</p>
-                    </div>
+                  {/* Verification Checkbox */}
+                  <div className="pt-2 border-t border-zinc-800 flex items-center justify-between text-xs">
+                    <label className="flex items-center gap-2 cursor-pointer text-zinc-300 hover:text-white select-none">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(verifiedReceipts[req._id])}
+                        onChange={(e) => setVerifiedReceipts({ ...verifiedReceipts, [req._id]: e.target.checked })}
+                        className="rounded border-zinc-700 bg-zinc-900 text-white focus:ring-0 cursor-pointer"
+                      />
+                      <span>I have verified the receipt and vendor legitimacy</span>
+                    </label>
+
                     {req.documentUrl && (
                       <a
                         href={req.documentUrl.startsWith("http") ? req.documentUrl : `${BACKEND_URL}${req.documentUrl}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="ml-auto flex items-center gap-1 px-3 py-1.5 bg-white border border-gray-200 rounded-md text-xs font-medium text-primary hover:bg-gray-50 transition-colors"
+                        className="text-xs text-zinc-400 hover:text-white flex items-center gap-1 underline"
                       >
-                        View Receipt
+                        <FileText className="w-3.5 h-3.5" /> View Receipt
                       </a>
                     )}
-                  </label>
+                  </div>
                 </div>
 
-                <div className="flex flex-col items-end gap-3 w-full md:w-auto">
-                  <div className="text-2xl font-bold text-gray-800">₱{Math.round(req.amount).toLocaleString()}</div>
+                {/* Right Side: Amount & Action Buttons */}
+                <div className="flex flex-row md:flex-col items-center md:items-end justify-between w-full md:w-auto gap-4 shrink-0 border-t md:border-t-0 pt-3 md:pt-0 border-zinc-800">
+                  <div className="text-left md:text-right">
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider block">Requested Amount</span>
+                    <span className="text-2xl font-bold font-mono text-white">
+                      ₱{req.amount.toLocaleString()}
+                    </span>
+                  </div>
+
                   {req.status !== "requested" && req.hasVoted ? (
-                    <div className="flex flex-col items-end gap-1.5 w-full md:w-auto">
-                      <div className="px-4 py-2.5 rounded-xl bg-purple-500/15 border border-purple-500/35 text-purple-400 font-bold text-xs flex items-center gap-2 shadow-sm">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                        Signed by You ({req.votes} of {req.required})
+                    <div className="flex flex-col items-start md:items-end gap-1">
+                      <div className="px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-300 font-semibold text-xs flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Signed by You ({req.votes}/{req.required})</span>
                       </div>
-                      <p className="text-[11px] text-gray-400 text-right">
-                        Awaiting 2nd officer signature to execute.
-                      </p>
+                      <span className="text-[10px] text-zinc-500 text-left md:text-right">
+                        Awaiting 2nd officer signature to finalize.
+                      </span>
                     </div>
                   ) : (
-                    <>
-                      <div className="flex w-full gap-2">
+                    <div className="space-y-1.5 w-full md:w-auto">
+                      <div className="flex items-center gap-2 w-full">
                         <button
                           onClick={() => handleReject(req)}
                           disabled={actionLoading === req._id}
-                          className="flex-1 md:flex-none btn-danger py-2 px-4 whitespace-nowrap disabled:opacity-50"
+                          className="flex-1 md:flex-none px-3.5 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-rose-400 border border-zinc-800 text-xs font-semibold transition-colors disabled:opacity-40"
                         >
                           {actionLoading === req._id ? "Processing..." : (
-                            <span className="flex items-center gap-2"><XCircle className="w-4 h-4" /> Reject</span>
+                            <span className="flex items-center justify-center gap-1.5">
+                              <XCircle className="w-3.5 h-3.5" /> Reject
+                            </span>
                           )}
                         </button>
+
                         <button
                           onClick={() => handleApprove(req)}
                           disabled={actionLoading === req._id || !verifiedReceipts[req._id]}
-                          className="flex-1 md:flex-none btn-primary py-2 px-4 whitespace-nowrap disabled:opacity-50"
+                          className="flex-1 md:flex-none btn-primary py-2 px-4 rounded-lg text-xs font-semibold shadow-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                         >
-                          {actionLoading === req._id ? "Processing..." : (
-                            <span className="flex items-center gap-2">
-                              <CheckCircle2 className="w-4 h-4" />
-                              {req.status === "requested" ? "Approve Request" : "Approve"}
+                          {actionLoading === req._id ? "Signing..." : (
+                            <span className="flex items-center justify-center gap-1.5">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              {req.status === "requested" ? "Approve Request" : "Sign with Web3"}
                             </span>
                           )}
                         </button>
                       </div>
+
                       {!verifiedReceipts[req._id] && (
-                        <p className="text-[10px] text-amber-600 w-full text-center mt-1">
-                          ✓ {req.documentUrl ? "Verify receipt first" : "Confirm review first"}
+                        <p className="text-[10px] text-zinc-500 text-center md:text-right">
+                          ✓ Check verification above to unlock
                         </p>
                       )}
-                    </>
+                    </div>
                   )}
                 </div>
               </div>
             ))
           ) : (
-            <div className="text-center py-20 glass rounded-2xl border border-dashed border-white/10 flex flex-col items-center justify-center">
-              <div className="w-20 h-20 bg-emerald-500/10 rounded-full flex items-center justify-center mb-5 shadow-sm border border-emerald-500/20">
-                <CheckCircle2 className="w-10 h-10 text-emerald-400" />
+            <div className="text-center py-20 rounded-xl bg-[#121215] border border-zinc-800 flex flex-col items-center justify-center space-y-3">
+              <div className="w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400 mb-1">
+                <CheckCircle2 className="w-5 h-5 text-zinc-400" />
               </div>
-              <h3 className="text-xl font-bold text-white mb-2">You&apos;re all caught up!</h3>
-              <p className="text-sm text-gray-400 max-w-sm mx-auto">
-                There are no pending transactions or member requests requiring your approval at this time.
+              <h3 className="text-sm font-semibold text-white">All Caught Up!</h3>
+              <p className="text-xs text-zinc-400 max-w-sm">
+                There are no pending multi-sig approvals or member proposals awaiting your signature right now.
               </p>
             </div>
           )}
         </div>
       )}
 
-      {/* Interactive Wallet Mismatch Guide & Tutorial Modal */}
+      {/* Interactive Wallet Mismatch Guide Modal */}
       <WalletMismatchGuideModal
         isOpen={mismatchGuide.isOpen}
         onClose={() => setMismatchGuide((prev) => ({ ...prev, isOpen: false }))}

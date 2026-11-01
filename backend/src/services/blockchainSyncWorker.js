@@ -11,6 +11,7 @@ const User = require("../models/User");
 const Organization = require("../models/Organization");
 const Transaction = require("../models/Transaction");
 const { recordTransactionOnChain } = require("./blockchain");
+const redisService = require("./redis");
 
 let isSyncing = false;
 
@@ -29,6 +30,11 @@ const syncPendingTransactions = async (io = null) => {
 
   if (!rpcUrl || !privateKey || !contractAddress) {
     return { status: "skipped", reason: "Blockchain not configured" };
+  }
+
+  const lockToken = await redisService.acquireLock("blockchain_sync_worker", 45);
+  if (!lockToken) {
+    return { status: "already_running_cluster" };
   }
 
   isSyncing = true;
@@ -110,9 +116,9 @@ const syncPendingTransactions = async (io = null) => {
             `[BlockchainSyncWorker] Successfully anchored Tx ${txn._id} on Polygon Amoy! Hash: ${result.blockchainTxHash}`
           );
 
-          // Broadcast real-time update to Mobile and Web clients
-          if (io) {
-            io.emit("transaction_updated", {
+          // Broadcast real-time update to Mobile and Web clients (scoped to org room)
+          if (io && txn.organization) {
+            io.to(`org:${txn.organization}`).emit("transaction_updated", {
               txId: txn._id,
               orgId: txn.organization,
               isRecordedOnChain: true,
@@ -137,6 +143,7 @@ const syncPendingTransactions = async (io = null) => {
     console.error("[BlockchainSyncWorker] Worker error:", globalErr.message);
   } finally {
     isSyncing = false;
+    await redisService.releaseLock("blockchain_sync_worker", lockToken);
   }
 
   return { status: "completed", synced: syncedCount, errors: errorCount };

@@ -26,6 +26,7 @@ import {
   Download,
   Sparkles,
   AlertTriangle,
+  Plus,
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import toast from "react-hot-toast";
@@ -33,6 +34,7 @@ import api from "@/lib/api";
 import TableSkeleton from "@/components/TableSkeleton";
 import TxExplorerModal from "@/components/TxExplorerModal";
 import TransactionFilterBar from "@/components/TransactionFilterBar";
+import CustomSelect from "@/components/CustomSelect";
 import { exportToCSV, exportToPDF } from "@/lib/exportUtils";
 import { BACKEND_URL } from "@/lib/config";
 import { getErrorMessage } from "@/lib/utils";
@@ -517,39 +519,49 @@ export default function TransactionsPage() {
       />
 
       {/* ── Header ── */}
-      <header className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <header className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-800">
         <div>
-          <h1 className="text-2xl font-bold mb-1">Transactions</h1>
-          <p className="text-sm text-gray-500">View and manage all organization transactions.</p>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white">Ledger &amp; Transactions</h1>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-800 text-zinc-300 border border-zinc-700">
+              Audit Ledger
+            </span>
+          </div>
+          <p className="text-xs md:text-sm text-zinc-400 mt-1">Cryptographically verified organizational ledger and cash flows.</p>
         </div>
-        <div className="flex flex-col sm:flex-row gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
           {/* Export Buttons */}
           {canExport && (
-            <div className="flex items-center gap-2 mr-2">
+            <div className="flex items-center gap-1.5 p-1 rounded-lg bg-zinc-900 border border-zinc-800">
               <button
-                className="btn-secondary py-2 px-3 text-xs flex items-center gap-2"
+                className="px-3 py-1.5 text-xs font-semibold rounded-md text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors flex items-center gap-1.5 disabled:opacity-40"
                 onClick={() => handleExport("csv")}
                 disabled={isExporting || filteredTxs.length === 0}
+                title="Export Filtered CSV"
               >
-                <Download className="w-3.5 h-3.5" /> CSV
+                <Download className="w-3.5 h-3.5 text-zinc-400" />
+                <span>CSV</span>
               </button>
               <button
-                className="btn-secondary py-2 px-3 text-xs flex items-center gap-2"
+                className="px-3 py-1.5 text-xs font-semibold rounded-md text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors flex items-center gap-1.5 disabled:opacity-40"
                 onClick={() => handleExport("pdf")}
                 disabled={isExporting || filteredTxs.length === 0}
+                title="Export Filtered PDF"
               >
-                <Download className="w-3.5 h-3.5" /> PDF
+                <Download className="w-3.5 h-3.5 text-zinc-400" />
+                <span>PDF</span>
               </button>
             </div>
           )}
-          {/* RBAC Fix: Level 1, 2, and 3 can record/request transactions */}
+          {/* RBAC: Level 1, 2, and 3 can record/request transactions */}
           {canRecordOrRequest && (
             <button
               id="record-transaction-btn"
-              className="btn-primary py-2"
+              className="btn-primary inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-all active:scale-95"
               onClick={() => setShowCreateModal(true)}
             >
-              {canDirectRecord ? "Record Transaction" : "Submit Request"}
+              <Plus className="w-4 h-4" />
+              <span>{canDirectRecord ? "Record Expense" : "Submit Request"}</span>
             </button>
           )}
         </div>
@@ -558,66 +570,66 @@ export default function TransactionsPage() {
       {/* ── Filters ── */}
       <TransactionFilterBar filters={filters} onFilterChange={setFilters} />
 
-      {/* ── Table ── */}
+      {/* ── Table (Studio Admin Style) ── */}
       {loading ? (
         <TableSkeleton />
       ) : (
-      <div className="glass rounded-xl overflow-hidden border border-purple-500/30 shadow-[0_0_20px_rgba(139,92,246,0.1)] w-full overflow-x-auto">
+      <div className="rounded-xl overflow-hidden border border-zinc-800 bg-[#121215] shadow-xs w-full overflow-x-auto">
         <table className="w-full text-left border-collapse">
-          <thead className="bg-white/5 border-b border-purple-500/30 text-white/60 uppercase tracking-widest text-[10px]">
+          <thead className="bg-zinc-900/60 border-b border-zinc-800 text-zinc-400 uppercase tracking-wider text-[10px] font-semibold">
             <tr>
-              <th className="p-4 font-bold">Description</th>
-              <th className="p-4 font-bold">Category</th>
-              <th className="p-4 font-bold">Date</th>
-              <th className="p-4 font-bold">Status</th>
-              <th className="p-4 font-bold">Blockchain</th>
-              <th className="p-4 font-bold">Receipt</th>
-              <th className="p-4 font-bold text-right">Amount</th>
+              <th className="p-4">Description</th>
+              <th className="p-4">Category</th>
+              <th className="p-4">Date</th>
+              <th className="p-4">Status</th>
+              <th className="p-4">Blockchain</th>
+              <th className="p-4">Receipt</th>
+              <th className="p-4 text-right">Amount</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-white/5 text-sm">
+          <tbody className="divide-y divide-zinc-800 text-sm">
             {filteredTxs.length > 0 ? (
               filteredTxs.map((tx) => (
                 <React.Fragment key={tx._id}>
-                <tr onClick={() => setExpandedTxId(expandedTxId === tx._id ? null : tx._id)} className="cursor-pointer hover:bg-white/10 transition-colors group">
+                <tr onClick={() => setExpandedTxId(expandedTxId === tx._id ? null : tx._id)} className="cursor-pointer hover:bg-zinc-800/40 transition-colors group">
                   <td className="p-4">
                     <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 border ${tx.type === "income" ? "bg-cyan-500/10 border-cyan-400/20 shadow-[0_0_10px_rgba(34,211,238,0.1)]" : "bg-red-500/10 border-red-400/20 shadow-[0_0_10px_rgba(239,68,68,0.1)]"}`}>
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 border border-zinc-800 bg-zinc-900 text-zinc-300">
                         {tx.type === "income"
-                          ? <ArrowUpRight className="w-5 h-5 text-cyan-400 drop-shadow-[0_0_5px_rgba(34,211,238,0.8)]" />
-                          : <ArrowDownRight className="w-5 h-5 text-red-400 drop-shadow-[0_0_5px_rgba(239,68,68,0.8)]" />}
+                          ? <ArrowUpRight className="w-4 h-4 text-emerald-400" />
+                          : <ArrowDownRight className="w-4 h-4 text-zinc-400" />}
                       </div>
                       <div className="flex flex-col">
-                        <span className="font-bold text-white drop-shadow-sm flex items-center gap-2">
+                        <span className="font-semibold text-white flex items-center gap-2">
                           {tx.description}
                           {tx.urgency === "urgent" && (
-                            <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-sm bg-red-500/20 border border-red-500/40 text-red-300 shadow-[0_0_10px_rgba(239,68,68,0.3)] animate-pulse">
+                            <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-sm bg-rose-500/10 border border-rose-500/30 text-rose-400">
                               Urgent
                             </span>
                           )}
                         </span>
                         {tx.referenceNumber && (
-                          <span className="text-[10px] text-white/50 mt-0.5 font-medium tracking-wide">
+                          <span className="text-[10px] text-zinc-400 mt-0.5 font-medium tracking-wide">
                             Ref: {tx.referenceNumber}
                           </span>
                         )}
                       </div>
-                      <ChevronDown className={`w-3.5 h-3.5 text-white/30 transition-transform duration-200 group-hover:text-white/70 ${expandedTxId === tx._id ? "rotate-180" : ""}`} />
+                      <ChevronDown className={`w-3.5 h-3.5 text-zinc-500 transition-transform duration-200 group-hover:text-zinc-300 ${expandedTxId === tx._id ? "rotate-180" : ""}`} />
                     </div>
                   </td>
                   <td className="p-4">
-                    <span className="inline-block whitespace-nowrap px-2 py-1 rounded-sm bg-white/5 border border-white/10 text-[10px] uppercase tracking-widest font-bold text-white/70">
+                    <span className="inline-block whitespace-nowrap px-2 py-0.5 rounded text-[11px] font-medium bg-zinc-800/80 border border-zinc-700/80 text-zinc-300">
                       {tx.category || "—"}
                     </span>
                   </td>
-                  <td className="p-4 text-white/60 font-medium">{new Date(tx.createdAt).toLocaleDateString()}</td>
+                  <td className="p-4 text-zinc-400 font-medium text-xs">{new Date(tx.createdAt).toLocaleDateString()}</td>
                   <td className="p-4">
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <span className={`whitespace-nowrap px-2 py-1 text-[9px] font-bold uppercase tracking-widest rounded-sm border ${
-                        tx.status === "approved" ? "bg-green-500/20 text-green-300 border-green-500/30 shadow-[0_0_10px_rgba(34,197,94,0.2)]" : 
-                        tx.status === "rejected" ? "bg-red-500/20 text-red-300 border-red-500/30 shadow-[0_0_10px_rgba(239,68,68,0.2)]" : 
-                        tx.status === "requested" ? "bg-blue-500/20 text-blue-300 border-blue-500/30 shadow-[0_0_10px_rgba(59,130,246,0.2)]" :
-                        "bg-amber-500/20 text-amber-300 border-amber-500/30 shadow-[0_0_10px_rgba(245,158,11,0.2)]"
+                      <span className={`whitespace-nowrap px-2 py-0.5 text-[10px] font-medium rounded-full border ${
+                        tx.status === "approved" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : 
+                        tx.status === "rejected" ? "bg-rose-500/10 text-rose-400 border-rose-500/20" : 
+                        tx.status === "requested" ? "bg-blue-500/10 text-blue-400 border-blue-500/20" : 
+                        "bg-amber-500/10 text-amber-400 border-amber-500/20"
                       }`}>
                         {tx.status === "approved" ? "Approved" : 
                          tx.status === "pending_approval" ? "Pending" : 
@@ -625,10 +637,10 @@ export default function TransactionsPage() {
                          "Rejected"}
                       </span>
                       {tx.isEscrow && (
-                        <span className={`whitespace-nowrap px-2 py-1 text-[9px] font-bold uppercase tracking-widest rounded-sm border ${
-                          tx.escrowStatus === "locked" ? "bg-fuchsia-500/20 text-fuchsia-300 border-fuchsia-500/30 shadow-[0_0_10px_rgba(217,70,239,0.2)]" : 
-                          tx.escrowStatus === "released" ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/30 shadow-[0_0_10px_rgba(34,211,238,0.2)]" : 
-                          "bg-white/10 text-white/50 border-white/20"
+                        <span className={`whitespace-nowrap px-2 py-0.5 text-[10px] font-medium rounded-full border ${
+                          tx.escrowStatus === "locked" ? "bg-zinc-800 text-zinc-200 border-zinc-700" : 
+                          tx.escrowStatus === "released" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : 
+                          "bg-zinc-800 text-zinc-400 border-zinc-700"
                         }`}>
                           {tx.escrowStatus === "locked" ? "Escrow Locked" : 
                            tx.escrowStatus === "released" ? "Escrow Released" : 
@@ -662,7 +674,7 @@ export default function TransactionsPage() {
                             };
                             executeTx();
                           }}
-                          className="whitespace-nowrap px-2 py-1 text-[9px] font-bold uppercase tracking-widest bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 hover:bg-cyan-500/40 rounded-sm transition-colors shadow-[0_0_10px_rgba(34,211,238,0.2)]"
+                          className="whitespace-nowrap px-2 py-0.5 text-[10px] font-medium bg-zinc-800 text-zinc-200 border border-zinc-700 hover:bg-zinc-700 rounded-md transition-colors"
                         >
                           Execute Transfer
                         </button>
@@ -690,7 +702,7 @@ export default function TransactionsPage() {
                             };
                             releaseTx();
                           }}
-                          className="whitespace-nowrap px-2 py-1 text-[9px] font-bold uppercase tracking-widest bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30 hover:bg-fuchsia-500/40 rounded-sm transition-colors shadow-[0_0_10px_rgba(217,70,239,0.2)]"
+                          className="whitespace-nowrap px-2 py-0.5 text-[10px] font-medium bg-zinc-800 text-zinc-200 border border-zinc-700 hover:bg-zinc-700 rounded-md transition-colors"
                         >
                           Release Escrow
                         </button>
@@ -699,13 +711,13 @@ export default function TransactionsPage() {
                         <>
                           <button 
                             onClick={(e) => { e.stopPropagation(); handleProcessRequest(tx._id, "approve"); }}
-                            className="whitespace-nowrap px-2 py-1 text-[9px] font-bold uppercase tracking-widest bg-green-500/20 text-green-300 border border-green-500/30 hover:bg-green-500/40 rounded-sm transition-colors shadow-[0_0_10px_rgba(34,197,94,0.2)]"
+                            className="whitespace-nowrap px-2 py-0.5 text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 rounded-md transition-colors"
                           >
                             Approve
                           </button>
                           <button 
                             onClick={(e) => { e.stopPropagation(); handleProcessRequest(tx._id, "reject"); }}
-                            className="whitespace-nowrap px-2 py-1 text-[9px] font-bold uppercase tracking-widest bg-red-500/20 text-red-300 border border-red-500/30 hover:bg-red-500/40 rounded-sm transition-colors shadow-[0_0_10px_rgba(239,68,68,0.2)]"
+                            className="whitespace-nowrap px-2 py-0.5 text-[10px] font-medium bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 rounded-md transition-colors"
                           >
                             Reject
                           </button>
@@ -721,20 +733,20 @@ export default function TransactionsPage() {
                             e.stopPropagation();
                             setSelectedExplorerHash(tx.blockchainTxHash || "");
                           }}
-                          className="px-2 py-1 rounded-sm bg-fuchsia-500/10 border border-fuchsia-500/20 text-fuchsia-300 text-[10px] uppercase tracking-widest font-bold hover:bg-fuchsia-500/20 transition-colors inline-flex items-center gap-1 w-fit cursor-pointer shadow-[0_0_10px_rgba(217,70,239,0.1)]" 
+                          className="px-2 py-0.5 rounded-md bg-zinc-800 border border-zinc-700 text-zinc-300 text-[10px] font-medium hover:bg-zinc-700 transition-colors inline-flex items-center gap-1.5 w-fit cursor-pointer" 
                           title="View in Explorer"
                         >
-                          <span className="chain-dot w-2 h-2 shadow-[0_0_8px_rgba(217,70,239,0.8)]" /> Verified
-                          <ExternalLink className="w-3 h-3" />
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Verified
+                          <ExternalLink className="w-3 h-3 text-zinc-400" />
                         </button>
                       ) : (
-                        <span className="px-2 py-1 rounded-sm bg-fuchsia-500/10 border border-fuchsia-500/20 text-fuchsia-300 text-[10px] uppercase tracking-widest font-bold shadow-[0_0_10px_rgba(217,70,239,0.1)]" title="Recorded on Polygon">
-                          <span className="chain-dot w-2 h-2 mr-1 shadow-[0_0_8px_rgba(217,70,239,0.8)]" /> Verified
+                        <span className="px-2 py-0.5 rounded-md bg-zinc-800 border border-zinc-700 text-zinc-300 text-[10px] font-medium inline-flex items-center gap-1.5" title="Recorded on Polygon">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Verified
                         </span>
                       )
                     ) : (
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-white/30 font-medium">—</span>
+                        <span className="text-xs text-zinc-500 font-medium">—</span>
                         {tx.status === "approved" && canDirectRecord && (
                           <button 
                             onClick={async (e) => {
@@ -748,7 +760,7 @@ export default function TransactionsPage() {
                                 toast.error(getErrorMessage(err, "Failed to sync to blockchain."), { id: "syncToast" });
                               }
                             }}
-                            className="text-[9px] font-bold uppercase tracking-widest bg-fuchsia-500/10 hover:bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30 px-2 py-1 rounded-sm transition-colors shadow-[0_0_10px_rgba(217,70,239,0.1)]"
+                            className="text-[10px] font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 px-2 py-0.5 rounded-md transition-colors"
                             title="Retry sync to blockchain"
                           >
                             Retry Sync
@@ -777,15 +789,15 @@ export default function TransactionsPage() {
                           });
                         }}
                         title="View receipt"
-                        className="inline-flex items-center gap-1.5 text-xs font-bold text-cyan-400 hover:text-cyan-300 hover:underline cursor-pointer bg-cyan-500/10 hover:bg-cyan-500/20 px-2.5 py-1 rounded-md border border-cyan-500/20 transition-colors"
+                        className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-300 hover:text-white cursor-pointer bg-zinc-800 hover:bg-zinc-700 px-2 py-0.5 rounded-md border border-zinc-700 transition-colors"
                       >
-                        <Paperclip className="w-3.5 h-3.5" />
+                        <Paperclip className="w-3.5 h-3.5 text-zinc-400" />
                         Receipt
-                        <ExternalLink className="w-3 h-3 opacity-60" />
+                        <ExternalLink className="w-3 h-3 text-zinc-500" />
                       </button>
                     ) : (
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-white/30 font-medium">—</span>
+                        <span className="text-xs text-zinc-500 font-medium">—</span>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -793,7 +805,7 @@ export default function TransactionsPage() {
                             if (attachFileInputRef.current) attachFileInputRef.current.click();
                           }}
                           disabled={isAttaching && attachingTxId === tx._id}
-                          className="text-[10px] font-bold uppercase tracking-widest bg-white/5 hover:bg-cyan-500/20 hover:text-cyan-300 text-white/50 border border-white/10 px-2 py-1 rounded-sm transition-colors disabled:opacity-50"
+                          className="text-[10px] font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 px-2 py-0.5 rounded-md transition-colors disabled:opacity-50"
                           title="Attach Receipt"
                         >
                           {isAttaching && attachingTxId === tx._id ? "..." : "Upload"}
@@ -801,7 +813,7 @@ export default function TransactionsPage() {
                       </div>
                     )}
                   </td>
-                  <td className={`p-4 text-right font-black tracking-tight text-lg drop-shadow-md whitespace-nowrap ${tx.type === "income" ? "text-cyan-400" : "text-red-400"}`}>
+                  <td className={`p-4 text-right font-semibold font-mono text-sm whitespace-nowrap ${tx.type === "income" ? "text-emerald-400" : "text-zinc-200"}`}>
                     {tx.type === "income" ? "+" : "-"}&#8369;{Math.round(tx.amount).toLocaleString()}
                   </td>
                 </tr>
@@ -852,9 +864,9 @@ export default function TransactionsPage() {
                                     : "Recorded on chain" 
                                   : "Pending blockchain record",
                                 date: tx.isRecordedOnChain ? "✓ Immutable" : "",
-                                icon: <Link2 className="w-4 h-4" />,
+                                icon: <Link2 className="w-4 h-4 text-zinc-950" />,
                                 done: tx.isRecordedOnChain,
-                                color: "bg-purple-600",
+                                color: "bg-white text-zinc-950",
                               },
                             ];
 
@@ -863,9 +875,9 @@ export default function TransactionsPage() {
                             return visibleSteps.map((step, idx) => (
                               <div key={idx} className={`flex items-start ${idx < visibleSteps.length - 1 ? "flex-1" : "w-32"}`}>
                                 <div className="flex flex-col items-center w-32 shrink-0">
-                                  <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white shadow-md transition-all duration-300 ${
+                                  <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white shadow-sm transition-all duration-300 ${
                                     step.done 
-                                      ? `${step.color} scale-100 shadow-[0_0_15px_rgba(139,92,246,0.4)]` 
+                                      ? `${step.color} scale-100` 
                                       : "bg-white/10 border border-white/20 scale-90"
                                   }`}>
                                     {step.done ? step.icon : <span className="w-2 h-2 bg-white/20 rounded-full" />}
@@ -914,7 +926,7 @@ export default function TransactionsPage() {
         <Portal>
         <div
           className="fixed inset-0 z-50"
-          style={{ background: "rgba(11, 12, 16, 0.75)", backdropFilter: "blur(8px)" }}
+          style={{ background: "rgba(9, 9, 11, 0.8)", backdropFilter: "blur(6px)" }}
         >
           {/* Scrollable container that fills the backdrop */}
           <div
@@ -923,22 +935,22 @@ export default function TransactionsPage() {
           >
             {/* Flex centering wrapper */}
             <div className="flex min-h-full items-center justify-center p-3 md:p-4 py-6 md:py-8">
-              <div className="glass rounded-xl md:rounded-2xl p-5 md:p-8 w-full max-w-lg shadow-[0_0_30px_rgba(139,92,246,0.15)] animate-fade-in border border-purple-500/30">
+              <div className="bg-[#121215] rounded-2xl p-5 md:p-6 w-full max-w-lg shadow-2xl animate-modal-pop border border-zinc-800">
 
-            <div className="flex items-center justify-between mb-4 md:mb-6">
-              <h2 className="text-lg md:text-xl font-bold text-white drop-shadow-sm">
+            <div className="flex items-center justify-between mb-4 md:mb-5">
+              <h2 className="text-base md:text-lg font-bold text-white">
                 { canDirectRecord ? "Record Transaction" : "Submit Request" }
               </h2>
               <button
                 onClick={closeModal}
-                className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-white/10 text-white/50 hover:text-white transition-colors"
+                className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
             {error && (
-              <div className="mb-4 px-4 py-3 rounded-lg text-sm text-red-300 border border-red-500/30 bg-red-500/10 shadow-[0_0_10px_rgba(239,68,68,0.1)]">
+              <div className="mb-4 px-3.5 py-2.5 rounded-lg text-xs text-rose-300 border border-rose-500/30 bg-rose-500/10">
                 {error}
               </div>
             )}
@@ -946,27 +958,17 @@ export default function TransactionsPage() {
             <form onSubmit={handleSubmit} className="space-y-3 md:space-y-4">
 
               {/* Income / Expense toggle */}
-              <div className="flex rounded-lg overflow-hidden border border-white/10 bg-black/20 p-1 gap-1">
+              <div className="flex rounded-lg overflow-hidden border border-zinc-800 bg-zinc-900 p-1 gap-1">
                 {(["expense", "income"] as const).map((t) => (
                   <button
                     key={t}
                     type="button"
                     onClick={() => setActiveTab(t)}
-                    className="flex-1 py-2 text-sm font-bold uppercase tracking-widest rounded-md transition-all duration-300"
-                    style={{
-                      background: activeTab === t
-                        ? t === "income" ? "rgba(34, 211, 238, 0.15)" : "rgba(239, 68, 68, 0.15)"
-                        : "transparent",
-                      color: activeTab === t
-                        ? t === "income" ? "#22d3ee" : "#ef4444"
-                        : "rgba(255, 255, 255, 0.4)",
-                      boxShadow: activeTab === t 
-                        ? t === "income" ? "inset 0 0 10px rgba(34, 211, 238, 0.1), 0 0 10px rgba(34, 211, 238, 0.2)" : "inset 0 0 10px rgba(239, 68, 68, 0.1), 0 0 10px rgba(239, 68, 68, 0.2)"
-                        : "none",
-                      border: activeTab === t
-                        ? t === "income" ? "1px solid rgba(34, 211, 238, 0.3)" : "1px solid rgba(239, 68, 68, 0.3)"
-                        : "1px solid transparent"
-                    }}
+                    className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+                      activeTab === t
+                        ? "bg-zinc-800 text-white shadow-xs"
+                        : "text-zinc-400 hover:text-zinc-200"
+                    }`}
                   >
                     {t === "income" ? "+ Income" : "− Expense"}
                   </button>
@@ -975,7 +977,7 @@ export default function TransactionsPage() {
 
               {/* Amount */}
               <div>
-                <label className="block text-sm font-bold text-white/70 mb-1 drop-shadow-sm">Amount (&#8369;)</label>
+                <label className="block text-xs font-semibold text-zinc-300 mb-1">Amount (&#8369;)</label>
                 <input
                   id="tx-amount"
                   type="number"
@@ -991,7 +993,7 @@ export default function TransactionsPage() {
 
               {/* Description */}
               <div>
-                <label className="block text-sm font-bold text-white/70 mb-1 drop-shadow-sm">
+                <label className="block text-xs font-semibold text-zinc-300 mb-1">
                   {formData.type === "expense" ? "Description (What is this for?)" : "Description (Where did this come from?)"}
                 </label>
                 <input
@@ -1007,23 +1009,23 @@ export default function TransactionsPage() {
 
               {/* Urgency Toggle (Level 3 specific) */}
               {userRoleLevel === 3 && formData.type === "expense" && (
-                <div className="flex items-center justify-between p-2 md:p-3 bg-red-500/10 border border-red-500/30 rounded-lg shadow-[inset_0_0_15px_rgba(239,68,68,0.05)]">
+                <div className="flex items-center justify-between p-2.5 bg-zinc-900 border border-zinc-800 rounded-lg">
                   <div>
-                    <label className="block text-sm font-bold text-red-400 mb-0 md:mb-0.5 drop-shadow-sm">Mark as Urgent?</label>
-                    <p className="text-[9px] md:text-[10px] text-red-300/70 leading-tight">Flags this request for immediate admin attention.</p>
+                    <label className="block text-xs font-semibold text-zinc-200 mb-0.5">Mark as Urgent?</label>
+                    <p className="text-[10px] text-zinc-400 leading-tight">Flags this request for immediate admin attention.</p>
                   </div>
-                  <div className="flex bg-black/40 rounded-lg p-1 border border-red-500/20 shadow-sm shrink-0 gap-1">
+                  <div className="flex bg-zinc-800/80 rounded-lg p-1 border border-zinc-700/60 shrink-0 gap-1">
                     <button
                       type="button"
                       onClick={() => setFormData({ ...formData, urgency: "normal" })}
-                      className={`px-3 py-1 text-[10px] uppercase tracking-widest font-bold rounded-md transition-all duration-300 ${formData.urgency === "normal" ? "bg-white/10 text-white shadow-sm border border-white/10" : "text-white/40 hover:text-white/70"}`}
+                      className={`px-2.5 py-1 text-[10px] uppercase tracking-wider font-semibold rounded-md transition-colors ${formData.urgency === "normal" ? "bg-zinc-700 text-white" : "text-zinc-400 hover:text-zinc-200"}`}
                     >
                       Normal
                     </button>
                     <button
                       type="button"
                       onClick={() => setFormData({ ...formData, urgency: "urgent" })}
-                      className={`px-3 py-1 text-[10px] uppercase tracking-widest font-bold rounded-md transition-all duration-300 ${formData.urgency === "urgent" ? "bg-red-500/80 text-white shadow-[0_0_10px_rgba(239,68,68,0.5)] border border-red-400" : "text-red-500/50 hover:bg-red-500/20 hover:text-red-300"}`}
+                      className={`px-2.5 py-1 text-[10px] uppercase tracking-wider font-semibold rounded-md transition-colors ${formData.urgency === "urgent" ? "bg-rose-600 text-white" : "text-rose-400 hover:bg-rose-500/20"}`}
                     >
                       URGENT
                     </button>
@@ -1034,26 +1036,24 @@ export default function TransactionsPage() {
               {/* Category + Reference */}
               <div className="grid grid-cols-2 gap-2 md:gap-3">
                 <div>
-                  <label className="block text-sm font-bold text-white/70 mb-1 drop-shadow-sm">Category (Budget Allocation)</label>
+                  <label className="block text-xs font-semibold text-zinc-300 mb-1">Category</label>
                   {formData.type === "expense" ? (
-                    <select
+                    <CustomSelect
                       id="tx-category"
-                      className="input appearance-none bg-[#160B2E] text-white"
+                      placeholder="Select Budget Category"
                       value={formData.category}
-                      onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                      required
-                    >
-                      <option value="" disabled className="bg-[#160B2E] text-white/50">Select Budget Category</option>
-                      {budgets.map((b) => {
+                      onChange={(val) => setFormData({ ...formData, category: val })}
+                      options={budgets.map((b) => {
                         const remaining = b.allocated - b.spent;
                         const isExhausted = remaining <= 0;
-                        return (
-                          <option key={b._id} value={b.name} disabled={isExhausted} className="bg-[#160B2E] text-white disabled:text-white/30">
-                            {b.name} (Remaining: ₱{remaining.toLocaleString()})
-                          </option>
-                        );
+                        return {
+                          value: b.name,
+                          label: b.name,
+                          hint: `Remaining: ₱${remaining.toLocaleString()}`,
+                          disabled: isExhausted,
+                        };
                       })}
-                    </select>
+                    />
                   ) : (
                     <input
                       id="tx-category"
@@ -1066,7 +1066,7 @@ export default function TransactionsPage() {
                   )}
                 </div>
                 <div>
-                  <label className="block text-sm font-bold text-white/70 mb-1 drop-shadow-sm">Reference #</label>
+                  <label className="block text-xs font-semibold text-zinc-300 mb-1">Reference #</label>
                   <input
                     id="tx-reference"
                     type="text"
@@ -1080,7 +1080,7 @@ export default function TransactionsPage() {
 
               {/* Notes */}
               <div>
-                <label className="block text-sm font-bold text-white/70 mb-1 drop-shadow-sm">Notes (optional)</label>
+                <label className="block text-xs font-semibold text-zinc-300 mb-1">Notes (optional)</label>
                 <textarea
                   id="tx-notes"
                   rows={2}
@@ -1093,18 +1093,16 @@ export default function TransactionsPage() {
 
               {/* ── Receipt / Attachment Upload ── */}
               <div>
-                <label className="block text-sm font-bold text-white/70 mb-1.5 md:mb-2 drop-shadow-sm">
-                  Receipt / Attachment <span className="text-white/40 font-medium">(optional)</span>
+                <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+                  Receipt / Attachment <span className="text-zinc-500 font-normal">(optional)</span>
                 </label>
 
                 {!uploadedFile ? (
                   <div
-                    className="relative border-2 border-dashed rounded-xl p-4 md:p-5 text-center cursor-pointer transition-all duration-300 border-white/20 hover:border-cyan-400/50 hover:bg-cyan-400/5"
-                    onDragOver={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement).style.borderColor = "#22D3EE"; }}
-                    onDragLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.2)"; }}
+                    className="relative border border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors border-zinc-700 bg-zinc-900/40 hover:bg-zinc-900/80 hover:border-zinc-500"
+                    onDragOver={(e) => { e.preventDefault(); }}
                     onDrop={(e) => {
                       e.preventDefault();
-                      (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.2)";
                       const file = e.dataTransfer.files?.[0];
                       if (file) {
                         processUploadedFile(file);
@@ -1120,53 +1118,53 @@ export default function TransactionsPage() {
                       onChange={handleFileChange}
                     />
                     {isUploading ? (
-                      <div className="flex flex-col items-center gap-2">
-                        <Loader2 className="w-7 h-7 text-cyan-400 drop-shadow-[0_0_5px_rgba(34,211,238,0.8)] animate-spin" />
-                        <p className="text-sm font-bold text-white drop-shadow-sm">Uploading file...</p>
+                      <div className="flex flex-col items-center gap-1.5">
+                        <Loader2 className="w-5 h-5 text-zinc-400 animate-spin" />
+                        <p className="text-xs font-semibold text-white">Uploading file...</p>
                       </div>
                     ) : (
-                      <div className="flex flex-col items-center gap-2">
-                        <div className="w-10 h-10 rounded-full bg-cyan-500/10 border border-cyan-500/20 shadow-[0_0_10px_rgba(34,211,238,0.1)] flex items-center justify-center">
-                          <Upload className="w-5 h-5 text-cyan-400 drop-shadow-[0_0_5px_rgba(34,211,238,0.8)]" />
+                      <div className="flex flex-col items-center gap-1.5">
+                        <div className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center">
+                          <Upload className="w-4 h-4 text-zinc-300" />
                         </div>
-                        <p className="text-sm text-white/70">
-                          <span className="font-bold text-cyan-400">Click to upload</span> or drag & drop
+                        <p className="text-xs text-zinc-300">
+                          <span className="font-semibold text-white">Click to upload</span> or drag &amp; drop
                         </p>
-                        <p className="text-xs text-white/40 font-medium tracking-wide">JPEG, PNG, WebP, PDF — max 5 MB</p>
+                        <p className="text-[11px] text-zinc-500 font-medium">JPEG, PNG, WebP, PDF — max 5 MB</p>
                       </div>
                     )}
                   </div>
                 ) : (
                   <div
-                    className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-cyan-500/30 bg-cyan-500/10 shadow-[inset_0_0_10px_rgba(34,211,238,0.05)]"
+                    className="flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-lg border border-zinc-800 bg-zinc-900"
                   >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-9 h-9 rounded-lg bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center shrink-0 text-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.1)]">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-7 h-7 rounded bg-zinc-800 border border-zinc-700 flex items-center justify-center shrink-0 text-zinc-300">
                         {getFileIcon(uploadedFile.mimeType)}
                       </div>
                       <div className="min-w-0">
-                        <p className="text-sm font-bold text-white drop-shadow-sm truncate">{uploadedFile.originalName}</p>
-                        <p className="text-xs text-cyan-300/70 font-medium tracking-wide">{(uploadedFile.size / 1024).toFixed(1)} KB</p>
+                        <p className="text-xs font-semibold text-white truncate">{uploadedFile.originalName}</p>
+                        <p className="text-[10px] text-zinc-400">{(uploadedFile.size / 1024).toFixed(1)} KB</p>
                       </div>
-                      <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0 drop-shadow-[0_0_5px_rgba(74,222,128,0.8)]" />
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
                     </div>
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
                         onClick={handleAiAutoFill}
                         disabled={isAiScanning}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold text-xs shadow-sm transition-all ${
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-semibold text-xs transition-colors ${
                           aiScanSuccess 
                             ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" 
-                            : "bg-linear-to-r from-purple-500/10 to-blue-500/10 hover:from-purple-500/20 hover:to-blue-500/20 text-cyan-400 border border-cyan-500/20 hover:border-cyan-400/50"
+                            : "bg-zinc-800 text-zinc-200 border border-zinc-700 hover:bg-zinc-700"
                         }`}
                       >
                         {isAiScanning ? (
-                          <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Scanning...</>
+                          <><Loader2 className="w-3 h-3 animate-spin" /> Scanning...</>
                         ) : aiScanSuccess ? (
-                          <><CheckCircle2 className="w-3.5 h-3.5" /> Scanned!</>
+                          <><CheckCircle2 className="w-3 h-3" /> Scanned!</>
                         ) : (
-                          <><Sparkles className="w-3.5 h-3.5" /> AI Auto-fill</>
+                          <><Sparkles className="w-3 h-3 text-zinc-300" /> AI Auto-fill</>
                         )}
                       </button>
                       <button
@@ -1176,20 +1174,20 @@ export default function TransactionsPage() {
                           setRawFile(null);
                           setAiScanSuccess(false);
                         }}
-                        className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-danger/10 text-gray-400 hover:text-danger transition-colors shrink-0"
+                        className="w-6 h-6 rounded flex items-center justify-center hover:bg-zinc-800 text-zinc-400 hover:text-rose-400 transition-colors shrink-0"
                       >
-                        <X className="w-4 h-4" />
+                        <X className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </div>
                 )}
 
                 {uploadError && (
-                  <p className="mt-2 text-xs text-danger">{uploadError}</p>
+                  <p className="mt-1.5 text-xs text-rose-400">{uploadError}</p>
                 )}
 
                 {uploadedFile && (
-                  <p className="mt-1.5 text-xs text-gray-400 flex items-center gap-1">
+                  <p className="mt-1 text-[11px] text-zinc-500 flex items-center gap-1">
                     <span className="font-medium">SHA-256:</span>
                     <span className="font-mono truncate">{uploadedFile.documentHash.slice(0, 32)}...</span>
                   </p>
@@ -1197,7 +1195,7 @@ export default function TransactionsPage() {
               </div>
 
               {activeTab === "expense" && (
-                <div className="pt-2 border-t border-white/10">
+                <div className="pt-2 border-t border-zinc-800">
                   <label className="flex items-center gap-3 cursor-pointer group">
                     <div className="relative">
                       <input 
@@ -1206,22 +1204,22 @@ export default function TransactionsPage() {
                         checked={formData.isEscrow || false}
                         onChange={(e) => setExpenseData({ ...expenseData, isEscrow: e.target.checked })}
                       />
-                      <div className={`block w-10 h-6 rounded-full transition-colors ${formData.isEscrow ? "bg-fuchsia-500 shadow-[0_0_10px_rgba(217,70,239,0.5)]" : "bg-white/10 border border-white/20"}`}></div>
-                      <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform shadow-sm ${formData.isEscrow ? "transform translate-x-4" : ""}`}></div>
+                      <div className={`block w-9 h-5 rounded-full transition-colors ${formData.isEscrow ? "bg-white" : "bg-zinc-800 border border-zinc-700"}`}></div>
+                      <div className={`dot absolute left-0.5 top-0.5 w-4 h-4 rounded-full transition-transform ${formData.isEscrow ? "bg-zinc-950 transform translate-x-4" : "bg-zinc-400"}`}></div>
                     </div>
                     <div className="flex flex-col">
-                      <span className="text-sm font-bold text-white drop-shadow-sm">Use Smart Contract Escrow</span>
-                      <span className="text-xs text-white/50">Lock funds until supplier delivery is confirmed.</span>
+                      <span className="text-xs font-semibold text-white">Use Smart Contract Escrow</span>
+                      <span className="text-[11px] text-zinc-400">Lock funds until supplier delivery is confirmed.</span>
                     </div>
                   </label>
                 </div>
               )}
 
               {/* Actions */}
-              <div className="pt-3 md:pt-4 mt-1 md:mt-2 flex justify-end gap-2 md:gap-3 border-t border-white/10">
+              <div className="pt-3 mt-1 flex justify-end gap-2 border-t border-zinc-800">
                 <button
                   type="button"
-                  className="px-4 py-2 md:py-2.5 text-sm md:text-base font-bold text-white/50 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg transition-colors flex-1"
+                  className="px-3.5 py-2 text-xs font-semibold text-zinc-400 hover:text-white bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-lg transition-colors flex-1"
                   onClick={closeModal}
                 >
                   Cancel
@@ -1230,7 +1228,7 @@ export default function TransactionsPage() {
                   id="tx-submit-btn"
                   type="submit"
                   disabled={isSubmitting || isUploading}
-                  className="px-4 py-2 md:py-2.5 text-sm md:text-base font-bold text-white bg-cyan-500/20 border border-cyan-400 hover:bg-cyan-500/40 rounded-lg shadow-[0_0_15px_rgba(34,211,238,0.3)] transition-all flex-1 whitespace-nowrap disabled:opacity-50"
+                  className="btn-primary px-3.5 py-2 text-xs font-semibold rounded-lg transition-all flex-1 whitespace-nowrap disabled:opacity-50"
                 >
                   {isSubmitting ? "Recording..." : canDirectRecord ? "Record Transaction" : "Submit Request"}
                 </button>
@@ -1246,20 +1244,20 @@ export default function TransactionsPage() {
       {/* ── Receipt Viewer & In-App Lightbox Modal ── */}
       {previewReceipt && (
         <Portal>
-          <div className="fixed inset-0 z-9999 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
-            <div className="relative bg-[#13121d] border border-white/15 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-modal-pop">
+          <div className="fixed inset-0 z-9999 flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm animate-fade-in">
+            <div className="relative bg-[#121215] border border-zinc-800 rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-modal-pop">
               
               {/* Header */}
-              <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-white/5">
+              <div className="flex items-center justify-between px-5 py-3.5 border-b border-zinc-800 bg-zinc-900/60">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center">
-                    <Receipt className="w-5 h-5 text-cyan-400" />
+                  <div className="w-8 h-8 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center">
+                    <Receipt className="w-4 h-4 text-zinc-300" />
                   </div>
                   <div>
-                    <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <h3 className="text-sm font-semibold text-white flex items-center gap-2">
                       {previewReceipt.title}
                     </h3>
-                    <p className="text-xs text-white/50">Transaction Attached Receipt</p>
+                    <p className="text-[11px] text-zinc-400">Transaction Attached Receipt</p>
                   </div>
                 </div>
 
@@ -1269,7 +1267,7 @@ export default function TransactionsPage() {
                       setAttachingTxId(previewReceipt.txId);
                       if (attachFileInputRef.current) attachFileInputRef.current.click();
                     }}
-                    className="px-3 py-1.5 text-xs font-bold text-purple-300 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 rounded-lg transition-colors flex items-center gap-1.5"
+                    className="px-2.5 py-1 text-xs font-semibold text-zinc-300 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-md transition-colors flex items-center gap-1.5"
                     title="Replace or re-upload receipt"
                   >
                     <Upload className="w-3.5 h-3.5" />
@@ -1281,7 +1279,7 @@ export default function TransactionsPage() {
                       href={previewReceipt.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="p-2 text-white/60 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                      className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-md transition-colors"
                       title="Open in new tab"
                     >
                       <ExternalLink className="w-4 h-4" />
@@ -1293,23 +1291,23 @@ export default function TransactionsPage() {
                       setPreviewReceipt(null);
                       setReceiptLoadError(false);
                     }}
-                    className="p-2 text-white/60 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                    className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-md transition-colors"
                     title="Close"
                   >
-                    <X className="w-5 h-5" />
+                    <X className="w-4 h-4" />
                   </button>
                 </div>
               </div>
 
               {/* Content Preview */}
-              <div className="flex-1 overflow-auto p-6 flex flex-col items-center justify-center min-h-75 bg-black/40">
+              <div className="flex-1 overflow-auto p-5 flex flex-col items-center justify-center min-h-75 bg-zinc-950/60">
                 {receiptLoadError ? (
-                  <div className="text-center p-8 max-w-md">
-                    <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mx-auto mb-4 text-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.15)]">
-                      <AlertTriangle className="w-8 h-8" />
+                  <div className="text-center p-6 max-w-md">
+                    <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mx-auto mb-3 text-amber-400">
+                      <AlertTriangle className="w-6 h-6" />
                     </div>
-                    <h4 className="text-base font-bold text-white mb-2">Receipt File Expired or Missing</h4>
-                    <p className="text-xs text-white/50 leading-relaxed mb-6">
+                    <h4 className="text-sm font-semibold text-white mb-1.5">Receipt File Expired or Missing</h4>
+                    <p className="text-xs text-zinc-400 leading-relaxed mb-5">
                       This receipt was stored in temporary cloud storage that was cleared during a server restart. You can easily re-upload the receipt image below to permanently attach it to this transaction.
                     </p>
                     <button
@@ -1318,16 +1316,16 @@ export default function TransactionsPage() {
                         if (attachFileInputRef.current) attachFileInputRef.current.click();
                       }}
                       disabled={isAttaching}
-                      className="btn-primary py-2.5 px-6 text-xs font-bold inline-flex items-center gap-2 shadow-[0_0_20px_rgba(107,85,217,0.4)]"
+                      className="btn-primary py-2 px-4 text-xs font-semibold inline-flex items-center gap-2"
                     >
                       {isAttaching ? (
                         <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
                           Uploading...
                         </>
                       ) : (
                         <>
-                          <Upload className="w-4 h-4" />
+                          <Upload className="w-3.5 h-3.5" />
                           Re-upload Receipt Image
                         </>
                       )}
@@ -1340,7 +1338,7 @@ export default function TransactionsPage() {
                       src={previewReceipt.url}
                       alt="Receipt Document"
                       onError={() => setReceiptLoadError(true)}
-                      className="max-h-[60vh] max-w-full rounded-xl object-contain shadow-2xl border border-white/10"
+                      className="max-h-[60vh] max-w-full rounded-lg object-contain border border-zinc-800"
                     />
                   </div>
                 )}
@@ -1348,12 +1346,12 @@ export default function TransactionsPage() {
 
               {/* Footer with Document Hash */}
               {previewReceipt.documentHash && (
-                <div className="px-6 py-3 border-t border-white/10 bg-white/5 flex items-center justify-between text-xs text-white/50">
-                  <span className="flex items-center gap-1.5 font-mono text-[11px] text-cyan-400">
-                    <ShieldCheck className="w-3.5 h-3.5" />
+                <div className="px-5 py-2.5 border-t border-zinc-800 bg-zinc-900/60 flex items-center justify-between text-xs text-zinc-400">
+                  <span className="flex items-center gap-1.5 font-mono text-[11px] text-zinc-300">
+                    <ShieldCheck className="w-3.5 h-3.5 text-zinc-400" />
                     IPFS Hash: {previewReceipt.documentHash.slice(0, 16)}...
                   </span>
-                  <span className="text-[10px] text-emerald-400 font-bold">On-Chain Verified</span>
+                  <span className="text-[10px] text-emerald-400 font-medium">On-Chain Verified</span>
                 </div>
               )}
             </div>

@@ -92,15 +92,14 @@ router.put("/me", authenticate, async (req, res) => {
       user.avatarUrl = avatarUrl;
     }
     
-    // Add to linked wallets, avoiding duplicates and current wallet
+    // Security: Do not allow adding unverified wallet addresses via PUT /me.
+    // New secondary wallets must be cryptographically verified via POST /api/auth/link-wallet.
+    // Only allow filtering/removing already-verified wallets from linkedWallets.
     if (linkedWallets && Array.isArray(linkedWallets)) {
-      const mainWallet = user.walletAddress ? user.walletAddress.toLowerCase() : "";
-      linkedWallets.forEach((w) => {
-        const lowerW = w.toLowerCase();
-        if (lowerW && lowerW !== mainWallet && !user.linkedWallets.includes(lowerW)) {
-          user.linkedWallets.push(lowerW);
-        }
-      });
+      const existingSet = new Set((user.linkedWallets || []).map((w) => w.toLowerCase()));
+      user.linkedWallets = linkedWallets
+        .map((w) => (typeof w === "string" ? w.toLowerCase() : ""))
+        .filter((w) => w && existingSet.has(w));
     }
 
     await user.save();
@@ -125,11 +124,25 @@ router.put("/me", authenticate, async (req, res) => {
 /// GET /api/users/:orgId/members — List members of an org (Level 1+)
 router.get("/:orgId/members", authenticate, requireRole(4), async (req, res) => {
   try {
+    const targetOrgId = req.params.orgId.toString();
     const users = await User.find({
       "memberships.organization": req.params.orgId,
       "memberships.isActive": true,
-    }).select("-nonce");
-    res.json(users);
+    })
+      .select("-nonce -nonceExpiresAt -pushTokens -notificationPreferences -encryptedPrivateKey -encryptedMnemonic -keyExportNonce -keyExportNonceExpiresAt")
+      .lean();
+
+    // Scope memberships to the requested organization to prevent cross-org membership enumeration
+    const scopedUsers = req.user.isSuperAdmin
+      ? users
+      : users.map((u) => ({
+          ...u,
+          memberships: (u.memberships || []).filter(
+            (m) => (m.organization?._id || m.organization)?.toString() === targetOrgId
+          ),
+        }));
+
+    res.json(scopedUsers);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

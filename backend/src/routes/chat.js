@@ -409,7 +409,7 @@ router.post("/:orgId/messages", authenticate, requireOrgMembership, async (req, 
     const roleLevel = req.membership.roleLevel || 4;
     const roleLabel =
       req.membership.roleLabel ||
-      (roleLevel === 1 ? "President" : roleLevel === 2 ? "Auditor" : roleLevel === 3 ? "Treasurer" : "Member");
+      (roleLevel === 1 ? "President" : roleLevel === 2 ? "Treasurer" : roleLevel === 3 ? "Member" : "Viewer");
 
     const message = new ChatMessage({
       organization: orgId,
@@ -578,6 +578,11 @@ router.post("/:orgId/messages/:messageId/react", authenticate, requireOrgMembers
     await message.save();
     await message.populate({ path: "reactions.users", select: "displayName avatarUrl" });
 
+    const redisService = req.app.get("redisService");
+    if (redisService && redisService.invalidateChatCache) {
+      void redisService.invalidateChatCache(orgId);
+    }
+
     const io = req.app.get("io");
     if (io) {
       io.to(`org:${orgId}`).emit("org_message_reacted", {
@@ -617,6 +622,11 @@ router.post("/:orgId/seen", authenticate, requireOrgMembership, async (req, res)
     await ChatMessage.updateMany(filter, {
       $addToSet: { seenBy: req.user.id },
     });
+
+    const redisService = req.app.get("redisService");
+    if (redisService && redisService.invalidateChatCache) {
+      void redisService.invalidateChatCache(orgId);
+    }
 
     const io = req.app.get("io");
     if (io) {
@@ -676,6 +686,11 @@ router.post("/:orgId/messages/:messageId/delivered", authenticate, requireOrgMem
         { $addToSet: { deliveredTo: currentUserId } }
       );
 
+      const redisService = req.app.get("redisService");
+      if (redisService && redisService.invalidateChatCache) {
+        void redisService.invalidateChatCache(orgId);
+      }
+
       const io = req.app.get("io");
       if (io) {
         io.to(`org:${orgId}`).emit("org_message_delivered", {
@@ -725,6 +740,11 @@ router.post("/:orgId/messages/:messageId/pin", authenticate, requireOrgMembershi
       await message.populate("pinnedBy", "displayName");
     }
 
+    const redisService = req.app.get("redisService");
+    if (redisService && redisService.invalidateChatCache) {
+      void redisService.invalidateChatCache(orgId);
+    }
+
     const io = req.app.get("io");
     if (io) {
       io.to(`org:${orgId}`).emit("org_message_pinned", {
@@ -759,6 +779,11 @@ router.delete("/:orgId/messages/:messageId", authenticate, requireOrgMembership,
     }
 
     await ChatMessage.deleteOne({ _id: messageId });
+
+    const redisService = req.app.get("redisService");
+    if (redisService && redisService.invalidateChatCache) {
+      void redisService.invalidateChatCache(orgId);
+    }
 
     const io = req.app.get("io");
     if (io) {

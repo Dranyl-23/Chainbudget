@@ -8,7 +8,11 @@ import Image from "next/image";
 import {
   LayoutDashboard, ArrowLeftRight, PiggyBank,
   ClipboardCheck, FileText, BookOpen, Settings,
-  LogOut, Users, Menu, X, AlertTriangle, Copy, Vote, ChevronLeft, ChevronRight, UserCircle, ShieldCheck, Box, Crown, CheckCircle2, User as UserIcon, Eye, HelpCircle, LifeBuoy, Shield, MessageSquare
+  LogOut, Users, Menu, X, Copy, Vote,
+  ChevronLeft, ChevronRight, UserCircle, ShieldCheck,
+  Box, Crown, CheckCircle2, User as UserIcon, Eye,
+  LifeBuoy, Shield, MessageSquare, Search, Plus,
+  ChevronDown, Bell, Download, RefreshCw, PanelLeft
 } from "lucide-react";
 
 import toast from "react-hot-toast";
@@ -40,6 +44,19 @@ interface PendingCountResponse {
   count?: number;
 }
 
+interface NavItem {
+  href: string;
+  icon: React.ReactNode;
+  label: string;
+  minRole: number;
+  badge?: number;
+}
+
+interface NavGroup {
+  groupTitle: string;
+  items: NavItem[];
+}
+
 function getOrgId(org?: string | UserOrgRef): string | undefined {
   if (!org) return undefined;
   return typeof org === "string" ? org : org._id;
@@ -63,21 +80,7 @@ function getShortNetworkName(chainId?: string): string {
   return "Amoy";
 }
 
-const navItems = [
-  { href: "/dashboard",              icon: <LayoutDashboard className="w-4 h-4" />, label: "Dashboard",    minRole: 4 },
-  { href: "/dashboard/chat",         icon: <MessageSquare   className="w-4 h-4" />, label: "Org Chat",     minRole: 4 },
-  { href: "/dashboard/transactions", icon: <ArrowLeftRight  className="w-4 h-4" />, label: "Transactions", minRole: 4 },
-  { href: "/dashboard/budget",       icon: <PiggyBank       className="w-4 h-4" />, label: "Budget",       minRole: 3 }, // RBAC Fix: Level 3 can view budgets
-  { href: "/dashboard/approvals",    icon: <ClipboardCheck  className="w-4 h-4" />, label: "Approvals",    minRole: 2 }, // Treasurer (Level 2) can approve
-  { href: "/dashboard/treasury",     icon: <Box             className="w-4 h-4" />, label: "Treasury",     minRole: 1 }, // Executive (Level 1)
-  { href: "/dashboard/reports",      icon: <FileText        className="w-4 h-4" />, label: "Reports",      minRole: 4 }, // RBAC Fix: Level 4 can view public reports
-  { href: "/dashboard/audit",        icon: <BookOpen        className="w-4 h-4" />, label: "Audit Trail",  minRole: 2 }, // Treasurer should see audit logs
-  { href: "/dashboard/dao",          icon: <Vote            className="w-4 h-4" />, label: "DAO Governance", minRole: 4 }, // All members can vote
-  { href: "/dashboard/team",         icon: <Users           className="w-4 h-4" />, label: "Team",         minRole: 4 },
-  { href: "/dashboard/settings",     icon: <UserCircle      className="w-4 h-4" />, label: "Profile",      minRole: 4 },
-];
-
-function UserAvatar({ src, name, size = 40, className = "" }: { src?: string; name?: string; size?: number; className?: string }) {
+function UserAvatar({ src, name, size = 32, className = "" }: { src?: string; name?: string; size?: number; className?: string }) {
   const [hasError, setHasError] = useState(false);
 
   const formattedSrc = useMemo(() => {
@@ -95,20 +98,22 @@ function UserAvatar({ src, name, size = 40, className = "" }: { src?: string; na
 
   if (!formattedSrc || hasError) {
     return (
-      <div className={`w-full h-full flex items-center justify-center bg-purple-500/20 text-purple-300 font-bold text-xs ${className}`}>
-        {name ? name.trim().charAt(0).toUpperCase() : <UserCircle className="w-full h-full text-purple-400" />}
+      <div 
+        style={{ width: size, height: size }}
+        className={`flex items-center justify-center bg-zinc-800 text-zinc-300 font-bold text-xs rounded-full border border-zinc-700 ${className}`}
+      >
+        {name ? name.trim().charAt(0).toUpperCase() : <UserCircle className="w-full h-full text-zinc-400" />}
       </div>
     );
   }
 
   return (
-    <Image
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
       src={formattedSrc}
       alt={name || "Avatar"}
-      width={size}
-      height={size}
-      unoptimized
-      className={`w-full h-full object-cover ${className}`}
+      style={{ width: size, height: size }}
+      className={`rounded-full object-cover border border-zinc-700 ${className}`}
       onError={() => setHasError(true)}
     />
   );
@@ -123,20 +128,60 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [showDisconnectModal, setShowDisconnectModal] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [topSearch, setTopSearch] = useState("");
 
-  // Filter nav items based on role (Super Admins see everything)
   const memberships = (user?.memberships || []) as UserMembership[];
   const currentMembership = memberships.find(
     (m) => getOrgId(m.organization) === activeOrgId
   );
-  const roleLevel = user?.isSuperAdmin ? 1 : (currentMembership?.roleLevel || 4); 
+  const roleLevel = user?.isSuperAdmin ? 1 : (currentMembership?.roleLevel || 4);
 
-  const visibleNavItems = useMemo(() => {
-    return navItems.filter((item) => {
-      if (user?.isSuperAdmin) return true;
-      return roleLevel <= item.minRole;
-    });
-  }, [user?.isSuperAdmin, roleLevel]);
+  // Grouped Navigation Structure (Studio Admin Monochrome)
+  const navGroups: NavGroup[] = useMemo(() => [
+    {
+      groupTitle: "Dashboards",
+      items: [
+        { href: "/dashboard", icon: <LayoutDashboard className="w-4 h-4 shrink-0" />, label: "Overview", minRole: 4 },
+        { href: "/chat", icon: <MessageSquare className="w-4 h-4 shrink-0" />, label: "Organization Chat", minRole: 4 },
+      ]
+    },
+    {
+      groupTitle: "Financials",
+      items: [
+        { href: "/dashboard/transactions", icon: <ArrowLeftRight className="w-4 h-4 shrink-0" />, label: "Transactions", minRole: 4 },
+        { href: "/dashboard/budget", icon: <PiggyBank className="w-4 h-4 shrink-0" />, label: "Budgets & Envelopes", minRole: 3 },
+        { href: "/dashboard/treasury", icon: <Box className="w-4 h-4 shrink-0" />, label: "Treasury Safe", minRole: 1 },
+      ]
+    },
+    {
+      groupTitle: "Governance",
+      items: [
+        { 
+          href: "/dashboard/approvals", 
+          icon: <ClipboardCheck className="w-4 h-4 shrink-0" />, 
+          label: "Multi-Sig Approvals", 
+          minRole: 2,
+          badge: pendingCount 
+        },
+        { href: "/dashboard/dao", icon: <Vote className="w-4 h-4 shrink-0" />, label: "DAO Proposals", minRole: 4 },
+      ]
+    },
+    {
+      groupTitle: "Accountability",
+      items: [
+        { href: "/dashboard/reports", icon: <FileText className="w-4 h-4 shrink-0" />, label: "Reports & Statements", minRole: 4 },
+        { href: "/dashboard/audit", icon: <BookOpen className="w-4 h-4 shrink-0" />, label: "Cryptographic Audit", minRole: 2 },
+      ]
+    },
+    {
+      groupTitle: "Workspace",
+      items: [
+        { href: "/dashboard/notifications", icon: <Bell className="w-4 h-4 shrink-0" />, label: "Notifications", minRole: 4 },
+        { href: "/dashboard/team", icon: <Users className="w-4 h-4 shrink-0" />, label: "Team & Permissions", minRole: 4 },
+        { href: "/dashboard/settings", icon: <Settings className="w-4 h-4 shrink-0" />, label: "Settings", minRole: 4 },
+      ]
+    }
+  ], [pendingCount]);
 
   useEffect(() => {
     if (!isLoading && !isConnected) {
@@ -144,13 +189,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, [isLoading, isConnected, router]);
 
-  // Synchronize dark theme attribute with DOM and localStorage
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", "dark");
     localStorage.setItem("chainbudget-theme", "dark");
   }, []);
 
-  // Asynchronous pending approvals count loader
   useEffect(() => {
     let isCancelled = false;
 
@@ -167,7 +210,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           setPendingCount(res.data.count || 0);
         }
       } catch (err: unknown) {
-        console.error("Failed to fetch pending approvals count:", err);
+        console.error("Failed to fetch pending count:", err);
       }
     };
 
@@ -184,17 +227,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     };
   }, [activeOrgId, roleLevel, pathname]);
 
-  const visiblePendingCount = (activeOrgId && roleLevel <= 2) ? pendingCount : 0;
-
   if (isLoading || !isConnected) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-gray-500 animate-pulse">Loading...</div>
+      <div className="min-h-screen flex items-center justify-center bg-[#09090b]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-7 h-7 rounded-full border-2 border-white border-t-transparent animate-spin" />
+          <span className="text-zinc-500 text-xs font-medium">Loading ChainBudget...</span>
+        </div>
       </div>
     );
   }
 
-  // Show onboarding if user has no organization memberships
   const hasMemberships = user?.memberships && user.memberships.length > 0;
   if (!hasMemberships) {
     return <Onboarding />;
@@ -205,7 +248,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     : "No Wallet Linked";
 
   const chainId = typeof window !== "undefined" ? window.ethereum?.chainId : undefined;
-  const networkName = getNetworkName(chainId);
   const shortNetworkName = getShortNetworkName(chainId);
 
   const handleNavClick = () => {
@@ -214,337 +256,462 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   };
 
+  const copyAddress = () => {
+    if (walletAddress) {
+      navigator.clipboard.writeText(walletAddress);
+      toast.success("Wallet address copied to clipboard!");
+    }
+  };
+
+  // Quick tabs for Top Bar
+  const topTabs = [
+    { label: "Dashboard", href: "/dashboard" },
+    { label: "Transactions", href: "/dashboard/transactions" },
+    { label: "Approvals", href: "/dashboard/approvals" },
+    { label: "Budgets", href: "/dashboard/budget" },
+  ];
+
   return (
-    <div className="h-screen flex flex-col md:flex-row overflow-hidden" style={{ background: "var(--color-bg)" }}>
+    <div className="h-screen flex flex-col md:flex-row overflow-hidden bg-[#09090b] text-zinc-100 font-sans">
       <OnboardingTour />
       <SessionExpiredModal />
-      {/* ── Mobile Header ── */}
-      <div className="md:hidden flex items-center justify-between px-4 py-3 border-b z-20" style={{ background: "var(--color-surface, #0f0f14)", borderColor: "var(--color-border)" }}>
-        <div className="flex items-center gap-3">
-          <Image src="/3D-Chainbudget.png" alt="ChainBudget logo" width={52} height={52} unoptimized className="w-12 h-12 object-contain drop-shadow-md shrink-0" />
-          <span className="font-extrabold text-2xl tracking-tight">
-            Chain<span className="gradient-text">Budget</span>
+
+      {/* ── Mobile Top Bar ── */}
+      <header className="md:hidden flex items-center justify-between px-4 py-2.5 bg-[#09090b] border-b border-zinc-800 z-30 shrink-0">
+        <div className="flex items-center gap-2">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img 
+            src="/3D-Chainbudget.png" 
+            alt="ChainBudget Logo" 
+            className="w-7 h-7 object-contain drop-shadow" 
+          />
+          <span className="font-bold text-base tracking-tight text-white">
+            ChainBudget
           </span>
         </div>
-        <div className="flex items-center gap-1">
-          <div className="mt-1 mr-1 z-50">
-            <NotificationsCenter />
-          </div>
-          <button onClick={() => setIsMobileOpen(!isMobileOpen)} className="p-2 -mr-2 text-gray-500 focus:outline-none" aria-label="Toggle Navigation">
-            {isMobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+
+        <div className="flex items-center gap-2">
+          <NotificationsCenter />
+          <button 
+            onClick={() => setIsMobileOpen(!isMobileOpen)} 
+            className="p-1.5 text-zinc-400 hover:text-white rounded-lg bg-zinc-900 border border-zinc-800" 
+            aria-label="Toggle navigation"
+          >
+            {isMobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
         </div>
-      </div>
+      </header>
 
-      {/* ── Mobile Overlay ── */}
+      {/* ── Mobile Backdrop ── */}
       {isMobileOpen && (
         <div 
-          className="fixed inset-0 bg-black/40 z-30 md:hidden backdrop-blur-sm"
-          onClick={() => setIsMobileOpen(false)}
+          className="fixed inset-0 bg-black/70 backdrop-blur-xs z-40 md:hidden animate-fade-in"
+          onClick={() => setIsMobileOpen(false)} 
         />
       )}
 
-      {/* ── Sidebar ── */}
+      {/* ── Studio Minimalist Sidebar ── */}
       <aside 
         className={`
-          fixed md:static inset-y-0 left-0 z-40 flex flex-col border-r h-screen max-h-screen transform transition-all duration-300 ease-in-out shrink-0
-          ${isCollapsed ? "w-20" : "w-60"}
-          ${isMobileOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0
-        `} 
-        style={{ background: "var(--color-surface, #0f0f14)", borderRight: "1px solid var(--color-border)" }}
+          fixed md:static inset-y-0 left-0 z-50 flex flex-col border-r h-full max-h-screen 
+          bg-[#09090b] border-zinc-800 transition-all duration-150 ease-out shrink-0 select-none
+          ${isCollapsed ? "w-[68px]" : "w-60"}
+          ${isMobileOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"} md:translate-x-0
+        `}
       >
-        {/* Floating Sidebar Toggle Button on the Right Border */}
-        <button 
-          onClick={() => setIsCollapsed(!isCollapsed)}
-          className="hidden md:flex absolute -right-3 top-5 w-6 h-6 rounded-full bg-[#121215] border border-white/20 text-gray-300 hover:text-white hover:border-fuchsia-500/60 hover:bg-[#1a1a22] shadow-md items-center justify-center transition-all z-50 cursor-pointer active:scale-95"
-          aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          {isCollapsed ? <ChevronRight className="w-3 h-3 text-fuchsia-400" /> : <ChevronLeft className="w-3 h-3" />}
-        </button>
-
-        {/* Brand Header */}
-        <div className={`h-14 shrink-0 hidden md:flex items-center transition-all duration-300 ${isCollapsed ? "justify-center px-2" : "justify-start px-4"}`}>
-          <div className="flex items-center gap-2.5">
-            <Image 
+        {/* Sidebar Brand Header */}
+        <div className={`h-14 shrink-0 flex items-center border-b border-zinc-800 ${isCollapsed ? "justify-center px-2" : "justify-between px-4"}`}>
+          <div className="flex items-center gap-2.5 overflow-hidden">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img 
               src="/3D-Chainbudget.png" 
-              alt="ChainBudget logo" 
-              width={40} 
-              height={40} 
-              unoptimized 
-              className="w-10 h-10 object-contain drop-shadow-md shrink-0 transition-transform hover:scale-105 cursor-pointer"
+              alt="Logo" 
+              className="w-7 h-7 object-contain shrink-0 cursor-pointer"
               onClick={() => isCollapsed && setIsCollapsed(false)}
             />
-            <span className={`font-extrabold text-xl tracking-tight transition-all duration-300 overflow-hidden whitespace-nowrap ${isCollapsed ? "max-w-0 opacity-0 hidden" : "max-w-40 opacity-100"}`}>
-              Chain<span className="gradient-text">Budget</span>
-            </span>
-          </div>
-        </div>
-
-        {/* Org selector component */}
-        <div className={`shrink-0 transition-all duration-300 px-2 ${isCollapsed ? "overflow-hidden max-h-0 opacity-0 m-0 p-0" : "max-h-125 opacity-100 z-30 relative mb-2"}`}>
-          <OrgSelector />
-        </div>
-
-        {/* Scrollable Nav Items & Footer Container */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden px-2.5 py-1 space-y-0.5 custom-scrollbar flex flex-col justify-between">
-          <nav className="space-y-0.5">
-            <p className={`px-2 text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1 transition-all duration-300 overflow-hidden whitespace-nowrap ${isCollapsed ? "max-h-0 opacity-0 m-0" : "max-h-6 opacity-100"}`}>Main</p>
-            {visibleNavItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={handleNavClick}
-                title={isCollapsed ? item.label : ""}
-                id={`nav-${item.label.toLowerCase().replace(" ", "-")}`}
-                className={`nav-item flex justify-between ${
-                  item.href === "/dashboard"
-                    ? pathname === "/dashboard" ? "active" : ""
-                    : pathname.startsWith(item.href) ? "active" : ""
-                } ${isCollapsed ? "justify-center px-0" : ""}`}
-              >
-                <div className="flex items-center gap-2.5 overflow-hidden">
-                  <div className="shrink-0">{item.icon}</div>
-                  <span className={`transition-all duration-300 whitespace-nowrap ${isCollapsed ? "max-w-0 opacity-0" : "max-w-37.5 opacity-100"}`}>
-                    {item.label}
-                  </span>
-                </div>
-                {item.label === "Approvals" && visiblePendingCount > 0 && (
-                  <>
-                    <span className={`bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0 shadow-sm animate-pulse transition-all duration-300 ${isCollapsed ? "max-w-0 max-h-0 opacity-0 p-0 m-0 border-0 overflow-hidden" : "max-w-8 opacity-100"}`}>
-                      {visiblePendingCount}
-                    </span>
-                    {isCollapsed && (
-                      <span className="absolute top-2 right-2 bg-red-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full shrink-0 shadow-sm animate-pulse">
-                        {visiblePendingCount}
-                      </span>
-                    )}
-                  </>
-                )}
-              </Link>
-            ))}
-
-            {user?.isSuperAdmin && (
-              <>
-                <p className={`px-2 text-[10px] font-bold text-gray-500 uppercase tracking-widest transition-all duration-300 overflow-hidden whitespace-nowrap ${isCollapsed ? "max-h-0 opacity-0 m-0" : "max-h-6 opacity-100 mt-3 mb-1"}`}>Admin</p>
-                <Link 
-                  title={isCollapsed ? "Platform Admin" : ""}
-                  href="/admin" 
-                  onClick={handleNavClick}
-                  className={`nav-item flex items-center gap-2.5 transition-all duration-300 ${isCollapsed ? "justify-center px-0" : ""} ${pathname.startsWith("/admin") ? "active" : ""}`}
-                >
-                  <div className="shrink-0"><Settings className="w-4 h-4" /></div>
-                  <span className={`transition-all duration-300 whitespace-nowrap ${isCollapsed ? "max-w-0 opacity-0" : "max-w-37.5 opacity-100"}`}>
-                    Platform Admin
-                  </span>
-                </Link>
-              </>
+            {!isCollapsed && (
+              <span className="font-bold text-sm tracking-tight text-white">
+                Chainbudget
+              </span>
             )}
-          </nav>
+          </div>
 
-          {/* Bottom Links & Mobile Info */}
-          <div className="pt-2 mt-2 border-t border-gray-100 dark:border-white/5 space-y-0.5">
-            {/* Mobile Profile Card */}
-            <div className={`md:hidden transition-all duration-300 overflow-hidden ${isCollapsed ? "max-h-0 opacity-0 m-0 p-0 border-0" : "max-h-50 opacity-100 px-3 py-3 mb-2 rounded-lg sidebar-card"}`}>
-              <div 
-                className="flex items-center justify-between mb-2 group cursor-pointer hover:bg-white/5 rounded px-1 -mx-1 transition-colors"
-                onClick={() => {
-                  if (walletAddress) {
-                    navigator.clipboard.writeText(walletAddress);
-                    toast.success("Wallet address copied!");
-                  }
-                }}
-                title="Copy full wallet address"
+          {!isCollapsed && (
+            <span className="text-[10px] font-semibold text-zinc-500 bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 rounded">
+              v1.1
+            </span>
+          )}
+        </div>
+
+        {/* Quick Create Action Button (Studio Admin signature) */}
+        <div className={`p-3 shrink-0 ${isCollapsed ? "px-2" : "px-3"}`}>
+          {!isCollapsed ? (
+            <div className="flex items-center gap-1.5">
+              <Link
+                href="/dashboard/transactions"
+                className="btn-primary w-full py-2 text-xs font-semibold flex items-center justify-center gap-1.5 rounded-lg shadow-sm"
               >
-                <div className="flex items-center gap-2">
-                  <div className="nft-avatar-wrapper scale-[0.7] origin-left">
-                    <div className="w-10 h-10 nft-avatar border border-purple-500/30 shadow-[inset_0_0_10px_rgba(139,92,246,0.2)] overflow-hidden">
-                      <UserAvatar src={user?.avatarUrl} name={user?.displayName} size={40} />
-                    </div>
-                  </div>
-                  <div className="flex flex-col -ml-2 gap-0.5">
-                    <div className="flex items-center gap-1.5">
-                      {user?.displayName && (
-                        <span className="text-xs font-bold text-gray-100 flex items-center gap-1">
-                          {user.displayName}
-                          {currentMembership?.hasSBT && (
-                            <span title="SBT Verified Member" className="flex items-center">
-                              <ShieldCheck className="w-3 h-3 text-cyan-400 drop-shadow-[0_0_5px_rgba(34,211,238,0.8)]" />
-                            </span>
-                          )}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className={`px-1.5 py-px rounded-sm text-[8px] uppercase tracking-widest font-bold flex items-center gap-1 w-fit ${
-                        roleLevel === 1 ? "role-badge-superadmin" :
-                        roleLevel === 2 ? "role-badge-approver" :
-                        roleLevel === 3 ? "role-badge-member" : "role-badge-readonly"
-                      }`}>
-                        {roleLevel === 1 ? <><Crown className="w-2.5 h-2.5" /> Exec</> : 
-                         roleLevel === 2 ? <><CheckCircle2 className="w-2.5 h-2.5" /> Apprv</> : 
-                         roleLevel === 3 ? <><UserIcon className="w-2.5 h-2.5" /> Mem</> : 
-                         <><Eye className="w-2.5 h-2.5" /> Pub</>}
-                      </span>
-                      <span className="text-[10px] font-mono text-cyan-400/70 group-hover:text-cyan-300 transition-colors">{shortAddress}</span>
-                    </div>
-                  </div>
-                </div>
-                <Copy className="w-3.5 h-3.5 text-white/30 opacity-0 group-hover:opacity-100 transition-opacity" />
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="chain-dot" />
-                <span className="text-xs text-gray-600">
-                  {networkName}
-                </span>
-              </div>
+                <Plus className="w-3.5 h-3.5" />
+                <span>Quick Create</span>
+              </Link>
+              <Link
+                href="/chat"
+                title="Organization Chat (Fullscreen)"
+                className="p-2 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors shrink-0"
+              >
+                <MessageSquare className="w-3.5 h-3.5" />
+              </Link>
             </div>
-
+          ) : (
             <Link
-              href="/help"
-              onClick={handleNavClick}
-              title={isCollapsed ? "Help & FAQs" : ""}
-              className={`nav-item flex items-center gap-2.5 w-full transition-all duration-300 text-gray-500 hover:text-primary ${isCollapsed ? "justify-center px-0" : ""}`}
+              href="/dashboard/transactions"
+              title="Quick Create"
+              className="w-10 h-10 mx-auto flex items-center justify-center rounded-lg bg-white text-zinc-950 hover:bg-zinc-200 transition-colors"
             >
-              <div className="shrink-0"><LifeBuoy className="w-4 h-4" /></div>
-              <span className={`transition-all duration-300 whitespace-nowrap ${isCollapsed ? "max-w-0 opacity-0" : "max-w-37.5 opacity-100"}`}>
-                Help & FAQs
-              </span>
+              <Plus className="w-4 h-4" />
             </Link>
+          )}
+        </div>
 
+        {/* Active Organization Selector */}
+        {!isCollapsed && (
+          <div className="px-3 pb-2 shrink-0">
+            <OrgSelector />
+          </div>
+        )}
+
+        {/* Navigation Groups List */}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden px-2.5 py-1 space-y-3 no-scrollbar">
+          {navGroups.map((group) => {
+            const filteredItems = group.items.filter((item) => {
+              if (user?.isSuperAdmin) return true;
+              return roleLevel <= item.minRole;
+            });
+
+            if (filteredItems.length === 0) return null;
+
+            return (
+              <div key={group.groupTitle} className="space-y-0.5">
+                {!isCollapsed ? (
+                  <p className="px-2 py-1 text-[11px] font-semibold text-zinc-500 tracking-wide">
+                    {group.groupTitle}
+                  </p>
+                ) : (
+                  <div className="h-px bg-zinc-800 my-1 mx-2" />
+                )}
+
+                {filteredItems.map((item) => {
+                  const isActive = item.href === "/dashboard" 
+                    ? pathname === "/dashboard" 
+                    : pathname.startsWith(item.href);
+
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      id={
+                        item.href === "/dashboard/transactions" ? "nav-transactions" :
+                        item.href === "/dashboard/budget" ? "nav-budget" :
+                        item.href === "/dashboard/approvals" ? "nav-approvals" :
+                        item.href === "/dashboard/dao" ? "nav-dao-governance" : undefined
+                      }
+                      onClick={handleNavClick}
+                      title={isCollapsed ? item.label : ""}
+                      className={`
+                        studio-nav-item group
+                        ${isActive ? "active" : ""}
+                        ${isCollapsed ? "justify-center px-0 py-2" : ""}
+                      `}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className={`transition-colors ${isActive ? "text-white" : "text-zinc-400 group-hover:text-white"}`}>
+                          {item.icon}
+                        </div>
+                        {!isCollapsed && (
+                          <span className="truncate text-xs">
+                            {item.label}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Approval Counter Badge */}
+                      {item.badge !== undefined && item.badge > 0 && (
+                        <>
+                          {!isCollapsed ? (
+                            <span className="ml-auto bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-semibold px-1.5 py-0.2 rounded-full font-mono">
+                              {item.badge}
+                            </span>
+                          ) : (
+                            <span className="absolute top-1.5 right-2 w-1.5 h-1.5 rounded-full bg-amber-400" />
+                          )}
+                        </>
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
+            );
+          })}
+
+          {/* Super Admin Section */}
+          {user?.isSuperAdmin && (
+            <div className="pt-2 border-t border-zinc-800 space-y-0.5">
+              {!isCollapsed && (
+                <p className="px-2 py-1 text-[11px] font-semibold text-rose-400 tracking-wide">
+                  SuperAdmin
+                </p>
+              )}
+              <Link 
+                href="/admin" 
+                onClick={handleNavClick}
+                title={isCollapsed ? "Platform Admin" : ""}
+                className={`studio-nav-item ${pathname.startsWith("/admin") ? "active" : ""} ${isCollapsed ? "justify-center px-0 py-2" : ""}`}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <Settings className="w-4 h-4 text-rose-400 shrink-0" />
+                  {!isCollapsed && <span className="truncate text-xs text-rose-300">Platform Admin</span>}
+                </div>
+              </Link>
+            </div>
+          )}
+
+          {/* Support Links */}
+          <div className="pt-2 border-t border-zinc-800 space-y-0.5">
+            {!isCollapsed && (
+              <p className="px-2 py-1 text-[11px] font-semibold text-zinc-500 tracking-wide">
+                Help & Public
+              </p>
+            )}
             <Link
-              href="/privacy"
+              href="/explorer"
               onClick={handleNavClick}
-              title={isCollapsed ? "Data Privacy (RA 10173)" : ""}
-              className={`nav-item flex items-center gap-2.5 w-full transition-all duration-300 text-gray-500 hover:text-primary ${isCollapsed ? "justify-center px-0" : ""}`}
+              title={isCollapsed ? "Public Explorer" : ""}
+              className={`studio-nav-item ${isCollapsed ? "justify-center px-0 py-2" : ""}`}
             >
-              <div className="shrink-0"><Shield className="w-4 h-4" /></div>
-              <span className={`transition-all duration-300 whitespace-nowrap ${isCollapsed ? "max-w-0 opacity-0" : "max-w-37.5 opacity-100"}`}>
-                Privacy & DPA
-              </span>
+              <div className="flex items-center gap-2.5">
+                <Globe className="w-4 h-4 shrink-0 text-zinc-500 group-hover:text-white" />
+                {!isCollapsed && <span className="text-xs">Public Explorer</span>}
+              </div>
             </Link>
 
             <Link
               href="/tutorials"
               onClick={handleNavClick}
-              title={isCollapsed ? "Tutorials" : ""}
-              className={`nav-item flex items-center gap-2.5 w-full transition-all duration-300 text-gray-500 hover:text-primary ${isCollapsed ? "justify-center px-0" : ""}`}
+              title={isCollapsed ? "Tutorials & Guides" : ""}
+              className={`studio-nav-item ${pathname.startsWith("/tutorials") ? "active" : ""} ${isCollapsed ? "justify-center px-0 py-2" : ""}`}
             >
-              <div className="shrink-0"><HelpCircle className="w-4 h-4" /></div>
-              <span className={`transition-all duration-300 whitespace-nowrap ${isCollapsed ? "max-w-0 opacity-0" : "max-w-37.5 opacity-100"}`}>
-                Tutorials
-              </span>
+              <div className="flex items-center gap-2.5">
+                <BookOpen className="w-4 h-4 shrink-0 text-zinc-500 group-hover:text-white" />
+                {!isCollapsed && <span className="text-xs">Tutorials & Guides</span>}
+              </div>
             </Link>
 
-            <button
-              title={isCollapsed ? "Disconnect" : ""}
-              onClick={() => setShowDisconnectModal(true)}
-              id="logout-btn"
-              className={`md:hidden nav-item flex items-center gap-2.5 w-full transition-all duration-300 text-gray-500 hover:text-danger ${isCollapsed ? "justify-center px-0" : ""}`}
+            <Link
+              href="/help"
+              onClick={handleNavClick}
+              title={isCollapsed ? "Help Center" : ""}
+              className={`studio-nav-item ${pathname.startsWith("/help") ? "active" : ""} ${isCollapsed ? "justify-center px-0 py-2" : ""}`}
             >
-              <div className="shrink-0"><LogOut className="w-4 h-4" /></div>
-              <span className={`transition-all duration-300 whitespace-nowrap ${isCollapsed ? "max-w-0 opacity-0" : "max-w-37.5 opacity-100"}`}>
-                Disconnect
-              </span>
-            </button>
+              <div className="flex items-center gap-2.5">
+                <LifeBuoy className="w-4 h-4 shrink-0 text-zinc-500 group-hover:text-white" />
+                {!isCollapsed && <span className="text-xs">Help & FAQs</span>}
+              </div>
+            </Link>
           </div>
+        </div>
+
+        {/* Sidebar Footer User Card */}
+        <div className="shrink-0 p-2 border-t border-zinc-800 bg-[#09090b]">
+          {!isCollapsed ? (
+            <div className="flex items-center justify-between p-2 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-zinc-700 transition-colors">
+              <div 
+                className="flex items-center gap-2 min-w-0 cursor-pointer"
+                onClick={copyAddress}
+                title="Click to copy wallet address"
+              >
+                <UserAvatar src={user?.avatarUrl} name={user?.displayName} size={30} />
+                <div className="flex flex-col min-w-0">
+                  <span className="text-xs font-semibold text-white truncate max-w-28">
+                    {user?.displayName || "User"}
+                  </span>
+                  <span className="text-[10px] text-zinc-500 font-mono truncate max-w-28">
+                    {shortAddress}
+                  </span>
+                </div>
+              </div>
+
+              <button
+                id="logout-btn"
+                onClick={() => setShowDisconnectModal(true)}
+                title="Sign Out"
+                className="p-1 text-zinc-400 hover:text-rose-400 rounded transition-colors ml-1 shrink-0"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-1.5 py-1">
+              <button 
+                onClick={copyAddress}
+                title={`Copy ${shortAddress}`}
+                className="p-1 rounded-full hover:ring-1 hover:ring-zinc-600 transition-all cursor-pointer"
+              >
+                <UserAvatar src={user?.avatarUrl} name={user?.displayName} size={28} />
+              </button>
+              <button
+                id="logout-btn"
+                onClick={() => setShowDisconnectModal(true)}
+                title="Disconnect"
+                className="p-1 text-zinc-400 hover:text-rose-400 transition-colors"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
         </div>
       </aside>
 
-      {/* ── Main content ── */}
-      <main className="flex-1 overflow-auto w-full md:w-auto relative flex flex-col">
+      {/* ── Main Content Area with Studio Top Bar ── */}
+      <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden">
         
-        {/* Desktop Top Navigation Bar */}
-        <div className="hidden md:flex items-center justify-end px-8 py-4 sticky top-0 z-40 bg-bg/80 backdrop-blur-xl border-b border-white/5 gap-4">
-          <NotificationsCenter />
-
-          {/* Top Nav Profile Pill */}
-          <div className="flex items-center gap-4 pl-4 border-l border-white/10">
-            {/* Role & Network */}
-            <div className="flex items-center gap-2">
-              <span className={`px-2 py-1 rounded-sm text-[9px] uppercase tracking-widest font-bold flex items-center gap-1 w-fit ${
-                  roleLevel === 1 ? "role-badge-superadmin" :
-                  roleLevel === 2 ? "role-badge-approver" :
-                  roleLevel === 3 ? "role-badge-member" : "role-badge-readonly"
-                }`}>
-                  {roleLevel === 1 ? <><Crown className="w-3 h-3" /> Exec</> : 
-                   roleLevel === 2 ? <><CheckCircle2 className="w-3 h-3" /> Apprv</> : 
-                   roleLevel === 3 ? <><UserIcon className="w-3 h-3" /> Mem</> : 
-                   <><Eye className="w-3 h-3" /> Pub</>}
-              </span>
-              <div className="flex items-center gap-1.5 bg-white/5 px-2 py-1 rounded-md border border-white/10">
-                <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-                <span className="text-[10px] text-gray-400">
-                  {shortNetworkName}
-                </span>
-              </div>
-            </div>
-
-            {/* Profile Info */}
-            <div 
-              className="flex items-center gap-3 cursor-pointer group"
-              onClick={() => {
-                if (walletAddress) {
-                  navigator.clipboard.writeText(walletAddress);
-                  toast.success("Wallet address copied!");
-                }
-              }}
-              title="Copy full wallet address"
+        {/* Desktop Sticky Header Bar (Exact match to Studio Admin benchmark) */}
+        <header className="hidden md:flex items-center justify-between h-14 px-5 bg-[#09090b] border-b border-zinc-800 z-30 shrink-0">
+          
+          {/* Left: Sidebar Toggle, Search, & Navigation Tabs */}
+          <div className="flex items-center gap-4 min-w-0">
+            {/* Sidebar Collapse Toggle */}
+            <button 
+              onClick={() => setIsCollapsed(!isCollapsed)}
+              className="p-1.5 rounded-lg border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
+              title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             >
-              <div className="flex flex-col items-end">
-                <span className="text-sm font-bold text-white flex items-center gap-1">
-                  {user?.displayName || "User"}
-                  {currentMembership?.hasSBT && (
-                    <ShieldCheck className="w-3.5 h-3.5 text-cyan-400 drop-shadow-[0_0_5px_rgba(34,211,238,0.8)]" />
-                  )}
-                </span>
-                <span className="text-[10px] font-mono text-cyan-400/70 group-hover:text-cyan-300 transition-colors">{shortAddress}</span>
-              </div>
-              <div className="w-10 h-10 rounded-full border border-purple-500/30 overflow-hidden shadow-[inset_0_0_10px_rgba(139,92,246,0.2)]">
-                <UserAvatar src={user?.avatarUrl} name={user?.displayName} size={40} />
-              </div>
-            </div>
-
-            {/* Desktop Logout Button */}
-            <button
-              onClick={() => setShowDisconnectModal(true)}
-              title="Sign out"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-400 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              <span className="hidden xl:inline">Sign Out</span>
+              <PanelLeft className="w-4 h-4" />
             </button>
-          </div>
-        </div>
 
-        <div className="flex-1 relative">
-          {children}
-        </div>
-      </main>
+            {/* Studio Search Input */}
+            <div className="relative w-48 lg:w-56">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+              <input
+                type="text"
+                placeholder="Search..."
+                value={topSearch}
+                onChange={(e) => setTopSearch(e.target.value)}
+                className="w-full bg-zinc-900 border border-zinc-800 focus:border-zinc-600 text-white rounded-lg pl-8 pr-8 py-1.5 text-xs placeholder:text-zinc-500 focus:outline-none transition-colors"
+              />
+              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-zinc-500 border border-zinc-800 bg-zinc-950 px-1 rounded font-mono">
+                ⌘K
+              </span>
+            </div>
+
+            {/* Studio Context Tabs */}
+            <div className="hidden lg:flex items-center gap-1 border-l border-zinc-800 pl-4">
+              {topTabs.map((tab) => {
+                const isActive = tab.href === "/dashboard" 
+                  ? pathname === "/dashboard" 
+                  : pathname.startsWith(tab.href);
+                return (
+                  <Link
+                    key={tab.label}
+                    href={tab.href}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      isActive 
+                        ? "bg-zinc-800 text-white font-semibold" 
+                        : "text-zinc-400 hover:text-white hover:bg-zinc-900"
+                    }`}
+                  >
+                    {tab.label}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Right: Updated Info, Settings, Export, Notifications, User */}
+          <div className="flex items-center gap-2.5 shrink-0">
+            
+            {/* Updated Indicator */}
+            <div className="hidden xl:flex items-center gap-1.5 text-[11px] text-zinc-500 pr-2">
+              <RefreshCw className="w-3 h-3 text-zinc-500" />
+              <span>Updated just now</span>
+            </div>
+
+            {/* Network Badge */}
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 text-[11px] font-medium text-zinc-300">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              <span className="font-mono">{shortNetworkName}</span>
+            </div>
+
+            {/* Role Badge */}
+            <div className="hidden sm:flex items-center">
+              <span className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider bg-zinc-900 border border-zinc-800 text-zinc-300">
+                {roleLevel === 1 && "Executive"}
+                {roleLevel === 2 && "Approver"}
+                {roleLevel === 3 && "Member"}
+                {roleLevel > 3 && "Public"}
+              </span>
+            </div>
+
+            {/* Quick Settings Link */}
+            <Link
+              href="/dashboard/settings"
+              className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white text-xs transition-colors"
+            >
+              <Settings className="w-3.5 h-3.5" />
+              <span>Settings</span>
+            </Link>
+
+            {/* Export Link */}
+            <Link
+              href="/dashboard/reports"
+              className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white text-xs transition-colors"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Export</span>
+            </Link>
+
+            {/* Notifications */}
+            <NotificationsCenter />
+
+            {/* User Profile Thumbnail */}
+            <div 
+              onClick={copyAddress}
+              className="cursor-pointer ml-1"
+              title="Click to copy wallet address"
+            >
+              <UserAvatar src={user?.avatarUrl} name={user?.displayName} size={28} />
+            </div>
+          </div>
+        </header>
+
+        {/* Page Content Container */}
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6 bg-[#09090b] relative custom-scrollbar">
+          <div className="max-w-7xl mx-auto space-y-5">
+            {children}
+          </div>
+        </main>
+      </div>
 
       {/* Disconnect Confirmation Modal */}
       {showDisconnectModal && (
         <Portal>
-          <div className="fixed inset-0 z-200 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">
-            <div className="glass rounded-2xl p-6 w-full max-w-sm shadow-[0_0_40px_rgba(239,68,68,0.15)] border border-red-500/20 animate-modal-pop">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center shrink-0">
-                    <AlertTriangle className="w-5 h-5 text-red-400 drop-shadow-[0_0_8px_rgba(239,68,68,0.8)]" />
-                  </div>
-                  <h2 className="text-xl font-bold text-white drop-shadow-sm">Disconnect Wallet</h2>
-                </div>
-                <button onClick={() => setShowDisconnectModal(false)} className="text-white/40 hover:text-white transition-colors">
-                  <X className="w-5 h-5" />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-fade-in">
+            <div className="bg-[#121215] rounded-xl p-5 w-full max-w-sm border border-zinc-800 shadow-2xl">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-bold text-white">Sign Out Session</h2>
+                <button 
+                  onClick={() => setShowDisconnectModal(false)} 
+                  className="text-zinc-500 hover:text-white p-1 rounded transition-colors"
+                >
+                  <X className="w-4 h-4" />
                 </button>
               </div>
-              <p className="text-white/60 mb-6 text-sm">
-                Are you sure you want to disconnect? You will need to sign in again with your wallet to access the dashboard.
+              <p className="text-zinc-400 mb-5 text-xs leading-relaxed">
+                Are you sure you want to sign out? You will need to re-authenticate with your wallet to access your organization dashboard.
               </p>
-              <div className="flex gap-3">
+              <div className="flex gap-2">
                 <button
                   onClick={() => setShowDisconnectModal(false)}
-                  className="flex-1 px-4 py-2.5 text-sm font-medium text-white/70 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg transition-colors"
+                  className="flex-1 px-3 py-2 text-xs font-medium text-zinc-300 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-lg transition-colors"
                 >
                   Cancel
                 </button>
@@ -553,9 +720,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     setShowDisconnectModal(false);
                     logout();
                   }}
-                  className="flex-1 px-4 py-2.5 text-sm font-bold text-red-100 bg-red-500/80 hover:bg-red-500 border border-red-500/50 rounded-lg transition-all duration-300 shadow-[0_0_15px_rgba(239,68,68,0.4)] hover:shadow-[0_0_25px_rgba(239,68,68,0.6)] hover:-translate-y-0.5"
+                  className="flex-1 px-3 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-500 rounded-lg transition-all shadow-sm"
                 >
-                  Disconnect
+                  Sign Out
                 </button>
               </div>
             </div>
@@ -563,5 +730,26 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </Portal>
       )}
     </div>
+  );
+}
+
+function Globe(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      {...props}
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+      <path d="M2 12h20" />
+    </svg>
   );
 }

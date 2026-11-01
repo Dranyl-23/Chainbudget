@@ -215,10 +215,38 @@ io.on("connection", async (socket) => {
     }
   });
 
-  // Dynamic room joining for organizations
+  // Dynamic room joining for organizations (authenticated & membership-verified only)
   socket.on("join_org", async (orgId) => {
     if (orgId) {
       const strOrgId = orgId.toString();
+      let isAuthorized = userOrgIds.has(strOrgId);
+
+      if (!isAuthorized && mongoUserId) {
+        try {
+          const dbUser = await User.findById(mongoUserId).select("memberships isSuperAdmin").lean();
+          if (dbUser) {
+            isAuthorized =
+              Boolean(dbUser.isSuperAdmin) ||
+              Boolean(
+                dbUser.memberships &&
+                  dbUser.memberships.some(
+                    (m) => m.isActive && (m.organization?._id || m.organization)?.toString() === strOrgId
+                  )
+              );
+          }
+        } catch (err) {
+          console.error("[socket:join_org] Membership verification failed:", err.message);
+        }
+      }
+
+      if (!isAuthorized) {
+        socket.emit("org_join_denied", {
+          orgId: strOrgId,
+          error: "Access denied: active organization membership required",
+        });
+        return;
+      }
+
       socket.join(`org:${strOrgId}`);
       userOrgIds.add(strOrgId);
       if (mongoUserId) {
@@ -232,6 +260,7 @@ io.on("connection", async (socket) => {
   socket.on("get_org_online", async (orgId) => {
     if (orgId) {
       const strOrgId = orgId.toString();
+      if (!userOrgIds.has(strOrgId)) return;
       const onlineUserIds = await redisService.getOrgOnlineUsers(strOrgId);
       socket.emit("org_online_users", {
         orgId: strOrgId,

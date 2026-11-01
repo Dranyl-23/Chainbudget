@@ -5,6 +5,7 @@ import Image from "next/image";
 import { Building, Users, ArrowRight, Shield, BarChart3, Link2 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import api from "@/lib/api";
+import CustomSelect from "@/components/CustomSelect";
 
 interface CreateOrgFormData {
   name: string;
@@ -203,22 +204,24 @@ export default function Onboarding() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Organization Type</label>
-                <select
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm"
+                <CustomSelect
                   value={formData.type}
-                  onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                >
-                  <option value="student_org">Student Org</option>
-                  <option value="barangay">Barangay Fund</option>
-                  <option value="homeowners_association">Homeowners Assoc</option>
-                  <option value="ngo">NGO</option>
-                  <option value="cooperative">Cooperative</option>
-                  <option value="church">Church / Religious</option>
-                  <option value="sports_club">Sports Club</option>
-                  <option value="startup">Startup</option>
-                  <option value="family">Family Fund</option>
-                  <option value="fundraising">Fundraising</option>
-                </select>
+                  onChange={(val) => setFormData({ ...formData, type: val })}
+                  options={[
+                    { value: "student_org", label: "Student Organization" },
+                    { value: "barangay", label: "Barangay Fund" },
+                    { value: "homeowners_association", label: "Homeowners Association" },
+                    { value: "ngo", label: "Non-Government Organization" },
+                    { value: "cooperative", label: "Cooperative" },
+                    { value: "church", label: "Church / Religious Group" },
+                    { value: "sports_club", label: "Sports Club" },
+                    { value: "startup", label: "Startup" },
+                    { value: "family", label: "Family Fund" },
+                    { value: "fundraising", label: "Fundraising Campaign" },
+                  ]}
+                  placeholder="Select Organization Type"
+                  buttonClassName="border-zinc-800 bg-zinc-900 text-white"
+                />
               </div>
 
               <div>

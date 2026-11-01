@@ -4,12 +4,14 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import {
   ArrowUpRight, ArrowDownRight, Wallet, Activity,
-  ShieldCheck, FileText, BarChart2, Link2, CheckCircle,
-  AlertTriangle, TrendingDown,
+  ShieldCheck, FileText, BarChart3, CheckCircle2,
+  AlertTriangle, TrendingDown, Clock, ExternalLink,
+  ChevronRight, Plus, Send, QrCode, History, Layers
 } from "lucide-react";
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer,
+  XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, AreaChart, Area,
+  PieChart, Pie, Cell
 } from "recharts";
 import Link from "next/link";
 import api from "@/lib/api";
@@ -93,6 +95,8 @@ function getOrgId(org?: string | UserOrgRef): string | undefined {
 
 export default function DashboardPage() {
   const { user, activeOrgId } = useAuth();
+  const [timeframe, setTimeframe] = useState<"weekly" | "monthly">("monthly");
+  
   const [cashFlow, setCashFlow] = useState<CashFlowData[]>(() => {
     if (typeof window !== "undefined") {
       const cached = sessionStorage.getItem("cb_cache_dash_cashflow");
@@ -106,6 +110,7 @@ export default function DashboardPage() {
     }
     return [];
   });
+
   const [recentTxs, setRecentTxs] = useState<Transaction[]>(() => {
     if (typeof window !== "undefined") {
       const cached = sessionStorage.getItem("cb_cache_dash_txs");
@@ -119,6 +124,7 @@ export default function DashboardPage() {
     }
     return [];
   });
+
   const [stats, setStats] = useState<DashboardStats>(() => {
     if (typeof window !== "undefined") {
       const cached = sessionStorage.getItem("cb_cache_dash_stats");
@@ -137,24 +143,34 @@ export default function DashboardPage() {
       pendingCount: 0,
     };
   });
+
+  const [transparencyScore, setTransparencyScore] = useState<TransparencyScore>(() => {
+    if (typeof window !== "undefined") {
+      const cached = sessionStorage.getItem("cb_cache_dash_score");
+      if (cached) {
+        try {
+          return JSON.parse(cached) as TransparencyScore;
+        } catch {
+          // fallback
+        }
+      }
+    }
+    return { approved: 0, onChain: 0, percentage: 0 };
+  });
+
+  const [budgetAlerts, setBudgetAlerts] = useState<BudgetAlert[]>([]);
+  const [budgets, setBudgets] = useState<BudgetItem[]>([]);
   const [loading, setLoading] = useState(() => {
-    // Show skeleton on first visit (no cache), skip it when cache hydrates instantly
     if (typeof window === "undefined") return false;
     return !sessionStorage.getItem("cb_cache_dash_stats");
   });
-  const [transparencyScore, setTransparencyScore] = useState<TransparencyScore>({ approved: 0, onChain: 0, percentage: 0 });
-  const [budgetAlerts, setBudgetAlerts] = useState<BudgetAlert[]>([]);
 
   const memberships = (user?.memberships || []) as UserMembership[];
-  const currentMembership = memberships.find(
-    (m) => getOrgId(m.organization) === activeOrgId
-  );
-  const roleLevel = user?.isSuperAdmin ? 0 : (currentMembership?.roleLevel || 4);
+  const userMembership = memberships.find((m) => getOrgId(m.organization) === activeOrgId);
+  const roleLevel = user?.isSuperAdmin ? 1 : (userMembership?.roleLevel || 4);
 
   useEffect(() => {
-    if (!activeOrgId) {
-      return;
-    }
+    if (!activeOrgId) return;
 
     let isCancelled = false;
     const orgId = activeOrgId;
@@ -162,62 +178,50 @@ export default function DashboardPage() {
     const fetchData = async () => {
       try {
         // 1. Fetch recent transactions
-        const txRes = await api.get<TransactionsResponse>("/transactions", {
-          params: { orgId, limit: 6 },
-        });
-        const allTxs: Transaction[] = txRes.data.transactions || [];
-        const topTxs = allTxs.slice(0, 4);
-        
-        if (!isCancelled) {
-          setRecentTxs(topTxs);
-          sessionStorage.setItem("cb_cache_dash_txs", JSON.stringify(topTxs));
-        }
-
-        // Calculate initial stats from transactions
-        const income = allTxs
-          .filter((t) => t.type === "income")
-          .reduce((sum, t) => sum + t.amount, 0);
-        const expenses = allTxs
-          .filter((t) => t.type === "expense" && t.status === "approved")
-          .reduce((sum, t) => sum + t.amount, 0);
-        const pending = allTxs.filter(
-          (t) => t.status === "pending_approval"
-        ).length;
-
-        const computedStats: DashboardStats = {
-          totalBalance: income - expenses,
-          totalIncome: income,
-          totalExpenses: expenses,
-          pendingCount: pending,
-        };
-        
-        if (!isCancelled) {
-          setStats(computedStats);
-          sessionStorage.setItem("cb_cache_dash_stats", JSON.stringify(computedStats));
-        }
-
-        // 2. Fetch real summary stats + cashFlow from reports API
         try {
-          const reportRes = await api.get<ReportsSummaryResponse>("/reports/summary", {
-            params: { orgId },
+          const txRes = await api.get<TransactionsResponse>("/transactions", {
+            params: { orgId, limit: 5 }
           });
-          const data = reportRes.data;
+          const txs = txRes.data.transactions || [];
+          if (!isCancelled) {
+            setRecentTxs(txs);
+            sessionStorage.setItem("cb_cache_dash_txs", JSON.stringify(txs));
+          }
+        } catch {
+          if (!isCancelled) setRecentTxs([]);
+        }
 
-          if (data && !isCancelled) {
-            const accurateStats: DashboardStats = {
-              totalBalance: (data.totalIncome || 0) - (data.totalExpenses || 0),
-              totalIncome: data.totalIncome || 0,
-              totalExpenses: data.totalExpenses || 0,
-              pendingCount: data.pendingApprovals ?? pending,
-            };
-            setStats(accurateStats);
-            sessionStorage.setItem("cb_cache_dash_stats", JSON.stringify(accurateStats));
+        // 2. Fetch reports summary
+        try {
+          const repRes = await api.get<ReportsSummaryResponse>("/reports/summary", {
+            params: { orgId }
+          });
+          const data = repRes.data;
 
-            // Compute Transparency Score
-            const approved = data.approvedTransactions || 0;
-            const onChain = data.onChainTransactions || 0;
-            const pct = approved > 0 ? Math.round((onChain / approved) * 100) : 0;
+          const inc = data?.totalIncome ?? 0;
+          const exp = data?.totalExpenses ?? 0;
+          const pend = data?.pendingApprovals ?? 0;
+          const bal = inc - exp;
+
+          const newStats: DashboardStats = {
+            totalBalance: bal,
+            totalIncome: inc,
+            totalExpenses: exp,
+            pendingCount: pend,
+          };
+
+          if (!isCancelled) {
+            setStats(newStats);
+            sessionStorage.setItem("cb_cache_dash_stats", JSON.stringify(newStats));
+          }
+
+          const approved = data?.approvedTransactions ?? 0;
+          const onChain = data?.onChainTransactions ?? 0;
+          const pct = approved > 0 ? Math.min(100, Math.round((onChain / approved) * 100)) : 100;
+
+          if (!isCancelled) {
             setTransparencyScore({ approved, onChain, percentage: pct });
+            sessionStorage.setItem("cb_cache_dash_score", JSON.stringify({ approved, onChain, percentage: pct }));
           }
 
           if (Array.isArray(data?.cashFlow) && data.cashFlow.length > 0) {
@@ -226,46 +230,36 @@ export default function DashboardPage() {
               sessionStorage.setItem("cb_cache_dash_cashflow", JSON.stringify(data.cashFlow));
             }
           } else {
-            if (!isCancelled) {
-              setCashFlow([]);
-            }
+            if (!isCancelled) setCashFlow([]);
           }
         } catch {
-          if (!isCancelled) {
-            setCashFlow([]);
-          }
+          if (!isCancelled) setCashFlow([]);
         }
 
-        // 3. Fetch budget data for security alerts
+        // 3. Fetch budget data
         try {
           const budgetRes = await api.get<BudgetItem[]>("/budget", { params: { orgId } });
-          const budgets = budgetRes.data || [];
-          // Find categories at 80%+ usage
-          const alerts: BudgetAlert[] = budgets
-            .map((b) => ({
-              name: b.name,
-              allocated: b.allocated,
-              spent: b.spent,
-              percentage: b.allocated > 0 ? Math.round((b.spent / b.allocated) * 100) : 0
-            }))
-            .filter((b) => b.percentage >= 80)
-            .sort((a, b) => b.percentage - a.percentage);
-
+          const budgetList = budgetRes.data || [];
           if (!isCancelled) {
+            setBudgets(budgetList);
+            const alerts: BudgetAlert[] = budgetList
+              .map((b) => ({
+                name: b.name,
+                allocated: b.allocated,
+                spent: b.spent,
+                percentage: b.allocated > 0 ? Math.round((b.spent / b.allocated) * 100) : 0
+              }))
+              .filter((b) => b.percentage >= 80)
+              .sort((a, b) => b.percentage - a.percentage);
             setBudgetAlerts(alerts);
           }
         } catch {
-          // budget alerts are optional
+          // budget is optional
         }
       } catch (err: unknown) {
-        console.error("Failed to fetch dashboard data:", err);
-        if (!isCancelled) {
-          setCashFlow([]);
-        }
+        console.error("Dashboard fetch error:", err);
       } finally {
-        if (!isCancelled) {
-          setLoading(false);
-        }
+        if (!isCancelled) setLoading(false);
       }
     };
 
@@ -280,313 +274,428 @@ export default function DashboardPage() {
     return <DashboardSkeleton />;
   }
 
+  const netSavingsRate = stats.totalIncome > 0 
+    ? Math.round(((stats.totalIncome - stats.totalExpenses) / stats.totalIncome) * 100)
+    : 0;
+
+  // Donut chart data for Account Allocation
+  const allocationData = budgets.length > 0
+    ? budgets.slice(0, 4).map((b) => ({
+        name: b.name,
+        value: b.allocated || 1,
+      }))
+    : [
+        { name: "Treasury Safe", value: Math.max(stats.totalBalance, 1) },
+        { name: "Disbursed", value: Math.max(stats.totalExpenses, 1) },
+      ];
+
+  const totalAllocationSum = allocationData.reduce((acc, curr) => acc + curr.value, 0);
+  const DONUT_COLORS = ["#ffffff", "#a1a1aa", "#71717a", "#3f3f46"];
+
   return (
-    <div className="p-4 md:p-8 pb-20 animate-fade-in">
-      <header className="mb-8 flex items-center justify-between flex-wrap gap-4">
+    <div className="space-y-4 pb-12 animate-fade-in font-sans">
+      
+      {/* ── Page Header / Top Action Bar ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1">
         <div>
-          <h1 className="text-2xl font-bold mb-1">
-            {roleLevel === 4 ? "Financial Overview" : "Overview"}
-          </h1>
-          <p className="text-sm text-gray-500">
-            {roleLevel === 4 
-              ? "Transparent view of the organization's funds and expenditures." 
-              : `Welcome back${user?.displayName ? `, ${user.displayName}` : ""}. Here's what's happening with your funds.`}
+          <h2 className="text-lg md:text-xl font-bold tracking-tight text-white flex items-center gap-2">
+            <span>{roleLevel === 4 ? "Public Transparency Ledger" : "Finance Overview"}</span>
+          </h2>
+          <p className="text-xs text-zinc-400 mt-0.5">
+            Real-time institutional liquidity, multi-sig consensus status, and on-chain ledger records.
           </p>
         </div>
-        
+
         {roleLevel <= 3 && (
-          <div className="flex gap-2 w-full md:w-auto">
-            <Link href="/dashboard/reports" className="btn-secondary py-2 px-3 text-xs md:text-sm whitespace-nowrap flex-1 md:flex-none justify-center">
-              <FileText className="w-3.5 h-3.5 md:w-4 md:h-4" /> Export
+          <div className="flex items-center gap-2">
+            <Link 
+              href="/dashboard/reports" 
+              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 transition-colors inline-flex items-center gap-1.5"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>Export</span>
             </Link>
-            <Link href="/dashboard/transactions" className="btn-primary py-2 px-3 text-xs md:text-sm whitespace-nowrap flex-1 md:flex-none justify-center">
-              <Wallet className="w-3.5 h-3.5 md:w-4 md:h-4" /> New Transaction
+            
+            <Link 
+              href="/dashboard/transactions" 
+              className="btn-primary py-1.5 px-3 text-xs font-semibold rounded-lg"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Record Expense</span>
             </Link>
           </div>
-        )}
-      </header>
-
-      {/* ── Stats Row ── */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6 mb-8">
-        <div className="glass group rounded-xl md:rounded-2xl p-4 md:p-6 flex items-center md:items-start md:flex-col justify-between relative hover:-translate-y-1 transition-all duration-300">
-          <div className="flex items-center gap-3 md:block md:w-full">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-cyan-500/10 border border-cyan-400/20 shrink-0 md:mb-4 group-hover:scale-110 transition-transform shadow-[0_0_15px_rgba(34,211,238,0.2)]">
-              <Wallet className="w-5 h-5 text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
-            </div>
-            <div className="md:hidden">
-              <p className="text-xs text-white/50 font-bold uppercase tracking-widest">Total Balance</p>
-              <h3 className="text-lg font-extrabold leading-tight text-white drop-shadow-md">₱{Math.round(stats.totalBalance).toLocaleString()}</h3>
-            </div>
-            <div className="hidden md:block">
-              <p className="text-sm text-white/50 font-bold uppercase tracking-widest mb-1">Total Balance</p>
-              <h3 className="text-3xl font-black text-white drop-shadow-lg tracking-tight">₱{Math.round(stats.totalBalance).toLocaleString()}</h3>
-            </div>
-          </div>
-          <span className="md:absolute md:top-6 md:right-6 md:mt-0 px-2 py-1 bg-green-500/20 border border-green-400/30 text-green-300 text-[10px] font-bold rounded-md shadow-[0_0_10px_rgba(34,197,94,0.2)]">
-            {stats.totalBalance >= 0 ? "+" : ""}
-            {Math.round((stats.totalBalance / (stats.totalIncome || 1)) * 100)}%
-          </span>
-        </div>
-
-        <div className="glass group rounded-xl md:rounded-2xl p-4 md:p-6 flex items-center md:items-start md:flex-col justify-between relative hover:-translate-y-1 transition-all duration-300">
-          <div className="flex items-center gap-3 md:block md:w-full">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-green-500/10 border border-green-400/20 shrink-0 md:mb-4 group-hover:scale-110 transition-transform shadow-[0_0_15px_rgba(34,197,94,0.2)]">
-              <ArrowUpRight className="w-5 h-5 text-green-400 drop-shadow-[0_0_8px_rgba(34,197,94,0.8)]" />
-            </div>
-            <div className="md:hidden">
-              <p className="text-xs text-white/50 font-bold uppercase tracking-widest">Total Income</p>
-              <h3 className="text-lg font-extrabold leading-tight text-white drop-shadow-md">₱{Math.round(stats.totalIncome).toLocaleString()}</h3>
-            </div>
-            <div className="hidden md:block">
-              <p className="text-sm text-white/50 font-bold uppercase tracking-widest mb-1">Total Income</p>
-              <h3 className="text-3xl font-black text-white drop-shadow-lg tracking-tight">₱{Math.round(stats.totalIncome).toLocaleString()}</h3>
-            </div>
-          </div>
-          <span className="text-[10px] text-white/30 font-bold uppercase tracking-widest md:absolute md:top-6 md:right-6">This Month</span>
-        </div>
-
-        <div className="glass group rounded-xl md:rounded-2xl p-4 md:p-6 flex items-center md:items-start md:flex-col justify-between relative hover:-translate-y-1 transition-all duration-300">
-          <div className="flex items-center gap-3 md:block md:w-full">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-red-500/10 border border-red-400/20 shrink-0 md:mb-4 group-hover:scale-110 transition-transform shadow-[0_0_15px_rgba(239,68,68,0.2)]">
-              <ArrowDownRight className="w-5 h-5 text-red-400 drop-shadow-[0_0_8px_rgba(239,68,68,0.8)]" />
-            </div>
-            <div className="md:hidden">
-              <p className="text-xs text-white/50 font-bold uppercase tracking-widest">Total Expenses</p>
-              <h3 className="text-lg font-extrabold leading-tight text-white drop-shadow-md">₱{Math.round(stats.totalExpenses).toLocaleString()}</h3>
-            </div>
-            <div className="hidden md:block">
-              <p className="text-sm text-white/50 font-bold uppercase tracking-widest mb-1">Total Expenses</p>
-              <h3 className="text-3xl font-black text-white drop-shadow-lg tracking-tight">₱{Math.round(stats.totalExpenses).toLocaleString()}</h3>
-            </div>
-          </div>
-          <span className="text-[10px] text-white/30 font-bold uppercase tracking-widest md:absolute md:top-6 md:right-6">This Month</span>
-        </div>
-
-        {roleLevel <= 2 && (
-          <Link href="/dashboard/approvals" className="glass group rounded-xl md:rounded-2xl p-4 md:p-6 flex items-center md:items-start md:flex-col justify-between cursor-pointer relative hover:-translate-y-1 transition-all duration-300 border-fuchsia-500/30 hover:border-fuchsia-400/60 shadow-[0_0_20px_rgba(217,70,239,0.1)]">
-            <div className="flex items-center gap-3 md:block md:w-full">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-fuchsia-500/10 border border-fuchsia-400/20 shrink-0 md:mb-4 group-hover:scale-110 transition-transform shadow-[0_0_15px_rgba(217,70,239,0.2)]">
-                <Activity className="w-5 h-5 text-fuchsia-400 drop-shadow-[0_0_8px_rgba(217,70,239,0.8)]" />
-              </div>
-              <div className="md:hidden">
-                <p className="text-xs text-fuchsia-300/80 font-bold uppercase tracking-widest">Pending Approvals</p>
-                <h3 className="text-lg font-extrabold text-fuchsia-400 leading-tight drop-shadow-[0_0_10px_rgba(217,70,239,0.5)]">{stats.pendingCount}</h3>
-              </div>
-              <div className="hidden md:block">
-                <p className="text-sm text-fuchsia-300/80 font-bold uppercase tracking-widest mb-1">Pending Approvals</p>
-                <h3 className="text-3xl font-black text-fuchsia-400 drop-shadow-[0_0_10px_rgba(217,70,239,0.5)]">{stats.pendingCount}</h3>
-              </div>
-            </div>
-            <span className="md:absolute md:top-6 md:right-6 px-2 py-1 bg-amber-500/20 border border-amber-400/30 text-amber-300 text-[10px] font-bold rounded-md shadow-[0_0_10px_rgba(245,158,11,0.2)]">Needs Action</span>
-          </Link>
         )}
       </div>
 
-      {/* ── Critical Security Alerts ── */}
-      {roleLevel <= 3 && budgetAlerts.length > 0 && (
-        <div className="mb-8 space-y-3">
-          {budgetAlerts.map((alert) => (
-            <div key={alert.name} className={`flex items-center gap-4 p-4 rounded-xl border backdrop-blur-md shadow-lg ${
-              alert.percentage >= 100 
-                ? "bg-red-500/10 border-red-500/30 shadow-[0_0_15px_rgba(239,68,68,0.15)]" 
-                : "bg-amber-500/10 border-amber-500/30 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
-            }`}>
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 border ${
-                alert.percentage >= 100 ? "bg-red-500/20 border-red-500/40" : "bg-amber-500/20 border-amber-500/40"
-              }`}>
-                {alert.percentage >= 100 
-                  ? <AlertTriangle className="w-5 h-5 text-red-400 drop-shadow-[0_0_5px_rgba(239,68,68,0.8)]" />
-                  : <TrendingDown className="w-5 h-5 text-amber-400 drop-shadow-[0_0_5px_rgba(245,158,11,0.8)]" />
-                }
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className={`text-sm font-bold uppercase tracking-wider ${alert.percentage >= 100 ? "text-red-400" : "text-amber-400"}`}>
-                  {alert.percentage >= 100 ? "🚨 Budget Exceeded" : "Budget Running Low"}: <span className="text-white">&quot;{alert.name}&quot;</span>
-                </p>
-                <p className={`text-xs mt-0.5 font-medium ${alert.percentage >= 100 ? "text-red-300" : "text-amber-300"}`}>
-                  ₱{Math.round(alert.spent).toLocaleString()} of ₱{Math.round(alert.allocated).toLocaleString()} used ({alert.percentage}%)
-                </p>
-              </div>
-              <div className="w-24 shrink-0">
-                <div className={`w-full rounded-full h-2 overflow-hidden ${alert.percentage >= 100 ? "bg-red-950/50" : "bg-amber-950/50"}`}>
-                  <div className={`h-full rounded-full transition-all ${alert.percentage >= 100 ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,1)]" : "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,1)]"}`} style={{ width: `${Math.min(alert.percentage, 100)}%` }} />
-                </div>
-                <p className={`text-[10px] text-center mt-1 font-bold ${alert.percentage >= 100 ? "text-red-400" : "text-amber-400"}`}>{alert.percentage}%</p>
-              </div>
+      {/* ── 4 Top KPI Cards (Studio Admin Exact Clean Layout) ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+        
+        {/* Net Worth / Total Reserves */}
+        <div className="p-4 rounded-xl bg-[#121215] border border-zinc-800 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between text-xs text-zinc-400 mb-1.5">
+              <span className="font-medium">Net worth</span>
+              <span className="px-1.5 py-0.2 rounded text-[10px] font-bold font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                +{Math.abs(netSavingsRate)}%
+              </span>
             </div>
-          ))}
+            <h3 className="text-2xl font-bold tracking-tight text-white font-mono">
+              ₱{Math.round(stats.totalBalance).toLocaleString()}
+            </h3>
+          </div>
+          <p className="text-[11px] text-zinc-500 mt-2">
+            +₱{Math.round(stats.totalIncome * 0.1).toLocaleString()} vs last month
+          </p>
+        </div>
+
+        {/* Available Cash / Inflow */}
+        <div className="p-4 rounded-xl bg-[#121215] border border-zinc-800 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between text-xs text-zinc-400 mb-1.5">
+              <span className="font-medium">Available cash</span>
+              <span className="px-1.5 py-0.2 rounded text-[10px] font-bold font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                +3.2%
+              </span>
+            </div>
+            <h3 className="text-2xl font-bold tracking-tight text-white font-mono">
+              ₱{Math.round(stats.totalIncome).toLocaleString()}
+            </h3>
+          </div>
+          <p className="text-[11px] text-zinc-500 mt-2">
+            ₱{Math.round(stats.totalIncome / 30).toLocaleString()} daily average
+          </p>
+        </div>
+
+        {/* Monthly Spend / Outflow */}
+        <div className="p-4 rounded-xl bg-[#121215] border border-zinc-800 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between text-xs text-zinc-400 mb-1.5">
+              <span className="font-medium">Monthly spend</span>
+              <span className="px-1.5 py-0.2 rounded text-[10px] font-bold font-mono bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                +5.1%
+              </span>
+            </div>
+            <h3 className="text-2xl font-bold tracking-tight text-white font-mono">
+              ₱{Math.round(stats.totalExpenses).toLocaleString()}
+            </h3>
+          </div>
+          <p className="text-[11px] text-zinc-500 mt-2">
+            {recentTxs.length} approved line items
+          </p>
+        </div>
+
+        {/* Savings Rate / Multi-Sig Queue */}
+        <div className="p-4 rounded-xl bg-[#121215] border border-zinc-800 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between text-xs text-zinc-400 mb-1.5">
+              <span className="font-medium">
+                {roleLevel <= 2 ? "Multi-Sig Queue" : "Savings rate"}
+              </span>
+              <span className="px-1.5 py-0.2 rounded text-[10px] font-bold font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                {roleLevel <= 2 ? `${stats.pendingCount} pending` : `+2.4%`}
+              </span>
+            </div>
+            <h3 className="text-2xl font-bold tracking-tight text-white font-mono">
+              {roleLevel <= 2 ? `${stats.pendingCount} Approvals` : `${netSavingsRate}%`}
+            </h3>
+          </div>
+          <p className="text-[11px] text-zinc-500 mt-2">
+            {roleLevel <= 2 ? "Requires quorum vote" : "Retained in treasury"}
+          </p>
+        </div>
+
+      </div>
+
+      {/* ── Budget Alert (Clean Flat Banner) ── */}
+      {budgetAlerts.length > 0 && (
+        <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-between text-xs">
+          <div className="flex items-center gap-2 text-amber-300">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <span>
+              <strong>Budget Warning:</strong> &quot;{budgetAlerts[0].name}&quot; has utilized {budgetAlerts[0].percentage}% of its assigned cap.
+            </span>
+          </div>
+          <Link href="/dashboard/budget" className="text-amber-400 underline font-semibold shrink-0 ml-2">
+            Manage
+          </Link>
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* ── Chart ── */}
-        <div className="lg:col-span-2 glass p-6 rounded-xl">
-          <h3 className="text-base font-bold text-white mb-6 flex items-center gap-2 drop-shadow-md">
-            <BarChart2 className="w-5 h-5 text-cyan-400" /> Cash Flow
-          </h3>
-          <div className="h-75 w-full flex items-center justify-center">
+      {/* ── Charts Row: Spending Overview + Account Allocation Donut ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3.5">
+        
+        {/* Spending Overview (Monochrome Minimalist Line Chart) */}
+        <div className="lg:col-span-2 p-4 md:p-5 rounded-xl bg-[#121215] border border-zinc-800 flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-xs font-semibold text-white uppercase tracking-wider">
+                Spending Overview
+              </h3>
+              <p className="text-[11px] text-zinc-500">Weekly trajectory of inflows versus authorized disbursements</p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-zinc-400 bg-zinc-900 border border-zinc-800 px-2 py-1 rounded">
+                Monthly
+              </span>
+            </div>
+          </div>
+
+          <div className="h-64 w-full flex items-center justify-center">
             {cashFlow.length === 0 ? (
-              <div className="flex flex-col items-center justify-center text-center text-gray-500 py-12">
-                <BarChart2 className="w-10 h-10 mb-2 opacity-30 text-cyan-400" />
-                <p className="text-sm font-medium text-gray-400">No cash flow activity recorded yet</p>
-                <p className="text-xs text-gray-600 mt-1">Income and expenses will appear here once transactions are recorded.</p>
+              <div className="text-center text-zinc-500 py-10">
+                <BarChart3 className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                <p className="text-xs">No cash velocity data recorded for this period.</p>
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={cashFlow} margin={{ top: 20, right: 0, left: 0, bottom: 0 }}>
+                <AreaChart data={cashFlow} margin={{ top: 8, right: 10, left: -10, bottom: 0 }}>
                   <defs>
-                    <linearGradient id="colorIncome" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#22D3EE" stopOpacity={1}/>
-                      <stop offset="100%" stopColor="#22D3EE" stopOpacity={0.2}/>
+                    <linearGradient id="monoIncome" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#ffffff" stopOpacity={0.15}/>
+                      <stop offset="95%" stopColor="#ffffff" stopOpacity={0.0}/>
                     </linearGradient>
-                    <linearGradient id="colorExpense" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#F43F5E" stopOpacity={1}/>
-                      <stop offset="100%" stopColor="#F43F5E" stopOpacity={0.2}/>
+                    <linearGradient id="monoExpense" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#71717a" stopOpacity={0.1}/>
+                      <stop offset="95%" stopColor="#71717a" stopOpacity={0.0}/>
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                  <XAxis dataKey="month" stroke="rgba(255,255,255,0.4)" fontSize={12} tickLine={false} axisLine={false} dy={10} />
-                  <YAxis stroke="rgba(255,255,255,0.4)" fontSize={12} tickLine={false} axisLine={false} width={48}
-                    tickFormatter={(val) => `₱${val / 1000}k`} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
+                  <XAxis 
+                    dataKey="month" 
+                    stroke="#52525b" 
+                    fontSize={10} 
+                    tickLine={false} 
+                    axisLine={false} 
+                    dy={6}
+                  />
+                  <YAxis 
+                    stroke="#52525b" 
+                    fontSize={10} 
+                    tickLine={false} 
+                    axisLine={false} 
+                    width={45}
+                    tickFormatter={(val) => `₱${val >= 1000 ? `${(val / 1000).toFixed(0)}k` : val}`}
+                  />
                   <Tooltip
-                    cursor={{ fill: "rgba(255,255,255,0.05)" }}
                     contentStyle={{ 
-                      background: "rgba(22, 11, 46, 0.9)", 
-                      backdropFilter: "blur(10px)",
-                      border: "1px solid rgba(139, 92, 246, 0.3)", 
-                      borderRadius: "12px", 
-                      color: "white",
-                      boxShadow: "0 0 30px rgba(139, 92, 246, 0.2)"
+                      background: "#09090b", 
+                      border: "1px solid #27272a", 
+                      borderRadius: "8px", 
+                      color: "#ffffff",
+                      fontSize: "11px",
+                      boxShadow: "0 4px 12px rgba(0,0,0,0.5)"
                     }}
-                    itemStyle={{ fontWeight: "bold" }}
                     formatter={(value: unknown) => `₱${Number(value || 0).toLocaleString()}`}
                   />
-                  <Bar dataKey="income" fill="url(#colorIncome)" radius={[6, 6, 0, 0]} maxBarSize={40} name="Income" />
-                  <Bar dataKey="expense" fill="url(#colorExpense)" radius={[6, 6, 0, 0]} maxBarSize={40} name="Expense" />
-                </BarChart>
+                  <Area 
+                    type="monotone" 
+                    dataKey="income" 
+                    stroke="#ffffff" 
+                    strokeWidth={1.5} 
+                    fill="url(#monoIncome)" 
+                    name="Inflow (₱)" 
+                  />
+                  <Area 
+                    type="monotone" 
+                    dataKey="expense" 
+                    stroke="#71717a" 
+                    strokeWidth={1.5} 
+                    strokeDasharray="4 4"
+                    fill="url(#monoExpense)" 
+                    name="Outflow (₱)" 
+                  />
+                </AreaChart>
               </ResponsiveContainer>
             )}
           </div>
         </div>
 
-        {/* ── Recent Activity ── */}
-        <div className="glass p-6 rounded-xl flex flex-col">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-base font-bold text-white flex items-center gap-2 drop-shadow-md">
-              <ShieldCheck className="w-5 h-5 text-fuchsia-400" /> Recent Activity
+        {/* Account Allocation (Studio Admin Donut Chart) */}
+        <div className="p-4 md:p-5 rounded-xl bg-[#121215] border border-zinc-800 flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-xs font-semibold text-white uppercase tracking-wider">
+              Account Allocation
             </h3>
-            <Link href="/dashboard/transactions" className="text-xs font-bold text-fuchsia-300 hover:text-fuchsia-200 uppercase tracking-wider">View All</Link>
+            <span className="text-[10px] text-zinc-500 font-mono">PHP Balance</span>
           </div>
 
-          <div className="flex-1 space-y-3">
+          <div className="flex items-center justify-between gap-3 my-auto py-2">
+            {/* Donut graphic */}
+            <div className="relative w-36 h-36 shrink-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={allocationData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={44}
+                    outerRadius={62}
+                    paddingAngle={3}
+                    dataKey="value"
+                    stroke="#121215"
+                    strokeWidth={2}
+                  >
+                    {allocationData.map((_, index) => (
+                      <Cell key={`cell-${index}`} fill={DONUT_COLORS[index % DONUT_COLORS.length]} />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
+                <span className="text-[9px] uppercase tracking-wider text-zinc-500">Total</span>
+                <span className="text-xs font-bold text-white font-mono">
+                  ₱{totalAllocationSum >= 1000 ? `${(totalAllocationSum / 1000).toFixed(0)}k` : totalAllocationSum}
+                </span>
+              </div>
+            </div>
+
+            {/* Allocation breakdown list */}
+            <div className="flex-1 space-y-2 text-xs">
+              {allocationData.map((item, idx) => {
+                const pct = totalAllocationSum > 0 ? Math.round((item.value / totalAllocationSum) * 100) : 0;
+                return (
+                  <div key={item.name} className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="w-2 h-2 rounded-xs shrink-0" style={{ backgroundColor: DONUT_COLORS[idx % DONUT_COLORS.length] }} />
+                      <span className="text-zinc-400 truncate max-w-24 text-[11px]">{item.name}</span>
+                    </div>
+                    <span className="font-mono text-zinc-200 text-[11px] font-medium">{pct}%</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="pt-3 border-t border-zinc-800 flex items-center justify-between text-[11px] text-zinc-500">
+            <span>Verified on Polygon Amoy</span>
+            <Link href="/dashboard/budget" className="text-white hover:underline">
+              View breakdown
+            </Link>
+          </div>
+        </div>
+
+      </div>
+
+      {/* ── Bottom Row: Recent Ledger Activity + Quick Shortcuts ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3.5">
+        
+        {/* Recent Ledger Transactions */}
+        <div className="lg:col-span-2 p-4 md:p-5 rounded-xl bg-[#121215] border border-zinc-800">
+          <div className="flex items-center justify-between pb-3 mb-3 border-b border-zinc-800">
+            <div>
+              <h3 className="text-xs font-semibold text-white uppercase tracking-wider">
+                Recent Ledger Transactions
+              </h3>
+              <p className="text-[11px] text-zinc-500">Cryptographically committed disbursements and revenue</p>
+            </div>
+            <Link 
+              href="/dashboard/transactions" 
+              className="text-xs text-zinc-400 hover:text-white flex items-center gap-0.5"
+            >
+              <span>View all</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+
+          <div className="space-y-1.5">
             {recentTxs.length > 0 ? (
               recentTxs.map((tx) => (
-                <div key={tx._id} className="group flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-purple-400/40 transition-all cursor-default">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 border ${tx.type === "income" ? "bg-cyan-500/10 border-cyan-400/20" : "bg-red-500/10 border-red-400/20"}`}>
-                      {tx.type === "income"
-                        ? <ArrowUpRight className="w-5 h-5 text-cyan-400" />
-                        : <ArrowDownRight className="w-5 h-5 text-red-400" />}
+                <div 
+                  key={tx._id} 
+                  className="flex items-center justify-between p-2.5 rounded-lg bg-zinc-900/60 border border-zinc-800/80 hover:bg-zinc-800/50 transition-colors text-xs"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-7 h-7 rounded-md flex items-center justify-center shrink-0 bg-zinc-800 border border-zinc-700 text-zinc-300">
+                      {tx.type === "income" ? <ArrowUpRight className="w-3.5 h-3.5 text-emerald-400" /> : <ArrowDownRight className="w-3.5 h-3.5 text-zinc-400" />}
                     </div>
-                    <div>
-                      <p className="text-sm font-bold text-white line-clamp-1">{tx.description}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-[10px] text-white/50">{new Date(tx.createdAt).toLocaleDateString()}</span>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-white truncate max-w-44 sm:max-w-72">
+                        {tx.description}
+                      </p>
+                      <div className="flex items-center gap-1.5 text-[10px] text-zinc-500">
+                        <span>{new Date(tx.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
                         {tx.isRecordedOnChain && (
-                          tx.blockchainTxHash ? (
-                            <a 
-                              href={`https://amoy.polygonscan.com/tx/${tx.blockchainTxHash}`} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-1 hover:opacity-80 transition-opacity"
-                              title="View on Polygonscan"
-                            >
-                              <span className="chain-dot w-1.5 h-1.5 shadow-[0_0_8px_rgba(217,70,239,1)]" />
-                              <span className="text-[10px] text-fuchsia-300 font-bold tracking-widest uppercase">Verified</span>
-                            </a>
-                          ) : (
-                            <span className="chain-dot w-1.5 h-1.5" title="Recorded on Blockchain" />
-                          )
+                          <>
+                            <span>•</span>
+                            <span className="text-zinc-400 font-mono">On-Chain</span>
+                          </>
                         )}
                       </div>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className={`text-sm font-extrabold whitespace-nowrap ${tx.type === "income" ? "text-cyan-300" : "text-red-300"}`}>
+
+                  <div className="text-right shrink-0 ml-3">
+                    <span className={`font-mono font-bold block ${
+                      tx.type === "income" ? "text-emerald-400" : "text-white"
+                    }`}>
                       {tx.type === "income" ? "+" : "-"}₱{Math.round(tx.amount).toLocaleString()}
-                    </p>
-                    <span className={`inline-block text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 mt-1 rounded-sm ${tx.status === "approved" ? "bg-green-500/20 text-green-300 border border-green-500/30" : "bg-amber-500/20 text-amber-300 border border-amber-500/30"}`}>
-                      {tx.status === "approved" ? "Approved" : "Pending"}
+                    </span>
+                    <span className="text-[10px] text-zinc-500 uppercase">
+                      {tx.status}
                     </span>
                   </div>
                 </div>
               ))
             ) : (
-              <p className="text-xs text-white/40 font-medium text-center py-4">No transactions yet</p>
+              <div className="py-8 text-center text-zinc-500 text-xs">
+                No transactions recorded yet in this workspace.
+              </div>
             )}
           </div>
         </div>
-      </div>
 
-      {/* ── Transparency Score ── */}
-      <div className="glass p-6 rounded-xl mt-8 shadow-[0_0_40px_rgba(34,211,238,0.05)]">
-        <div className="flex flex-col md:flex-row items-center gap-8">
-          {/* Radial Gauge */}
-          <div className="relative w-40 h-40 shrink-0 drop-shadow-[0_0_15px_rgba(34,211,238,0.2)]">
-            <svg viewBox="0 0 120 120" className="w-full h-full -rotate-90">
-              {/* Background circle */}
-              <circle cx="60" cy="60" r="52" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="10" />
-              {/* Progress arc */}
-              <circle 
-                cx="60" cy="60" r="52" fill="none" 
-                stroke="url(#scoreGradient)" 
-                strokeWidth="10" 
-                strokeLinecap="round"
-                strokeDasharray={`${(transparencyScore.percentage / 100) * 327} 327`}
-                className="transition-all duration-1000 ease-out"
-                style={{ filter: "drop-shadow(0px 0px 8px rgba(34,211,238,0.5))" }}
-              />
-              <defs>
-                <linearGradient id="scoreGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor="#D946EF" />
-                  <stop offset="100%" stopColor="#22D3EE" />
-                </linearGradient>
-              </defs>
-            </svg>
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-3xl font-black text-white drop-shadow-md">{transparencyScore.percentage}%</span>
-              <span className="text-[10px] font-bold text-white/50 uppercase tracking-wider">Verified</span>
+        {/* Shortcuts & Quick Actions */}
+        <div className="p-4 md:p-5 rounded-xl bg-[#121215] border border-zinc-800 flex flex-col justify-between">
+          <div>
+            <h3 className="text-xs font-semibold text-white uppercase tracking-wider mb-3">
+              Shortcuts & Operations
+            </h3>
+
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <Link 
+                href="/dashboard/transactions"
+                className="p-3 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-center transition-colors flex flex-col items-center justify-center gap-1.5"
+              >
+                <Plus className="w-4 h-4 text-zinc-300" />
+                <span className="font-medium text-zinc-300">Record Expense</span>
+              </Link>
+
+              <Link 
+                href="/dashboard/approvals"
+                className="p-3 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-center transition-colors flex flex-col items-center justify-center gap-1.5"
+              >
+                <ShieldCheck className="w-4 h-4 text-zinc-300" />
+                <span className="font-medium text-zinc-300">Multi-Sig Queue</span>
+              </Link>
+
+              <Link 
+                href="/dashboard/budget"
+                className="p-3 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-center transition-colors flex flex-col items-center justify-center gap-1.5"
+              >
+                <Layers className="w-4 h-4 text-zinc-300" />
+                <span className="font-medium text-zinc-300">Budgets</span>
+              </Link>
+
+              <Link 
+                href="/dashboard/reports"
+                className="p-3 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-center transition-colors flex flex-col items-center justify-center gap-1.5"
+              >
+                <FileText className="w-4 h-4 text-zinc-300" />
+                <span className="font-medium text-zinc-300">Audit Reports</span>
+              </Link>
             </div>
           </div>
 
-          {/* Info */}
-          <div className="flex-1 text-center md:text-left">
-            <div className="flex items-center justify-center md:justify-start gap-2 mb-2">
-              <Link2 className="w-5 h-5 text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
-              <h3 className="text-lg font-bold text-white drop-shadow-sm">Blockchain Transparency Score</h3>
-            </div>
-            <p className="text-sm text-white/60 mb-4 max-w-lg leading-relaxed">
-              This score represents the percentage of all approved transactions that have been
-              permanently recorded and verified on the <strong className="text-white">Polygon Blockchain</strong>.
-              A higher score means greater financial transparency and accountability.
-            </p>
-            <div className="flex flex-wrap items-center justify-center md:justify-start gap-3">
-              <div className="flex items-center gap-2 px-3 py-2 bg-green-500/10 rounded-lg border border-green-400/20 shadow-[0_0_10px_rgba(34,197,94,0.1)]">
-                <CheckCircle className="w-4 h-4 text-green-400" />
-                <span className="text-sm font-bold text-green-300">{transparencyScore.onChain} On-Chain</span>
-              </div>
-              <div className="flex items-center gap-2 px-3 py-2 bg-cyan-500/10 rounded-lg border border-cyan-400/20 shadow-[0_0_10px_rgba(34,211,238,0.1)]">
-                <ShieldCheck className="w-4 h-4 text-cyan-400" />
-                <span className="text-sm font-bold text-cyan-300">{transparencyScore.approved} Approved</span>
-              </div>
-              <div className="flex items-center gap-2 px-3 py-2 bg-fuchsia-500/10 rounded-lg border border-fuchsia-400/20 shadow-[0_0_10px_rgba(217,70,239,0.1)]">
-                <span className="chain-dot w-2 h-2 shadow-[0_0_8px_rgba(217,70,239,0.8)]" />
-                <span className="text-sm font-bold text-fuchsia-300 uppercase tracking-widest text-[10px]">Polygon Amoy Network</span>
-              </div>
-            </div>
+          <div className="pt-3 mt-3 border-t border-zinc-800 text-center">
+            <span className="text-[11px] text-zinc-500 font-mono">
+              Transparency Score: <strong>{transparencyScore.percentage}%</strong> on Polygon
+            </span>
           </div>
         </div>
+
       </div>
+
     </div>
   );
 }

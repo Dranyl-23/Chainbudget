@@ -138,7 +138,7 @@ export default function ApprovalsScreen() {
     if (action === 'approved' && tx.type === 'expense' && activeOrgId) {
       try {
         const [budgetsRes, txRes] = await Promise.all([
-          api.get(`/budgets?orgId=${activeOrgId}`),
+          api.get(`/budget?orgId=${activeOrgId}`),
           api.get(`/reports/summary?orgId=${activeOrgId}`),
         ]);
         const budgets: any[] = budgetsRes.data?.budgets || budgetsRes.data || [];
@@ -147,8 +147,9 @@ export default function ApprovalsScreen() {
         const remainingBudget = totalIncome - totalExpenses;
 
         // Check category-specific budget if one matches
+        const targetCategory = (tx.budgetCategory || tx.category || '').toLowerCase();
         const matchedBudget = budgets.find(
-          (b: any) => b.name?.toLowerCase() === (tx.category || '').toLowerCase()
+          (b: any) => b.name?.toLowerCase() === targetCategory
         );
         const categoryRemaining = matchedBudget
           ? matchedBudget.allocated - matchedBudget.spent

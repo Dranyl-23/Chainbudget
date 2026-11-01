@@ -2,22 +2,18 @@ const axios = require("axios");
 const { GoogleGenAI } = require("@google/genai");
 
 // Candidate Gemini models in order of preference
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.6-flash";
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 const GEMINI_MODELS = [
   process.env.GEMINI_MODEL,
-  "gemini-3.6-flash",
-  "gemini-3.8-flash",
-  "gemini-3.7-flash",
-  "gemini-3.1-flash-lite",
-  "gemini-flash-latest",
+  "gemini-2.5-flash",
   "gemini-2.0-flash",
+  "gemini-1.5-flash",
+  "gemini-2.5-flash-lite",
 ].filter(Boolean);
 
 // Groq candidate models
 const GROQ_TEXT_MODELS = [
   process.env.GROQ_MODEL,
-  "openai/gpt-oss-120b",
-  "openai/gpt-oss-20b",
   "llama-3.3-70b-versatile",
   "llama-3.1-8b-instant",
 ].filter(Boolean);
@@ -131,7 +127,7 @@ async function callGroq({ prompt, image, isJson = true }) {
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
-        timeout: 15000,
+        timeout: 6000,
       });
 
       const content = response.data?.choices?.[0]?.message?.content;
@@ -197,7 +193,7 @@ async function callOpenRouter({ prompt, image, isJson = true }) {
           "HTTP-Referer": "https://chainbudget-api.fly.dev",
           "X-Title": "ChainBudgets AI Engine",
         },
-        timeout: 20000,
+        timeout: 6000,
       });
 
       const content = response.data?.choices?.[0]?.message?.content;
@@ -219,51 +215,68 @@ async function callOpenRouter({ prompt, image, isJson = true }) {
 
 /**
  * Multi-Provider AI Fallback Engine
- * Sequentially tries: Gemini -> Groq -> OpenRouter
+ * Sequentially tries: Gemini -> Groq -> OpenRouter (with strict timeout guard)
  */
-async function generateWithFallback({ prompt, image = null, isJson = true }) {
-  const errors = [];
+async function generateWithFallback({ prompt, image = null, isJson = true, timeoutMs = 6000 }) {
+  const runner = async () => {
+    const errors = [];
 
-  // 1. Try Gemini
-  if (process.env.GEMINI_API_KEY) {
-    try {
-      const res = await callGemini({ prompt, image, isJson });
-      return res;
-    } catch (err) {
-      console.warn("[AI Orchestrator] Gemini failed, attempting next provider:", err.message);
-      errors.push({ provider: "gemini", error: err.message });
+    // 1. Try Gemini
+    if (process.env.GEMINI_API_KEY) {
+      try {
+        const res = await callGemini({ prompt, image, isJson });
+        return res;
+      } catch (err) {
+        console.warn("[AI Orchestrator] Gemini failed, attempting next provider:", err.message);
+        errors.push({ provider: "gemini", error: err.message });
+      }
     }
+
+    // 2. Try Groq
+    if (process.env.GROQ_API_KEY) {
+      try {
+        const res = await callGroq({ prompt, image, isJson });
+        return res;
+      } catch (err) {
+        console.warn("[AI Orchestrator] Groq failed, attempting next provider:", err.message);
+        errors.push({ provider: "groq", error: err.message });
+      }
+    }
+
+    // 3. Try OpenRouter
+    if (process.env.OPENROUTER_API_KEY) {
+      try {
+        const res = await callOpenRouter({ prompt, image, isJson });
+        return res;
+      } catch (err) {
+        console.warn("[AI Orchestrator] OpenRouter failed:", err.message);
+        errors.push({ provider: "openrouter", error: err.message });
+      }
+    }
+
+    const err = new Error(
+      errors.length > 0
+        ? `All AI providers failed: ${errors.map(e => `${e.provider} (${e.error})`).join(", ")}`
+        : "No AI provider keys configured (GEMINI_API_KEY, GROQ_API_KEY, OPENROUTER_API_KEY)"
+    );
+    err.providerErrors = errors;
+    throw err;
+  };
+
+  if (!timeoutMs || timeoutMs <= 0) {
+    return runner();
   }
 
-  // 2. Try Groq
-  if (process.env.GROQ_API_KEY) {
-    try {
-      const res = await callGroq({ prompt, image, isJson });
-      return res;
-    } catch (err) {
-      console.warn("[AI Orchestrator] Groq failed, attempting next provider:", err.message);
-      errors.push({ provider: "groq", error: err.message });
-    }
-  }
+  let timer;
+  const timeoutPromise = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`AI generation timed out after ${timeoutMs}ms`)), timeoutMs);
+  });
 
-  // 3. Try OpenRouter
-  if (process.env.OPENROUTER_API_KEY) {
-    try {
-      const res = await callOpenRouter({ prompt, image, isJson });
-      return res;
-    } catch (err) {
-      console.warn("[AI Orchestrator] OpenRouter failed:", err.message);
-      errors.push({ provider: "openrouter", error: err.message });
-    }
+  try {
+    return await Promise.race([runner(), timeoutPromise]);
+  } finally {
+    clearTimeout(timer);
   }
-
-  const err = new Error(
-    errors.length > 0
-      ? `All AI providers failed: ${errors.map(e => `${e.provider} (${e.error})`).join(", ")}`
-      : "No AI provider keys configured (GEMINI_API_KEY, GROQ_API_KEY, OPENROUTER_API_KEY)"
-  );
-  err.providerErrors = errors;
-  throw err;
 }
 
 /**

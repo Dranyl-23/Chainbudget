@@ -7,6 +7,7 @@ import api from "@/lib/api";
 import toast from "react-hot-toast";
 import TableSkeleton from "@/components/TableSkeleton";
 import axios from "axios";
+import ConfirmModal from "@/components/ConfirmModal";
 import { getErrorMessage } from "@/lib/utils";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -240,23 +241,34 @@ export default function TeamPage() {
     }
   };
 
-  const handleRemoveMember = async (userId: string) => {
-    if (!confirm("Are you sure you want to remove this member?")) return;
+  const [memberToRemove, setMemberToRemove] = useState<Member | null>(null);
+  const [isRemovingMember, setIsRemovingMember] = useState(false);
+
+  const handleRemoveMember = (member: Member) => {
+    setMemberToRemove(member);
+  };
+
+  const confirmRemoveMember = async () => {
+    if (!memberToRemove) return;
+    setIsRemovingMember(true);
     try {
-      await api.delete(`/users/${orgId}/members/${userId}`);
-      setMembers((prev) => prev.filter((m) => m._id !== userId));
+      await api.delete(`/users/${orgId}/members/${memberToRemove._id}`);
+      setMembers((prev) => prev.filter((m) => m._id !== memberToRemove._id));
       toast.success("Member removed");
+      setMemberToRemove(null);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, "Failed to remove member."));
+    } finally {
+      setIsRemovingMember(false);
     }
   };
 
   const getRoleBadge = (level: number) => {
     switch (level) {
-      case 1: return <span className="whitespace-nowrap inline-flex items-center gap-1 px-2.5 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold role-badge-superadmin"><Crown className="w-3 h-3" /> Super Admin</span>;
-      case 2: return <span className="whitespace-nowrap inline-flex items-center gap-1 px-2.5 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold role-badge-approver"><CheckCircle2 className="w-3 h-3" /> Approver</span>;
-      case 3: return <span className="whitespace-nowrap inline-flex items-center gap-1 px-2.5 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold role-badge-member"><UserIcon className="w-3 h-3" /> Member</span>;
-      case 4: return <span className="whitespace-nowrap inline-flex items-center gap-1 px-2.5 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold role-badge-readonly"><Eye className="w-3 h-3" /> Public</span>;
+      case 1: return <span className="whitespace-nowrap inline-flex items-center gap-1 px-2 py-0.5 rounded border border-zinc-700 bg-zinc-800 text-white text-[10px] font-medium tracking-wide uppercase"><Crown className="w-3 h-3" /> Super Admin</span>;
+      case 2: return <span className="whitespace-nowrap inline-flex items-center gap-1 px-2 py-0.5 rounded border border-zinc-700/80 bg-zinc-850 text-zinc-200 text-[10px] font-medium tracking-wide uppercase"><CheckCircle2 className="w-3 h-3 text-emerald-400" /> Approver</span>;
+      case 3: return <span className="whitespace-nowrap inline-flex items-center gap-1 px-2 py-0.5 rounded border border-zinc-800 bg-zinc-900 text-zinc-300 text-[10px] font-medium tracking-wide uppercase"><UserIcon className="w-3 h-3" /> Member</span>;
+      case 4: return <span className="whitespace-nowrap inline-flex items-center gap-1 px-2 py-0.5 rounded border border-zinc-800 bg-zinc-900/60 text-zinc-400 text-[10px] font-medium tracking-wide uppercase"><Eye className="w-3 h-3" /> Public</span>;
       default: return null;
     }
   };
@@ -265,15 +277,18 @@ export default function TeamPage() {
 
   return (
     <>
-      <div className="p-4 md:p-8 pb-20 animate-fade-in">
-      <header className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="p-4 md:p-6 pb-20 animate-fade-in max-w-7xl mx-auto space-y-5">
+      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold mb-1">Team Management</h1>
-          <p className="text-sm text-gray-500">View and manage organization members and their roles.</p>
+          <h1 className="text-xl md:text-2xl font-semibold text-white tracking-tight flex items-center gap-2">
+            <UserIcon className="w-5 h-5 text-zinc-400" />
+            Team Management
+          </h1>
+          <p className="text-xs text-zinc-400 mt-1">View and manage organization members, permissions, and roles.</p>
         </div>
         {canManage && (
-          <button className="btn-primary py-2" onClick={() => { setShowAddModal(true); setError(null); }}>
-            <Plus className="w-4 h-4" /> Add Member
+          <button className="btn-primary py-2 px-4 text-xs font-semibold rounded-lg flex items-center gap-1.5" onClick={() => { setShowAddModal(true); setError(null); }}>
+            <Plus className="w-3.5 h-3.5" /> Add Member
           </button>
         )}
       </header>
@@ -281,18 +296,18 @@ export default function TeamPage() {
       {loading ? (
         <TableSkeleton />
       ) : (
-        <div className="glass rounded-xl overflow-hidden border border-[var(--color-border)]">
+        <div className="bg-[#121215] rounded-xl overflow-hidden border border-zinc-800 shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-white/5 border-b border-white/10">
-                  <th className="p-4 text-xs font-semibold text-white/50 uppercase tracking-wider">Member</th>
-                  <th className="p-4 text-xs font-semibold text-white/50 uppercase tracking-wider">Role Access</th>
-                  <th className="p-4 text-xs font-semibold text-white/50 uppercase tracking-wider">Position/Label</th>
-                  {canManage && <th className="p-4 text-xs font-semibold text-white/50 uppercase tracking-wider text-right">Actions</th>}
+                <tr className="bg-[#0e0e11] border-b border-zinc-800">
+                  <th className="p-3.5 text-[11px] font-medium text-zinc-400 uppercase tracking-wider">Member</th>
+                  <th className="p-3.5 text-[11px] font-medium text-zinc-400 uppercase tracking-wider">Role Access</th>
+                  <th className="p-3.5 text-[11px] font-medium text-zinc-400 uppercase tracking-wider">Position/Label</th>
+                  {canManage && <th className="p-3.5 text-[11px] font-medium text-zinc-400 uppercase tracking-wider text-right">Actions</th>}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-zinc-800/80">
                 {[1, 2, 3, 4].map((level) => {
                   const levelMembers = members.filter((member) => {
                     const membership = member.memberships.find(
@@ -312,8 +327,8 @@ export default function TeamPage() {
 
                   return (
                     <React.Fragment key={`level-${level}`}>
-                      <tr className="bg-black/40 border-y border-white/5">
-                        <td colSpan={canManage ? 4 : 3} className="px-4 py-2 text-xs font-bold text-purple-300/80 uppercase tracking-widest">
+                      <tr className="bg-zinc-900/40 border-y border-zinc-800">
+                        <td colSpan={canManage ? 4 : 3} className="px-4 py-2 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
                           {levelTitles[level]}
                         </td>
                       </tr>
@@ -324,50 +339,48 @@ export default function TeamPage() {
                         const isSelf = Boolean(currentUserId && member._id === currentUserId);
 
                         return (
-                          <tr key={member._id} className="hover:bg-white/5 transition-colors">
-                            <td className="p-4">
+                          <tr key={member._id} className="hover:bg-zinc-900/50 transition-colors">
+                            <td className="p-3.5">
                               <div className="flex items-center gap-3">
-                                <div className="nft-avatar-wrapper">
-                                  <div className="w-10 h-10 nft-avatar border border-purple-500/30 shadow-[inset_0_0_10px_rgba(139,92,246,0.2)]">
-                                    {level === 1 ? <Shield className="w-4 h-4 text-purple-400 drop-shadow-[0_0_5px_rgba(168,85,247,0.8)]" /> : <UserIcon className="w-4 h-4 text-cyan-400 drop-shadow-[0_0_5px_rgba(34,211,238,0.8)]" />}
-                                  </div>
+                                <div className="w-8 h-8 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center shrink-0">
+                                  {level === 1 ? <Shield className="w-3.5 h-3.5 text-zinc-300" /> : <UserIcon className="w-3.5 h-3.5 text-zinc-400" />}
                                 </div>
                                 <div>
-                                  <p className="font-mono text-sm font-medium text-cyan-300">
+                                  <p className="font-mono text-xs font-medium text-zinc-200">
                                     {member.walletAddress ? `${member.walletAddress.slice(0, 6)}...${member.walletAddress.slice(-4)}` : "No Wallet"}
-                                    {isSelf && <span className="ml-2 text-[10px] text-purple-400 font-bold tracking-widest uppercase">(You)</span>}
+                                    {isSelf && <span className="ml-1.5 text-[10px] text-zinc-400 font-medium uppercase tracking-wider">(You)</span>}
                                   </p>
-                                  {member.displayName && <p className="text-xs text-white/50">{member.displayName}</p>}
+                                  {member.displayName && <p className="text-[11px] text-zinc-500">{member.displayName}</p>}
                                 </div>
                               </div>
                             </td>
-                            <td className="p-4">
+                            <td className="p-3.5">
                               {getRoleBadge(level)}
                             </td>
-                            <td className="p-4">
-                              <span className="text-sm text-white/70 font-medium">
+                            <td className="p-3.5">
+                              <span className="text-xs text-zinc-300 font-medium">
                                 {membership?.roleLabel || "Member"}
                               </span>
                             </td>
                             {canManage && (
-                              <td className="p-4 text-right">
+                              <td className="p-3.5 text-right">
                                 <div className="flex items-center justify-end gap-1">
                                   <button
                                     onClick={() => handleOpenEditRole(member)}
-                                    className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+                                    className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
                                     title="Edit member role"
                                   >
-                                    <Edit2 className="w-4 h-4" />
+                                    <Edit2 className="w-3.5 h-3.5" />
                                   </button>
                                   <button
-                                    onClick={() => handleRemoveMember(member._id)}
+                                    onClick={() => handleRemoveMember(member)}
                                     disabled={isSelf} // Don't allow removing yourself to prevent lockout
-                                    className={`p-2 rounded-lg transition-colors ${
-                                      isSelf ? "text-gray-300 cursor-not-allowed" : "text-gray-400 hover:text-danger hover:bg-danger/10"
+                                    className={`p-1.5 rounded-lg transition-colors ${
+                                      isSelf ? "text-zinc-600 cursor-not-allowed" : "text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10"
                                     }`}
                                     title={isSelf ? "Cannot remove yourself" : "Remove member"}
                                   >
-                                    <Trash2 className="w-4 h-4" />
+                                    <Trash2 className="w-3.5 h-3.5" />
                                   </button>
                                 </div>
                               </td>
@@ -380,7 +393,7 @@ export default function TeamPage() {
                 })}
                 {members.length === 0 && (
                   <tr>
-                    <td colSpan={canManage ? 4 : 3} className="p-8 text-center text-gray-500">
+                    <td colSpan={canManage ? 4 : 3} className="p-8 text-center text-zinc-500 text-xs">
                       No members found.
                     </td>
                   </tr>
@@ -396,92 +409,91 @@ export default function TeamPage() {
       {/* ── Add Member Modal ── */}
       {showAddModal && (
         <div
-          className="fixed inset-0 z-9999 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+          className="fixed inset-0 z-9999 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
           onClick={(e) => { if (e.target === e.currentTarget) setShowAddModal(false); }}
         >
-          <div className="glass rounded-2xl p-8 w-full max-w-md shadow-2xl animate-fade-in">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold">Add Team Member</h2>
+          <div className="bg-[#121215] border border-zinc-800 rounded-2xl p-5 md:p-6 w-full max-w-md shadow-2xl animate-fade-in">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-base font-semibold text-white">Add Team Member</h2>
               <button
                 onClick={() => setShowAddModal(false)}
-                className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-primary/10 text-gray-500 hover:text-primary transition-colors"
+                className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
             {error && (
-              <div className="mb-4 px-4 py-3 rounded-lg text-sm text-danger border border-danger/20 bg-danger/10">
+              <div className="mb-4 px-3 py-2 rounded-lg text-xs text-rose-400 border border-rose-500/20 bg-rose-500/10">
                 {error}
               </div>
             )}
 
-            <form onSubmit={handleAddMember} className="space-y-4">
+            <form onSubmit={handleAddMember} className="space-y-3.5">
               {/* Email or Wallet Address */}
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">Email or Wallet Address</label>
+                <label className="block text-xs font-medium text-zinc-400 uppercase tracking-wider mb-1.5">Email or Wallet Address</label>
                 <input
                   type="text"
                   placeholder="e.g., user@cjc.edu.ph or 0x123..."
-                  className="input text-sm"
+                  className="w-full px-3.5 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500 transition-colors"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   required
                 />
-                <p className="text-xs text-gray-500 mt-1">
-                  We will auto-generate their Web3 wallet if they log in via email later!
+                <p className="text-[11px] text-zinc-500 mt-1">
+                  We will auto-generate their Web3 wallet if they log in via email later.
                 </p>
               </div>
 
               {/* Name */}
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">Name</label>
+                <label className="block text-xs font-medium text-zinc-400 uppercase tracking-wider mb-1.5">Name</label>
                 <input
                   type="text"
                   placeholder="e.g., Alfie Lynard"
-                  className="input text-sm"
+                  className="w-full px-3.5 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500 transition-colors"
                   value={formData.displayName}
                   onChange={(e) => setFormData({ ...formData, displayName: e.target.value })}
                   required
                 />
               </div>
 
-
               {/* Role Level */}
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">Access Level</label>
+                <label className="block text-xs font-medium text-zinc-400 uppercase tracking-wider mb-1.5">Access Level</label>
                 <select
-                  className="input"
+                  className="w-full px-3.5 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-white focus:outline-none focus:border-zinc-500 transition-colors appearance-none"
                   value={formData.roleLevel}
                   onChange={(e) => setFormData({ ...formData, roleLevel: Number(e.target.value) })}
                 >
-                  <option value={1}>Level 1: Executive Approver</option>
-                  <option value={2}>Level 2: Finance / Transaction Officer</option>
-                  <option value={3}>Level 3: Member / Contributor</option>
-                  <option value={4}>Level 4: Public Viewer</option>
+                  <option value={1} className="bg-zinc-900">Level 1: Executive Approver</option>
+                  <option value={2} className="bg-zinc-900">Level 2: Finance / Transaction Officer</option>
+                  <option value={3} className="bg-zinc-900">Level 3: Member / Contributor</option>
+                  <option value={4} className="bg-zinc-900">Level 4: Public Viewer</option>
                 </select>
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-[11px] text-zinc-500 mt-1">
                   Level 1 is required for multi-sig approvals.
                 </p>
               </div>
 
               {/* Role Label */}
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">Position / Title</label>
+                <label className="block text-xs font-medium text-zinc-400 uppercase tracking-wider mb-1.5">Position / Title</label>
                 <input
                   type="text"
                   placeholder="e.g. Treasurer, Secretary"
-                  className="input"
+                  className="w-full px-3.5 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500 transition-colors"
                   value={formData.roleLabel}
                   onChange={(e) => setFormData({ ...formData, roleLabel: e.target.value })}
                 />
               </div>
 
               {/* Actions */}
-              <div className="flex gap-3 pt-4">
+              <div className="flex gap-2.5 pt-3">
                 <button
                   type="button"
-                  className="btn-secondary flex-1 py-2.5"
+                  className="flex-1 py-2 px-3 rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-white text-xs font-medium transition-colors"
                   onClick={() => setShowAddModal(false)}
                 >
                   Cancel
@@ -489,7 +501,7 @@ export default function TeamPage() {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="btn-primary flex-1 py-2.5"
+                  className="flex-1 py-2 px-3 rounded-lg bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs transition-colors disabled:opacity-50"
                 >
                   {isSubmitting ? "Saving..." : "Add Member"}
                 </button>
@@ -502,63 +514,63 @@ export default function TeamPage() {
       {/* ── Edit Role Modal ── */}
       {editingMember && (
         <div
-          className="fixed inset-0 z-9999 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+          className="fixed inset-0 z-9999 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
           onClick={(e) => { if (e.target === e.currentTarget) setEditingMember(null); }}
         >
-          <div className="glass rounded-2xl p-8 w-full max-w-md shadow-2xl animate-fade-in">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold">Edit Member Role</h2>
+          <div className="bg-[#121215] border border-zinc-800 rounded-2xl p-5 md:p-6 w-full max-w-md shadow-2xl animate-fade-in">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-base font-semibold text-white">Edit Member Role</h2>
               <button
                 onClick={() => setEditingMember(null)}
-                className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-primary/10 text-gray-500 hover:text-primary transition-colors"
+                className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="mb-4 p-3 bg-white/5 border border-white/10 rounded-xl">
-              <p className="text-xs text-gray-400">Editing permissions for</p>
-              <p className="text-sm font-bold text-white mt-0.5">
+            <div className="mb-4 p-3 bg-zinc-900 border border-zinc-800 rounded-lg">
+              <p className="text-[11px] text-zinc-500 uppercase tracking-wider">Editing permissions for</p>
+              <p className="text-xs font-semibold text-white mt-0.5">
                 {editingMember.member.displayName || editingMember.member.email || editingMember.member.walletAddress}
               </p>
             </div>
 
-            <form onSubmit={handleUpdateRole} className="space-y-4">
+            <form onSubmit={handleUpdateRole} className="space-y-3.5">
               {/* Role Level */}
               <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1">Access Level</label>
+                <label className="block text-xs font-medium text-zinc-400 uppercase tracking-wider mb-1.5">Access Level</label>
                 <select
-                  className="input"
+                  className="w-full px-3.5 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-white focus:outline-none focus:border-zinc-500 transition-colors appearance-none"
                   value={editingMember.roleLevel}
                   onChange={(e) => setEditingMember({ ...editingMember, roleLevel: Number(e.target.value) })}
                 >
-                  <option value={1}>Level 1: Executive Approver</option>
-                  <option value={2}>Level 2: Finance / Transaction Officer</option>
-                  <option value={3}>Level 3: Member / Contributor</option>
-                  <option value={4}>Level 4: Public Viewer</option>
+                  <option value={1} className="bg-zinc-900">Level 1: Executive Approver</option>
+                  <option value={2} className="bg-zinc-900">Level 2: Finance / Transaction Officer</option>
+                  <option value={3} className="bg-zinc-900">Level 3: Member / Contributor</option>
+                  <option value={4} className="bg-zinc-900">Level 4: Public Viewer</option>
                 </select>
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-[11px] text-zinc-500 mt-1">
                   Level 1 is required for multi-sig approvals.
                 </p>
               </div>
 
               {/* Role Label */}
               <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1">Position / Title</label>
+                <label className="block text-xs font-medium text-zinc-400 uppercase tracking-wider mb-1.5">Position / Title</label>
                 <input
                   type="text"
                   placeholder="e.g. Treasurer, Secretary"
-                  className="input"
+                  className="w-full px-3.5 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500 transition-colors"
                   value={editingMember.roleLabel}
                   onChange={(e) => setEditingMember({ ...editingMember, roleLabel: e.target.value })}
                 />
               </div>
 
               {/* Actions */}
-              <div className="flex gap-3 pt-4">
+              <div className="flex gap-2.5 pt-3">
                 <button
                   type="button"
-                  className="btn-secondary flex-1 py-2.5"
+                  className="flex-1 py-2 px-3 rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-white text-xs font-medium transition-colors"
                   onClick={() => setEditingMember(null)}
                 >
                   Cancel
@@ -566,7 +578,7 @@ export default function TeamPage() {
                 <button
                   type="submit"
                   disabled={isUpdatingRole}
-                  className="btn-primary flex-1 py-2.5"
+                  className="flex-1 py-2 px-3 rounded-lg bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs transition-colors disabled:opacity-50"
                 >
                   {isUpdatingRole ? "Saving..." : "Save Role"}
                 </button>
@@ -575,6 +587,17 @@ export default function TeamPage() {
           </div>
         </div>
       )}
+      {/* ── Remove Member Confirmation Modal ── */}
+      <ConfirmModal
+        isOpen={Boolean(memberToRemove)}
+        title="Remove Team Member"
+        message={`Are you sure you want to remove "${memberToRemove?.displayName || memberToRemove?.email || 'this member'}" from the organization? They will lose dashboard and multi-signature authorization rights.`}
+        confirmText="Remove Member"
+        variant="danger"
+        isLoading={isRemovingMember}
+        onConfirm={confirmRemoveMember}
+        onCancel={() => setMemberToRemove(null)}
+      />
     </>
   );
 }

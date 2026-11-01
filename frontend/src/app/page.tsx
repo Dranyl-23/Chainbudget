@@ -3,29 +3,29 @@
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
-import { Wallet, ShieldCheck, Users, BarChart3, Lock, LogIn, UserPlus, Search, Hexagon, Menu, X } from "lucide-react";
+import { Wallet, ShieldCheck, Users, BarChart3, Lock, LogIn, UserPlus, Search, Hexagon, Menu, X, ArrowRight, ArrowUpRight, Globe, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 
 const features = [
   {
-    icon: <ShieldCheck className="w-8 h-8 text-fuchsia-400" />,
+    icon: <ShieldCheck className="w-6 h-6 text-primary" />,
     title: "Secure Transactions",
-    desc: "Advanced encryption and multi-layer security on Polygon Amoy.",
+    desc: "Cryptographic consensus and multi-layer verification on Polygon Amoy testnet.",
   },
   {
-    icon: <BarChart3 className="w-8 h-8 text-cyan-400" />,
+    icon: <BarChart3 className="w-6 h-6 text-cyan-400" />,
     title: "Real-Time Tracking",
-    desc: "Instant processing without delays. Monitor funds live.",
+    desc: "Instant ledger recording without delays. Track inflows, outflows, and remaining limits.",
   },
   {
-    icon: <Lock className="w-8 h-8 text-purple-400" />,
-    title: "Role-Based Access",
-    desc: "Four-level permission system ensuring absolute accountability.",
+    icon: <Lock className="w-6 h-6 text-zinc-200" />,
+    title: "Role-Based Access (RBAC)",
+    desc: "Four-tier institutional hierarchy: Executives, Approvers, Members, and Public Viewers.",
   },
   {
-    icon: <Users className="w-8 h-8 text-blue-400" />,
-    title: "Multi-Signature",
-    desc: "High-value transactions require consensus from multiple approvers.",
+    icon: <Users className="w-6 h-6 text-emerald-400" />,
+    title: "Multi-Signature Governance",
+    desc: "High-value transactions strictly require threshold consensus before smart contract release.",
   },
 ];
 
@@ -33,21 +33,21 @@ export default function LandingPage() {
   const { isConnected, isAsgardeoAuthenticated, login, register, linkMetaMask, isLoading, error, user } = useAuth();
   const router = useRouter();
 
-  const [infoModal, setInfoModal] = useState<{title: string, content: string} | null>(null);
+  const [infoModal, setInfoModal] = useState<{ title: string; content: string } | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const modalData = {
     whyUs: {
       title: "Why ChainBudget?",
-      content: "ChainBudget brings 100% financial transparency to organizations and decentralized teams.\n\nBy leveraging the immutable Polygon blockchain, we eliminate hidden spending and build public trust. Organizations can publicly prove exactly where their funds go without compromising operational speed."
+      content: "ChainBudget brings 100% verifiable financial transparency to educational and institutional organizations.\n\nBy anchoring treasury releases to the Polygon blockchain, we eliminate undisclosed disbursements and build lasting stakeholder trust. Organizations can publicly prove fiscal integrity without sacrificing administrative agility."
     },
     features: {
-      title: "Key Features",
-      content: "• Real-Time Tracking: Instantly monitor treasury balances and expenditures.\n• EIP-712 Signatures: Approve transactions using cryptographically secure wallet signatures.\n• Gasless Relayer: Enjoy Web3 security with Web2 convenience—our backend pays the gas fees!\n• Public Transparency Explorer: Anyone can verify your organization's financial health and ledger."
+      title: "Key Capabilities",
+      content: "• Real-Time Treasury: Observe safe reserves and category envelopes with zero latency.\n• EIP-712 Typed Signatures: Authenticate disbursements using cryptographic off-chain signatures verified on-chain.\n• Gasless Relayer: Web3 cryptographic assurance without gas fee hurdles—the relayer handles blockchain execution.\n• Public Explorer: Publicly verifiable student body portal for transparent auditability."
     },
     security: {
-      title: "Enterprise-Grade Security",
-      content: "Our Smart Contract Treasury acts as a decentralized vault for your funds.\n\nUnlike traditional bank accounts, no single person can withdraw money. High-value transactions automatically require multi-signature consensus (e.g., 2 out of 3 executives) before the smart contract releases funds directly to the payee."
+      title: "Enterprise Multi-Sig Security",
+      content: "Our Smart Contract Safe acts as an autonomous decentralized custodian.\n\nNo solitary executive can withdraw funds unilaterally. High-value disbursements mandate multi-party consensus (e.g. 2-of-N signers) before the smart contract releases funds directly to verified vendors."
     }
   };
 
@@ -58,235 +58,220 @@ export default function LandingPage() {
   }, [isConnected, user, router]);
 
   return (
-    <main className="min-h-screen flex flex-col relative overflow-hidden bg-[#0A0216] text-white">
-      {/* ── Massive Holographic Fluid Background ── */}
-      <div className="absolute top-[-10%] left-[-20%] w-[120vw] md:w-[70vw] h-[120vw] md:h-[70vw] rounded-full bg-fuchsia-600/30 blur-[100px] md:blur-[150px] pointer-events-none mix-blend-screen animate-pulse" style={{ animationDuration: '10s' }} />
-      <div className="absolute top-[20%] right-[-30%] w-[100vw] md:w-[60vw] h-[100vw] md:h-[60vw] rounded-full bg-cyan-600/20 blur-[90px] md:blur-[130px] pointer-events-none mix-blend-screen animate-pulse" style={{ animationDuration: '14s' }} />
-      <div className="absolute bottom-[-10%] left-[-10%] w-[120vw] md:w-[80vw] h-[120vw] md:h-[80vw] rounded-full bg-blue-800/20 blur-[120px] md:blur-[160px] pointer-events-none mix-blend-screen animate-pulse" style={{ animationDuration: '12s' }} />
-      
-      {/* ── Noise Overlay ── */}
-
-
-      {/* ── Nav ── */}
-      <nav className="relative z-20 flex items-center justify-between px-4 md:px-8 py-4 md:py-6">
-        <div className="flex items-center gap-2.5 md:gap-3">
-          <img src="/3D-Chainbudget.png" alt="ChainBudget logo" className="w-10 h-10 md:w-12 md:h-12 object-contain drop-shadow-md shrink-0" />
-          <span className="text-xl md:text-2xl font-extrabold tracking-tight text-white">
-            CHAIN<span className="text-fuchsia-400">BUDGET</span>
+    <main className="min-h-screen flex flex-col relative overflow-hidden bg-[#09090b] text-white">
+      {/* ── Top Navigation Bar ── */}
+      <nav className="relative z-20 flex items-center justify-between px-6 md:px-12 py-3.5 md:py-4 border-b border-zinc-800 bg-[#09090b]/80 backdrop-blur-md">
+        <div className="flex items-center gap-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/3D-Chainbudget.png" alt="ChainBudget logo" className="w-8 h-8 object-contain shrink-0" />
+          <span className="text-lg font-bold tracking-tight text-white">
+            CHAIN<span className="text-zinc-400">BUDGET</span>
           </span>
         </div>
-        <div className="hidden md:flex items-center gap-8 text-sm font-medium text-white/70">
-          <span onClick={() => setInfoModal(modalData.whyUs)} className="hover:text-white cursor-pointer transition-colors">Why us</span>
-          <span onClick={() => setInfoModal(modalData.features)} className="hover:text-white cursor-pointer transition-colors">Features</span>
-          <span onClick={() => setInfoModal(modalData.security)} className="hover:text-white cursor-pointer transition-colors">Security</span>
-          <Link href="/help" className="hover:text-white transition-colors">Help & FAQ</Link>
-          <Link href="/privacy" className="hover:text-white transition-colors">Privacy Notice</Link>
-          <Link href="/tutorials" className="hover:text-white transition-colors">Tutorials</Link>
+
+        <div className="hidden md:flex items-center gap-6 text-xs font-medium text-zinc-400">
+          <button onClick={() => setInfoModal(modalData.whyUs)} className="hover:text-white transition-colors cursor-pointer">
+            Why Us
+          </button>
+          <button onClick={() => setInfoModal(modalData.features)} className="hover:text-white transition-colors cursor-pointer">
+            Features
+          </button>
+          <button onClick={() => setInfoModal(modalData.security)} className="hover:text-white transition-colors cursor-pointer">
+            Security
+          </button>
+          <Link href="/explorer" className="hover:text-white transition-colors">
+            Public Explorer
+          </Link>
+          <Link href="/help" className="hover:text-white transition-colors">
+            Help &amp; FAQ
+          </Link>
+          <Link href="/privacy" className="hover:text-white transition-colors">
+            Data Privacy
+          </Link>
         </div>
-        <div className="hidden sm:flex items-center gap-2 text-xs text-white/50 bg-white/5 px-4 py-2 rounded-full border border-white/10 backdrop-blur-md">
-          <span className="w-2 h-2 rounded-full bg-fuchsia-500 animate-pulse inline-block" />
-          Polygon Amoy
+
+        <div className="hidden sm:flex items-center gap-2.5">
+          <div className="flex items-center gap-2 text-xs text-zinc-400 bg-zinc-900 px-3 py-1 rounded-full border border-zinc-800">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="font-mono text-[11px]">Polygon Amoy</span>
+          </div>
+
+          <button
+            onClick={login}
+            disabled={isLoading}
+            className="btn-primary px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer"
+          >
+            Sign In
+          </button>
         </div>
         
-        {/* Mobile Menu Button */}
+        {/* Mobile Menu Toggle Button */}
         <button 
-          className="md:hidden p-2 text-white/70 hover:text-white transition-colors z-50"
+          className="md:hidden p-2 text-zinc-400 hover:text-white transition-colors"
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
         >
-          {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </button>
       </nav>
 
-      {/* Mobile Menu Dropdown */}
+      {/* ── Mobile Menu Dropdown ── */}
       {isMobileMenuOpen && (
-        <div className="md:hidden absolute top-[72px] left-0 w-full bg-[#160B2E]/95 backdrop-blur-xl border-b border-purple-500/20 z-40 shadow-2xl animate-in slide-in-from-top-4">
-          <div className="flex flex-col p-6 gap-6 text-sm font-medium text-white/80">
-            <span onClick={() => { setInfoModal(modalData.whyUs); setIsMobileMenuOpen(false); }} className="hover:text-white cursor-pointer transition-colors flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-fuchsia-400"></span> Why us
-            </span>
-            <span onClick={() => { setInfoModal(modalData.features); setIsMobileMenuOpen(false); }} className="hover:text-white cursor-pointer transition-colors flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span> Features
-            </span>
-            <span onClick={() => { setInfoModal(modalData.security); setIsMobileMenuOpen(false); }} className="hover:text-white cursor-pointer transition-colors flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span> Security
-            </span>
-            <Link href="/help" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-white transition-colors flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-pink-400"></span> Help & FAQ
-            </Link>
-            <Link href="/privacy" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-white transition-colors flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-teal-400"></span> Data Privacy (RA 10173)
-            </Link>
-            <Link href="/tutorials" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-white transition-colors flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span> Tutorials
-            </Link>
+        <div className="md:hidden absolute top-[65px] left-0 w-full bg-[#0e1017]/95 backdrop-blur-xl border-b border-white/[0.08] z-40 p-6 flex flex-col gap-4 text-xs font-medium text-white/70 shadow-2xl animate-fade-in">
+          <button onClick={() => { setInfoModal(modalData.whyUs); setIsMobileMenuOpen(false); }} className="text-left py-1 hover:text-white transition-colors">
+            Why Us
+          </button>
+          <button onClick={() => { setInfoModal(modalData.features); setIsMobileMenuOpen(false); }} className="text-left py-1 hover:text-white transition-colors">
+            Features
+          </button>
+          <button onClick={() => { setInfoModal(modalData.security); setIsMobileMenuOpen(false); }} className="text-left py-1 hover:text-white transition-colors">
+            Security
+          </button>
+          <Link href="/explorer" onClick={() => setIsMobileMenuOpen(false)} className="py-1 hover:text-white transition-colors">
+            Public Explorer
+          </Link>
+          <Link href="/help" onClick={() => setIsMobileMenuOpen(false)} className="py-1 hover:text-white transition-colors">
+            Help & FAQ
+          </Link>
+          <Link href="/privacy" onClick={() => setIsMobileMenuOpen(false)} className="py-1 hover:text-white transition-colors">
+            Data Privacy (RA 10173)
+          </Link>
+          <div className="pt-3 border-t border-white/[0.08] flex gap-2">
+            <button
+              onClick={() => { setIsMobileMenuOpen(false); login(); }}
+              className="flex-1 py-2.5 rounded-xl bg-primary text-white text-xs font-semibold text-center"
+            >
+              Sign In
+            </button>
+            <button
+              onClick={() => { setIsMobileMenuOpen(false); register(); }}
+              className="flex-1 py-2.5 rounded-xl bg-[#13151f] border border-white/[0.08] text-white text-xs font-semibold text-center"
+            >
+              Register
+            </button>
           </div>
         </div>
       )}
 
-
-      {/* ── Hero ── */}
-      <section className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-4 xl:gap-12 items-center px-6 md:px-16 pt-16 md:pt-20 pb-20 md:pb-32 max-w-7xl mx-auto w-full">
+      {/* ── Hero Section ── */}
+      <section className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center px-6 md:px-16 pt-16 md:pt-24 pb-16 md:pb-24 max-w-7xl mx-auto w-full">
         {/* Left Content */}
-        <div className="flex flex-col items-start w-full lg:col-span-7 z-20">
-          <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-5xl xl:text-[4.5rem] font-extrabold tracking-tight mb-6 md:mb-8 leading-[1.1] text-white drop-shadow-2xl uppercase w-full">
-            SIMPLIFY YOUR <br className="hidden sm:block" />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-fuchsia-400 to-purple-500 block mt-2 sm:mt-1 xl:mt-2">
-              TRANSACTIONS
-            </span>
+        <div className="flex flex-col items-start w-full lg:col-span-7">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-300 text-xs font-medium mb-5">
+            <ShieldCheck className="w-3.5 h-3.5" />
+            <span>Institutional Web3 Governance</span>
+          </div>
+
+          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-bold tracking-tight mb-4 leading-[1.1] text-white">
+            Simplify Your <br />
+            <span className="text-zinc-400">Organizational Finances</span>
           </h1>
 
-          <p className="text-white/70 text-base md:text-lg xl:text-xl max-w-xl mb-10 md:mb-12 leading-relaxed">
-            Seamless, secure and fast transparent fund management in an easy-to-understand app for organizations of all sizes.
+          <p className="text-zinc-400 text-xs sm:text-sm md:text-base max-w-xl mb-7 leading-relaxed">
+            Multi-signature blockchain treasury and transparent fund disbursement built for collegiate institutions, clubs, and cooperatives.
           </p>
 
           {error && (
-            <div className="mb-8 px-4 py-3 rounded-lg text-sm text-fuchsia-200 border border-fuchsia-500/30 bg-fuchsia-900/40 backdrop-blur-md">
+            <div className="mb-5 px-3.5 py-2 rounded-lg text-xs text-rose-400 border border-rose-500/20 bg-rose-500/10">
               {error}
             </div>
           )}
 
-          <div className="flex flex-col min-[480px]:flex-row items-center gap-4 w-full sm:w-auto mt-2">
+          {/* Action CTAs */}
+          <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full sm:w-auto">
             {isAsgardeoAuthenticated && !isConnected ? (
               <button
                 onClick={linkMetaMask}
                 disabled={isLoading}
-                className="group relative overflow-hidden rounded-full text-sm font-bold px-8 py-4 w-full min-[480px]:w-auto min-w-[200px] text-white bg-gradient-to-r from-fuchsia-500 to-cyan-500 hover:scale-105 transition-all duration-300 shadow-[0_0_30px_rgba(217,70,239,0.4)] border border-white/20"
+                className="btn-primary w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-xs font-semibold transition-all cursor-pointer"
               >
-                <div className="absolute inset-0 bg-white/20 group-hover:translate-x-full -skew-x-12 -translate-x-full transition-transform duration-700 ease-out" />
-                <span className="relative flex items-center justify-center gap-2">
-                  <Wallet className="w-5 h-5" />
-                  {isLoading ? "Linking..." : "Link MetaMask"}
-                </span>
+                <Wallet className="w-4 h-4" />
+                {isLoading ? "Linking..." : "Link MetaMask Wallet"}
               </button>
             ) : (
               <>
                 <button
                   onClick={login}
                   disabled={isLoading}
-                  className="group relative overflow-hidden rounded-full text-sm font-bold px-8 py-4 w-full min-[480px]:w-auto min-w-[200px] text-white bg-gradient-to-r from-fuchsia-500 to-cyan-500 hover:scale-105 transition-all duration-300 shadow-[0_0_30px_rgba(217,70,239,0.4)] hover:shadow-[0_0_40px_rgba(34,211,238,0.5)] border border-white/20"
+                  className="btn-primary w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-xs font-semibold transition-all cursor-pointer"
                 >
-                  <div className="absolute inset-0 bg-white/20 group-hover:translate-x-full -skew-x-12 -translate-x-full transition-transform duration-700 ease-out" />
-                  <span className="relative flex items-center justify-center gap-2">
-                    <LogIn className="w-5 h-5" />
-                    {isLoading ? "Loading..." : "Get Started"}
-                  </span>
+                  <LogIn className="w-4 h-4" />
+                  {isLoading ? "Authenticating..." : "Get Started"}
                 </button>
 
                 <button
                   onClick={register}
                   disabled={isLoading}
-                  className="group relative overflow-hidden rounded-full text-sm font-bold px-8 py-4 w-full min-[480px]:w-auto min-w-[200px] text-white bg-[#160B2E]/60 backdrop-blur-xl border border-purple-500/30 hover:bg-white/10 hover:border-fuchsia-400/50 hover:scale-105 transition-all duration-300 shadow-[0_0_20px_rgba(139,92,246,0.15)]"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-800 text-xs font-semibold transition-all cursor-pointer"
                 >
-                  <span className="relative flex items-center justify-center gap-2">
-                    <UserPlus className="w-5 h-5" />
-                    Register
-                  </span>
+                  <UserPlus className="w-4 h-4" />
+                  Register Account
                 </button>
               </>
             )}
           </div>
 
-          <div className="mt-8 flex flex-row items-center justify-center sm:justify-start gap-3 sm:gap-6">
-            <Link href="/explorer" className="flex items-center gap-1.5 text-[12px] sm:text-sm text-cyan-300 hover:text-cyan-200 transition-colors font-medium">
-              <span className="relative flex h-2.5 w-2.5 sm:h-3 sm:w-3">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 sm:h-3 sm:w-3 bg-cyan-500"></span>
-              </span>
+          {/* Explorer Quick Links */}
+          <div className="mt-7 flex items-center gap-4 text-xs">
+            <Link href="/explorer" className="flex items-center gap-1.5 text-zinc-300 hover:text-white hover:underline font-medium">
+              <Globe className="w-3.5 h-3.5" />
               Explore Public Ledgers
             </Link>
-            <span className="text-white/20 text-xs">•</span>
-            <Link href="/verify" className="flex items-center gap-1.5 text-[12px] sm:text-sm text-white/60 hover:text-white transition-colors">
-              <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Verify a Transaction
+            <span className="text-zinc-700">•</span>
+            <Link href="/verify" className="flex items-center gap-1.5 text-zinc-500 hover:text-zinc-300 transition-colors">
+              <Search className="w-3.5 h-3.5" />
+              Verify Transaction
             </Link>
           </div>
         </div>
 
-        {/* Right Content: 3D Glowing Coin */}
-        <div className="hidden lg:flex justify-end items-center w-full lg:col-span-5 mt-10 lg:mt-0" style={{ perspective: '1200px' }}>
-          <div className="relative animate-float w-full max-w-[380px] xl:max-w-[420px] flex justify-center h-[400px] items-center" style={{ transformStyle: 'preserve-3d' }}>
+        {/* Right Content: 3D Holographic Spinning Coin */}
+        <div className="hidden lg:flex justify-end items-center w-full lg:col-span-5" style={{ perspective: '1200px' }}>
+          <div className="relative animate-float w-full max-w-[380px] flex justify-center h-[380px] items-center" style={{ transformStyle: 'preserve-3d' }}>
             
             {/* The 3D Spinning Coin */}
-            <div className="relative w-64 h-64 sm:w-80 sm:h-80 animate-spin-slow-3d" style={{ transformStyle: 'preserve-3d' }}>
+            <div className="relative w-64 h-64 sm:w-72 sm:h-72 animate-spin-slow-3d" style={{ transformStyle: 'preserve-3d' }}>
               
               {/* Back Face */}
-              <div className="absolute inset-0 rounded-full border-[6px] border-fuchsia-500/80 bg-gradient-to-br from-[#160B2E] to-purple-900/60 backdrop-blur-xl shadow-[0_0_80px_rgba(217,70,239,0.4)] flex items-center justify-center" style={{ transform: 'translateZ(-16px) rotateY(180deg)' }}>
-                <div className="absolute inset-2 rounded-full border border-fuchsia-400/20" />
-                <div className="absolute inset-4 rounded-full border border-fuchsia-400/10" />
-                
+              <div className="absolute inset-0 rounded-full border-2 border-zinc-700 bg-[#121215] shadow-xl flex items-center justify-center" style={{ transform: 'translateZ(-14px) rotateY(180deg)' }}>
                 <div className="flex flex-col items-center justify-center z-10 relative">
-                  <div className="w-24 h-24 rounded-full bg-fuchsia-500/10 border border-fuchsia-400/30 flex items-center justify-center shadow-[0_0_30px_rgba(217,70,239,0.2)] mb-4">
-                    <img src="/Matic-logo.png" alt="Polygon Network" className="w-20 h-20 object-contain drop-shadow-[0_0_15px_rgba(217,70,239,0.8)]" />
+                  <div className="w-20 h-20 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center mb-3">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src="/Matic-logo.png" alt="Polygon" className="w-12 h-12 object-contain" />
                   </div>
-                  <span className="text-white font-extrabold tracking-[0.2em] text-lg uppercase drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]">
-                    Polygon
-                  </span>
-                  <span className="text-fuchsia-300 font-bold tracking-widest text-[10px] uppercase mt-1">
-                    Network
-                  </span>
+                  <span className="text-white font-semibold tracking-wider text-xs uppercase">Polygon</span>
+                  <span className="text-zinc-400 font-mono text-[10px] uppercase mt-0.5">Amoy Testnet</span>
                 </div>
               </div>
               
-              {/* Inner Core / Edge Thickness */}
-              {[...Array(16)].map((_, i) => (
-                <div key={i} className="absolute inset-0 rounded-full border-[3px] border-purple-500/30 bg-[#0A0216]/50" style={{ transform: `translateZ(${-15 + i * 2}px)` }}></div>
+              {/* Thickness layers */}
+              {[...Array(12)].map((_, i) => (
+                <div key={i} className="absolute inset-0 rounded-full border border-zinc-800 bg-[#09090b]" style={{ transform: `translateZ(${-12 + i * 2}px)` }} />
               ))}
 
               {/* Front Face */}
-              <div className="absolute inset-0 rounded-full border-[6px] border-cyan-400 bg-gradient-to-tr from-[#160B2E]/90 to-purple-900/80 backdrop-blur-2xl flex items-center justify-center shadow-[inset_0_0_60px_rgba(34,211,238,0.3),_0_0_100px_rgba(34,211,238,0.5)]" style={{ transform: 'translateZ(16px)' }}>
-                <div className="absolute inset-2 rounded-full border border-white/10" />
-                <div className="absolute inset-4 rounded-full border border-white/5" />
-                
+              <div className="absolute inset-0 rounded-full border-2 border-zinc-700 bg-[#121215] flex items-center justify-center shadow-xl" style={{ transform: 'translateZ(14px)' }}>
                 <div className="flex flex-col items-center justify-center z-10 relative">
-                  {/* Outer glowing ring for the logo */}
-                  <div className="w-24 h-24 rounded-full bg-white/5 border border-white/20 flex items-center justify-center shadow-[0_0_30px_rgba(255,255,255,0.1)] mb-4">
-                    <img src="/3D-Chainbudget.png" alt="ChainBudget" className="w-40 h-40 object-contain drop-shadow-[0_0_15px_rgba(255,255,255,0.9)]" />
+                  <div className="w-20 h-20 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center mb-3">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src="/3D-Chainbudget.png" alt="ChainBudget" className="w-16 h-16 object-contain" />
                   </div>
-                  <span className="text-white font-extrabold tracking-[0.2em] text-lg uppercase drop-shadow-[0_0_10px_rgba(255,255,255,0.5)] bg-clip-text text-transparent bg-gradient-to-r from-white to-white/70">
-                    ChainBudget
-                  </span>
-                  <span className="text-cyan-300 font-bold tracking-widest text-[10px] uppercase mt-1">
-                    Powered By Polygon
-                  </span>
+                  <span className="text-white font-semibold tracking-wider text-xs uppercase">ChainBudget</span>
+                  <span className="text-zinc-400 font-mono text-[10px] uppercase mt-0.5">Decentralized Vault</span>
                 </div>
               </div>
 
             </div>
 
-            {/* Floating Decorative Elements around the coin (Now 3D) */}
-            
-            {/* 3D Hexagon Element */}
-            <div className="absolute top-10 -right-10 z-20 animate-float" style={{ transform: 'translateZ(60px)' }}>
-              <div className="relative w-24 h-24 animate-spin-slow-3d" style={{ transformStyle: 'preserve-3d', animationDuration: '15s' }}>
-                {/* Back Face */}
-                <div className="absolute inset-0 bg-purple-500/20 border border-purple-400/40 rounded-3xl backdrop-blur-xl flex items-center justify-center shadow-[0_20px_40px_rgba(0,0,0,0.5)]" style={{ transform: 'translateZ(-8px) rotateY(180deg)' }}>
-                  <Hexagon className="w-10 h-10 text-fuchsia-300/30" />
-                </div>
-                {/* Layers for thickness */}
-                {[...Array(4)].map((_, i) => (
-                  <div key={i} className="absolute inset-0 border border-purple-500/30 rounded-3xl bg-[#0A0216]/40" style={{ transform: `translateZ(${-4 + i * 2}px)` }}></div>
-                ))}
-                {/* Front Face */}
-                <div className="absolute inset-0 bg-gradient-to-tr from-[#160B2E]/90 to-purple-900/80 border-[3px] border-fuchsia-400/50 rounded-3xl backdrop-blur-xl flex items-center justify-center shadow-[inset_0_0_20px_rgba(217,70,239,0.3),_0_0_30px_rgba(139,92,246,0.4)]" style={{ transform: 'translateZ(8px)' }}>
-                  <Hexagon className="w-10 h-10 text-fuchsia-300 drop-shadow-[0_0_15px_rgba(217,70,239,0.8)]" />
-                </div>
+            {/* Floating Decorative Elements */}
+            <div className="absolute top-6 -right-6 z-20 animate-float" style={{ transform: 'translateZ(50px)' }}>
+              <div className="w-14 h-14 rounded-xl bg-[#121215] border border-zinc-800 shadow-lg flex items-center justify-center">
+                <Hexagon className="w-6 h-6 text-zinc-300" />
               </div>
             </div>
 
-            {/* 3D Wallet Element */}
-            <div className="absolute bottom-10 -left-10 z-0" style={{ transform: 'translateZ(-40px)', animation: 'float-delayed 7s ease-in-out infinite' }}>
-              <div className="relative w-28 h-28 animate-spin-slow-3d" style={{ transformStyle: 'preserve-3d', animationDuration: '20s', animationDirection: 'reverse' }}>
-                {/* Back Face */}
-                <div className="absolute inset-0 bg-cyan-500/20 border border-cyan-400/40 rounded-full backdrop-blur-xl flex items-center justify-center shadow-[0_20px_40px_rgba(0,0,0,0.5)]" style={{ transform: 'translateZ(-8px) rotateY(180deg)' }}>
-                  <Wallet className="w-12 h-12 text-cyan-200/30" />
-                </div>
-                {/* Layers for thickness */}
-                {[...Array(4)].map((_, i) => (
-                  <div key={i} className="absolute inset-0 border border-cyan-500/30 rounded-full bg-[#0A0216]/40" style={{ transform: `translateZ(${-4 + i * 2}px)` }}></div>
-                ))}
-                {/* Front Face */}
-                <div className="absolute inset-0 bg-gradient-to-tr from-[#160B2E]/90 to-cyan-900/80 border-[3px] border-cyan-400/50 rounded-full backdrop-blur-xl flex items-center justify-center shadow-[inset_0_0_20px_rgba(34,211,238,0.3),_0_0_30px_rgba(34,211,238,0.4)]" style={{ transform: 'translateZ(8px)' }}>
-                  <Wallet className="w-12 h-12 text-cyan-200 drop-shadow-[0_0_15px_rgba(34,211,238,0.8)]" />
-                </div>
+            <div className="absolute bottom-6 -left-6 z-0" style={{ transform: 'translateZ(-30px)' }}>
+              <div className="w-14 h-14 rounded-xl bg-[#121215] border border-zinc-800 shadow-lg flex items-center justify-center">
+                <Wallet className="w-6 h-6 text-zinc-400" />
               </div>
             </div>
 
@@ -294,73 +279,82 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── Why Choose Us (Glassmorphism Grid) ── */}
-      <section className="relative z-10 px-6 md:px-16 pb-20 md:pb-32 max-w-7xl mx-auto w-full">
-        <h2 className="text-2xl md:text-4xl font-bold text-white mb-8 md:mb-10 uppercase tracking-wide">
-          Why Choose Us?
-        </h2>
+      {/* ── Feature Highlights Grid ── */}
+      <section className="relative z-10 px-6 md:px-16 pb-16 md:pb-20 max-w-7xl mx-auto w-full">
+        <div className="mb-6">
+          <h2 className="text-lg md:text-xl font-bold text-white tracking-tight">Institutional Architecture</h2>
+          <p className="text-xs text-zinc-400 mt-1">Engineered to eliminate financial opacity without operational friction.</p>
+        </div>
         
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
           {features.map((f, i) => (
-            <div key={i} className="group relative p-6 md:p-8 rounded-3xl bg-[#160B2E]/60 backdrop-blur-xl border border-purple-500/20 overflow-hidden hover:-translate-y-2 hover:border-purple-400/50 hover:bg-[#1a0e35]/80 transition-all duration-500 shadow-[0_0_30px_rgba(139,92,246,0.05)]">
-              {/* Inner Glow */}
-              <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-purple-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-              
-              <div className="mb-5 md:mb-6 opacity-80 group-hover:opacity-100 group-hover:scale-110 transition-all duration-500">
-                {f.icon}
+            <div key={i} className="bg-[#121215] border border-zinc-800 hover:border-zinc-700 p-4.5 rounded-xl transition-all shadow-xs flex flex-col justify-between">
+              <div>
+                <div className="w-9 h-9 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center mb-3.5 text-zinc-300">
+                  {f.icon}
+                </div>
+                <h3 className="font-semibold text-xs md:text-sm text-white mb-1">{f.title}</h3>
+                <p className="text-xs text-zinc-400 leading-relaxed">{f.desc}</p>
               </div>
-              <h3 className="font-bold text-base md:text-lg text-white mb-2 md:mb-3 tracking-wide">{f.title}</h3>
-              <p className="text-sm text-white/50 leading-relaxed font-light">{f.desc}</p>
             </div>
           ))}
         </div>
       </section>
 
-      {/* ── Stats Banner ── */}
-      <section className="relative z-10 px-6 md:px-16 pb-16 md:pb-24 max-w-7xl mx-auto w-full">
-        <div className="rounded-3xl bg-[#160B2E]/60 backdrop-blur-xl border border-purple-500/30 py-8 md:py-10 px-6 md:px-8 flex flex-col md:flex-row justify-around items-center text-center divide-y md:divide-y-0 md:divide-x divide-purple-500/30 shadow-[0_0_40px_rgba(139,92,246,0.1)]">
-          <div className="flex flex-col items-center px-4 py-5 md:py-0 w-full">
-            <span className="text-3xl md:text-5xl font-extrabold text-white mb-2 drop-shadow-lg">100%</span>
-            <span className="text-[10px] md:text-xs text-cyan-300 font-bold uppercase tracking-[0.2em]">On-Chain Transparency</span>
+      {/* ── Metrics Banner ── */}
+      <section className="relative z-10 px-6 md:px-16 pb-16 md:pb-20 max-w-7xl mx-auto w-full">
+        <div className="bg-[#121215] border border-zinc-800 rounded-xl py-5 px-6 grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-zinc-800 text-center shadow-xs">
+          <div className="py-3 md:py-0 px-4">
+            <span className="text-2xl md:text-3xl font-bold text-white font-mono">100%</span>
+            <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-500 mt-1">Cryptographic Transparency</p>
           </div>
-          <div className="flex flex-col items-center px-4 py-6 md:py-0 w-full">
-            <span className="text-3xl md:text-5xl font-extrabold text-white mb-2 drop-shadow-lg">&lt; 2s</span>
-            <span className="text-[10px] md:text-xs text-cyan-300 font-bold uppercase tracking-[0.2em]">Transaction Speed</span>
+          <div className="py-3 md:py-0 px-4">
+            <span className="text-2xl md:text-3xl font-bold text-white font-mono">&lt; 2s</span>
+            <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-500 mt-1">Polygon Block Finality</p>
           </div>
-          <div className="flex flex-col items-center px-4 py-5 md:py-0 w-full">
-            <span className="text-3xl md:text-5xl font-extrabold text-white mb-2 drop-shadow-lg">Multi-Sig</span>
-            <span className="text-[10px] md:text-xs text-cyan-300 font-bold uppercase tracking-[0.2em]">Enterprise Security</span>
+          <div className="py-3 md:py-0 px-4">
+            <span className="text-2xl md:text-3xl font-bold text-white font-mono">2-of-N</span>
+            <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-500 mt-1">Multi-Sig Consensus Guard</p>
           </div>
         </div>
       </section>
 
-      {/* ── Footer ── */}
-      <footer className="relative z-10 text-center py-6 md:py-8 text-[10px] md:text-xs text-white/40 border-t border-white/5 mt-auto bg-[#05010B]/50 backdrop-blur-md flex flex-col items-center justify-center gap-2">
-        <div className="flex items-center justify-center gap-4 text-white/60">
-          <Link href="/help" className="hover:text-white transition-colors">Help & FAQ</Link>
+      {/* ── Institutional Footer ── */}
+      <footer className="relative z-10 text-center py-7 text-xs text-zinc-500 border-t border-zinc-800 bg-[#09090b] flex flex-col items-center justify-center gap-2.5">
+        <div className="flex items-center justify-center gap-4 text-zinc-400">
+          <Link href="/help" className="hover:text-white transition-colors">Help &amp; FAQ</Link>
           <span>·</span>
           <Link href="/privacy" className="hover:text-white transition-colors">Data Privacy (RA 10173)</Link>
           <span>·</span>
           <Link href="/tutorials" className="hover:text-white transition-colors">Tutorials</Link>
+          <span>·</span>
+          <Link href="/verify" className="hover:text-white transition-colors">Verify Receipt</Link>
         </div>
-        <p className="text-white/30">
-          ChainBudget · Cor Jesu College Capstone 2025–2026 · Powered by Polygon · Aligned with RA 10175 & RA 10173
+        <p className="text-zinc-600 text-[11px] max-w-xl mx-auto px-4">
+          ChainBudget · Cor Jesu College Capstone Project · Anchored on Polygon Amoy · Aligned with RA 10175 (Cybercrime Prevention) &amp; RA 10173 (Data Privacy Act)
         </p>
       </footer>
 
       {/* ── Info Modal ── */}
       {infoModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm animate-backdrop-fade" onClick={() => setInfoModal(null)} />
-          <div className="relative glass border border-purple-500/30 p-8 rounded-3xl max-w-lg w-full shadow-[0_0_50px_rgba(139,92,246,0.2)] animate-modal-pop">
-            <h2 className="text-2xl font-bold text-white mb-4">{infoModal.title}</h2>
-            <div className="text-white/70 leading-relaxed whitespace-pre-line text-sm md:text-base">
-              {infoModal.content}
-            </div>
-            <div className="mt-8 flex justify-end">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-[#121215] border border-zinc-800 p-5 md:p-6 rounded-xl max-w-lg w-full shadow-xl flex flex-col text-white">
+            <div className="flex items-center justify-between mb-3.5 border-b border-zinc-800 pb-2.5">
+              <h2 className="text-sm font-semibold text-white">{infoModal.title}</h2>
               <button 
                 onClick={() => setInfoModal(null)}
-                className="px-6 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white font-medium transition-colors"
+                className="text-zinc-500 hover:text-white p-1 rounded-lg hover:bg-zinc-800 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="text-xs text-zinc-300 leading-relaxed whitespace-pre-line space-y-2">
+              {infoModal.content}
+            </div>
+            <div className="mt-5 flex justify-end pt-3 border-t border-zinc-800">
+              <button 
+                onClick={() => setInfoModal(null)}
+                className="btn-primary px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer"
               >
                 Close
               </button>
@@ -368,24 +362,6 @@ export default function LandingPage() {
           </div>
         </div>
       )}
-
-      <style jsx global>{`
-        @keyframes modal-pop {
-          0% { opacity: 0; transform: scale(0.95) translateY(20px); }
-          100% { opacity: 1; transform: scale(1) translateY(0); }
-        }
-        .animate-modal-pop {
-          animation: modal-pop 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-        }
-
-        @keyframes backdrop-fade {
-          0% { opacity: 0; }
-          100% { opacity: 1; }
-        }
-        .animate-backdrop-fade {
-          animation: backdrop-fade 0.3s ease-out forwards;
-        }
-      `}</style>
     </main>
   );
 }

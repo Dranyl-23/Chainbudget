@@ -35,10 +35,10 @@ const generalRateLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// Rate limit for private key export (30 requests per 15 minutes per user/IP)
+// Rate limit for private key export (5 requests per 15 minutes per user/IP)
 const keyExportRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 30,
+  max: 5,
   keyGenerator: (req) => req.user?._id?.toString() || req.ip,
   message: { error: "Too many key export requests. Please try again in a few minutes." },
   standardHeaders: true,

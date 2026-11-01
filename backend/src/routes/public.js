@@ -7,7 +7,7 @@ const Budget = require("../models/Budget");
 // ── GET /api/public/organizations ── List all active public organizations
 router.get("/organizations", async (req, res) => {
   try {
-    const orgs = await Organization.find({ isActive: true }).lean();
+    const orgs = await Organization.find({ isActive: true, isPrivate: { $ne: true } }).lean();
     if (!orgs.length) return res.json([]);
 
     const orgIds = orgs.map((o) => o._id);
@@ -65,6 +65,9 @@ router.get("/organizations/:orgId", async (req, res) => {
   try {
     const org = await Organization.findOne({ _id: req.params.orgId, isActive: true }).lean();
     if (!org) return res.status(404).json({ error: "Organization not found or inactive" });
+    if (org.isPrivate) {
+      return res.status(403).json({ error: "This organization is private." });
+    }
 
     const totalApproved = await Transaction.countDocuments({ organization: org._id, status: "approved" });
     const totalVerified = await Transaction.countDocuments({ organization: org._id, status: "approved", isRecordedOnChain: true });
@@ -115,7 +118,7 @@ router.get("/organizations/:orgId/transactions", async (req, res) => {
   }
 });
 
-// ── GET /api/public/organizations/:orgId/budget ── Fetch public budget categories
+// ── GET /api/public/organizations/:orgId/budget ── Fetch public budget categories with real spent aggregation
 router.get("/organizations/:orgId/budget", async (req, res) => {
   try {
     const org = await Organization.findById(req.params.orgId).lean();
@@ -123,11 +126,35 @@ router.get("/organizations/:orgId/budget", async (req, res) => {
       return res.status(403).json({ error: "This organization is private. Budget is restricted." });
     }
 
-    const budgets = await Budget.find({ organization: req.params.orgId })
-      .select("name allocated spent")
-      .sort({ allocated: -1 });
+    const [budgets, txns] = await Promise.all([
+      Budget.find({ organization: req.params.orgId })
+        .select("name allocated color")
+        .sort({ allocated: -1 })
+        .lean(),
+      Transaction.find({
+        organization: req.params.orgId,
+        type: "expense",
+        status: "approved",
+      })
+        .select("amount category budgetCategory")
+        .lean(),
+    ]);
 
-    res.json(budgets);
+    const enrichedBudgets = budgets.map((b) => {
+      const nameLower = (b.name || "").toLowerCase();
+      const spent = txns
+        .filter((t) => {
+          const cat = (t.budgetCategory || t.category || "").toLowerCase();
+          return cat === nameLower;
+        })
+        .reduce((sum, t) => sum + (t.amount || 0), 0);
+      return {
+        ...b,
+        spent,
+      };
+    });
+
+    res.json(enrichedBudgets);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -197,8 +224,10 @@ router.get("/verify/:hash", async (req, res) => {
       category: transaction.category,
       budgetCategory: transaction.budgetCategory,
       description: transaction.description,
-      receiptIpfsHash: transaction.receiptIpfsHash, // Provide the raw receipt for auditing
-      receiptUrl: transaction.receiptUrl,
+      receiptIpfsHash: transaction.documentHash || transaction.receiptIpfsHash || null, // Provide the raw receipt for auditing
+      receiptUrl: transaction.documentUrl || transaction.receiptUrl || null,
+      documentHash: transaction.documentHash || transaction.receiptIpfsHash || null,
+      documentUrl: transaction.documentUrl || transaction.receiptUrl || null,
       submittedBy: transaction.submittedBy?.displayName || transaction.submittedBy?.walletAddress,
       signatures: approvals.map(a => ({
         name: a.approver?.displayName,

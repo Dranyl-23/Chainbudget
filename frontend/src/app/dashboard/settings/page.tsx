@@ -7,7 +7,7 @@ import { ethers } from "ethers";
 import { getAmoyProvider, rotateAmoyProvider } from "@/lib/rpcProvider";
 import api from "@/lib/api";
 import { getExplorerAddressUrl } from "@/lib/config";
-import { getProvider } from "@/lib/wallet";
+import { getProvider, linkWallet } from "@/lib/wallet";
 import { getErrorMessage } from "@/lib/utils";
 import toast from "react-hot-toast";
 import { 
@@ -83,6 +83,7 @@ export default function SettingsPage() {
   const currentDisplayName = displayName || user?.displayName || "";
   const activeAvatar = avatarPreview || (!imageError ? formatAvatarUrl(user?.avatarUrl) : null);
   const [isLinking, setIsLinking] = useState(false);
+  const [isMinting, setIsMinting] = useState(false);
   const [walletBalance, setWalletBalance] = useState<string | null>(null);
   const [pendingLiquidations, setPendingLiquidations] = useState<PendingLiquidationOrg[]>([]);
   const [approvingLiquidationId, setApprovingLiquidationId] = useState<string | null>(null);
@@ -345,31 +346,9 @@ export default function SettingsPage() {
   const handleLinkWallet = async () => {
     try {
       setIsLinking(true);
-      if (typeof window === "undefined" || !window.ethereum) {
-        throw new Error("MetaMask not installed");
-      }
-      
-      const accounts = await window.ethereum.request({
-        method: "eth_requestAccounts",
-      }) as string[];
-      
-      if (!accounts || accounts.length === 0) {
-        throw new Error("No accounts selected");
-      }
-
-      const newWallet = accounts[0];
-      
-      if (user?.walletAddress && newWallet.toLowerCase() === user.walletAddress.toLowerCase()) {
-        toast.error("This is your primary wallet.");
-        return;
-      }
-
-      await api.put("/users/me", {
-        linkedWallets: [newWallet]
-      });
-
+      await linkWallet();
       await refreshUser();
-      toast.success("Wallet linked successfully!");
+      toast.success("Wallet cryptographically verified and linked!");
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, "Failed to link wallet"));
     } finally {
@@ -450,7 +429,7 @@ export default function SettingsPage() {
   const handleApproveLiquidation = async (orgId: string) => {
     try {
       setApprovingLiquidationId(orgId);
-      await api.post(`/organizations/${orgId}/liquidate/approve`);
+      await api.post(`/organizations/${orgId}/approve-liquidation`);
       toast.success("Liquidation approved! Budget replenished.");
       setPendingLiquidations((prev) => prev.filter((o) => o._id !== orgId));
     } catch (err: unknown) {
@@ -461,102 +440,103 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="p-4 md:p-8 pb-24 w-full space-y-8 animate-fade-in">
+    <div className="p-4 md:p-6 pb-24 w-full space-y-6 animate-fade-in max-w-7xl mx-auto">
+      {/* ── Page Header ── */}
       <div>
-        <h1 className="text-2xl md:text-3xl font-bold text-gray-800 dark:text-white tracking-tight flex items-center gap-3">
-          <UserIcon className="w-8 h-8 text-primary" />
+        <h1 className="text-xl md:text-2xl font-semibold text-white tracking-tight flex items-center gap-2.5">
+          <UserIcon className="w-5 h-5 text-zinc-400" />
           Profile & Settings
         </h1>
-        <p className="text-gray-500 mt-1 text-sm">
+        <p className="text-zinc-400 mt-1 text-xs">
           Manage your personal details, Web3 security keys, notification preferences, and organization branding.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         
-        <div className="lg:col-span-2 space-y-6">
-          <div className="glass p-6 rounded-2xl">
-            <h2 className="text-xl font-bold text-gray-800 mb-6 border-b pb-2">Personal Information</h2>
+        <div className="lg:col-span-2 space-y-5">
+          <div className="bg-[#121215] border border-zinc-800 rounded-xl p-5 md:p-6 shadow-sm">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-300 mb-5 border-b border-zinc-800 pb-3">
+              Personal Information
+            </h2>
             
             {successBanner && (
-              <div className="mb-6 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 backdrop-blur-md flex items-center justify-between gap-3 animate-fade-in shadow-[0_0_20px_rgba(16,185,129,0.15)]">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center shrink-0">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-400 drop-shadow-[0_0_6px_rgba(16,185,129,0.8)]" />
-                  </div>
+              <div className="mb-5 p-3.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between gap-3 animate-fade-in">
+                <div className="flex items-center gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
                   <div>
-                    <p className="text-sm font-bold text-emerald-300 flex items-center gap-1.5">
-                      Profile Saved Successfully! <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                    <p className="text-xs font-medium text-emerald-300 flex items-center gap-1.5">
+                      Profile Saved Successfully! <Sparkles className="w-3 h-3 text-emerald-400" />
                     </p>
-                    <p className="text-xs text-emerald-400/80">
+                    <p className="text-[11px] text-emerald-400/80">
                       {successBanner}
                     </p>
                   </div>
                 </div>
                 <button
                   onClick={() => setSuccessBanner(null)}
-                  className="p-1.5 rounded-lg text-emerald-400/60 hover:text-emerald-300 hover:bg-emerald-500/10 transition-colors"
+                  className="p-1 rounded text-emerald-400/60 hover:text-emerald-300 transition-colors"
                   title="Dismiss"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-3.5 h-3.5" />
                 </button>
               </div>
             )}
             
-            <div className="flex flex-col sm:flex-row gap-6 items-center sm:items-start mb-6">
+            <div className="flex flex-col sm:flex-row gap-5 items-center sm:items-start mb-5">
               <div className="relative flex flex-col items-center">
-                <div className="relative group mb-3">
-                  <div className="w-24 h-24 rounded-full bg-purple-500/10 border-4 border-purple-500/30 shadow-lg overflow-hidden flex items-center justify-center shrink-0">
+                <div className="relative group mb-2.5">
+                  <div className="w-20 h-20 rounded-full bg-zinc-900 border border-zinc-800 overflow-hidden flex items-center justify-center shrink-0">
                     {activeAvatar ? (
                       <Image
                         src={activeAvatar}
                         alt="Avatar"
-                        width={96}
-                        height={96}
+                        width={80}
+                        height={80}
                         unoptimized
                         className="w-full h-full object-cover"
                         onError={() => setImageError(true)}
                       />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-purple-500/20 text-purple-300 font-bold text-3xl">
-                        {currentDisplayName ? currentDisplayName.trim().charAt(0).toUpperCase() : <UserIcon className="w-10 h-10 text-purple-400" />}
+                      <div className="w-full h-full flex items-center justify-center bg-zinc-850 text-zinc-300 font-semibold text-2xl">
+                        {currentDisplayName ? currentDisplayName.trim().charAt(0).toUpperCase() : <UserIcon className="w-8 h-8 text-zinc-400" />}
                       </div>
                     )}
                   </div>
-                  <label className="absolute bottom-0 right-0 bg-primary text-white p-2 rounded-full cursor-pointer shadow-md hover:bg-primary-hover transition-colors">
-                    <Upload className="w-4 h-4" />
+                  <label className="absolute bottom-0 right-0 bg-white text-zinc-950 p-1.5 rounded-full cursor-pointer hover:bg-zinc-200 transition-colors shadow-sm">
+                    <Upload className="w-3.5 h-3.5" />
                     <input type="file" className="hidden" accept="image/jpeg, image/png, image/webp" onChange={handleFileChange} />
                   </label>
                 </div>
                 
-                <div className="bg-indigo-50 text-indigo-700 text-[10px] uppercase tracking-wider font-bold px-3 py-1 rounded-full border border-indigo-100 flex items-center gap-1 shadow-sm">
-                  <ShieldCheck className="w-3 h-3" />
+                <div className="bg-zinc-800 text-zinc-300 text-[10px] uppercase tracking-wider font-medium px-2.5 py-0.5 rounded-full border border-zinc-700 flex items-center gap-1">
+                  <ShieldCheck className="w-3 h-3 text-zinc-400" />
                   {roleLabel}
                 </div>
               </div>
               
-              <div className="flex-1 w-full space-y-4">
+              <div className="flex-1 w-full space-y-3.5">
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Display Name</label>
+                  <label className="block text-xs font-medium text-zinc-400 uppercase tracking-wider mb-1.5">Display Name</label>
                   <input
                     type="text"
                     value={currentDisplayName}
                     onChange={(e) => setDisplayName(e.target.value)}
-                    className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all dark:text-white"
+                    className="w-full px-3.5 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500 transition-colors"
                     placeholder="Enter your display name"
                   />
                 </div>
                 <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <label className="text-sm font-semibold text-gray-700">Primary Wallet</label>
+                  <div className="flex justify-between items-center mb-1.5">
+                    <label className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Primary Wallet</label>
                     {user?.walletAddress && (
                       <a 
                         href={getExplorerAddressUrl(user.walletAddress)} 
                         target="_blank" 
                         rel="noopener noreferrer" 
-                        className="text-xs flex items-center gap-1 text-primary hover:text-primary-hover font-medium bg-primary/5 hover:bg-primary/10 px-2 py-1 rounded-md transition-colors"
+                        className="text-xs flex items-center gap-1 text-zinc-400 hover:text-white transition-colors"
                       >
-                        <ExternalLink className="w-3 h-3" /> View on Explorer
+                        <ExternalLink className="w-3 h-3" /> Explorer
                       </a>
                     )}
                   </div>
@@ -565,37 +545,37 @@ export default function SettingsPage() {
                       type="text"
                       disabled
                       value={user?.walletAddress || "No wallet linked"}
-                      className="w-full px-4 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-500 font-mono text-xs"
+                      className="w-full px-3.5 py-2 bg-zinc-900/60 border border-zinc-800 rounded-lg text-zinc-400 font-mono text-xs"
                     />
                     {user?.walletAddress && (
                       <button
                         onClick={() => handleCopy(user.walletAddress!, "wallet")}
-                        className="p-2 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-500 transition-colors shrink-0"
+                        className="p-2 border border-zinc-800 bg-zinc-900 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors shrink-0"
                         title="Copy Address"
                       >
-                        {copiedField === "wallet" ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+                        {copiedField === "wallet" ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                       </button>
                     )}
                   </div>
                   {walletBalance && (
-                    <p className="text-xs text-gray-400 mt-1 font-mono">
-                      Balance: <span className="text-primary font-bold">{walletBalance} POL</span> (Polygon Amoy)
+                    <p className="text-[11px] text-zinc-500 mt-1.5 font-mono">
+                      Balance: <span className="text-zinc-200 font-medium">{walletBalance} POL</span> (Polygon Amoy)
                     </p>
                   )}
                 </div>
               </div>
             </div>
 
-            <div className="flex justify-end pt-4 border-t">
+            <div className="flex justify-end pt-3.5 border-t border-zinc-800">
               <button
                 onClick={handleSaveProfile}
                 disabled={isSaving}
-                className="btn-primary py-2 px-6 flex items-center gap-2"
+                className="btn-primary py-2 px-5 flex items-center gap-2 text-xs font-semibold rounded-lg"
               >
                 {isSaving ? (
-                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span className="w-3.5 h-3.5 border-2 border-zinc-950 border-t-transparent rounded-full animate-spin" />
                 ) : (
-                  <Save className="w-4 h-4" />
+                  <Save className="w-3.5 h-3.5" />
                 )}
                 Save Profile
               </button>
@@ -603,51 +583,47 @@ export default function SettingsPage() {
           </div>
 
           {user?.walletAddress && (
-            <div className="glass p-6 rounded-2xl border border-orange-500/20 bg-linear-to-br from-orange-500/5 via-transparent to-transparent">
-              <div className="flex items-center justify-between mb-4 border-b border-orange-500/10 pb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-orange-500/10 border border-orange-500/30 flex items-center justify-center">
-                    <Lock className="w-4 h-4 text-orange-400" />
+            <div className="bg-[#121215] border border-zinc-800 rounded-xl p-5 md:p-6 shadow-sm">
+              <div className="flex items-center justify-between mb-4 border-b border-zinc-800 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center">
+                    <Lock className="w-4 h-4 text-zinc-300" />
                   </div>
                   <div>
-                    <h2 className="text-base font-bold text-gray-800 dark:text-white">Web3 Security & Auto-Wallet Keys</h2>
-                    <p className="text-xs text-gray-500">Non-custodial account credentials & recovery backup</p>
+                    <h2 className="text-sm font-semibold text-white">Web3 Security & Auto-Wallet Keys</h2>
+                    <p className="text-[11px] text-zinc-400">Non-custodial account credentials & recovery backup</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   {showKeys && keyCountdown !== null && (
-                    <span className="text-[11px] font-mono font-bold text-orange-400 bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <span className="text-[10px] font-mono font-medium text-zinc-300 bg-zinc-900 border border-zinc-800 px-2 py-0.5 rounded flex items-center gap-1">
                       <Clock className="w-3 h-3 animate-spin" />
                       {keyCountdown}s
                     </span>
                   )}
                   <button
                     onClick={handleRevealKeys}
-                    className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-all flex items-center gap-1.5 ${
-                      showKeys
-                        ? "bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700"
-                        : "bg-orange-600/20 hover:bg-orange-600/30 border-orange-500/40 text-orange-300 shadow-sm"
-                    }`}
+                    className="text-xs font-medium px-3 py-1.5 rounded-lg border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-zinc-200 transition-colors flex items-center gap-1.5"
                   >
-                    <Key className="w-3.5 h-3.5" />
+                    <Key className="w-3.5 h-3.5 text-zinc-400" />
                     {showKeys ? "Hide Keys" : "Export / View Keys"}
                   </button>
                 </div>
               </div>
 
               {!showKeys ? (
-                <div className="text-xs text-gray-500 dark:text-gray-400 space-y-2">
+                <div className="text-xs text-zinc-400 space-y-2">
                   <p>
-                    Your wallet is cryptographically registered on Polygon Amoy. Your credentials are fully non-custodial and protected with zero-knowledge server challenge signing.
+                    Your wallet is cryptographically registered on Polygon Amoy. Credentials are non-custodial and protected with zero-knowledge server challenge signing.
                   </p>
-                  <div className="p-3 bg-slate-900/50 rounded-xl border border-slate-800 flex items-center gap-2 text-slate-400">
+                  <div className="p-3 bg-zinc-900 rounded-lg border border-zinc-800 flex items-center gap-2.5 text-zinc-400 text-xs">
                     <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>Keys are hidden. Click <strong>Export / View Keys</strong> to reveal with MetaMask verification.</span>
+                    <span>Keys are protected. Click <strong>Export / View Keys</strong> to reveal with MetaMask verification.</span>
                   </div>
                 </div>
               ) : (
-                <div className="space-y-4 animate-in fade-in-50 duration-200">
-                  <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-300 text-xs flex items-start gap-2">
+                <div className="space-y-3.5 animate-in fade-in-50 duration-200">
+                  <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-lg text-rose-400 text-xs flex items-start gap-2">
                     <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
                     <div>
                       <strong>Never share your private key or recovery phrase.</strong> Anyone with these credentials has full control over your funds and SBT credentials.
@@ -657,16 +633,16 @@ export default function SettingsPage() {
                   {autoWalletKeys?.privateKey && (
                     <div>
                       <div className="flex justify-between items-center mb-1">
-                        <label className="text-xs font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider">Private Key</label>
+                        <label className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Private Key</label>
                         <button
                           onClick={() => handleCopy(autoWalletKeys.privateKey!, "pk")}
-                          className="text-xs text-orange-400 hover:text-orange-300 flex items-center gap-1 font-mono font-semibold"
+                          className="text-xs text-zinc-300 hover:text-white flex items-center gap-1 font-mono font-medium"
                         >
                           {copiedField === "pk" ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                          {copiedField === "pk" ? "Copied!" : "Copy"}
+                          {copiedField === "pk" ? "Copied" : "Copy"}
                         </button>
                       </div>
-                      <div className="p-2.5 bg-slate-950 border border-slate-800 rounded-lg font-mono text-xs text-orange-300 break-all select-all">
+                      <div className="p-2.5 bg-zinc-900 border border-zinc-800 rounded-lg font-mono text-xs text-zinc-200 break-all select-all">
                         {autoWalletKeys.privateKey}
                       </div>
                     </div>
@@ -675,20 +651,20 @@ export default function SettingsPage() {
                   {autoWalletKeys?.mnemonic && (
                     <div>
                       <div className="flex justify-between items-center mb-1">
-                        <label className="text-xs font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider">12-Word Recovery Phrase</label>
+                        <label className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">12-Word Recovery Phrase</label>
                         <button
                           onClick={() => handleCopy(autoWalletKeys.mnemonic!, "mnemonic")}
-                          className="text-xs text-orange-400 hover:text-orange-300 flex items-center gap-1 font-mono font-semibold"
+                          className="text-xs text-zinc-300 hover:text-white flex items-center gap-1 font-mono font-medium"
                         >
                           {copiedField === "mnemonic" ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                          {copiedField === "mnemonic" ? "Copied!" : "Copy"}
+                          {copiedField === "mnemonic" ? "Copied" : "Copy"}
                         </button>
                       </div>
-                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5 p-3 bg-slate-950 border border-slate-800 rounded-xl">
+                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5 p-2.5 bg-zinc-900 border border-zinc-800 rounded-lg">
                         {autoWalletKeys.mnemonic.split(" ").map((word, idx) => (
-                          <div key={idx} className="flex items-center gap-1.5 bg-slate-900/80 px-2 py-1 rounded-md border border-slate-800">
-                            <span className="text-[10px] text-slate-500 font-mono w-4">{idx + 1}.</span>
-                            <span className="text-xs text-emerald-300 font-mono font-bold">{word}</span>
+                          <div key={idx} className="flex items-center gap-1.5 bg-zinc-850 px-2 py-1 rounded border border-zinc-800">
+                            <span className="text-[10px] text-zinc-500 font-mono w-3.5">{idx + 1}.</span>
+                            <span className="text-xs text-zinc-200 font-mono font-medium">{word}</span>
                           </div>
                         ))}
                       </div>
@@ -700,38 +676,38 @@ export default function SettingsPage() {
           )}
         </div>
         
-        <div className="space-y-6">
-          <div className="glass p-6 rounded-2xl">
-            <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-              <Wallet className="w-5 h-5 text-primary" />
+        <div className="space-y-5">
+          <div className="bg-[#121215] border border-zinc-800 rounded-xl p-5 md:p-6 shadow-sm">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-300 mb-3 flex items-center gap-2">
+              <Wallet className="w-4 h-4 text-zinc-400" />
               Connected Wallets
             </h2>
-            <p className="text-xs text-gray-500 mb-4">
+            <p className="text-xs text-zinc-400 mb-3.5">
               Link additional Web3 wallets for multi-device login and multi-sig approvals.
             </p>
 
-            <div className="space-y-2 mb-4">
+            <div className="space-y-2 mb-3.5">
               {user?.linkedWallets && user.linkedWallets.length > 0 ? (
                 user.linkedWallets.map((wallet, idx) => (
-                  <div key={idx} className="p-2.5 bg-gray-50 dark:bg-gray-800/40 rounded-lg border border-gray-100 dark:border-gray-700/50 flex items-center justify-between text-xs font-mono">
+                  <div key={idx} className="p-2.5 bg-zinc-900 rounded-lg border border-zinc-800 flex items-center justify-between text-xs font-mono text-zinc-300">
                     <span className="truncate pr-2">{wallet}</span>
-                    <button onClick={() => handleCopy(wallet, `linked_${idx}`)} className="text-gray-400 hover:text-primary shrink-0">
-                      {copiedField === `linked_${idx}` ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                    <button onClick={() => handleCopy(wallet, `linked_${idx}`)} className="text-zinc-500 hover:text-white shrink-0">
+                      {copiedField === `linked_${idx}` ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                     </button>
                   </div>
                 ))
               ) : (
-                <p className="text-xs text-gray-400 italic">No secondary wallets linked.</p>
+                <p className="text-xs text-zinc-500 italic">No secondary wallets linked.</p>
               )}
             </div>
 
             <button
               onClick={handleLinkWallet}
               disabled={isLinking}
-              className="btn-secondary w-full text-xs py-2 px-3 flex items-center justify-center gap-1.5"
+              className="w-full text-xs font-medium py-2 px-3 rounded-lg border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-zinc-200 flex items-center justify-center gap-1.5 transition-colors"
             >
               {isLinking ? (
-                <span className="w-3.5 h-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                <span className="w-3.5 h-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin" />
               ) : (
                 <Wallet className="w-3.5 h-3.5" />
               )}
@@ -739,53 +715,53 @@ export default function SettingsPage() {
             </button>
           </div>
 
-          <div className="glass p-6 rounded-2xl border border-primary/20 bg-linear-to-b from-primary/5 to-transparent">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center">
-                <ShieldCheck className="w-5 h-5 text-purple-400" />
+          <div className="bg-[#121215] border border-zinc-800 rounded-xl p-5 md:p-6 shadow-sm">
+            <div className="flex items-center gap-2.5 mb-3">
+              <div className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center">
+                <ShieldCheck className="w-4 h-4 text-zinc-300" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-gray-800 dark:text-white">Soulbound ID (SBT)</h3>
-                <p className="text-[11px] text-gray-500">Polygon Amoy Testnet</p>
+                <h3 className="text-sm font-semibold text-white">Soulbound ID (SBT)</h3>
+                <p className="text-[11px] text-zinc-400">Polygon Amoy Testnet</p>
               </div>
             </div>
             
             {activeMembership?.hasSBT ? (
-              <div className="mt-4 p-4 rounded-xl bg-purple-500/10 border border-purple-500/30 text-center">
-                <div className="inline-flex p-2 rounded-full bg-purple-500/20 text-purple-300 mb-2">
+              <div className="mt-3.5 p-3.5 rounded-lg bg-zinc-900 border border-zinc-800 text-center">
+                <div className="inline-flex p-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 mb-2">
                   <Check className="w-4 h-4" />
                 </div>
-                <p className="text-xs font-bold text-purple-300">Verified Member</p>
-                <p className="text-[10px] text-purple-400 font-mono mt-0.5">
+                <p className="text-xs font-medium text-white">Verified Member</p>
+                <p className="text-[10px] text-zinc-400 font-mono mt-0.5">
                   Token ID: #{activeMembership.sbtTokenId || "1"}
                 </p>
               </div>
             ) : (
-              <div className="mt-4 text-center p-4 bg-white/50 dark:bg-gray-800/50 rounded-xl border border-dashed border-gray-300 dark:border-gray-700">
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+              <div className="mt-3.5 text-center p-3.5 bg-zinc-900 rounded-lg border border-zinc-800">
+                <p className="text-xs text-zinc-400 mb-3">
                   You don&apos;t have a Soulbound Token (SBT) yet.
                 </p>
                 {user?.walletAddress ? (
                   <button 
                     onClick={async () => {
                       try {
-                        setIsLinking(true);
+                        setIsMinting(true);
                         await api.post("/auth/mint-sbt");
                         await refreshUser();
                         toast.success("Soulbound ID Minted Successfully!");
                       } catch (err: unknown) {
                         toast.error(getErrorMessage(err, "Failed to mint SBT"));
                       } finally {
-                        setIsLinking(false);
+                        setIsMinting(false);
                       }
                     }}
-                    disabled={isLinking}
-                    className="btn-primary w-full text-sm font-semibold py-3 px-4 rounded-xl flex justify-center items-center gap-2 bg-linear-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-lg whitespace-nowrap transition-all hover:scale-[1.02]"
+                    disabled={isMinting}
+                    className="btn-primary w-full text-xs font-semibold py-2 px-3 rounded-lg flex justify-center items-center gap-2"
                   >
-                    {isLinking ? (
-                      <span className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+                    {isMinting ? (
+                      <span className="animate-spin w-3.5 h-3.5 border-2 border-zinc-950 border-t-transparent rounded-full" />
                     ) : (
-                      <ShieldCheck className="w-5 h-5 shrink-0" />
+                      <ShieldCheck className="w-4 h-4 shrink-0" />
                     )}
                     Mint Member ID
                   </button>
@@ -793,13 +769,13 @@ export default function SettingsPage() {
                   <button 
                     onClick={handleLinkWallet}
                     disabled={isLinking}
-                    className="btn-primary w-full text-sm py-2 px-4 rounded-lg flex justify-center items-center gap-2"
+                    className="btn-primary w-full text-xs font-semibold py-2 px-3 rounded-lg flex justify-center items-center gap-2"
                   >
-                    <Wallet className="w-4 h-4" />
+                    <Wallet className="w-3.5 h-3.5" />
                     Link Wallet to Mint
                   </button>
                 )}
-                <p className="text-[10px] text-gray-400 mt-2">Gas fees paid by ChainBudget</p>
+                <p className="text-[10px] text-zinc-500 mt-2">Gas fees paid by ChainBudget</p>
               </div>
             )}
           </div>
@@ -808,20 +784,20 @@ export default function SettingsPage() {
       </div>
 
       {/* ── Notification Preferences (Full-Width Section) ── */}
-      <div className="glass p-6 rounded-2xl border border-primary/20 w-full shadow-sm">
-        <div className="flex items-center justify-between mb-4 border-b pb-3">
+      <div className="bg-[#121215] border border-zinc-800 rounded-xl p-5 md:p-6 w-full shadow-sm">
+        <div className="flex items-center justify-between mb-4 border-b border-zinc-800 pb-3">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center">
-              <Bell className="w-5 h-5 text-purple-400" />
+            <div className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center">
+              <Bell className="w-4 h-4 text-zinc-300" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-gray-800 dark:text-white">Notification Preferences</h2>
-              <p className="text-xs text-gray-500">Configure which notifications you receive on Web, Mobile, and Email.</p>
+              <h2 className="text-sm font-semibold text-white">Notification Preferences</h2>
+              <p className="text-[11px] text-zinc-400">Configure which notifications you receive on Web, Mobile, and Email.</p>
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
           {[
             { key: "push", label: "Mobile Push Notifications", desc: "Receive alerts on your iOS / Android devices" },
             { key: "email", label: "Email Notifications", desc: "Important transaction summaries and receipts" },
@@ -835,24 +811,24 @@ export default function SettingsPage() {
               <div
                 key={key}
                 onClick={() => handleTogglePreference(key, isEnabled)}
-                className={`p-4 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 select-none ${
+                className={`p-3.5 rounded-lg border transition-colors cursor-pointer flex items-center justify-between gap-3 select-none ${
                   isEnabled
-                    ? "bg-purple-500/10 border-purple-500/30 shadow-sm"
-                    : "bg-white/5 border-white/10 opacity-70 hover:opacity-100"
+                    ? "bg-zinc-900/80 border-zinc-700"
+                    : "bg-zinc-900/30 border-zinc-800/80 hover:bg-zinc-900/50"
                 }`}
               >
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-bold text-gray-800 dark:text-white truncate">{label}</p>
-                  <p className="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-1">{desc}</p>
+                  <p className="text-xs font-medium text-white truncate">{label}</p>
+                  <p className="text-[11px] text-zinc-400 line-clamp-1">{desc}</p>
                 </div>
                 <div
-                  className={`w-10 h-5 rounded-full transition-colors relative flex items-center p-0.5 shrink-0 ${
-                    isEnabled ? "bg-purple-600" : "bg-gray-400 dark:bg-gray-600"
+                  className={`w-9 h-5 rounded-full transition-colors relative flex items-center p-0.5 shrink-0 ${
+                    isEnabled ? "bg-white" : "bg-zinc-700"
                   }`}
                 >
                   <div
-                    className={`w-4 h-4 rounded-full bg-white transition-transform ${
-                      isEnabled ? "translate-x-5" : "translate-x-0"
+                    className={`w-4 h-4 rounded-full transition-transform ${
+                      isEnabled ? "bg-zinc-950 translate-x-4" : "bg-zinc-400 translate-x-0"
                     }`}
                   />
                 </div>
@@ -875,31 +851,31 @@ export default function SettingsPage() {
       )}
 
       {user?.isSuperAdmin && (
-        <div className="mt-8 glass p-6 rounded-2xl border border-primary/20">
-          <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-            <ShieldCheck className="w-5 h-5 text-primary" />
+        <div className="bg-[#121215] border border-zinc-800 rounded-xl p-5 md:p-6 shadow-sm">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-300 mb-2 flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-zinc-400" />
             Pending Financial Liquidations
           </h2>
-          <p className="text-sm text-gray-500 mb-4">Review and approve liquidations to trigger automated budget replenishment.</p>
+          <p className="text-xs text-zinc-400 mb-4">Review and approve liquidations to trigger automated budget replenishment.</p>
           
           {pendingLiquidations.length === 0 ? (
-            <div className="text-center py-6 text-gray-400 bg-gray-50 dark:bg-gray-800/30 rounded-lg border border-dashed border-gray-200 dark:border-gray-700">
+            <div className="text-center py-5 text-xs text-zinc-500 bg-zinc-900 rounded-lg border border-zinc-800">
               No pending liquidations.
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {pendingLiquidations.map((org) => (
-                <div key={org._id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 glass rounded-xl border border-white/10 shadow-sm gap-4">
+                <div key={org._id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 bg-zinc-900 rounded-lg border border-zinc-800 gap-3">
                   <div>
-                    <h3 className="font-bold text-white">{org.name}</h3>
-                    <p className="text-xs text-gray-400">Requested Subsidy: ₱{(org.subsidyAmount || 50000).toLocaleString()}</p>
+                    <h3 className="font-semibold text-white text-xs">{org.name}</h3>
+                    <p className="text-[11px] text-zinc-400 font-mono">Requested Subsidy: ₱{(org.subsidyAmount || 50000).toLocaleString()}</p>
                   </div>
                   <button
                     onClick={() => handleApproveLiquidation(org._id)}
                     disabled={approvingLiquidationId === org._id}
-                    className="btn-primary py-2 px-4 whitespace-nowrap"
+                    className="btn-primary py-1.5 px-3.5 text-xs whitespace-nowrap rounded-lg"
                   >
-                    {approvingLiquidationId === org._id ? "Processing..." : "Approve & Replenish Budget"}
+                    {approvingLiquidationId === org._id ? "Processing..." : "Approve & Replenish"}
                   </button>
                 </div>
               ))}
@@ -915,54 +891,54 @@ export default function SettingsPage() {
             onClick={(e) => {
               if (e.target === e.currentTarget) setIsSecurityModalOpen(false);
             }}
-            className="fixed inset-0 z-9999 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fade-in overflow-y-auto"
+            className="fixed inset-0 z-9999 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in overflow-y-auto"
           >
-            <div className="relative bg-slate-900 border border-slate-700/80 rounded-3xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto p-6 md:p-8 animate-in zoom-in-95 duration-200 my-auto">
+            <div className="relative bg-[#121215] border border-zinc-800 rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto p-5 md:p-6 animate-in zoom-in-95 duration-200 my-auto">
               <button
                 onClick={() => setIsSecurityModalOpen(false)}
-                className="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-800 border border-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors"
+                className="absolute top-4 right-4 w-7 h-7 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center transition-colors"
                 aria-label="Close"
               >
                 <X className="w-4 h-4" />
               </button>
 
-              <div className="flex items-center gap-3.5 mb-5">
-                <div className="w-12 h-12 rounded-2xl bg-orange-500/20 border border-orange-500/40 flex items-center justify-center shrink-0">
-                  <Lock className="w-6 h-6 text-orange-400" />
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-9 h-9 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center shrink-0">
+                  <Lock className="w-4 h-4 text-zinc-300" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-white tracking-tight">
+                  <h3 className="text-base font-semibold text-white tracking-tight">
                     Security Verification
                   </h3>
-                  <p className="text-xs text-slate-400 mt-0.5">
+                  <p className="text-xs text-zinc-400">
                     Confirm identity to export Web3 credentials.
                   </p>
                 </div>
               </div>
 
-              <p className="text-xs text-slate-300 mb-5 leading-relaxed">
-                Your recovery phrase and private key grant full authority over your on-chain assets. To export your keys, MetaMask will prompt you to cryptographically sign a single-use verification challenge issued by the server.
+              <p className="text-xs text-zinc-400 mb-4 leading-relaxed">
+                Your recovery phrase and private key grant full authority over your on-chain assets. MetaMask will prompt you to cryptographically sign a single-use verification challenge.
               </p>
 
-              <div className="p-3.5 mb-5 rounded-xl bg-orange-500/10 border border-orange-500/30 text-xs text-orange-300 flex items-start gap-2.5">
-                <ShieldCheck className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
+              <div className="p-3 mb-4 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 flex items-start gap-2.5">
+                <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                 <span>
                   <strong>Zero-Knowledge Security:</strong> This challenge requires ECDSA signature verification on the server before keys are decrypted.
                 </span>
               </div>
 
               {securityError && (
-                <p className="text-xs text-rose-400 font-semibold mb-4 flex items-center gap-1.5 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30">
+                <p className="text-xs text-rose-400 font-medium mb-3 flex items-center gap-1.5 p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/20">
                   <ShieldAlert className="w-4 h-4 shrink-0" />
                   {securityError}
                 </p>
               )}
 
-              <div className="flex gap-3 pt-2">
+              <div className="flex gap-2.5 pt-1">
                 <button
                   type="button"
                   onClick={() => setIsSecurityModalOpen(false)}
-                  className="flex-1 py-3 px-4 rounded-xl border border-slate-700 bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 font-bold text-xs transition-colors"
+                  className="flex-1 py-2 px-3 rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-white text-xs font-medium transition-colors"
                 >
                   Cancel
                 </button>
@@ -970,16 +946,16 @@ export default function SettingsPage() {
                   type="button"
                   onClick={() => handleConfirmSecurity()}
                   disabled={isVerifyingSecurity}
-                  className="flex-1 py-3 px-4 rounded-xl bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-orange-600/30 transition-all"
+                  className="flex-1 py-2 px-3 rounded-lg bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
                 >
                   {isVerifyingSecurity ? (
                     <>
-                      <span className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+                      <span className="animate-spin w-3.5 h-3.5 border-2 border-zinc-950 border-t-transparent rounded-full" />
                       <span>Signing...</span>
                     </>
                   ) : (
                     <>
-                      <Key className="w-4 h-4" />
+                      <Key className="w-3.5 h-3.5" />
                       <span>Sign & Export Keys</span>
                     </>
                   )}

@@ -51,7 +51,7 @@ export default function ScaleButton({
   };
 
   const flattenedStyle: Record<string, any> = (StyleSheet.flatten(style) as any) || {};
-  const autoContainerStyle: ViewStyle = {};
+  const autoContainerStyle: Record<string, any> = {};
 
   if (flattenedStyle.flex !== undefined) autoContainerStyle.flex = flattenedStyle.flex;
   if (flattenedStyle.flexGrow !== undefined) autoContainerStyle.flexGrow = flattenedStyle.flexGrow;
