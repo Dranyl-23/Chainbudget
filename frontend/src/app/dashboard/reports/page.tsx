@@ -8,6 +8,7 @@ import {
 } from "recharts";
 import api from "@/lib/api";
 import Portal from "@/components/Portal";
+import CustomSelect, { CustomSelectOption } from "@/components/CustomSelect";
 import { exportToCSV } from "@/lib/exportUtils";
 import toast from "react-hot-toast";
 import DashboardSkeleton from "@/components/DashboardSkeleton";
@@ -144,6 +145,13 @@ function getLiquidationConfig(type?: string | null) {
     desc: "Submit verified ledger transactions and receipts to all stakeholders and auditors for transparent fund liquidation.",
   };
 }
+
+const REPORT_RANGE_OPTIONS: CustomSelectOption[] = [
+  { value: "1month", label: "Last Month" },
+  { value: "3months", label: "Last 3 Months" },
+  { value: "6months", label: "Last 6 Months" },
+  { value: "1year", label: "Last Year" },
+];
 
 export default function ReportsPage() {
   const { user, activeOrgId } = useAuth();
@@ -455,17 +463,15 @@ export default function ReportsPage() {
 
         {/* Actions & Range Select */}
         <div className="flex flex-wrap items-center gap-2.5 shrink-0 self-start md:self-auto">
-          <div className="px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-white">
-            <select
+          <div className="w-36 sm:w-40">
+            <CustomSelect
+              size="sm"
               value={range}
-              onChange={(e) => setRange(e.target.value)}
-              className="bg-transparent text-xs text-zinc-200 focus:outline-none cursor-pointer pr-1"
-            >
-              <option value="1month" className="bg-[#121215]">Last Month</option>
-              <option value="3months" className="bg-[#121215]">Last 3 Months</option>
-              <option value="6months" className="bg-[#121215]">Last 6 Months</option>
-              <option value="1year" className="bg-[#121215]">Last Year</option>
-            </select>
+              onChange={(val) => setRange(val)}
+              options={REPORT_RANGE_OPTIONS}
+              buttonClassName="!py-1.5 !px-3 font-medium text-xs bg-zinc-900 border-zinc-800 hover:border-zinc-700"
+              menuClassName="w-36 sm:w-40 right-0 left-auto"
+            />
           </div>
 
           {canManageReports && (

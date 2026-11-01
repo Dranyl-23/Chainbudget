@@ -111,11 +111,13 @@ export default function CustomSelect({
                   onChange(option.value);
                   setIsOpen(false);
                 }}
-                className={`w-full px-3 py-2 rounded-lg text-left flex items-center justify-between text-xs md:text-sm transition-colors cursor-pointer ${
+                className={`w-full ${
+                  size === "sm" ? "px-2.5 py-1.5 text-xs" : "px-3 py-2 text-xs md:text-sm"
+                } rounded-lg text-left flex items-center justify-between transition-colors cursor-pointer ${
                   option.disabled
                     ? "opacity-40 cursor-not-allowed"
                     : isSelected
-                    ? "bg-zinc-800/60 text-white font-medium"
+                    ? "bg-zinc-800/70 text-white font-medium"
                     : "text-zinc-300 hover:bg-zinc-800/40 hover:text-white"
                 }`}
               >
@@ -126,7 +128,9 @@ export default function CustomSelect({
                     {option.hint && <span className="block text-[10px] text-zinc-500">{option.hint}</span>}
                   </div>
                 </div>
-                {isSelected && <Check className="w-3.5 h-3.5 text-white shrink-0 ml-2" />}
+                {isSelected && (
+                  <Check className={`${size === "sm" ? "w-3 h-3" : "w-3.5 h-3.5"} text-zinc-200 shrink-0 ml-2`} />
+                )}
               </button>
             );
           })}
