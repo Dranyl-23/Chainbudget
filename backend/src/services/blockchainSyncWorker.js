@@ -139,6 +139,16 @@ const syncPendingTransactions = async (io = null) => {
         }
       }
     }
+
+    // 3. Reconcile approved organization applications whose on-chain attestation is still pending
+    try {
+      const { reconcilePendingOrgAttestations } = require("./orgAttestation");
+      if (typeof reconcilePendingOrgAttestations === "function") {
+        await reconcilePendingOrgAttestations({ io, limit: 5 });
+      }
+    } catch (orgSyncErr) {
+      console.warn("[BlockchainSyncWorker] Org attestation reconciliation warning:", orgSyncErr.message);
+    }
   } catch (globalErr) {
     console.error("[BlockchainSyncWorker] Worker error:", globalErr.message);
   } finally {

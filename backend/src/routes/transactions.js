@@ -9,13 +9,14 @@ const User = require("../models/User");
 const Notification = require("../models/Notification");
 const { recordTransactionOnChain, releaseEscrowOnChain } = require("../services/blockchain");
 const { authenticate, requireRole } = require("../middleware/auth");
+const { requireVerifiedOrg } = require("../middleware/orgVerification");
 const { requireIdempotency } = require("../middleware/idempotency");
 const { sendEmail } = require("../services/email");
 const { ethers } = require("ethers");
 const { sendPushNotifications } = require("./users");
 
 /// POST /api/transactions — Create a new transaction (Level 2+) or Request (Level 3)
-router.post("/", authenticate, requireRole(3), requireIdempotency, async (req, res) => {
+router.post("/", authenticate, requireRole(3), requireIdempotency, requireVerifiedOrg, async (req, res) => {
   try {
     const {
       organizationId,

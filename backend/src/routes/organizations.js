@@ -5,8 +5,6 @@ const User = require("../models/User");
 const Budget = require("../models/Budget");
 const { authenticate, requireRole } = require("../middleware/auth");
 const multer = require("multer");
-const path = require("path");
-const fs = require("fs");
 const { uploadToPinata } = require("../utils/pinata");
 
 const storage = multer.memoryStorage();
@@ -19,6 +17,14 @@ const upload = multer({
 /// POST /api/organizations — Create organization (any authenticated user)
 router.post("/", authenticate, upload.single("logo"), async (req, res) => {
   try {
+    if (process.env.DISABLE_LEGACY_ORG_CREATE === "true") {
+      return res.status(410).json({
+        error: "LEGACY_ORG_CREATE_DISABLED",
+        message: "Direct organization creation is disabled. Please use the multi-step verification flow.",
+        redirect: "/organizations/new",
+      });
+    }
+
     // BUG-8 FIX: Whitelist fields instead of spreading raw req.body
     const { name, type, description, highValueThreshold, requiredApprovals, isPrivate, logoUrl: directLogoUrl } = req.body;
     if (!name || !type) {
@@ -50,6 +56,9 @@ router.post("/", authenticate, upload.single("logo"), async (req, res) => {
       requiredApprovals: requiredApprovals || 2,
       isPrivate: isPrivate === true || isPrivate === "true",
       createdBy: req.user._id,
+      verification: {
+        status: "legacy_unverified",
+      },
     });
     await org.save();
 

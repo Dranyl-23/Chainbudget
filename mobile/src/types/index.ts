@@ -8,6 +8,7 @@
 export interface Organization {
   _id: string;
   name: string;
+  legalName?: string;
   type?: string;
   logoUrl?: string;
   contractAddress?: string;
@@ -15,6 +16,13 @@ export interface Organization {
   chainId?: number;
   isPrivate?: boolean;
   requiredApprovals?: number;
+  verification?: {
+    status: "legacy_unverified" | "pending" | "verified" | "revoked";
+    tier?: string;
+    verifiedAt?: string;
+    dossierHash?: string;
+    attestationTxHash?: string;
+  };
   createdAt?: string;
 }
 
@@ -173,7 +181,7 @@ export type RootStackParamList = {
   NetworkStatus: undefined;
   SecurityKeys: undefined;
   Settings: undefined;
-  CreateOrganization: undefined;
+  CreateOrganization: { applicationId?: string } | undefined;
   ChatInbox: undefined;
   OrgChat: { orgId: string; orgName?: string };
   OrgChatInfo: { orgId: string; orgName?: string };

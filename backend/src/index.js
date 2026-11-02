@@ -30,6 +30,7 @@ const notificationRoutes = require("./routes/notifications");
 const aiRoutes = require("./routes/ai");
 const feedbackRoutes = require("./routes/feedback");
 const chatRoutes = require("./routes/chat");
+const orgApplicationRoutes = require("./routes/orgApplications");
 const { generalRateLimiter, csrfProtection } = require("./middleware/security");
 
 const app = express();
@@ -396,6 +397,7 @@ app.use("/api/notifications", notificationRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/feedback", feedbackRoutes);
 app.use("/api/chat", chatRoutes);
+app.use("/api/org-applications", orgApplicationRoutes);
 
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get("/api/health", (req, res) => {

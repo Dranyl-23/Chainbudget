@@ -1,288 +1,238 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 import Image from "next/image";
-import { Building, Users, ArrowRight, Shield, BarChart3, Link2 } from "lucide-react";
+import {
+  Building,
+  Users,
+  ArrowRight,
+  Shield,
+  BarChart3,
+  Link2,
+  Clock,
+  AlertTriangle,
+} from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import api from "@/lib/api";
-import CustomSelect from "@/components/CustomSelect";
-
-interface CreateOrgFormData {
-  name: string;
-  type: string;
-  description: string;
-  highValueThreshold: number;
-  requiredApprovals: number;
-  isPrivate: boolean;
-}
-
-interface ApiErrorResponse {
-  response?: {
-    data?: {
-      error?: string;
-      message?: string;
-    };
-  };
-}
+import {
+  MyOrgApplicationSummary,
+  formatStatusLabel,
+  isEditableStatus,
+} from "@/lib/orgApplications";
 
 export default function Onboarding() {
   const { user, logout } = useAuth();
-  const [step, setStep] = useState<"choose" | "create">("choose");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
+  const [myApps, setMyApps] = useState<MyOrgApplicationSummary[]>([]);
 
-  const [formData, setFormData] = useState<CreateOrgFormData>({
-    name: "",
-    type: "student_org",
-    description: "",
-    highValueThreshold: 10000,
-    requiredApprovals: 2,
-    isPrivate: false,
-  });
-
-  const handleCreateOrg = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    setError(null);
-    try {
-      await api.post("/organizations", formData);
-      // Reload to refresh user memberships and redirect to dashboard
-      window.location.reload();
-    } catch (err: unknown) {
-      const apiErr = err as ApiErrorResponse;
-      setError(apiErr.response?.data?.error || apiErr.response?.data?.message || "Failed to create organization");
-      setIsSubmitting(false);
-    }
-  };
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .get<MyOrgApplicationSummary[]>("/org-applications/mine")
+      .then((res) => {
+        if (!cancelled) setMyApps(res.data || []);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6" style={{ background: "var(--color-bg)" }}>
+    <div
+      className="min-h-screen flex items-center justify-center p-6"
+      style={{ background: "var(--color-bg)" }}
+    >
       <div className="w-full max-w-2xl">
         {/* Header */}
         <div className="text-center mb-10">
           <div className="inline-flex items-center gap-2 mb-4">
-            <Image 
-              src="/images/logo.png" 
-              alt="ChainBudget logo" 
-              width={32} 
-              height={32} 
-              unoptimized 
-              className="w-8 h-8 object-contain rounded-lg shadow-sm shrink-0" 
+            <Image
+              src="/images/logo.png"
+              alt="ChainBudget logo"
+              width={32}
+              height={32}
+              unoptimized
+              className="w-8 h-8 object-contain rounded-lg shadow-sm shrink-0"
             />
             <span className="text-xl font-bold tracking-tight">
               Chain<span className="gradient-text">Budget</span>
             </span>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome, {user?.displayName || "New User"}!</h1>
-          <p className="text-gray-500 text-sm">Let&apos;s get you set up. Choose how you want to get started.</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            Welcome, {user?.displayName || "New User"}!
+          </h1>
+          <p className="text-gray-500 text-sm">
+            Let&apos;s get you set up. Choose how you want to get started.
+          </p>
         </div>
 
-        {step === "choose" ? (
-          <>
-            {/* Two Options */}
-            <div className="grid md:grid-cols-2 gap-4 mb-8">
-              {/* Option 1: Create Org */}
-              <button
-                onClick={() => setStep("create")}
-                disabled={!user?.walletAddress}
-                className={`glass p-6 rounded-2xl text-left transition-all group border-2 border-transparent ${
-                  !user?.walletAddress 
-                    ? "opacity-60 cursor-not-allowed grayscale"
-                    : "hover:shadow-lg hover:-translate-y-1 hover:border-primary/30"
-                }`}
+        {/* Active Applications Banner (if the user already started or submitted one) */}
+        {myApps.length > 0 && (
+          <div className="glass p-5 rounded-2xl mb-6 border border-indigo-500/20">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                <Clock className="w-4 h-4 text-primary" />
+                Your Organization Applications ({myApps.length})
+              </h2>
+              <Link
+                href="/organizations/new"
+                className="text-xs font-semibold text-primary hover:underline"
               >
-                <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-4" style={{ background: "linear-gradient(135deg, var(--color-primary), var(--color-primary-2))" }}>
-                  <Building className="w-6 h-6 text-white" />
-                </div>
-                <h3 className="text-lg font-bold text-gray-900 mb-2 flex items-center gap-2">
-                  Create Organization
-                  <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity text-primary" />
-                </h3>
-                <p className="text-sm text-gray-500 leading-relaxed mb-3">
-                  Set up a new organization and become its <strong className="text-primary">Level 1 Admin</strong>. You can invite members and manage budgets.
-                </p>
-                {!user?.walletAddress ? (
-                  <p className="text-xs font-bold text-red-500 bg-red-50 p-2 rounded-md border border-red-100 inline-block">
-                    ⚠️ Link your MetaMask wallet first
-                  </p>
-                ) : (
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">Full Control</span>
-                    <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">Invite Members</span>
-                  </div>
-                )}
-              </button>
-
-              {/* Option 2: I Was Invited */}
-              <div className="glass p-6 rounded-2xl text-left border-2 border-transparent">
-                <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center mb-4">
-                  <Users className="w-6 h-6 text-gray-500" />
-                </div>
-                <h3 className="text-lg font-bold text-gray-900 mb-2">I Was Invited</h3>
-                <p className="text-sm text-gray-500 leading-relaxed">
-                  Your admin needs to add your <strong>wallet address</strong> to their organization via the Team page.
-                </p>
-                <div className="mt-4 p-3 rounded-lg bg-gray-50 border border-gray-100">
-                  <p className="text-xs text-gray-500 mb-1 font-medium">Share this with your admin:</p>
-                  <p className="text-xs font-mono text-primary break-all select-all">
-                    {user?.walletAddress || "Link your MetaMask wallet first"}
-                  </p>
-                </div>
-                <p className="text-xs text-gray-400 mt-3">
-                  Once added, refresh this page and your organization will appear automatically.
-                </p>
-              </div>
+                View All →
+              </Link>
             </div>
-
-            {/* Features Preview */}
-            <div className="glass rounded-2xl p-6">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-4">What you&apos;ll get</p>
-              <div className="grid grid-cols-3 gap-4">
-                <div className="text-center">
-                  <Shield className="w-5 h-5 text-primary mx-auto mb-2" />
-                  <p className="text-xs font-medium text-gray-700">Multi-Sig Approval</p>
-                  <p className="text-xs text-gray-400">2-of-N signing</p>
-                </div>
-                <div className="text-center">
-                  <BarChart3 className="w-5 h-5 text-primary mx-auto mb-2" />
-                  <p className="text-xs font-medium text-gray-700">Budget Tracking</p>
-                  <p className="text-xs text-gray-400">Real-time reports</p>
-                </div>
-                <div className="text-center">
-                  <Link2 className="w-5 h-5 text-primary mx-auto mb-2" />
-                  <p className="text-xs font-medium text-gray-700">Blockchain Audit</p>
-                  <p className="text-xs text-gray-400">Immutable records</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Logout */}
-            <div className="text-center mt-6">
-              <button onClick={logout} className="text-sm text-gray-400 hover:text-primary transition-colors">
-                Sign out and use a different account
-              </button>
-            </div>
-          </>
-        ) : (
-          /* Create Organization Form */
-          <div className="glass rounded-2xl p-8">
-            <button
-              onClick={() => setStep("choose")}
-              className="text-sm text-gray-400 hover:text-primary mb-6 flex items-center gap-1 transition-colors"
-            >
-              ← Back
-            </button>
-
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "linear-gradient(135deg, var(--color-primary), var(--color-primary-2))" }}>
-                <Building className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold">Create Your Organization</h2>
-                <p className="text-xs text-gray-500">You will be assigned as Level 1: Executive Approver (Founder)</p>
-              </div>
-            </div>
-
-            {error && (
-              <div className="mb-4 p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100">
-                {error}
-              </div>
-            )}
-
-            <form onSubmit={handleCreateOrg} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Organization Name</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. CCIS Student Council"
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Organization Type</label>
-                <CustomSelect
-                  value={formData.type}
-                  onChange={(val) => setFormData({ ...formData, type: val })}
-                  options={[
-                    { value: "student_org", label: "Student Organization" },
-                    { value: "barangay", label: "Barangay Fund" },
-                    { value: "homeowners_association", label: "Homeowners Association" },
-                    { value: "ngo", label: "Non-Government Organization" },
-                    { value: "cooperative", label: "Cooperative" },
-                    { value: "church", label: "Church / Religious Group" },
-                    { value: "sports_club", label: "Sports Club" },
-                    { value: "startup", label: "Startup" },
-                    { value: "family", label: "Family Fund" },
-                    { value: "fundraising", label: "Fundraising Campaign" },
-                  ]}
-                  placeholder="Select Organization Type"
-                  buttonClassName="border-zinc-800 bg-zinc-900 text-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Description <span className="text-gray-400 font-normal">(optional)</span></label>
-                <input
-                  type="text"
-                  placeholder="Brief description of your organization"
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">High-Value Threshold (₱)</label>
-                <p className="text-xs text-gray-500 mb-2">Transactions above this amount require multi-sig approval from Level 1 members.</p>
-                <input
-                  type="number"
-                  required
-                  min="0"
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm"
-                  value={formData.highValueThreshold}
-                  onChange={(e) => setFormData({ ...formData, highValueThreshold: Number(e.target.value) })}
-                />
-              </div>
-
-              <div className="flex flex-col gap-2 p-4 bg-gray-50 rounded-xl border border-gray-100">
-                <div className="flex items-center justify-between">
-                  <label className="text-sm font-bold text-gray-800">Private Organization</label>
-                  <button 
-                    type="button" 
-                    onClick={() => setFormData({ ...formData, isPrivate: !formData.isPrivate })}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formData.isPrivate ? "bg-primary" : "bg-gray-300"}`}
+            <div className="space-y-2.5">
+              {myApps.slice(0, 3).map((app) => {
+                const editable = isEditableStatus(app.status);
+                const href = editable
+                  ? `/organizations/new/${app.id}/${app.currentStep || "details"}`
+                  : `/organizations/new/${app.id}/status`;
+                return (
+                  <Link
+                    key={app.id}
+                    href={href}
+                    className="flex items-center justify-between p-3 rounded-xl bg-black/20 border border-white/10 hover:border-primary/40 transition-colors"
                   >
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.isPrivate ? "translate-x-6" : "translate-x-1"}`} />
-                  </button>
-                </div>
-                <p className="text-xs text-gray-500 leading-relaxed">
-                  If enabled, only members can view your transaction ledger and DAO. Your organization will still be listed in the public directory.
-                </p>
-              </div>
-
-              <div className="pt-4 flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setStep("choose")}
-                  className="flex-1 py-2.5 px-4 border border-gray-200 text-gray-600 rounded-lg font-medium hover:bg-gray-50 transition-colors text-sm"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="flex-1 btn-primary justify-center text-sm whitespace-nowrap"
-                >
-                  {isSubmitting ? "Creating..." : "Create Organization →"}
-                </button>
-              </div>
-            </form>
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-gray-900 truncate">
+                        {app.displayName || "Untitled Organization Draft"}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {formatStatusLabel(app.status)} · Step{" "}
+                        {app.completedSteps.length}/5
+                      </div>
+                      {app.applicantMessage && (
+                        <div className="text-xs text-amber-400 mt-1 flex items-center gap-1">
+                          <AlertTriangle className="w-3 h-3 shrink-0" />
+                          <span className="truncate">{app.applicantMessage}</span>
+                        </div>
+                      )}
+                    </div>
+                    <span className="text-xs font-semibold text-primary shrink-0 ml-3 inline-flex items-center gap-1">
+                      {editable ? "Resume" : "Status"}
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </span>
+                  </Link>
+                );
+              })}
+            </div>
           </div>
         )}
+
+        {/* Two Options */}
+        <div className="grid md:grid-cols-2 gap-4 mb-8">
+          {/* Option 1: Register & Verify Org */}
+          <button
+            onClick={() => router.push("/organizations/new")}
+            disabled={!user?.walletAddress}
+            className={`glass p-6 rounded-2xl text-left transition-all group border-2 border-transparent ${
+              !user?.walletAddress
+                ? "opacity-60 cursor-not-allowed grayscale"
+                : "hover:shadow-lg hover:-translate-y-1 hover:border-primary/30 cursor-pointer"
+            }`}
+          >
+            <div
+              className="w-12 h-12 rounded-xl flex items-center justify-center mb-4"
+              style={{
+                background:
+                  "linear-gradient(135deg, var(--color-primary), var(--color-primary-2))",
+              }}
+            >
+              <Building className="w-6 h-6 text-white" />
+            </div>
+            <h3 className="text-lg font-bold text-gray-900 mb-2 flex items-center gap-2">
+              Register Organization
+              <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity text-primary" />
+            </h3>
+            <p className="text-sm text-gray-500 leading-relaxed mb-3">
+              Complete our multi-step legitimacy verification to launch your organization treasury as{" "}
+              <strong className="text-primary">Level 1 Founder</strong>.
+            </p>
+            {!user?.walletAddress ? (
+              <p className="text-xs font-bold text-red-500 bg-red-50 p-2 rounded-md border border-red-100 inline-block">
+                ⚠️ Link your MetaMask wallet first
+              </p>
+            ) : (
+              <div className="mt-4 flex flex-wrap gap-2">
+                <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
+                  Verified Identity
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
+                  On-Chain Attestation
+                </span>
+              </div>
+            )}
+          </button>
+
+          {/* Option 2: I Was Invited */}
+          <div className="glass p-6 rounded-2xl text-left border-2 border-transparent">
+            <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center mb-4">
+              <Users className="w-6 h-6 text-gray-500" />
+            </div>
+            <h3 className="text-lg font-bold text-gray-900 mb-2">
+              I Was Invited
+            </h3>
+            <p className="text-sm text-gray-500 leading-relaxed">
+              Your admin needs to add your <strong>wallet address</strong> to
+              their organization via the Team page.
+            </p>
+            <div className="mt-4 p-3 rounded-lg bg-gray-50 border border-gray-100">
+              <p className="text-xs text-gray-500 mb-1 font-medium">
+                Share this with your admin:
+              </p>
+              <p className="text-xs font-mono text-primary break-all select-all">
+                {user?.walletAddress || "Link your MetaMask wallet first"}
+              </p>
+            </div>
+            <p className="text-xs text-gray-400 mt-3">
+              Once added, refresh this page and your organization will appear
+              automatically.
+            </p>
+          </div>
+        </div>
+
+        {/* Features Preview */}
+        <div className="glass rounded-2xl p-6">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-4">
+            What you&apos;ll get
+          </p>
+          <div className="grid grid-cols-3 gap-4">
+            <div className="text-center">
+              <Shield className="w-5 h-5 text-primary mx-auto mb-2" />
+              <p className="text-xs font-medium text-gray-700">
+                Multi-Sig Approval
+              </p>
+              <p className="text-xs text-gray-400">2-of-N signing</p>
+            </div>
+            <div className="text-center">
+              <BarChart3 className="w-5 h-5 text-primary mx-auto mb-2" />
+              <p className="text-xs font-medium text-gray-700">
+                Budget Tracking
+              </p>
+              <p className="text-xs text-gray-400">Real-time reports</p>
+            </div>
+            <div className="text-center">
+              <Link2 className="w-5 h-5 text-primary mx-auto mb-2" />
+              <p className="text-xs font-medium text-gray-700">
+                Blockchain Audit
+              </p>
+              <p className="text-xs text-gray-400">Immutable records</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Logout */}
+        <div className="text-center mt-6">
+          <button
+            onClick={logout}
+            className="text-sm text-gray-400 hover:text-primary transition-colors cursor-pointer"
+          >
+            Sign out and use a different account
+          </button>
+        </div>
       </div>
     </div>
   );

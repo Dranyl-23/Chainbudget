@@ -10,11 +10,19 @@ import { BACKEND_URL } from "@/lib/config";
 interface Organization {
   _id: string;
   name: string;
+  legalName?: string;
   type: string;
   description: string;
   logoUrl?: string;
   transparencyScore: number;
   isPrivate?: boolean;
+  verification?: {
+    status: "legacy_unverified" | "pending" | "verified" | "revoked";
+    tier?: string;
+    verifiedAt?: string;
+    dossierHash?: string;
+    attestationTxHash?: string;
+  };
 }
 
 function ExplorerOrgLogo({ logoUrl, name }: { logoUrl?: string; name: string }) {
@@ -334,7 +342,13 @@ export default function ExplorerPage() {
                     <div className="flex items-start justify-between mb-4">
                       <ExplorerOrgLogo logoUrl={org.logoUrl} name={org.name} />
                       <div className="flex flex-col items-end gap-1.5">
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                          {org.verification?.status === "verified" && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                              Verified
+                            </span>
+                          )}
                           {org.isPrivate && (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-wider bg-zinc-900 text-zinc-400 border border-zinc-800">
                               <Lock className="w-2.5 h-2.5" /> Private

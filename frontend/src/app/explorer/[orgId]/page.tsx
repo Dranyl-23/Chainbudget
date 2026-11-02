@@ -12,12 +12,22 @@ import { BACKEND_URL, getExplorerAddressUrl, getExplorerTxUrl } from "@/lib/conf
 interface Organization {
   _id: string;
   name: string;
+  legalName?: string;
+  registrationNumber?: string;
+  yearEstablished?: number;
   type: string;
   description: string;
   logoUrl?: string;
   contractAddress: string;
   transparencyScore: number;
   isPrivate?: boolean;
+  verification?: {
+    status: "legacy_unverified" | "pending" | "verified" | "revoked";
+    tier?: string;
+    verifiedAt?: string;
+    dossierHash?: string;
+    attestationTxHash?: string;
+  };
 }
 
 function DetailOrgLogo({ logoUrl, name, size = "large" }: { logoUrl?: string; name?: string; size?: "small" | "large" }) {
@@ -184,14 +194,26 @@ export default function PublicDashboardPage() {
                 <span className="px-2 py-0.5 rounded bg-zinc-900 text-[10px] font-medium text-zinc-400 uppercase tracking-wider border border-zinc-800">
                   {org.type ? org.type.replace('_', ' ') : 'ORG'}
                 </span>
-                <a 
-                  href={getExplorerAddressUrl(org.contractAddress)} 
-                  target="_blank" 
-                  rel="noopener noreferrer" 
-                  className="px-2 py-0.5 rounded bg-zinc-900 text-[10px] font-medium text-zinc-300 uppercase tracking-wider border border-zinc-800 flex items-center gap-1 hover:text-white transition-colors"
-                >
-                  <LinkIcon className="w-2.5 h-2.5 text-zinc-400" /> Polygon Amoy
-                </a>
+                {org.verification?.status === "verified" ? (
+                  <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-[10px] font-semibold text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                    <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                    Verified Legitimacy ({org.verification.tier === "light" ? "Light Tier" : "Standard Tier"})
+                  </span>
+                ) : org.verification?.status === "revoked" ? (
+                  <span className="px-2 py-0.5 rounded bg-rose-500/10 text-[10px] font-semibold text-rose-400 border border-rose-500/30">
+                    Verification Revoked
+                  </span>
+                ) : null}
+                {org.contractAddress && (
+                  <a 
+                    href={getExplorerAddressUrl(org.contractAddress)} 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="px-2 py-0.5 rounded bg-zinc-900 text-[10px] font-medium text-zinc-300 uppercase tracking-wider border border-zinc-800 flex items-center gap-1 hover:text-white transition-colors"
+                  >
+                    <LinkIcon className="w-2.5 h-2.5 text-zinc-400" /> Polygon Amoy
+                  </a>
+                )}
               </div>
               <h1 className="text-lg md:text-2xl font-semibold tracking-tight text-white mb-1">{org.name || "Unknown Organization"}</h1>
               <p className="text-xs text-zinc-400 max-w-xl leading-relaxed">{org.description || "Public verified organization ledger on Polygon."}</p>
@@ -206,6 +228,37 @@ export default function PublicDashboardPage() {
             <div className="text-2xl font-bold font-mono text-white">{org.transparencyScore || 0}%</div>
           </div>
         </div>
+
+        {/* ── On-Chain Verification Attestation Banner ── */}
+        {org.verification?.status === "verified" && (
+          <div className="p-4 rounded-xl bg-[#121215] border border-zinc-800 flex flex-wrap items-center justify-between gap-3 text-xs shadow-sm">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+              </div>
+              <div>
+                <p className="font-semibold text-white text-xs">
+                  On-Chain Legitimacy Attestation ({org.verification.tier === "light" ? "Light Tier" : "Standard Tier"})
+                </p>
+                <p className="text-[11px] text-zinc-400 font-mono">
+                  Dossier Keccak-256: {org.verification.dossierHash || "Off-chain verified"}
+                </p>
+              </div>
+            </div>
+
+            {org.verification.attestationTxHash && (
+              <a
+                href={`https://amoy.polygonscan.com/tx/${org.verification.attestationTxHash}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-xs text-emerald-400 hover:text-emerald-300 font-mono transition-colors"
+              >
+                <span>PolygonScan</span>
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            )}
+          </div>
+        )}
 
         {org.isPrivate ? (
           <div className="bg-[#121215] rounded-xl p-10 text-center border border-zinc-800 flex flex-col items-center justify-center shadow-sm">

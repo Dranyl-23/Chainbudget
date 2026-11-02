@@ -1,16 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import {
   Building2, Users, ArrowLeftRight, Activity,
   Search, RefreshCw, Ban, CheckCircle2, ChevronLeft,
   ChevronRight, Link2, Crown, AlertTriangle, BarChart3,
-  Globe, LogOut, Wallet,
+  Globe, LogOut, Wallet, ShieldCheck, ShieldAlert,
 } from "lucide-react";
 import api from "@/lib/api";
 import toast from "react-hot-toast";
+import AdminOrgVerificationsPanel from "@/components/AdminOrgVerificationsPanel";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface PlatformStats {
@@ -20,6 +21,7 @@ interface PlatformStats {
   totalUsers: number;
   totalTransactions: number;
   pendingTransactions: number;
+  pendingOrgApplications?: number;
   totalAuditLogs: number;
 }
 
@@ -34,6 +36,12 @@ interface OrgRow {
   highValueThreshold: number;
   createdAt: string;
   createdBy?: { walletAddress: string; displayName?: string };
+  verification?: {
+    status: "legacy_unverified" | "pending" | "verified" | "revoked";
+    tier?: string;
+    verifiedAt?: string;
+    dossierHash?: string;
+  };
 }
 
 interface UserRow {
@@ -81,7 +89,7 @@ export default function AdminPage() {
   const { user, isConnected, isLoading, logout, walletAddress } = useAuth();
   const router = useRouter();
 
-  const [tab, setTab] = useState<"overview" | "orgs" | "users" | "activity">("overview");
+  const [tab, setTab] = useState<"overview" | "verifications" | "orgs" | "users" | "activity">("overview");
   const [stats, setStats] = useState<PlatformStats | null>(null);
   const [orgs, setOrgs] = useState<OrgRow[]>([]);
   const [orgTotal, setOrgTotal] = useState(0);
@@ -108,6 +116,20 @@ export default function AdminPage() {
       router.push("/dashboard");
     }
   }, [isLoading, isConnected, user, router]);
+
+  const reloadOverviewData = useCallback(async () => {
+    if (!user?.isSuperAdmin) return;
+    try {
+      const [statsRes, activityRes] = await Promise.all([
+        api.get("/admin/stats"),
+        api.get("/admin/activity"),
+      ]);
+      setStats(statsRes.data);
+      setActivity(activityRes.data);
+    } catch {
+      toast.error("Failed to load platform stats");
+    }
+  }, [user?.isSuperAdmin]);
 
   // ── Effect 1: Initial Platform Stats & Activity ────────────────────────────
   useEffect(() => {
@@ -236,6 +258,24 @@ export default function AdminPage() {
     }
   };
 
+  // ── Revoke Org Verification ─────────────────────────────────────────────────
+  const handleRevokeVerification = async (org: OrgRow) => {
+    const reason = window.prompt(
+      `Enter revocation reason for "${org.name}" (min 5 characters):`
+    );
+    if (!reason || reason.trim().length < 5) return;
+    try {
+      await api.post(`/admin/organizations/${org._id}/revoke-verification`, {
+        reason: reason.trim(),
+      });
+      toast.success(`Revoked verification for "${org.name}"`);
+      refreshOrgs();
+      reloadOverviewData();
+    } catch {
+      toast.error("Failed to revoke verification");
+    }
+  };
+
   if (isLoading || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#09090b]">
@@ -300,15 +340,28 @@ export default function AdminPage() {
       <div className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
         {/* ── Tabs ─────────────────────────────────────────────────────────── */}
         <div className="flex gap-1 mb-6 p-1 rounded-lg bg-zinc-900 border border-zinc-800 overflow-x-auto hide-scrollbar w-full sm:w-fit">
-          {(["overview", "orgs", "users", "activity"] as const).map((t) => {
-            const icons = { overview: BarChart3, orgs: Building2, users: Users, activity: Activity };
-            const labels = { overview: "Overview", orgs: "Organizations", users: "Users", activity: "Activity" };
+          {(["overview", "verifications", "orgs", "users", "activity"] as const).map((t) => {
+            const icons = {
+              overview: BarChart3,
+              verifications: ShieldCheck,
+              orgs: Building2,
+              users: Users,
+              activity: Activity,
+            };
+            const labels = {
+              overview: "Overview",
+              verifications: "Verifications",
+              orgs: "Organizations",
+              users: "Users",
+              activity: "Activity",
+            };
             const Icon = icons[t];
+            const pendingCount = t === "verifications" ? stats?.pendingOrgApplications || 0 : 0;
             return (
               <button
                 key={t}
                 onClick={() => setTab(t)}
-                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-medium transition-all ${
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-medium transition-all whitespace-nowrap ${
                   tab === t
                     ? "bg-white text-zinc-950 font-semibold shadow-xs"
                     : "text-zinc-400 hover:text-white hover:bg-zinc-800/60"
@@ -316,6 +369,17 @@ export default function AdminPage() {
               >
                 <Icon className="w-3.5 h-3.5" />
                 {labels[t]}
+                {pendingCount > 0 && (
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                      tab === t
+                        ? "bg-zinc-950 text-white"
+                        : "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                    }`}
+                  >
+                    {pendingCount}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -336,10 +400,10 @@ export default function AdminPage() {
                   icon: Building2,
                 },
                 {
-                  label: "Registered Users",
-                  value: stats.totalUsers,
-                  sub: "Unique wallet addresses",
-                  icon: Users,
+                  label: "Verification Queue",
+                  value: stats.pendingOrgApplications || 0,
+                  sub: "Org legitimacy reviews pending",
+                  icon: ShieldCheck,
                 },
                 {
                   label: "Total Transactions",
@@ -350,7 +414,7 @@ export default function AdminPage() {
                 {
                   label: "Audit Events",
                   value: stats.totalAuditLogs,
-                  sub: "Platform-wide log entries",
+                  sub: `${stats.totalUsers} registered users`,
                   icon: Activity,
                 },
               ].map((card) => (
@@ -366,6 +430,30 @@ export default function AdminPage() {
                 </div>
               ))}
             </div>
+
+            {/* Pending Organization Verification Alert */}
+            {(stats.pendingOrgApplications || 0) > 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10">
+                <div className="flex items-center gap-3">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <div>
+                    <p className="text-xs font-semibold text-emerald-300">
+                      {stats.pendingOrgApplications} organization application
+                      {stats.pendingOrgApplications !== 1 ? "s" : ""} awaiting legitimacy review
+                    </p>
+                    <p className="text-[11px] text-emerald-400/80">
+                      Inspect uploaded encrypted credentials and approve to provision verified organizations on-chain.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setTab("verifications")}
+                  className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-semibold transition-colors"
+                >
+                  Open Review Queue →
+                </button>
+              </div>
+            )}
 
             {/* Status banner + pending alert */}
             {stats.pendingTransactions > 0 && (
@@ -427,6 +515,20 @@ export default function AdminPage() {
         )}
 
         {/* ══════════════════════════════════════════════════════════════════ */}
+        {/* TAB: VERIFICATIONS                                               */}
+        {/* ══════════════════════════════════════════════════════════════════ */}
+        {tab === "verifications" && (
+          <div className="animate-fade-in">
+            <AdminOrgVerificationsPanel
+              onStatsChanged={() => {
+                reloadOverviewData();
+                refreshOrgs();
+              }}
+            />
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════════ */}
         {/* TAB: ORGANIZATIONS                                               */}
         {/* ══════════════════════════════════════════════════════════════════ */}
         {tab === "orgs" && (
@@ -465,6 +567,7 @@ export default function AdminPage() {
                     <tr className="bg-[#0e0e11] border-b border-zinc-800 text-zinc-400 text-[11px] font-medium uppercase tracking-wider">
                       <th className="p-3 pl-4">Organization</th>
                       <th className="p-3">Type</th>
+                      <th className="p-3">Verification</th>
                       <th className="p-3">Members</th>
                       <th className="p-3">Transactions</th>
                       <th className="p-3">Threshold</th>
@@ -474,73 +577,102 @@ export default function AdminPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-800/80">
-                    {orgs.map((org) => (
-                      <tr key={org._id} className="hover:bg-zinc-900/50 transition-colors">
-                        <td className="p-3 pl-4">
-                          <div>
-                            <p className="font-medium text-white text-xs">{org.name}</p>
-                            <p className="text-[10px] font-mono text-zinc-500">{org._id.slice(-8)}</p>
-                          </div>
-                        </td>
-                        <td className="p-3">
-                          <span className="px-2 py-0.5 rounded bg-zinc-900 text-zinc-300 border border-zinc-800 text-[10px] uppercase font-medium">
-                            {ORG_TYPE_LABELS[org.type] || org.type}
-                          </span>
-                        </td>
-                        <td className="p-3">
-                          <span className="flex items-center gap-1 text-zinc-300">
-                            <Users className="w-3.5 h-3.5 text-zinc-500" />
-                            {org.memberCount}
-                          </span>
-                        </td>
-                        <td className="p-3">
-                          <div>
-                            <span className="text-zinc-200">{org.txCount}</span>
-                            {org.pendingCount > 0 && (
-                              <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 font-medium">
-                                {org.pendingCount} pending
+                    {orgs.map((org) => {
+                      const vStatus = org.verification?.status || "legacy_unverified";
+                      return (
+                        <tr key={org._id} className="hover:bg-zinc-900/50 transition-colors">
+                          <td className="p-3 pl-4">
+                            <div>
+                              <p className="font-medium text-white text-xs">{org.name}</p>
+                              <p className="text-[10px] font-mono text-zinc-500">{org._id.slice(-8)}</p>
+                            </div>
+                          </td>
+                          <td className="p-3">
+                            <span className="px-2 py-0.5 rounded bg-zinc-900 text-zinc-300 border border-zinc-800 text-[10px] uppercase font-medium">
+                              {ORG_TYPE_LABELS[org.type] || org.type}
+                            </span>
+                          </td>
+                          <td className="p-3">
+                            {vStatus === "verified" ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 text-[10px] font-medium">
+                                <ShieldCheck className="w-3 h-3" /> Verified
+                              </span>
+                            ) : vStatus === "revoked" ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-rose-500/10 text-rose-300 border border-rose-500/30 text-[10px] font-medium">
+                                <ShieldAlert className="w-3 h-3" /> Revoked
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-zinc-900 text-zinc-400 border border-zinc-800 text-[10px] font-medium">
+                                Legacy
                               </span>
                             )}
-                          </div>
-                        </td>
-                        <td className="p-3 text-zinc-300 font-mono">₱{org.highValueThreshold.toLocaleString()}</td>
-                        <td className="p-3 text-zinc-500 whitespace-nowrap font-mono text-[11px]">
-                          {new Date(org.createdAt).toLocaleDateString()}
-                        </td>
-                        <td className="p-3">
-                          {org.isActive ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-medium">
-                              <CheckCircle2 className="w-3 h-3" /> Active
+                          </td>
+                          <td className="p-3">
+                            <span className="flex items-center gap-1 text-zinc-300">
+                              <Users className="w-3.5 h-3.5 text-zinc-500" />
+                              {org.memberCount}
                             </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[10px] font-medium">
-                              <Ban className="w-3 h-3" /> Suspended
-                            </span>
-                          )}
-                        </td>
-                        <td className="p-3 pr-4 text-right">
-                          <button
-                            id={`admin-suspend-${org._id}`}
-                            onClick={() => toggleSuspend(org)}
-                            disabled={suspending === org._id}
-                            className={`text-[11px] font-medium px-2.5 py-1 rounded-md border transition-colors ${
-                              org.isActive
-                                ? "border-rose-500/30 text-rose-400 hover:bg-rose-500/10"
-                                : "border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
-                            } disabled:opacity-50`}
-                          >
-                            {suspending === org._id
-                              ? "..."
-                              : org.isActive
-                              ? "Suspend"
-                              : "Re-activate"}
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+                          <td className="p-3">
+                            <div>
+                              <span className="text-zinc-200">{org.txCount}</span>
+                              {org.pendingCount > 0 && (
+                                <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 font-medium">
+                                  {org.pendingCount} pending
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="p-3 text-zinc-300 font-mono">₱{org.highValueThreshold.toLocaleString()}</td>
+                          <td className="p-3 text-zinc-500 whitespace-nowrap font-mono text-[11px]">
+                            {new Date(org.createdAt).toLocaleDateString()}
+                          </td>
+                          <td className="p-3">
+                            {org.isActive ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-medium">
+                                <CheckCircle2 className="w-3 h-3" /> Active
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[10px] font-medium">
+                                <Ban className="w-3 h-3" /> Suspended
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-3 pr-4 text-right">
+                            <div className="inline-flex items-center gap-1.5">
+                              {vStatus === "verified" && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRevokeVerification(org)}
+                                  className="text-[11px] font-medium px-2 py-1 rounded-md border border-zinc-700 text-zinc-300 hover:bg-zinc-800 transition-colors"
+                                >
+                                  Revoke
+                                </button>
+                              )}
+                              <button
+                                id={`admin-suspend-${org._id}`}
+                                onClick={() => toggleSuspend(org)}
+                                disabled={suspending === org._id}
+                                className={`text-[11px] font-medium px-2.5 py-1 rounded-md border transition-colors ${
+                                  org.isActive
+                                    ? "border-rose-500/30 text-rose-400 hover:bg-rose-500/10"
+                                    : "border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
+                                } disabled:opacity-50`}
+                              >
+                                {suspending === org._id
+                                  ? "..."
+                                  : org.isActive
+                                  ? "Suspend"
+                                  : "Re-activate"}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                     {orgs.length === 0 && (
                       <tr>
-                        <td colSpan={8} className="text-center py-8 text-zinc-500 text-xs">
+                        <td colSpan={9} className="text-center py-8 text-zinc-500 text-xs">
                           No organizations found.
                         </td>
                       </tr>

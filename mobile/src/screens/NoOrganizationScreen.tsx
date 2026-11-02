@@ -1,120 +1,95 @@
 /**
- * NoOrganizationScreen.tsx — FP-9
- * Shown when a user is authenticated (has a wallet + JWT) but has no active
- * organization memberships yet.
+ * NoOrganizationScreen.tsx
+ * Shown when a user is authenticated but has no active organization memberships yet.
  * Includes:
- * 1. Share identifier (email or wallet address)
- * 2. Create new organization modal (FP-9)
- * 3. Check for membership pull-to-refresh
+ * 1. Active Verification Applications (real-time status tracker & resume button)
+ * 2. Multi-step Organization Registration Launcher
+ * 3. Share Identifier (email or wallet address) for organization invitations
+ * 4. Check for membership pull-to-refresh
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
-  View, Text, TouchableOpacity, ActivityIndicator,
-  Alert, RefreshControl, ScrollView, Modal, TextInput, Image,
+  View,
+  Text,
+  TouchableOpacity,
+  ActivityIndicator,
+  Alert,
+  RefreshControl,
+  ScrollView,
 } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Clipboard from 'expo-clipboard';
+import { useNavigation } from '@react-navigation/native';
 import api from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
-import { triggerSuccessHaptic, triggerErrorHaptic, triggerLightHaptic } from '../lib/biometrics';
-import AnimatedToggleSwitch from '../components/AnimatedToggleSwitch';
+import { useSocket } from '../context/SocketContext';
+import { triggerSuccessHaptic, triggerLightHaptic } from '../lib/biometrics';
 
-const ORG_TYPES = [
-  { value: 'student_org', label: 'Student Organization', icon: 'school-outline' },
-  { value: 'barangay', label: 'Barangay / Local Gov', icon: 'business-outline' },
-  { value: 'homeowners_association', label: 'Homeowners Assoc (HOA)', icon: 'key-outline' },
-  { value: 'ngo', label: 'NGO / Non-Profit', icon: 'heart-outline' },
-  { value: 'cooperative', label: 'Cooperative', icon: 'people-outline' },
-  { value: 'church', label: 'Church / Religious', icon: 'home-outline' },
-  { value: 'sports_club', label: 'Sports / Club', icon: 'trophy-outline' },
-  { value: 'startup', label: 'Startup / Company', icon: 'rocket-outline' },
-  { value: 'family', label: 'Family / Estate', icon: 'people-circle-outline' },
-  { value: 'fundraising', label: 'Fundraising / Charity', icon: 'gift-outline' },
-];
+interface MyOrgApplication {
+  id: string;
+  type: string;
+  displayName: string;
+  status: string;
+  currentStep: string;
+  applicantMessage?: string;
+  updatedAt?: string;
+}
+
+const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
+  draft: { label: 'Draft Incomplete', color: '#818CF8', bg: 'rgba(129, 140, 248, 0.15)' },
+  submitted: { label: 'Submitted (Review Queue)', color: '#38BDF8', bg: 'rgba(56, 189, 248, 0.15)' },
+  under_review: { label: 'Under Super-Admin Review', color: '#6366F1', bg: 'rgba(99, 102, 241, 0.15)' },
+  needs_info: { label: 'Action Required (Changes Requested)', color: '#F59E0B', bg: 'rgba(245, 158, 11, 0.15)' },
+  approved: { label: 'Verified & Approved', color: '#10B981', bg: 'rgba(16, 185, 129, 0.15)' },
+  rejected: { label: 'Application Rejected', color: '#EF4444', bg: 'rgba(239, 68, 68, 0.15)' },
+  revoked: { label: 'Verification Revoked', color: '#EF4444', bg: 'rgba(239, 68, 68, 0.15)' },
+};
 
 export default function NoOrganizationScreen() {
+  const navigation = useNavigation<any>();
   const { user, logout, refreshUser } = useAuth();
   const { colors, isDark } = useTheme();
   const { showToast } = useToast();
+  const { on: onSocketEvent } = useSocket();
+
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
-
-  // Org creation modal state
-  const [createModalVisible, setCreateModalVisible] = useState(false);
-  const [orgName, setOrgName] = useState('');
-  const [orgType, setOrgType] = useState('student_org');
-  const [orgDesc, setOrgDesc] = useState('');
-  const [threshold, setThreshold] = useState('10000');
-  const [approvals, setApprovals] = useState('2');
-  const [isPrivate, setIsPrivate] = useState(false);
-  const [creating, setCreating] = useState(false);
-
-  // Logo / Emblem state
-  const [logoUri, setLogoUri] = useState<string | null>(null);
-  const [logoUrl, setLogoUrl] = useState<string | null>(null);
-  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [applications, setApplications] = useState<MyOrgApplication[]>([]);
+  const [loadingApps, setLoadingApps] = useState(true);
 
   const identifier = user?.email || user?.walletAddress || '';
   const identifierLabel = user?.email ? 'Email' : 'Wallet Address';
 
-  const handlePickLogo = async () => {
-    await triggerLightHaptic();
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      showToast('Gallery access is needed to upload your custom organization logo.', 'warning');
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.7,
-    });
-
-    if (!result.canceled && result.assets[0]) {
-      const selectedUri = result.assets[0].uri;
-      setLogoUri(selectedUri);
-      await uploadLogoImage(selectedUri);
-    }
-  };
-
-  const uploadLogoImage = async (uri: string) => {
-    setUploadingLogo(true);
+  const loadMyApplications = useCallback(async () => {
     try {
-      const formData = new FormData();
-      const filename = uri.split('/').pop() || 'org_logo.jpg';
-      const match = /\.(\w+)$/.exec(filename);
-      const ext = match ? match[1].toLowerCase() : 'jpeg';
-      const type = ext === 'jpg' ? 'image/jpeg' : `image/${ext}`;
-
-      formData.append('file', {
-        uri,
-        name: filename,
-        type,
-      } as any);
-
-      const res = await api.post('/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-
-      if (res.data?.documentUrl) {
-        setLogoUrl(res.data.documentUrl);
-        await triggerSuccessHaptic();
-        showToast('Emblem uploaded successfully!', 'success');
-      }
-    } catch (err: any) {
-      console.error('[OrgLogoUpload] Error:', err);
-      showToast('Could not upload emblem image.', 'error');
+      const res = await api.get('/org-applications/mine');
+      setApplications(res.data?.applications || []);
+    } catch {
+      // Non-critical background fetch failure
     } finally {
-      setUploadingLogo(false);
+      setLoadingApps(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadMyApplications();
+  }, [loadMyApplications]);
+
+  // Listen to live verification status updates
+  useEffect(() => {
+    const unsub = onSocketEvent('org_verification_updated', async (payload: any) => {
+      showToast('Organization verification update received!', 'info');
+      await loadMyApplications();
+      if (payload?.status === 'approved') {
+        await refreshUser();
+      }
+    });
+    return unsub;
+  }, [loadMyApplications, onSocketEvent, refreshUser, showToast]);
 
   const copyIdentifier = async () => {
     await Clipboard.setStringAsync(identifier);
@@ -128,54 +103,21 @@ export default function NoOrganizationScreen() {
     setIsRefreshing(true);
     await triggerLightHaptic();
     try {
-      await refreshUser();
+      await Promise.all([refreshUser(), loadMyApplications()]);
     } finally {
       setIsRefreshing(false);
     }
-  }, [refreshUser]);
-
-  const handleCreateOrg = async () => {
-    if (!orgName.trim()) {
-      showToast('Please enter an organization name.', 'warning');
-      return;
-    }
-
-    setCreating(true);
-    try {
-      await api.post('/organizations', {
-        name: orgName.trim(),
-        type: orgType,
-        description: orgDesc.trim() || undefined,
-        logoUrl: logoUrl || undefined,
-        highValueThreshold: Number(threshold) || 10000,
-        requiredApprovals: Number(approvals) || 2,
-        isPrivate,
-      });
-      await triggerSuccessHaptic();
-      showToast('Organization created! Redirecting to dashboard...', 'success');
-      setCreateModalVisible(false);
-      await refreshUser();
-    } catch (err: any) {
-      await triggerErrorHaptic();
-      showToast(err.response?.data?.error || 'Failed to create organization.', 'error');
-    } finally {
-      setCreating(false);
-    }
-  };
+  }, [refreshUser, loadMyApplications]);
 
   const handleLogout = () => {
-    Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Sign Out', style: 'destructive', onPress: logout },
-      ]
-    );
+    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Sign Out', style: 'destructive', onPress: logout },
+    ]);
   };
 
   return (
-    <View style={{ backgroundColor: colors.background }} className="flex-1">
+    <View style={{ backgroundColor: colors.background, flex: 1 }}>
       <ScrollView
         contentContainerStyle={{
           flexGrow: 1,
@@ -195,11 +137,11 @@ export default function NoOrganizationScreen() {
         }
       >
         {/* Icon */}
-        <View 
+        <View
           style={{ backgroundColor: colors.primaryMuted, borderColor: colors.primary + '40' }}
           className="w-20 h-20 rounded-3xl border items-center justify-center mb-5 shadow-sm"
         >
-          <Ionicons name="business-outline" size={40} color={colors.primary} />
+          <Ionicons name="shield-checkmark-outline" size={40} color={colors.primary} />
         </View>
 
         {/* Heading */}
@@ -207,12 +149,89 @@ export default function NoOrganizationScreen() {
           No Organization Yet
         </Text>
         <Text style={{ color: colors.textSecondary }} className="text-sm text-center leading-6 mb-6">
-          Create your own organization or get invited to an existing one.
+          Register your organization through the legitimacy verification process or get invited by an administrator.
         </Text>
 
-        {/* Action: Create Organization */}
+        {/* ── Active Verification Applications Section ── */}
+        {applications.length > 0 && (
+          <View style={{ width: '100%', marginBottom: 24 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '800' }}>
+                Your Applications ({applications.length})
+              </Text>
+              <Text style={{ color: colors.textSecondary, fontSize: 11 }}>Tap to inspect</Text>
+            </View>
+
+            <View style={{ gap: 10 }}>
+              {applications.map((app) => {
+                const cfg = STATUS_CONFIG[app.status] || {
+                  label: app.status,
+                  color: colors.primary,
+                  bg: colors.primaryMuted,
+                };
+                return (
+                  <TouchableOpacity
+                    key={app.id}
+                    onPress={() => {
+                      triggerLightHaptic();
+                      navigation.navigate('CreateOrganization', { applicationId: app.id });
+                    }}
+                    style={{
+                      backgroundColor: colors.surface,
+                      borderColor: app.status === 'needs_info' ? colors.warning : colors.border,
+                      borderWidth: 1,
+                      borderRadius: 18,
+                      padding: 14,
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: isDark ? 0.2 : 0.05,
+                      shadowRadius: 4,
+                      elevation: 2,
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '800', flex: 1 }} numberOfLines={1}>
+                        {app.displayName || 'Untitled Draft'}
+                      </Text>
+                      <View style={{ backgroundColor: cfg.bg, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                        <Text style={{ color: cfg.color, fontSize: 10, fontWeight: '800' }}>{cfg.label}</Text>
+                      </View>
+                    </View>
+
+                    {app.applicantMessage ? (
+                      <Text style={{ color: colors.warning, fontSize: 11.5, marginBottom: 8 }} numberOfLines={2}>
+                        Reviewer note: {app.applicantMessage}
+                      </Text>
+                    ) : (
+                      <Text style={{ color: colors.textSecondary, fontSize: 11.5, marginBottom: 8 }}>
+                        Category: {app.type ? app.type.replace('_', ' ') : 'Organization'}
+                      </Text>
+                    )}
+
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 8, borderTopColor: colors.border, borderTopWidth: 1 }}>
+                      <Text style={{ color: colors.textMuted, fontSize: 10.5 }}>
+                        Updated: {app.updatedAt ? new Date(app.updatedAt).toLocaleDateString() : 'Recently'}
+                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                        <Text style={{ color: colors.primary, fontSize: 11.5, fontWeight: '700' }}>
+                          {app.status === 'needs_info' ? 'Update Documents' : 'View Status'}
+                        </Text>
+                        <Ionicons name="chevron-forward" size={14} color={colors.primary} />
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        )}
+
+        {/* ── Action: Create New Organization ── */}
         <TouchableOpacity
-          onPress={() => setCreateModalVisible(true)}
+          onPress={() => {
+            triggerLightHaptic();
+            navigation.navigate('CreateOrganization');
+          }}
           style={{
             width: '100%',
             marginBottom: 20,
@@ -238,9 +257,17 @@ export default function NoOrganizationScreen() {
               gap: 10,
             }}
           >
-            <Ionicons name="add-circle-outline" size={22} color="#FFFFFF" />
-            <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 16, textAlign: 'center', includeFontPadding: false }}>
-              Create an Organization
+            <Ionicons name="shield-outline" size={22} color="#FFFFFF" />
+            <Text
+              style={{
+                color: '#FFFFFF',
+                fontWeight: '800',
+                fontSize: 15,
+                textAlign: 'center',
+                includeFontPadding: false,
+              }}
+            >
+              Start Verified Org Registration
             </Text>
           </LinearGradient>
         </TouchableOpacity>
@@ -248,19 +275,28 @@ export default function NoOrganizationScreen() {
         {/* Divider */}
         <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%', marginBottom: 20 }}>
           <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
-          <Text style={{ color: colors.textMuted, marginHorizontal: 14, fontSize: 11, fontWeight: '800', letterSpacing: 0.8, textTransform: 'uppercase' }}>
+          <Text
+            style={{
+              color: colors.textMuted,
+              marginHorizontal: 14,
+              fontSize: 11,
+              fontWeight: '800',
+              letterSpacing: 0.8,
+              textTransform: 'uppercase',
+            }}
+          >
             OR JOIN EXISTING
           </Text>
           <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
         </View>
 
         {/* Step 1 — share identifier */}
-        <View 
+        <View
           style={{ backgroundColor: colors.surface, borderColor: colors.border }}
           className="w-full border rounded-3xl p-5 mb-4 shadow-sm"
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 }}>
-            <View 
+            <View
               style={{
                 width: 28,
                 height: 28,
@@ -279,8 +315,8 @@ export default function NoOrganizationScreen() {
           <Text style={{ color: colors.textSecondary, fontSize: 12.5, lineHeight: 18, marginBottom: 14 }}>
             Give this to your organization admin so they can add you:
           </Text>
-          <TouchableOpacity 
-            onPress={copyIdentifier} 
+          <TouchableOpacity
+            onPress={copyIdentifier}
             activeOpacity={0.7}
             style={{
               backgroundColor: isDark ? 'rgba(0,0,0,0.5)' : colors.backgroundSecondary,
@@ -294,7 +330,17 @@ export default function NoOrganizationScreen() {
               justifyContent: 'space-between',
             }}
           >
-            <Text style={{ color: colors.primary, flex: 1, fontFamily: 'monospace', fontSize: 12, fontWeight: '700', marginRight: 8 }} numberOfLines={1}>
+            <Text
+              style={{
+                color: colors.primary,
+                flex: 1,
+                fontFamily: 'monospace',
+                fontSize: 12,
+                fontWeight: '700',
+                marginRight: 8,
+              }}
+              numberOfLines={1}
+            >
               {identifier}
             </Text>
             <Ionicons
@@ -311,12 +357,12 @@ export default function NoOrganizationScreen() {
         </View>
 
         {/* Step 2 — wait */}
-        <View 
+        <View
           style={{ backgroundColor: colors.surface, borderColor: colors.border }}
           className="w-full border rounded-3xl p-5 mb-4 shadow-sm"
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 }}>
-            <View 
+            <View
               style={{
                 width: 28,
                 height: 28,
@@ -348,306 +394,30 @@ export default function NoOrganizationScreen() {
               alignItems: 'center',
               justifyContent: 'center',
               gap: 8,
-              width: '100%',
             }}
             onPress={handleRefresh}
-            disabled={isRefreshing}
-            activeOpacity={0.8}
+            activeOpacity={0.7}
           >
             {isRefreshing ? (
               <ActivityIndicator color={colors.primary} size="small" />
             ) : (
               <>
-                <Ionicons name="refresh-outline" size={17} color={colors.primary} />
-                <Text style={{ color: colors.primary, fontWeight: '800', fontSize: 14, textAlign: 'center', includeFontPadding: false }}>
-                  Check for membership
-                </Text>
+                <Ionicons name="refresh-outline" size={18} color={colors.primary} />
+                <Text style={{ color: colors.primary, fontWeight: '800', fontSize: 13.5 }}>Check for Membership</Text>
               </>
             )}
           </TouchableOpacity>
         </View>
 
-        {/* Info note */}
-        <View 
-          style={{ backgroundColor: colors.successBg, borderColor: colors.successBorder }}
-          className="flex-row items-start gap-2 border rounded-2xl p-4 mb-8 w-full"
+        {/* Sign Out Button */}
+        <TouchableOpacity
+          onPress={handleLogout}
+          style={{ marginTop: 8, paddingVertical: 12, paddingHorizontal: 20 }}
+          activeOpacity={0.7}
         >
-          <Ionicons name="shield-checkmark" size={16} color={colors.success} />
-          <Text style={{ color: colors.success }} className="flex-1 text-xs leading-5 font-medium">
-            Your wallet is secured on this device. Your membership will be linked automatically once the admin invites you.
-          </Text>
-        </View>
-
-        {/* Sign out */}
-        <TouchableOpacity onPress={handleLogout} className="flex-row items-center gap-1.5 py-2" activeOpacity={0.7}>
-          <Ionicons name="log-out-outline" size={16} color={colors.textMuted} />
-          <Text style={{ color: colors.textMuted }} className="text-sm font-semibold">Sign out</Text>
+          <Text style={{ color: colors.error, fontSize: 13, fontWeight: '700' }}>Sign Out</Text>
         </TouchableOpacity>
       </ScrollView>
-
-      {/* Create Organization Modal (FP-9) */}
-      <Modal
-        visible={createModalVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setCreateModalVisible(false)}
-      >
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-          <View style={{
-            backgroundColor: colors.surface,
-            borderTopLeftRadius: 28,
-            borderTopRightRadius: 28,
-            padding: 24,
-            maxHeight: '90%',
-          }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Ionicons name="business" size={24} color={colors.primary} />
-                <Text style={{ color: colors.textPrimary, fontSize: 20, fontWeight: '800' }}>New Organization</Text>
-              </View>
-              <TouchableOpacity onPress={() => setCreateModalVisible(false)}>
-                <Ionicons name="close" size={24} color={colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {/* Organization Emblem / Logo Picker */}
-              <View style={{ alignItems: 'center', marginBottom: 20 }}>
-                <TouchableOpacity
-                  onPress={handlePickLogo}
-                  disabled={uploadingLogo}
-                  activeOpacity={0.8}
-                  style={{
-                    width: 80,
-                    height: 80,
-                    borderRadius: 24,
-                    borderWidth: 2,
-                    borderColor: logoUri ? colors.primary : colors.border,
-                    borderStyle: logoUri ? 'solid' : 'dashed',
-                    backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    overflow: 'hidden',
-                    position: 'relative',
-                  }}
-                >
-                  {uploadingLogo ? (
-                    <ActivityIndicator size="small" color={colors.primary} />
-                  ) : logoUri ? (
-                    <Image source={{ uri: logoUri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-                  ) : (
-                    <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-                      <Ionicons name="camera-outline" size={24} color={colors.textMuted} />
-                      <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '700', marginTop: 2 }}>
-                        Add Logo
-                      </Text>
-                    </View>
-                  )}
-
-                  {logoUri && !uploadingLogo && (
-                    <View
-                      style={{
-                        position: 'absolute',
-                        bottom: 3,
-                        right: 3,
-                        backgroundColor: colors.primary,
-                        width: 22,
-                        height: 22,
-                        borderRadius: 11,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        borderWidth: 2,
-                        borderColor: colors.surface,
-                      }}
-                    >
-                      <Ionicons name="pencil" size={10} color="#FFFFFF" />
-                    </View>
-                  )}
-                </TouchableOpacity>
-
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 }}>
-                  <Text style={{ color: colors.textSecondary, fontSize: 11.5, fontWeight: '600' }}>
-                    {logoUri ? 'Custom Emblem Selected' : 'Organization Emblem / Logo (Optional)'}
-                  </Text>
-                  {logoUri && (
-                    <TouchableOpacity
-                      onPress={() => {
-                        setLogoUri(null);
-                        setLogoUrl(null);
-                      }}
-                      style={{ padding: 2 }}
-                    >
-                      <Ionicons name="close-circle" size={15} color={colors.error || '#EF4444'} />
-                    </TouchableOpacity>
-                  )}
-                </View>
-              </View>
-
-              {/* Organization Name */}
-              <Text style={{ color: colors.textSecondary, fontWeight: '600', marginBottom: 6 }}>Organization Name *</Text>
-              <TextInput
-                style={{
-                  backgroundColor: colors.background, color: colors.textPrimary,
-                  borderColor: colors.border, borderWidth: 1, borderRadius: 12,
-                  padding: 14, marginBottom: 16, fontSize: 15,
-                }}
-                placeholder="e.g. CS Student Council, Green Earth NGO"
-                placeholderTextColor={colors.textMuted}
-                value={orgName}
-                onChangeText={setOrgName}
-              />
-
-              {/* Organization Type */}
-              <Text style={{ color: colors.textSecondary, fontWeight: '600', marginBottom: 8 }}>Organization Type</Text>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
-                {ORG_TYPES.map((t) => (
-                  <TouchableOpacity
-                    key={t.value}
-                    onPress={() => setOrgType(t.value)}
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      paddingHorizontal: 12,
-                      paddingVertical: 8,
-                      borderRadius: 12,
-                      borderWidth: 1,
-                      backgroundColor: orgType === t.value ? colors.primaryMuted : colors.background,
-                      borderColor: orgType === t.value ? colors.primary : colors.border,
-                      gap: 6,
-                    }}
-                  >
-                    <Ionicons
-                      name={t.icon as any}
-                      size={14}
-                      color={orgType === t.value ? colors.primary : colors.textMuted}
-                    />
-                    <Text style={{
-                      color: orgType === t.value ? colors.primary : colors.textSecondary,
-                      fontSize: 12,
-                      fontWeight: orgType === t.value ? '700' : '500',
-                    }}>
-                      {t.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {/* Description */}
-              <Text style={{ color: colors.textSecondary, fontWeight: '600', marginBottom: 6 }}>Description (optional)</Text>
-              <TextInput
-                style={{
-                  backgroundColor: colors.background, color: colors.textPrimary,
-                  borderColor: colors.border, borderWidth: 1, borderRadius: 12,
-                  padding: 14, marginBottom: 16, height: 70, fontSize: 14,
-                }}
-                placeholder="Brief description of the organization's mission..."
-                placeholderTextColor={colors.textMuted}
-                multiline
-                value={orgDesc}
-                onChangeText={setOrgDesc}
-              />
-
-              {/* Threshold & Approvals */}
-              <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: colors.textSecondary, fontWeight: '600', marginBottom: 6, fontSize: 12 }}>
-                    High-Value Threshold (₱)
-                  </Text>
-                  <TextInput
-                    style={{
-                      backgroundColor: colors.background, color: colors.textPrimary,
-                      borderColor: colors.border, borderWidth: 1, borderRadius: 12,
-                      padding: 12, fontSize: 14,
-                    }}
-                    placeholder="10000"
-                    placeholderTextColor={colors.textMuted}
-                    keyboardType="numeric"
-                    value={threshold}
-                    onChangeText={setThreshold}
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: colors.textSecondary, fontWeight: '600', marginBottom: 6, fontSize: 12 }}>
-                    Required Approvals
-                  </Text>
-                  <TextInput
-                    style={{
-                      backgroundColor: colors.background, color: colors.textPrimary,
-                      borderColor: colors.border, borderWidth: 1, borderRadius: 12,
-                      padding: 12, fontSize: 14,
-                    }}
-                    placeholder="2"
-                    placeholderTextColor={colors.textMuted}
-                    keyboardType="numeric"
-                    value={approvals}
-                    onChangeText={setApprovals}
-                  />
-                </View>
-              </View>
-
-              {/* Privacy Toggle */}
-              <TouchableOpacity
-                onPress={() => setIsPrivate(!isPrivate)}
-                activeOpacity={0.8}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  backgroundColor: colors.background,
-                  borderColor: isPrivate ? colors.border : '#10B98135',
-                  borderWidth: 1,
-                  borderRadius: 16,
-                  padding: 14,
-                  marginBottom: 24,
-                }}
-              >
-                <View style={{ flex: 1, marginRight: 14 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Ionicons
-                      name={isPrivate ? 'lock-closed' : 'globe-outline'}
-                      size={16}
-                      color={isPrivate ? '#F59E0B' : '#10B981'}
-                    />
-                    <Text style={{ color: colors.textPrimary, fontWeight: '700', fontSize: 14 }}>
-                      {isPrivate ? 'Private Organization' : 'Public Transparency'}
-                    </Text>
-                  </View>
-                  <Text style={{ color: colors.textMuted, fontSize: 11, marginTop: 3, lineHeight: 16 }}>
-                    {isPrivate
-                      ? 'Transactions and budgets will be hidden from the public explorer.'
-                      : 'Transactions will be visible on the public transparency portal.'}
-                  </Text>
-                </View>
-                <AnimatedToggleSwitch
-                  value={!isPrivate}
-                  onValueChange={(val) => setIsPrivate(!val)}
-                  activeColor="#10B981"
-                  inactiveColor={isDark ? '#334155' : '#CBD5E1'}
-                />
-              </TouchableOpacity>
-
-              {/* Submit Button */}
-              <TouchableOpacity
-                onPress={handleCreateOrg}
-                disabled={creating}
-                style={{
-                  backgroundColor: colors.primary,
-                  paddingVertical: 16,
-                  borderRadius: 16,
-                  alignItems: 'center',
-                  marginBottom: 20,
-                }}
-              >
-                {creating ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={{ color: '#fff', fontWeight: '800', fontSize: 16 }}>Create Organization</Text>
-                )}
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }

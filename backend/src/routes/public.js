@@ -45,12 +45,22 @@ router.get("/organizations", async (req, res) => {
       return {
         _id: org._id,
         name: org.name,
+        legalName: org.legalName || org.name,
+        registrationNumber: org.registrationNumber || null,
+        yearEstablished: org.yearEstablished || null,
         type: org.type,
         description: org.description,
         logoUrl: org.logoUrl,
         contractAddress: org.contractAddress,
         transparencyScore,
         isPrivate: org.isPrivate || false,
+        verification: org.verification ? {
+          status: org.verification.status || "legacy_unverified",
+          tier: org.verification.tier || null,
+          verifiedAt: org.verification.verifiedAt || null,
+          dossierHash: org.verification.dossierHash || null,
+          attestationTxHash: org.verification.attestationTxHash || null,
+        } : { status: "legacy_unverified" },
       };
     });
 
@@ -82,12 +92,22 @@ router.get("/organizations/:orgId", async (req, res) => {
     res.json({
       _id: org._id,
       name: org.name,
+      legalName: org.legalName || org.name,
+      registrationNumber: org.registrationNumber || null,
+      yearEstablished: org.yearEstablished || null,
       type: org.type,
       description: org.description,
       logoUrl: org.logoUrl,
       contractAddress: org.contractAddress,
       transparencyScore,
-      isPrivate: org.isPrivate || false
+      isPrivate: org.isPrivate || false,
+      verification: org.verification ? {
+        status: org.verification.status || "legacy_unverified",
+        tier: org.verification.tier || null,
+        verifiedAt: org.verification.verifiedAt || null,
+        dossierHash: org.verification.dossierHash || null,
+        attestationTxHash: org.verification.attestationTxHash || null,
+      } : { status: "legacy_unverified" },
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

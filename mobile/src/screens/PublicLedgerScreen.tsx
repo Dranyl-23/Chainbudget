@@ -716,6 +716,27 @@ export default function PublicLedgerScreen() {
                         </Text>
                       </View>
 
+                      {org.verification?.status === 'verified' && (
+                        <View
+                          style={{
+                            backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                            borderColor: 'rgba(16, 185, 129, 0.35)',
+                            borderWidth: 1,
+                            paddingHorizontal: 6,
+                            paddingVertical: 2.5,
+                            borderRadius: 10,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 3,
+                          }}
+                        >
+                          <Ionicons name="checkmark-circle" size={9} color="#10B981" />
+                          <Text style={{ color: '#10B981', fontSize: 9, fontWeight: '800' }}>
+                            VERIFIED
+                          </Text>
+                        </View>
+                      )}
+
                       {org.isPrivate && (
                         <View
                           style={{

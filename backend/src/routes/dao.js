@@ -6,6 +6,7 @@ const DaoVote = require("../models/DaoVote");
 const User = require("../models/User");
 const Notification = require("../models/Notification");
 const { authenticate } = require("../middleware/auth");
+const { requireVerifiedOrg } = require("../middleware/orgVerification");
 const { sendEmail } = require("../services/email");
 const crypto = require("crypto");
 
@@ -75,7 +76,7 @@ router.get("/proposals", authenticate, async (req, res) => {
  * @desc    Create a new DAO proposal
  * @access  Private (Level 1 or 2 can create, or anyone based on org settings)
  */
-router.post("/proposals", authenticate, async (req, res) => {
+router.post("/proposals", authenticate, requireVerifiedOrg, async (req, res) => {
   try {
     const { orgId, organizationId, title, description, amount, durationSeconds } = req.body;
     const targetOrgId = orgId || organizationId;

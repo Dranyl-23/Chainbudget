@@ -275,7 +275,7 @@ export default function PublicOrgDetailScreen() {
                   </Text>
                   
                   {/* Category & Private Tags */}
-                  <View className="flex-row items-center gap-2 mt-1">
+                  <View className="flex-row items-center gap-2 mt-1 flex-wrap">
                     <View
                       style={{
                         backgroundColor: typeInfo.color + '15',
@@ -291,6 +291,27 @@ export default function PublicOrgDetailScreen() {
                         {typeInfo.label}
                       </Text>
                     </View>
+
+                    {org?.verification?.status === 'verified' && (
+                      <View
+                        style={{
+                          backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                          borderColor: 'rgba(16, 185, 129, 0.4)',
+                          borderWidth: 1,
+                          paddingHorizontal: 8,
+                          paddingVertical: 2.5,
+                          borderRadius: 10,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 3.5,
+                        }}
+                      >
+                        <Ionicons name="checkmark-circle" size={11} color="#10B981" />
+                        <Text style={{ color: '#10B981', fontSize: 10, fontWeight: '800' }}>
+                          VERIFIED {org?.verification?.tier === 'light' ? '(LIGHT)' : ''}
+                        </Text>
+                      </View>
+                    )}
 
                     {org?.isPrivate && (
                       <View

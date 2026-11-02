@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 /**
@@ -11,7 +11,7 @@ import type { NextRequest } from "next/server";
  */
 
 // Routes that require authentication
-const PROTECTED_PREFIXES = ["/dashboard", "/admin"];
+const PROTECTED_PREFIXES = ["/dashboard", "/admin", "/organizations"];
 
 // Routes that are public (auth callbacks, login landing page, health check)
 const PUBLIC_PREFIXES = ["/api/auth", "/_next", "/static", "/favicon.ico"];
@@ -21,10 +21,7 @@ export function middleware(request: NextRequest) {
 
   // Skip static assets and public API routes
   if (
-    pathname.startsWith("/_next") ||
-    pathname.startsWith("/static") ||
-    pathname.startsWith("/api/auth") ||
-    pathname === "/favicon.ico" ||
+    PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix)) ||
     pathname === "/"
   ) {
     return NextResponse.next();
@@ -66,5 +63,6 @@ export const config = {
      */
     "/dashboard/:path*",
     "/admin/:path*",
+    "/organizations/:path*",
   ],
 };

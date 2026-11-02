@@ -1,6 +1,28 @@
 import "@nomicfoundation/hardhat-toolbox";
+import { subtask } from "hardhat/config.js";
+import { TASK_COMPILE_SOLIDITY_GET_SOLC_BUILD } from "hardhat/builtin-tasks/task-names.js";
+import { createRequire } from "module";
 import dotenv from "dotenv";
 dotenv.config();
+
+const require = createRequire(import.meta.url);
+
+// Use local bundled solc from node_modules/solc when available (enables offline builds & tests)
+subtask(TASK_COMPILE_SOLIDITY_GET_SOLC_BUILD, async (args, _hre, runSuper) => {
+  try {
+    const compilerPath = require.resolve("solc/soljson.js");
+    const solc = require("solc");
+    const longVersion = typeof solc.version === "function" ? solc.version() : args.solcVersion;
+    return {
+      compilerPath,
+      isSolcJs: true,
+      version: args.solcVersion,
+      longVersion,
+    };
+  } catch {
+    return runSuper();
+  }
+});
 
 /** @type import('hardhat/config').HardhatUserConfig */
 export default {

@@ -213,7 +213,7 @@ class NotificationService {
   static notifyApprovalAction({ transaction, approver, organization, isFinalApproval, io = null }) {
     return notificationQueue.enqueue("approval_action", async () => {
       const title = isFinalApproval
-        ? `✅ Transaction Fully Approved: ₱${transaction.amount.toLocaleString()}`
+        ? `Transaction Fully Approved: ₱${transaction.amount.toLocaleString()}`
         : `Approval Recorded: ₱${transaction.amount.toLocaleString()}`;
       const body = `${approver.displayName || "An officer"} approved "${transaction.description}".`;
 
@@ -248,7 +248,7 @@ class NotificationService {
    */
   static notifyDaoProposalCreated({ proposal, creator, organization, memberUserIds = [], io = null }) {
     return notificationQueue.enqueue("dao_proposal_created", async () => {
-      const title = `🗳️ New DAO Proposal: ${proposal.title}`;
+      const title = `New DAO Proposal: ${proposal.title}`;
       const body = `${creator.displayName || "A member"} submitted a new budget proposal in ${organization.name}.`;
 
       // 1. In-App Notification
@@ -296,6 +296,91 @@ class NotificationService {
           screen: "OrgChat",
         },
       });
+    });
+  }
+
+  /**
+   * Event: Organization Verification Application Decision (Phase 3)
+   */
+  static notifyOrgApplicationDecision({
+    application,
+    organization = null,
+    decision,
+    applicantMessage = "",
+    io = null,
+  }) {
+    const applicantId = String(application.applicant?._id || application.applicant);
+    const orgName =
+      (application.basics && application.basics.displayName) ||
+      (organization && organization.name) ||
+      "Your Organization";
+
+    // Immediate real-time WebSocket update to the applicant's personal room
+    if (io && applicantId) {
+      io.to(`user:${applicantId}`).emit("org_verification_updated", {
+        applicationId: String(application._id),
+        status: application.status,
+        decision,
+        applicantMessage,
+        organizationId: organization ? String(organization._id) : null,
+      });
+    }
+
+    return notificationQueue.enqueue("org_application_decision", async () => {
+      let title = `Organization Update: ${orgName}`;
+      let body = applicantMessage || "Your organization application status has changed.";
+
+      if (decision === "approve") {
+        title = `Organization Verified: ${orgName}`;
+        body =
+          applicantMessage ||
+          `"${orgName}" has been verified and provisioned on ChainBudget.`;
+      } else if (decision === "needs_info") {
+        title = `Action Required: ${orgName}`;
+        body =
+          applicantMessage ||
+          "Please update your organization application with the requested information.";
+      } else if (decision === "reject") {
+        title = `Application Not Approved: ${orgName}`;
+      }
+
+      if (organization && organization._id) {
+        await NotificationService.createInAppNotification({
+          organizationId: organization._id,
+          recipientUserId: applicantId,
+          title,
+          message: body,
+          type: "system",
+          io,
+        });
+      }
+
+      if (applicantId) {
+        await NotificationService.sendPush([applicantId], {
+          title,
+          body,
+          category: "securityAlerts",
+          channelId: "chainbudget-system",
+          data: {
+            applicationId: String(application._id),
+            organizationId: organization ? String(organization._id) : undefined,
+            screen: "CreateOrganization",
+          },
+        });
+      }
+
+      const email = application.contact && application.contact.email;
+      if (email) {
+        const html = `
+          <div style="font-family:Arial,sans-serif;max-width:520px">
+            <h2>${escapeHtml(title)}</h2>
+            <p>${escapeHtml(body)}</p>
+            <p style="font-size:12px;color:#666">Application ID: ${escapeHtml(
+              String(application._id)
+            )} · Status: ${escapeHtml(String(application.status))}</p>
+          </div>`;
+        await sendEmail(email, `ChainBudget — ${title}`, html);
+      }
     });
   }
 }
