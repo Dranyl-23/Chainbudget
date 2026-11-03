@@ -6,6 +6,7 @@ import Link from "next/link";
 import Image from "next/image";
 import axios from "axios";
 import api from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 import toast from "react-hot-toast";
 import { getExplorerTxUrl } from "@/lib/config";
 
@@ -32,6 +33,7 @@ interface OverviewData {
 }
 
 export default function VerifyPage() {
+  const { isConnected } = useAuth();
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<PublicTx | null>(null);
@@ -89,9 +91,18 @@ export default function VerifyPage() {
             ChainBudget
           </span>
         </Link>
-        <Link href="/" className="text-xs font-medium text-zinc-400 hover:text-white flex items-center gap-1.5 transition-colors">
-          <ArrowLeft className="w-3.5 h-3.5" /> Back to Home
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link href="/explorer" className="text-xs font-medium text-zinc-400 hover:text-white transition-colors">
+            Public Explorer
+          </Link>
+          <Link 
+            href={isConnected ? "/dashboard" : "/"} 
+            className="text-xs font-medium text-zinc-400 hover:text-white flex items-center gap-1.5 transition-colors"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" /> 
+            <span>{isConnected ? "Back to Dashboard" : "Back to Home"}</span>
+          </Link>
+        </div>
       </nav>
 
       <main className="flex-1 flex flex-col items-center justify-center px-4 py-12 relative z-10">

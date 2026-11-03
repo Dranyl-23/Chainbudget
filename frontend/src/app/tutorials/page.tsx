@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useState, type ReactNode } from "react";
+import { useAuth } from "@/context/AuthContext";
 import { BookOpen, Video, Building2, Users, LogIn, CheckCircle2, ArrowRight, ExternalLink, Sparkles } from "lucide-react";
 
 interface TutorialStep {
@@ -218,21 +219,30 @@ const TutorialSection = ({ tutorial }: { tutorial: TutorialItem }) => {
 };
 
 export default function TutorialsPage() {
+  const { isConnected } = useAuth();
+
   return (
     <main className="min-h-screen bg-[#09090b] text-white">
       {/* Nav */}
       <nav className="relative z-20 flex items-center justify-between px-4 md:px-8 py-3.5 border-b border-zinc-800 bg-[#09090b]/90 backdrop-blur-md">
-        <Link href="/" className="flex items-center gap-2.5">
+        <Link href={isConnected ? "/dashboard" : "/"} className="flex items-center gap-2.5">
           <Image src="/3D-Chainbudget.png" alt="ChainBudget" width={32} height={32} className="object-contain shrink-0" />
           <span className="text-base font-semibold tracking-tight text-white">
             ChainBudget
           </span>
         </Link>
         <div className="flex items-center gap-2">
-          <Link href="/" className="text-xs text-zinc-400 hover:text-white transition-colors px-3 py-1 rounded-lg border border-zinc-800 hover:bg-zinc-900">← Home</Link>
-          <Link href="/dashboard" className="text-xs px-3 py-1 rounded-lg bg-white text-zinc-950 font-semibold hover:bg-zinc-200 transition-colors">
-            Dashboard
+          <Link 
+            href={isConnected ? "/dashboard" : "/"} 
+            className="text-xs text-zinc-400 hover:text-white transition-colors px-3 py-1.5 rounded-lg border border-zinc-800 hover:bg-zinc-900"
+          >
+            {isConnected ? "← Back to Dashboard" : "← Home"}
           </Link>
+          {isConnected && (
+            <Link href="/dashboard" className="text-xs px-3 py-1.5 rounded-lg bg-white text-zinc-950 font-semibold hover:bg-zinc-200 transition-colors">
+              Enter Workspace
+            </Link>
+          )}
         </div>
       </nav>
 

@@ -183,6 +183,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   ], [pendingCount]);
 
+  // Dynamic Contextual Breadcrumbs
+  const breadcrumb = useMemo(() => {
+    if (pathname === "/dashboard") return { group: "Workspace", page: "Overview" };
+    if (pathname.startsWith("/dashboard/transactions")) return { group: "Financials", page: "Transactions" };
+    if (pathname.startsWith("/dashboard/budget")) return { group: "Financials", page: "Budgets & Envelopes" };
+    if (pathname.startsWith("/dashboard/treasury")) return { group: "Financials", page: "Treasury Safe" };
+    if (pathname.startsWith("/dashboard/approvals")) return { group: "Governance", page: "Multi-Sig Approvals" };
+    if (pathname.startsWith("/dashboard/dao")) return { group: "Governance", page: "DAO Proposals" };
+    if (pathname.startsWith("/dashboard/reports")) return { group: "Accountability", page: "Reports & Statements" };
+    if (pathname.startsWith("/dashboard/audit")) return { group: "Accountability", page: "Cryptographic Audit" };
+    if (pathname.startsWith("/dashboard/notifications")) return { group: "Workspace", page: "Notifications" };
+    if (pathname.startsWith("/dashboard/team")) return { group: "Workspace", page: "Team & Permissions" };
+    if (pathname.startsWith("/dashboard/settings")) return { group: "Workspace", page: "Settings" };
+    return { group: "Dashboard", page: "Overview" };
+  }, [pathname]);
+
   useEffect(() => {
     if (!isLoading && !isConnected) {
       router.push("/");
@@ -262,14 +278,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       toast.success("Wallet address copied to clipboard!");
     }
   };
-
-  // Quick tabs for Top Bar
-  const topTabs = [
-    { label: "Dashboard", href: "/dashboard" },
-    { label: "Transactions", href: "/dashboard/transactions" },
-    { label: "Approvals", href: "/dashboard/approvals" },
-    { label: "Budgets", href: "/dashboard/budget" },
-  ];
 
   return (
     <div className="h-screen flex flex-col md:flex-row overflow-hidden bg-[#09090b] text-zinc-100 font-sans">
@@ -603,26 +611,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </span>
             </div>
 
-            {/* Studio Context Tabs */}
-            <div className="hidden lg:flex items-center gap-1 border-l border-zinc-800 pl-4">
-              {topTabs.map((tab) => {
-                const isActive = tab.href === "/dashboard" 
-                  ? pathname === "/dashboard" 
-                  : pathname.startsWith(tab.href);
-                return (
-                  <Link
-                    key={tab.label}
-                    href={tab.href}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                      isActive 
-                        ? "bg-zinc-800 text-white font-semibold" 
-                        : "text-zinc-400 hover:text-white hover:bg-zinc-900"
-                    }`}
-                  >
-                    {tab.label}
-                  </Link>
-                );
-              })}
+            {/* Dynamic Breadcrumbs */}
+            <div className="hidden lg:flex items-center gap-2 border-l border-zinc-800 pl-4 text-xs">
+              <span className="text-zinc-500 font-medium">{breadcrumb.group}</span>
+              <span className="text-zinc-700">/</span>
+              <span className="text-white font-semibold">{breadcrumb.page}</span>
             </div>
           </div>
 

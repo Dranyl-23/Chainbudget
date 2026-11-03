@@ -178,7 +178,10 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
   }, []);
 
   return (
-    <Animated.View style={[styles.container, { opacity: containerFade, paddingTop: insets.top }]}>
+    <Animated.View 
+      onTouchEnd={onFinish}
+      style={[styles.container, { opacity: containerFade, paddingTop: insets.top }]}
+    >
       {/* ── ATMOSPHERIC BACKGROUND ── */}
       <View style={StyleSheet.absoluteFill}>
         <LinearGradient

@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, Check, Plus, Building, ShieldCheck } from "lucide-react";
+import { ChevronDown, Check, Plus, Building, ShieldCheck, Clock } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import api from "@/lib/api";
+import { MyOrgApplicationSummary } from "@/lib/orgApplications";
 
 interface Organization {
   _id: string;
@@ -75,6 +76,7 @@ export default function OrgSelector() {
   const { activeOrgId, setActiveOrgId } = useAuth();
   const router = useRouter();
   const [orgs, setOrgs] = useState<Organization[]>([]);
+  const [pendingAppsCount, setPendingAppsCount] = useState<number>(0);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -84,13 +86,22 @@ export default function OrgSelector() {
 
     const loadOrgs = async () => {
       try {
-        const res = await api.get<Organization[]>("/organizations");
+        const [orgsRes, appsRes] = await Promise.allSettled([
+          api.get<Organization[]>("/organizations"),
+          api.get<MyOrgApplicationSummary[]>("/org-applications/mine"),
+        ]);
         if (!isCancelled) {
-          const organizations = res.data || [];
-          setOrgs(organizations);
+          if (orgsRes.status === "fulfilled") {
+            const organizations = orgsRes.value.data || [];
+            setOrgs(organizations);
 
-          if (!activeOrgId && organizations.length > 0) {
-            setActiveOrgId(organizations[0]._id);
+            if (!activeOrgId && organizations.length > 0) {
+              setActiveOrgId(organizations[0]._id);
+            }
+          }
+          if (appsRes.status === "fulfilled") {
+            const myApps = appsRes.value.data || [];
+            setPendingAppsCount(myApps.length);
           }
         }
       } catch (err: unknown) {
@@ -128,7 +139,7 @@ export default function OrgSelector() {
     <div className="relative w-full select-none" ref={dropdownRef}>
       {/* Selector Button */}
       <div
-        className="flex items-center justify-between px-2.5 py-2 rounded-lg cursor-pointer transition-colors bg-[#121215] border border-zinc-800 hover:border-zinc-700 select-none shadow-xs"
+        className="flex items-center justify-between px-2.5 py-2 rounded-lg cursor-pointer transition-colors bg-surface border border-zinc-800 hover:border-zinc-700 select-none shadow-xs"
         onClick={() => setDropdownOpen(!dropdownOpen)}
       >
         <div className="flex items-center gap-2.5 overflow-hidden min-w-0">
@@ -160,7 +171,7 @@ export default function OrgSelector() {
 
       {/* Dropdown Menu */}
       {dropdownOpen && (
-        <div className="absolute top-full left-0 right-0 mt-1.5 w-full bg-[#121215] rounded-xl shadow-2xl border border-zinc-800 py-1.5 z-50 animate-fade-in">
+        <div className="absolute top-full left-0 right-0 mt-1.5 w-full bg-surface rounded-xl shadow-2xl border border-zinc-800 py-1.5 z-50 animate-fade-in">
           <div className="max-h-52 overflow-y-auto custom-scrollbar p-1 space-y-0.5">
             {orgs.map((org) => {
               const isSelected = activeOrgId === org._id;
@@ -194,7 +205,26 @@ export default function OrgSelector() {
               </div>
             )}
           </div>
-          <div className="border-t border-zinc-800/80 mt-1 pt-1 px-1">
+          <div className="border-t border-zinc-800/80 mt-1 pt-1 px-1 space-y-0.5">
+            {pendingAppsCount > 0 && (
+              <button
+                type="button"
+                className="w-full px-2.5 py-1.5 text-xs text-amber-300 hover:text-white hover:bg-zinc-900 rounded-lg cursor-pointer flex items-center justify-between font-medium transition-colors"
+                onClick={() => {
+                  setDropdownOpen(false);
+                  router.push("/organizations/new");
+                }}
+              >
+                <div className="flex items-center gap-2">
+                  <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <span className="truncate">Track Applications</span>
+                </div>
+                <span className="text-[10px] font-bold bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.2 rounded-full text-amber-400 font-mono">
+                  {pendingAppsCount}
+                </span>
+              </button>
+            )}
+
             <button
               type="button"
               className="w-full px-2.5 py-2 text-xs text-zinc-300 hover:text-white hover:bg-zinc-900 rounded-lg cursor-pointer flex items-center gap-2 font-medium transition-colors whitespace-nowrap"

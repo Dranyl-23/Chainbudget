@@ -26,6 +26,7 @@ import { pruneExpiredCache } from './src/lib/cache';
 
 import { ToastProvider } from './src/context/ToastContext';
 import OfflineBanner from './src/components/OfflineBanner';
+import ErrorBoundary from './src/components/ErrorBoundary';
 import {
   useFonts,
   Inter_400Regular,
@@ -129,7 +130,7 @@ const RootNavigator = ({ navigationRef }: { navigationRef: React.MutableRefObjec
   const { colors, navigationTheme } = useTheme();
   const [isSplashComplete, setIsSplashComplete] = useState(false);
 
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
     Inter_600SemiBold,
@@ -137,7 +138,17 @@ const RootNavigator = ({ navigationRef }: { navigationRef: React.MutableRefObjec
     Inter_800ExtraBold,
   });
 
-  if (!fontsLoaded || !isSplashComplete || isLoading) {
+  // Safety fallback: Never trap user on splash screen if fonts fail or take too long
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsSplashComplete(true);
+    }, 3800);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const fontsSettled = fontsLoaded || !!fontError;
+
+  if (!isSplashComplete || (isLoading && !fontsSettled)) {
     return <SplashScreen onFinish={() => setIsSplashComplete(true)} />;
   }
 
@@ -229,26 +240,28 @@ export default function App() {
   }, []);
 
   return (
-    <SafeAreaProvider style={{ flex: 1, backgroundColor: '#05040F' }}>
-      <ThemeProvider>
-        <ToastProvider>
-          <OfflineBanner />
-          <AuthProvider>
-            {/* OrgProvider must be inside AuthProvider (uses useAuth) but outside
-                SocketProvider and all screens so the shared org state is available
-                everywhere. */}
-            <OrgProvider>
-              <SocketProvider>
-                <AppLockProvider>
-                  <RootNavigator navigationRef={navigationRef} />
-                  <AppLockOverlay />
-                </AppLockProvider>
-              </SocketProvider>
-            </OrgProvider>
-          </AuthProvider>
-        </ToastProvider>
-      </ThemeProvider>
-    </SafeAreaProvider>
+    <ErrorBoundary>
+      <SafeAreaProvider style={{ flex: 1, backgroundColor: '#05040F' }}>
+        <ThemeProvider>
+          <ToastProvider>
+            <OfflineBanner />
+            <AuthProvider>
+              {/* OrgProvider must be inside AuthProvider (uses useAuth) but outside
+                  SocketProvider and all screens so the shared org state is available
+                  everywhere. */}
+              <OrgProvider>
+                <SocketProvider>
+                  <AppLockProvider>
+                    <RootNavigator navigationRef={navigationRef} />
+                    <AppLockOverlay />
+                  </AppLockProvider>
+                </SocketProvider>
+              </OrgProvider>
+            </AuthProvider>
+          </ToastProvider>
+        </ThemeProvider>
+      </SafeAreaProvider>
+    </ErrorBoundary>
   );
 }
 

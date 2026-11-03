@@ -47,6 +47,10 @@
   },
   "scripts": {
     "start": "expo start",
+    "start:clear": "expo start -c",
+    "start:tunnel": "expo start --tunnel -c",
+    "start:lan": "expo start --lan -c",
+    "start:localhost": "expo start --localhost -c",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",

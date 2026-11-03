@@ -6,7 +6,7 @@ import {
   ArrowUpRight, ArrowDownRight, Wallet, Activity,
   ShieldCheck, FileText, BarChart3, CheckCircle2,
   AlertTriangle, TrendingDown, Clock, ExternalLink,
-  ChevronRight, Plus, Send, QrCode, History, Layers
+  ChevronRight, Plus, Send, QrCode, History, Layers, Vote
 } from "lucide-react";
 import {
   XAxis, YAxis, CartesianGrid,
@@ -661,13 +661,23 @@ export default function DashboardPage() {
                 <span className="font-medium text-zinc-300">Record Expense</span>
               </Link>
 
-              <Link 
-                href="/dashboard/approvals"
-                className="p-3 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-center transition-colors flex flex-col items-center justify-center gap-1.5"
-              >
-                <ShieldCheck className="w-4 h-4 text-zinc-300" />
-                <span className="font-medium text-zinc-300">Multi-Sig Queue</span>
-              </Link>
+              {roleLevel <= 2 ? (
+                <Link 
+                  href="/dashboard/approvals"
+                  className="p-3 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-center transition-colors flex flex-col items-center justify-center gap-1.5"
+                >
+                  <ShieldCheck className="w-4 h-4 text-zinc-300" />
+                  <span className="font-medium text-zinc-300">Multi-Sig Queue</span>
+                </Link>
+              ) : (
+                <Link 
+                  href="/dashboard/dao"
+                  className="p-3 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-center transition-colors flex flex-col items-center justify-center gap-1.5"
+                >
+                  <Vote className="w-4 h-4 text-zinc-300" />
+                  <span className="font-medium text-zinc-300">DAO Proposals</span>
+                </Link>
+              )}
 
               <Link 
                 href="/dashboard/budget"

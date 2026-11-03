@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useAuth } from "@/context/AuthContext";
 import {
   ShieldCheck,
   Lock,
@@ -20,13 +21,20 @@ import {
 } from "lucide-react";
 
 export default function PrivacyPolicyPage() {
+  const { isConnected } = useAuth();
+
   return (
     <main className="min-h-screen bg-[#09090b] text-white relative overflow-hidden flex flex-col">
       {/* ── Header Bar ── */}
       <header className="relative z-20 border-b border-zinc-800 bg-[#09090b]/90 backdrop-blur-md px-4 md:px-8 py-3.5 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors">
+        <Link 
+          href={isConnected ? "/dashboard" : "/"} 
+          className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors"
+        >
           <ArrowLeft className="w-4 h-4" />
-          <span className="text-xs font-medium">Back to Home</span>
+          <span className="text-xs font-medium">
+            {isConnected ? "Back to Dashboard" : "Back to Home"}
+          </span>
         </Link>
         <div className="flex items-center gap-2">
           <img src="/3D-Chainbudget.png" alt="ChainBudget" className="w-7 h-7 object-contain" />

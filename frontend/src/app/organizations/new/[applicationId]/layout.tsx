@@ -15,6 +15,7 @@ import {
   OrgRegistrationProvider,
   useOrgRegistration,
 } from "@/context/OrgRegistrationContext";
+import { useAuth } from "@/context/AuthContext";
 import {
   formatStatusLabel,
   isEditableStatus,
@@ -22,15 +23,31 @@ import {
 } from "@/lib/orgApplications";
 
 const STEP_DISPLAY: Record<string, { label: string; subtitle: string }> = {
-  details: { label: "Org Details", subtitle: "Legal identity" },
-  representative: { label: "Identity", subtitle: "Signatory KYC" },
-  documents: { label: "Documents", subtitle: "Evidence vault" },
-  governance: { label: "Governance", subtitle: "Quorum & rules" },
-  review: { label: "Review", subtitle: "Verify & submit" },
+  details: {
+    label: "Organization details",
+    subtitle: "Legal identity, location and purpose",
+  },
+  representative: {
+    label: "Your identity",
+    subtitle: "Who is registering this organization",
+  },
+  documents: {
+    label: "Documents",
+    subtitle: "Upload the evidence for your organization type",
+  },
+  governance: {
+    label: "Governance",
+    subtitle: "Approval rules and initial officers",
+  },
+  review: {
+    label: "Review & submit",
+    subtitle: "Confirm everything and send for verification",
+  },
 };
 
 function RegistrationShell({ children }: { children: React.ReactNode }) {
   const { application, requirements, loading, error } = useOrgRegistration();
+  const { user } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
 
@@ -86,10 +103,21 @@ function RegistrationShell({ children }: { children: React.ReactNode }) {
       {/* Sticky Top Header */}
       <header className="border-b border-zinc-800/80 bg-[#0c0c0f]/95 backdrop-blur-md sticky top-0 z-20">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            {user?.memberships && user.memberships.length > 0 && (
+              <>
+                <Link
+                  href="/dashboard"
+                  className="hidden sm:inline-flex items-center gap-1.5 text-xs font-medium text-zinc-400 hover:text-white px-2.5 py-1.5 rounded-lg hover:bg-zinc-900 border border-transparent hover:border-zinc-800 shrink-0 transition-colors"
+                >
+                  Dashboard
+                </Link>
+                <div className="hidden sm:block h-4 w-px bg-zinc-800 shrink-0" />
+              </>
+            )}
             <Link
               href="/organizations/new"
-              className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-400 hover:text-white px-2.5 py-1.5 rounded-lg hover:bg-zinc-900 border border-transparent hover:border-zinc-800 shrink-0"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-400 hover:text-white px-2.5 py-1.5 rounded-lg hover:bg-zinc-900 border border-transparent hover:border-zinc-800 shrink-0 transition-colors"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               All Applications
@@ -97,12 +125,12 @@ function RegistrationShell({ children }: { children: React.ReactNode }) {
             <div className="h-4 w-px bg-zinc-800 shrink-0" />
             <div className="flex items-center gap-2 min-w-0">
               <Image
-                src="/images/logo.png"
+                src="/3D-Chainbudget.png"
                 alt="ChainBudget"
                 width={22}
                 height={22}
                 unoptimized
-                className="w-5 h-5 rounded shrink-0"
+                className="w-5 h-5 rounded shrink-0 object-contain"
               />
               <span className="text-sm font-semibold text-white truncate">
                 {application.basics.displayName || requirements.label}
@@ -132,9 +160,9 @@ function RegistrationShell({ children }: { children: React.ReactNode }) {
 
         {/* Multi-Step Progress Navigation Bar */}
         {editable && (
-          <div className="border-t border-zinc-800/70 bg-[#101014]">
-            <div className="max-w-5xl mx-auto px-4 sm:px-6 py-2.5">
-              <ol className="grid grid-cols-5 gap-1.5 sm:gap-2.5 w-full">
+          <nav aria-label="Registration Progress" className="border-t border-zinc-800/70 bg-[#09090c]">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5">
+              <ol className="flex items-center justify-between gap-3 overflow-x-auto no-scrollbar">
                 {steps.map((step, idx) => {
                   const stepHref = `/organizations/new/${application.id}/${step.key}`;
                   const isActive = pathname.endsWith(`/${step.key}`);
@@ -145,33 +173,39 @@ function RegistrationShell({ children }: { children: React.ReactNode }) {
                   };
 
                   return (
-                    <li key={step.key} className="min-w-0">
+                    <li key={step.key} className="shrink-0 min-w-max">
                       <Link
                         href={stepHref}
-                        className={`flex items-center gap-2 p-2 sm:p-2.5 rounded-xl border transition-all ${
+                        className={`flex items-center gap-3 px-4 py-2 rounded-2xl border transition-all ${
                           isActive
-                            ? "bg-indigo-600/15 border-indigo-500 text-white shadow-sm shadow-indigo-500/10"
-                            : isDone
-                            ? "bg-zinc-900/70 border-zinc-800 text-zinc-200 hover:border-zinc-700"
-                            : "bg-zinc-900/30 border-zinc-800/60 text-zinc-500 hover:text-zinc-300 hover:border-zinc-700"
+                            ? "border-indigo-500/80 bg-[#16152a] text-white shadow-sm shadow-indigo-500/10"
+                            : "border-transparent hover:border-zinc-800/80 hover:bg-zinc-900/40 text-zinc-400"
                         }`}
                       >
                         <div
-                          className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full text-[11px] sm:text-xs font-bold flex items-center justify-center shrink-0 ${
+                          className={`w-7 h-7 rounded-full text-xs font-bold flex items-center justify-center shrink-0 transition-colors ${
                             isDone
                               ? "bg-emerald-500 text-zinc-950"
                               : isActive
-                              ? "bg-indigo-500 text-white shadow-sm ring-2 ring-indigo-500/30"
-                              : "bg-zinc-800 text-zinc-400"
+                              ? "bg-[#524bf2] text-white shadow-sm"
+                              : "bg-[#1e2029] text-zinc-400"
                           }`}
                         >
-                          {isDone ? <Check className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> : idx + 1}
+                          {isDone ? <Check className="w-3.5 h-3.5 stroke-[2.5]" /> : idx + 1}
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="text-[11px] sm:text-xs font-semibold truncate">
+                        <div className="min-w-0 text-left">
+                          <div
+                            className={`text-sm font-semibold tracking-tight leading-tight ${
+                              isActive ? "text-white" : isDone ? "text-zinc-200" : "text-zinc-300"
+                            }`}
+                          >
                             {display.label}
                           </div>
-                          <div className="text-[10px] text-zinc-400 truncate hidden lg:block">
+                          <div
+                            className={`text-[11px] leading-tight mt-0.5 ${
+                              isActive ? "text-zinc-400" : "text-zinc-500"
+                            }`}
+                          >
                             {display.subtitle}
                           </div>
                         </div>
@@ -181,7 +215,7 @@ function RegistrationShell({ children }: { children: React.ReactNode }) {
                 })}
               </ol>
             </div>
-          </div>
+          </nav>
         )}
       </header>
 

@@ -50,6 +50,14 @@ const ID_TYPES = [
   { value: 'voters_id', label: "Voter's ID" },
 ];
 
+const WIZARD_STEPS = [
+  { key: 'details', number: 1, title: 'Organization details', subtitle: 'Legal identity, location & purpose' },
+  { key: 'representative', number: 2, title: 'Your identity', subtitle: 'Who is registering this organization' },
+  { key: 'documents', number: 3, title: 'Documents', subtitle: 'Upload evidence for your organization' },
+  { key: 'governance', number: 4, title: 'Governance', subtitle: 'Approval rules and initial officers' },
+  { key: 'review', number: 5, title: 'Review & submit', subtitle: 'Confirm everything and send for verification' },
+];
+
 const getPillarBadge = (grp: any) => {
   const kinds = grp?.kinds || [];
   if (grp?.id?.startsWith('rep_') || kinds.some((k: string) => k.includes('id') || k.includes('selfie'))) {
@@ -672,9 +680,9 @@ export default function CreateOrganizationScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       {/* ── Wizard Header Progress Bar ── */}
       {stepIndex >= 1 && stepIndex <= 5 && (
-        <View style={{ backgroundColor: colors.surface, borderBottomColor: colors.border, borderBottomWidth: 1, paddingVertical: 12, paddingHorizontal: 16 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-            <TouchableOpacity onPress={() => setStepIndex((prev) => Math.max(1, prev - 1))} className="flex-row items-center gap-1">
+        <View style={{ backgroundColor: colors.surface, borderBottomColor: colors.border, borderBottomWidth: 1, paddingVertical: 10, paddingHorizontal: 16 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <TouchableOpacity onPress={() => setStepIndex((prev) => Math.max(1, prev - 1))} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
               <Ionicons name="arrow-back" size={16} color={colors.primary} />
               <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '700' }}>Back</Text>
             </TouchableOpacity>
@@ -682,7 +690,72 @@ export default function CreateOrganizationScreen() {
               STEP {stepIndex} OF 5
             </Text>
           </View>
-          <View style={{ height: 4, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)', borderRadius: 2, overflow: 'hidden' }}>
+
+          {/* Horizontal Step Stepper matching Web Design */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 6 }}>
+            {WIZARD_STEPS.map((s) => {
+              const isActive = stepIndex === s.number;
+              const isPast = stepIndex > s.number;
+              return (
+                <View
+                  key={s.key}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 8,
+                    paddingHorizontal: 12,
+                    paddingVertical: 7,
+                    borderRadius: 16,
+                    borderWidth: 1,
+                    borderColor: isActive ? colors.primary : isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
+                    backgroundColor: isActive
+                      ? (isDark ? 'rgba(99, 102, 241, 0.15)' : 'rgba(99, 102, 241, 0.08)')
+                      : 'transparent',
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 22,
+                      height: 22,
+                      borderRadius: 11,
+                      backgroundColor: isPast ? '#10b981' : isActive ? colors.primary : (isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'),
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    {isPast ? (
+                      <Ionicons name="checkmark" size={13} color="#fff" />
+                    ) : (
+                      <Text style={{ color: isActive ? '#fff' : colors.textSecondary, fontSize: 11, fontWeight: '700' }}>
+                        {s.number}
+                      </Text>
+                    )}
+                  </View>
+                  <View>
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        fontWeight: '700',
+                        color: isActive ? colors.textPrimary : isPast ? colors.textSecondary : colors.textMuted,
+                      }}
+                    >
+                      {s.title}
+                    </Text>
+                    <Text
+                      style={{
+                        fontSize: 9.5,
+                        color: isActive ? colors.textSecondary : colors.textMuted,
+                      }}
+                    >
+                      {s.subtitle}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })}
+          </ScrollView>
+
+          <View style={{ height: 3, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)', borderRadius: 2, overflow: 'hidden', marginTop: 4 }}>
             <View style={{ height: '100%', width: `${(stepIndex / 5) * 100}%`, backgroundColor: colors.primary }} />
           </View>
         </View>
