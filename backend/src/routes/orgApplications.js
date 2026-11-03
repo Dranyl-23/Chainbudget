@@ -166,7 +166,7 @@ router.get("/mine", authenticate, async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 router.post("/", authenticate, writeLimiter, requireIdempotency, async (req, res) => {
   try {
-    const { type } = req.body || {};
+    const type = (req.body?.type || req.body?.orgType)?.trim?.() || (req.body?.type || req.body?.orgType);
     if (!requirements.isValidType(type)) {
       return res.status(400).json({ error: "A valid organization type is required" });
     }

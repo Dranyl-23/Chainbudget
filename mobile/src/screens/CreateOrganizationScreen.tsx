@@ -227,20 +227,24 @@ export default function CreateOrganizationScreen() {
       try {
         if (appId) {
           const res = await api.get(`/org-applications/${appId}`);
-          if (!isCancelled && res.data?.application) {
-            populateFromApp(res.data.application);
-            await loadRequirements(res.data.application.type || 'student_org');
+          const appData = res.data?.application || res.data;
+          if (!isCancelled && appData) {
+            populateFromApp(appData);
+            await loadRequirements(appData.type || 'student_org');
           }
         } else {
           // Check for existing drafts first
           const mineRes = await api.get('/org-applications/mine');
-          const mine = mineRes.data?.applications || [];
+          const mine = Array.isArray(mineRes.data)
+            ? mineRes.data
+            : mineRes.data?.applications || [];
           if (!isCancelled && mine.length > 0) {
             const activeDraft = mine[0];
             const fullRes = await api.get(`/org-applications/${activeDraft.id}`);
-            if (!isCancelled && fullRes.data?.application) {
-              populateFromApp(fullRes.data.application);
-              await loadRequirements(fullRes.data.application.type || 'student_org');
+            const appData = fullRes.data?.application || fullRes.data;
+            if (!isCancelled && appData) {
+              populateFromApp(appData);
+              await loadRequirements(appData.type || 'student_org');
               return;
             }
           }
@@ -266,9 +270,10 @@ export default function CreateOrganizationScreen() {
         showToast(`Verification status updated: ${payload.status}`, 'info');
         try {
           const res = await api.get(`/org-applications/${appId}`);
-          if (res.data?.application) {
-            populateFromApp(res.data.application);
-            if (res.data.application.status === 'approved') {
+          const appData = res.data?.application || res.data;
+          if (appData) {
+            populateFromApp(appData);
+            if (appData.status === 'approved') {
               await triggerSuccessHaptic();
               setShowSuccessModal(true);
               Animated.spring(scaleAnim, { toValue: 1, friction: 6, useNativeDriver: true }).start();
@@ -282,17 +287,41 @@ export default function CreateOrganizationScreen() {
 
   // Handle Category selection & create draft (Step 0 -> Step 1)
   const handleStartApplication = async () => {
+    if (!user?.walletAddress) {
+      showToast('Please link a wallet in your Profile before registering an organization.', 'warning');
+      return;
+    }
+
     setSavingStep(true);
     await triggerLightHaptic();
     try {
-      const res = await api.post('/org-applications', { orgType: selectedType });
-      const created = res.data?.application;
-      setAppId(created.id);
-      populateFromApp(created);
-      await loadRequirements(selectedType);
-      setStepIndex(1);
-      showToast('Draft created! Proceed with organization details.', 'success');
+      const res = await api.post('/org-applications', {
+        type: selectedType,
+        orgType: selectedType,
+      });
+      const created = res.data?.application || res.data;
+      if (created) {
+        setAppId(created.id || created._id);
+        populateFromApp(created);
+        await loadRequirements(selectedType);
+        setStepIndex(1);
+        showToast('Draft created! Proceed with organization details.', 'success');
+      }
     } catch (err: any) {
+      if (err.response?.status === 409 && err.response?.data?.applicationId) {
+        const existingId = err.response.data.applicationId;
+        setAppId(existingId);
+        try {
+          const existingRes = await api.get(`/org-applications/${existingId}`);
+          const appData = existingRes.data?.application || existingRes.data;
+          if (appData) {
+            populateFromApp(appData);
+            await loadRequirements(appData.type || selectedType);
+            showToast('Resuming your existing draft application.', 'info');
+            return;
+          }
+        } catch {}
+      }
       showToast(err.response?.data?.error || 'Failed to start application.', 'error');
     } finally {
       setSavingStep(false);
@@ -360,7 +389,7 @@ export default function CreateOrganizationScreen() {
           postalCode: postalCode.trim() || undefined,
         },
       });
-      populateFromApp(res.data.application);
+      populateFromApp(res.data?.application || res.data);
       setStepIndex(2);
     } catch (err: any) {
       showToast(err.response?.data?.error || 'Failed to save details.', 'error');
@@ -477,7 +506,7 @@ export default function CreateOrganizationScreen() {
         phone: repPhone.trim() ? repPhone.trim().replace(/[\s-]/g, '') : undefined,
         authorizedConfirmed: true,
       });
-      populateFromApp(res.data.application);
+      populateFromApp(res.data?.application || res.data);
       setStepIndex(3);
     } catch (err: any) {
       showToast(err.response?.data?.error || 'Failed to save representative details.', 'error');
@@ -523,7 +552,7 @@ export default function CreateOrganizationScreen() {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
-      populateFromApp(res.data.application);
+      populateFromApp(res.data?.application || res.data);
       await triggerSuccessHaptic();
       showToast('Document encrypted and stored in private vault!', 'success');
     } catch (err: any) {
@@ -543,7 +572,7 @@ export default function CreateOrganizationScreen() {
         onPress: async () => {
           try {
             const res = await api.delete(`/org-applications/${appId}/documents/${docId}`);
-            populateFromApp(res.data.application);
+            populateFromApp(res.data?.application || res.data);
             showToast('Document removed.', 'info');
           } catch {
             showToast('Failed to remove document.', 'error');
@@ -627,7 +656,7 @@ export default function CreateOrganizationScreen() {
         isPrivate,
         officers,
       });
-      populateFromApp(res.data.application);
+      populateFromApp(res.data?.application || res.data);
       setStepIndex(5);
     } catch (err: any) {
       showToast(err.response?.data?.error || 'Failed to save governance.', 'error');
