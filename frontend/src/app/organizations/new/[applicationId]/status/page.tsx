@@ -131,7 +131,7 @@ export default function ApplicationStatusPage() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="space-y-1">
                 <div className="text-base font-bold text-emerald-300 flex items-center gap-2">
-                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500 text-zinc-950 font-black text-xs">✓</span>
+                  <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
                   <span>Verified Entity · Legitimacy Confirmed</span>
                 </div>
                 <p className="text-xs text-zinc-300 leading-relaxed">

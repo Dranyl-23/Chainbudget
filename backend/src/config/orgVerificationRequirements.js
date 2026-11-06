@@ -69,7 +69,7 @@ const IMAGE_OR_PDF_MIMES = [...IMAGE_MIMES, "application/pdf"];
 // maxPerKind: how many files of this kind may be attached (1 = replace on re-upload)
 const DOCUMENT_KINDS = {
   // ── Pillar 3: Signatory Identity (KYC) ──────────────────────────────────────
-  rep_id_front: { label: "Government-issued ID (front)", mimes: IMAGE_MIMES, maxPerKind: 1, sensitive: true },
+  rep_id_front: { label: "Valid Government or School ID (front)", mimes: IMAGE_MIMES, maxPerKind: 1, sensitive: true },
   rep_selfie_with_id: { label: "Selfie holding your ID", mimes: IMAGE_MIMES, maxPerKind: 1, sensitive: true },
   treasurer_id: { label: "Treasurer Government / Institutional ID", mimes: IMAGE_MIMES, maxPerKind: 1, sensitive: true },
   coach_id: { label: "Head Coach Valid ID", mimes: IMAGE_MIMES, maxPerKind: 1, sensitive: true },
@@ -86,8 +86,8 @@ const DOCUMENT_KINDS = {
   fund_utilization_plan: { label: "Signed Fund Utilization Plan", mimes: IMAGE_OR_PDF_MIMES, maxPerKind: 2 },
 
   // ── Pillar 1: Proof of Institutional Existence ──────────────────────────────
-  osa_accreditation: { label: "OSA Certificate of Recognition / Accreditation", mimes: IMAGE_OR_PDF_MIMES, maxPerKind: 2 },
-  school_accreditation: { label: "School accreditation / recognition certificate", mimes: IMAGE_OR_PDF_MIMES, maxPerKind: 2 },
+  osa_accreditation: { label: "OSA Certificate of Recognition (Office of Student Affairs)", mimes: IMAGE_OR_PDF_MIMES, maxPerKind: 2 },
+  school_accreditation: { label: "University / College Accreditation Certificate", mimes: IMAGE_OR_PDF_MIMES, maxPerKind: 2 },
   cbl_calendar: { label: "Club Constitution & By-Laws (CBL) / Approved Calendar", mimes: IMAGE_OR_PDF_MIMES, maxPerKind: 2 },
   dilg_oath: { label: "DILG Oath of Office / Certificate of Canvass", mimes: IMAGE_OR_PDF_MIMES, maxPerKind: 2 },
   proof_of_office: { label: "Proof of office (proclamation / oath of office)", mimes: IMAGE_OR_PDF_MIMES, maxPerKind: 2 },
@@ -145,7 +145,7 @@ const TYPE_PROFILES = {
       { key: "osaAccreditationNumber", label: "OSA Accreditation Number", type: "text", required: false, min: 2, max: 100 },
     ],
     documentGroups: [
-      { id: "accreditation", label: "OSA Certificate of Recognition / Accreditation", kinds: ["osa_accreditation", "school_accreditation"] },
+      { id: "accreditation", label: "University Recognition or Accreditation", kinds: ["osa_accreditation", "school_accreditation"] },
     ],
     requireAuthorizationLetter: true,
   },
@@ -344,6 +344,28 @@ const ID_TYPES = [
 ];
 const ID_TYPE_VALUES = ID_TYPES.map((t) => t.value);
 
+function getOfficerRolesForType(type) {
+  if (type === "family") {
+    return [
+      { level: 1, label: "Co-Head / Primary Signer" },
+      { level: 2, label: "Household Budget Manager" },
+      { level: 3, label: "Family Member" },
+    ];
+  }
+  if (type === "fundraising") {
+    return [
+      { level: 1, label: "Lead Campaign Trustee" },
+      { level: 2, label: "Disbursement Officer" },
+      { level: 3, label: "Campaign Contributor" },
+    ];
+  }
+  return [
+    { level: 1, label: "Executive Approver" },
+    { level: 2, label: "Finance Officer" },
+    { level: 3, label: "Member" },
+  ];
+}
+
 const GOVERNANCE_LIMITS = {
   minRequiredApprovals: 1,
   maxRequiredApprovals: 10,
@@ -351,8 +373,8 @@ const GOVERNANCE_LIMITS = {
   defaultRequiredApprovals: 2,
   defaultHighValueThreshold: 10000,
   officerRoles: [
-    { level: 1, label: "Executive approver" },
-    { level: 2, label: "Finance / transaction officer" },
+    { level: 1, label: "Executive Approver" },
+    { level: 2, label: "Finance Officer" },
     { level: 3, label: "Member" },
   ],
 };
@@ -450,7 +472,10 @@ function getRequirements(type) {
       emailDomainSuffixes: profile.emailDomainSuffixes,
     },
     documents: { groups, kinds, maxFileSizeBytes: 5 * 1024 * 1024, maxTotal: MAX_DOCUMENTS_PER_APPLICATION },
-    governance: GOVERNANCE_LIMITS,
+    governance: {
+      ...GOVERNANCE_LIMITS,
+      officerRoles: getOfficerRolesForType(type),
+    },
     consents: CONSENT_KEYS,
   };
 }

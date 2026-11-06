@@ -136,7 +136,6 @@ export default function NotificationsPage() {
 
         setNotifications((prev) => [newNotif, ...prev]);
         toast(newNotif.title, {
-          icon: "🔔",
           style: {
             borderRadius: "10px",
             background: "#121215",

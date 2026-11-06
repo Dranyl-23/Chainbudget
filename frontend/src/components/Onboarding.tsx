@@ -155,8 +155,9 @@ export default function Onboarding() {
               <strong className="text-white">Level 1 Founder</strong>.
             </p>
             {!user?.walletAddress ? (
-              <p className="text-[11px] font-semibold text-rose-400 bg-rose-500/10 p-2 rounded-lg border border-rose-500/20 inline-block">
-                ⚠️ Link your MetaMask wallet first
+              <p className="text-[11px] font-semibold text-rose-400 bg-rose-500/10 p-2 rounded-lg border border-rose-500/20 inline-flex items-center gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                <span>Link your MetaMask wallet first</span>
               </p>
             ) : (
               <div className="flex flex-wrap gap-1.5 pt-1">

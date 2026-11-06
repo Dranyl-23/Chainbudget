@@ -9,7 +9,7 @@ import {
 import api from "@/lib/api";
 import toast from "react-hot-toast";
 import { ethers } from "ethers";
-import { getAmoyProvider, rotateAmoyProvider } from "@/lib/rpcProvider";
+import { fetchAmoyBalance } from "@/lib/rpcProvider";
 import { getErrorMessage } from "@/lib/utils";
 import EmblemRebrandSection from "@/components/EmblemRebrandSection";
 
@@ -71,14 +71,7 @@ export default function TreasuryPage() {
     if (!address || !ethers.isAddress(address)) return;
     try {
       setIsFetchingBalance(true);
-      let provider = getAmoyProvider();
-      let rawBalance: bigint;
-      try {
-        rawBalance = await provider.getBalance(address);
-      } catch {
-        provider = rotateAmoyProvider();
-        rawBalance = await provider.getBalance(address);
-      }
+      const rawBalance = await fetchAmoyBalance(address);
       const formatted = ethers.formatEther(rawBalance);
       setBalance(parseFloat(formatted).toFixed(4));
     } catch (err: unknown) {

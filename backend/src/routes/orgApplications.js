@@ -296,7 +296,7 @@ router.post("/:id/contact/email/send", authenticate, writeLimiter, async (req, r
     const sent = await sendEmail(email, "ChainBudget — verify your organization email", html);
 
     if (!sent) {
-      if (process.env.NODE_ENV === "development") {
+      if (process.env.NODE_ENV !== "production") {
         // Local development without SMTP: surface the code in the server log only
         console.warn(`[orgApplications] DEV ONLY — email code for application ${app._id}: ${code}`);
       } else {

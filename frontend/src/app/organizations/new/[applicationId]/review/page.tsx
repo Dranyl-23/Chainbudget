@@ -11,6 +11,7 @@ import {
   ArrowLeft,
   Send,
   Edit3,
+  Lock,
 } from "lucide-react";
 import { useOrgRegistration } from "@/context/OrgRegistrationContext";
 import api from "@/lib/api";
@@ -331,7 +332,10 @@ export default function ReviewAndSubmitStepPage() {
                   ) : (
                     <span>sha256:{d.sha256.slice(0, 10)}…</span>
                   )}
-                  <span className="text-emerald-400 text-[10px]">🔒 Vault Encrypted</span>
+                  <span className="inline-flex items-center gap-1 text-emerald-400 text-[10px] bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                    <Lock className="w-2.5 h-2.5 shrink-0" />
+                    <span>Vault Encrypted</span>
+                  </span>
                 </div>
               </li>
             ))}

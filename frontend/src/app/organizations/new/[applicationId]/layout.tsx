@@ -25,23 +25,23 @@ import {
 const STEP_DISPLAY: Record<string, { label: string; subtitle: string }> = {
   details: {
     label: "Organization details",
-    subtitle: "Legal identity, location and purpose",
+    subtitle: "Identity & purpose",
   },
   representative: {
     label: "Your identity",
-    subtitle: "Who is registering this organization",
+    subtitle: "Representative KYC",
   },
   documents: {
     label: "Documents",
-    subtitle: "Upload the evidence for your organization type",
+    subtitle: "Evidence vault",
   },
   governance: {
     label: "Governance",
-    subtitle: "Approval rules and initial officers",
+    subtitle: "Multi-sig rules",
   },
   review: {
     label: "Review & submit",
-    subtitle: "Confirm everything and send for verification",
+    subtitle: "Confirm & finalize",
   },
 };
 
@@ -161,8 +161,8 @@ function RegistrationShell({ children }: { children: React.ReactNode }) {
         {/* Multi-Step Progress Navigation Bar */}
         {editable && (
           <nav aria-label="Registration Progress" className="border-t border-zinc-800/70 bg-[#09090c]">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5">
-              <ol className="flex items-center justify-between gap-3 overflow-x-auto no-scrollbar">
+            <div className="max-w-5xl mx-auto px-3 sm:px-6 py-2.5">
+              <ol className="grid grid-cols-5 gap-1.5 sm:gap-2">
                 {steps.map((step, idx) => {
                   const stepHref = `/organizations/new/${application.id}/${step.key}`;
                   const isActive = pathname.endsWith(`/${step.key}`);
@@ -173,17 +173,17 @@ function RegistrationShell({ children }: { children: React.ReactNode }) {
                   };
 
                   return (
-                    <li key={step.key} className="shrink-0 min-w-max">
+                    <li key={step.key} className="min-w-0">
                       <Link
                         href={stepHref}
-                        className={`flex items-center gap-3 px-4 py-2 rounded-2xl border transition-all ${
+                        className={`flex items-center gap-2 sm:gap-2.5 px-2.5 sm:px-3 py-2 rounded-xl border transition-all h-full ${
                           isActive
                             ? "border-indigo-500/80 bg-[#16152a] text-white shadow-sm shadow-indigo-500/10"
                             : "border-transparent hover:border-zinc-800/80 hover:bg-zinc-900/40 text-zinc-400"
                         }`}
                       >
                         <div
-                          className={`w-7 h-7 rounded-full text-xs font-bold flex items-center justify-center shrink-0 transition-colors ${
+                          className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full text-xs font-bold flex items-center justify-center shrink-0 transition-colors ${
                             isDone
                               ? "bg-emerald-500 text-zinc-950"
                               : isActive
@@ -193,16 +193,16 @@ function RegistrationShell({ children }: { children: React.ReactNode }) {
                         >
                           {isDone ? <Check className="w-3.5 h-3.5 stroke-[2.5]" /> : idx + 1}
                         </div>
-                        <div className="min-w-0 text-left">
+                        <div className="min-w-0 flex-1 text-left">
                           <div
-                            className={`text-sm font-semibold tracking-tight leading-tight ${
+                            className={`text-xs sm:text-sm font-semibold tracking-tight truncate leading-tight ${
                               isActive ? "text-white" : isDone ? "text-zinc-200" : "text-zinc-300"
                             }`}
                           >
                             {display.label}
                           </div>
                           <div
-                            className={`text-[11px] leading-tight mt-0.5 ${
+                            className={`text-[10px] sm:text-[11px] leading-tight truncate mt-0.5 hidden md:block ${
                               isActive ? "text-zinc-400" : "text-zinc-500"
                             }`}
                           >

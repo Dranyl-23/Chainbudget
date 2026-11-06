@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -25,6 +25,12 @@ import { useSocket } from '../context/SocketContext';
 import { triggerLightHaptic, triggerSuccessHaptic, triggerErrorHaptic } from '../lib/biometrics';
 import AnimatedToggleSwitch from '../components/AnimatedToggleSwitch';
 import api from '../lib/api';
+import {
+  getPhilippineRegions,
+  getProvincesForRegion,
+  getCitiesForProvince,
+  findCity,
+} from '../lib/philippineAddresses';
 
 const ORG_TYPES = [
   { value: 'student_org', label: 'Student Org', category: 'Institutional', governing: 'OSA / Student Affairs', icon: 'school-outline', desc: 'University councils, academic societies & clubs' },
@@ -110,6 +116,76 @@ export default function CreateOrganizationScreen() {
   const [street, setStreet] = useState('');
   const [postalCode, setPostalCode] = useState('');
   const [extras, setExtras] = useState<Record<string, string>>({});
+
+  // Philippine Cascading Address State
+  const [addressPickerType, setAddressPickerType] = useState<'region' | 'province' | 'city' | 'barangay' | null>(null);
+  const [addressSearchQuery, setAddressSearchQuery] = useState('');
+  const [manualBarangayInput, setManualBarangayInput] = useState(false);
+
+  const addressPickerOptions: Array<{ value: string; label: string; hint?: string }> = useMemo(() => {
+    if (addressPickerType === 'region') {
+      return getPhilippineRegions().map((r) => ({
+        value: r.name,
+        label: r.name,
+        hint: r.code !== r.name && !r.name.startsWith(r.code) ? r.code : undefined,
+      }));
+    }
+    if (addressPickerType === 'province') {
+      return getProvincesForRegion(region).map((p) => ({ value: p.name, label: p.name }));
+    }
+    if (addressPickerType === 'city') {
+      return getCitiesForProvince(region, province).map((c) => ({
+        value: c.name,
+        label: c.name,
+        hint: c.postalCode ? `ZIP ${c.postalCode}` : undefined,
+      }));
+    }
+    if (addressPickerType === 'barangay') {
+      const cityData = findCity(region, province, city);
+      return (cityData?.barangays || []).map((b) => ({ value: b, label: b }));
+    }
+    return [];
+  }, [addressPickerType, region, province, city]);
+
+  const filteredAddressOptions = useMemo(() => {
+    if (!addressSearchQuery.trim()) return addressPickerOptions;
+    const q = addressSearchQuery.trim().toLowerCase();
+    return addressPickerOptions.filter(
+      (opt) =>
+        opt.label.toLowerCase().includes(q) ||
+        (opt.hint && opt.hint.toLowerCase().includes(q)) ||
+        opt.value.toLowerCase().includes(q)
+    );
+  }, [addressPickerOptions, addressSearchQuery]);
+
+  const handleSelectAddressItem = (itemValue: string) => {
+    if (addressPickerType === 'region') {
+      setRegion(itemValue);
+      const provs = getProvincesForRegion(itemValue);
+      if (provs.length === 1) {
+        setProvince(provs[0].name);
+      } else {
+        setProvince('');
+      }
+      setCity('');
+      setBarangay('');
+    } else if (addressPickerType === 'province') {
+      setProvince(itemValue);
+      setCity('');
+      setBarangay('');
+    } else if (addressPickerType === 'city') {
+      setCity(itemValue);
+      setBarangay('');
+      const cityData = findCity(region, province, itemValue);
+      if (cityData?.postalCode && !postalCode) {
+        setPostalCode(cityData.postalCode);
+      }
+    } else if (addressPickerType === 'barangay') {
+      setBarangay(itemValue);
+    }
+    setAddressPickerType(null);
+    setAddressSearchQuery('');
+  };
 
   // Form State: Step 2 (Representative)
   const [repFullName, setRepFullName] = useState('');
@@ -1028,25 +1104,210 @@ export default function CreateOrganizationScreen() {
                 />
               </View>
 
-              <View>
-                <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: '700', marginBottom: 6 }}>
-                  Principal Address (City & Province)
+              {/* Philippine Address Cascading Section */}
+              <View style={{ gap: 12 }}>
+                <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: '700' }}>
+                  Principal Office / Location
                 </Text>
+
+                {/* Region Picker Button */}
+                <View>
+                  <Text style={{ color: colors.textSecondary, fontSize: 11, fontWeight: '600', marginBottom: 4 }}>
+                    Region *
+                  </Text>
+                  <TouchableOpacity
+                    onPress={async () => {
+                      await triggerLightHaptic();
+                      setAddressPickerType('region');
+                    }}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      backgroundColor: colors.surface,
+                      borderColor: colors.border,
+                      borderWidth: 1,
+                      borderRadius: 12,
+                      paddingHorizontal: 14,
+                      paddingVertical: 12,
+                    }}
+                  >
+                    <Text style={{ color: region ? colors.textPrimary : colors.textMuted, fontSize: 13, flex: 1 }} numberOfLines={1}>
+                      {region || 'Select Philippine Region'}
+                    </Text>
+                    <Ionicons name="chevron-down" size={16} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Province Picker Button */}
+                <View>
+                  <Text style={{ color: colors.textSecondary, fontSize: 11, fontWeight: '600', marginBottom: 4 }}>
+                    Province *
+                  </Text>
+                  <TouchableOpacity
+                    disabled={!region}
+                    onPress={async () => {
+                      await triggerLightHaptic();
+                      setAddressPickerType('province');
+                    }}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      backgroundColor: colors.surface,
+                      borderColor: colors.border,
+                      borderWidth: 1,
+                      borderRadius: 12,
+                      paddingHorizontal: 14,
+                      paddingVertical: 12,
+                      opacity: region ? 1 : 0.5,
+                    }}
+                  >
+                    <Text style={{ color: province ? colors.textPrimary : colors.textMuted, fontSize: 13, flex: 1 }} numberOfLines={1}>
+                      {province || (region ? 'Select Province' : 'Select Region first')}
+                    </Text>
+                    <Ionicons name="chevron-down" size={16} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                </View>
+
+                {/* City / Municipality Picker Button */}
+                <View>
+                  <Text style={{ color: colors.textSecondary, fontSize: 11, fontWeight: '600', marginBottom: 4 }}>
+                    City / Municipality *
+                  </Text>
+                  <TouchableOpacity
+                    disabled={!province}
+                    onPress={async () => {
+                      await triggerLightHaptic();
+                      setAddressPickerType('city');
+                    }}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      backgroundColor: colors.surface,
+                      borderColor: colors.border,
+                      borderWidth: 1,
+                      borderRadius: 12,
+                      paddingHorizontal: 14,
+                      paddingVertical: 12,
+                      opacity: province ? 1 : 0.5,
+                    }}
+                  >
+                    <Text style={{ color: city ? colors.textPrimary : colors.textMuted, fontSize: 13, flex: 1 }} numberOfLines={1}>
+                      {city || (province ? 'Select City / Municipality' : 'Select Province first')}
+                    </Text>
+                    <Ionicons name="chevron-down" size={16} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Barangay Picker or Manual Input */}
+                <View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <Text style={{ color: colors.textSecondary, fontSize: 11, fontWeight: '600' }}>
+                      Barangay *
+                    </Text>
+                    {findCity(region, province, city)?.barangays && (findCity(region, province, city)?.barangays?.length || 0) > 0 && (
+                      <TouchableOpacity onPress={() => setManualBarangayInput((prev) => !prev)}>
+                        <Text style={{ color: colors.primary, fontSize: 10.5, fontWeight: '700' }}>
+                          {manualBarangayInput ? 'Choose from list' : 'Type manually'}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  {!manualBarangayInput && findCity(region, province, city)?.barangays?.length ? (
+                    <TouchableOpacity
+                      disabled={!city}
+                      onPress={async () => {
+                        await triggerLightHaptic();
+                        setAddressPickerType('barangay');
+                      }}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        backgroundColor: colors.surface,
+                        borderColor: colors.border,
+                        borderWidth: 1,
+                        borderRadius: 12,
+                        paddingHorizontal: 14,
+                        paddingVertical: 12,
+                        opacity: city ? 1 : 0.5,
+                      }}
+                    >
+                      <Text style={{ color: barangay ? colors.textPrimary : colors.textMuted, fontSize: 13, flex: 1 }} numberOfLines={1}>
+                        {barangay || (city ? 'Select Barangay' : 'Select City first')}
+                      </Text>
+                      <Ionicons name="chevron-down" size={16} color={colors.textSecondary} />
+                    </TouchableOpacity>
+                  ) : (
+                    <TextInput
+                      value={barangay}
+                      onChangeText={setBarangay}
+                      placeholder={city ? 'e.g. Barangay Loyola Heights' : 'Enter Barangay name'}
+                      placeholderTextColor={colors.textMuted}
+                      style={{
+                        backgroundColor: colors.surface,
+                        borderColor: colors.border,
+                        borderWidth: 1,
+                        borderRadius: 12,
+                        paddingHorizontal: 14,
+                        paddingVertical: 10,
+                        color: colors.textPrimary,
+                        fontSize: 13,
+                      }}
+                    />
+                  )}
+                </View>
+
+                {/* Street / Building Address & Postal Code */}
                 <View style={{ flexDirection: 'row', gap: 10 }}>
-                  <TextInput
-                    value={city}
-                    onChangeText={setCity}
-                    placeholder="City / Municipality"
-                    placeholderTextColor={colors.textMuted}
-                    style={{ flex: 1, backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, color: colors.textPrimary, fontSize: 13 }}
-                  />
-                  <TextInput
-                    value={province}
-                    onChangeText={setProvince}
-                    placeholder="Province"
-                    placeholderTextColor={colors.textMuted}
-                    style={{ flex: 1, backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, color: colors.textPrimary, fontSize: 13 }}
-                  />
+                  <View style={{ flex: 2 }}>
+                    <Text style={{ color: colors.textSecondary, fontSize: 11, fontWeight: '600', marginBottom: 4 }}>
+                      Street / Building Address *
+                    </Text>
+                    <TextInput
+                      value={street}
+                      onChangeText={setStreet}
+                      placeholder="Building, street, unit"
+                      placeholderTextColor={colors.textMuted}
+                      style={{
+                        backgroundColor: colors.surface,
+                        borderColor: colors.border,
+                        borderWidth: 1,
+                        borderRadius: 12,
+                        paddingHorizontal: 14,
+                        paddingVertical: 10,
+                        color: colors.textPrimary,
+                        fontSize: 13,
+                      }}
+                    />
+                  </View>
+
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: colors.textSecondary, fontSize: 11, fontWeight: '600', marginBottom: 4 }}>
+                      Postal Code
+                    </Text>
+                    <TextInput
+                      value={postalCode}
+                      onChangeText={setPostalCode}
+                      placeholder="e.g. 1108"
+                      keyboardType="numeric"
+                      maxLength={4}
+                      placeholderTextColor={colors.textMuted}
+                      style={{
+                        backgroundColor: colors.surface,
+                        borderColor: colors.border,
+                        borderWidth: 1,
+                        borderRadius: 12,
+                        paddingHorizontal: 14,
+                        paddingVertical: 10,
+                        color: colors.textPrimary,
+                        fontSize: 13,
+                      }}
+                    />
+                  </View>
                 </View>
               </View>
 
@@ -1923,6 +2184,112 @@ export default function CreateOrganizationScreen() {
               <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '800' }}>Enter Dashboard</Text>
             </TouchableOpacity>
           </Animated.View>
+        </View>
+      </Modal>
+
+      {/* Philippine Address Cascading Picker Modal */}
+      <Modal visible={addressPickerType !== null} transparent animationType="slide">
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, maxHeight: '80%' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <Text style={{ color: colors.textPrimary, fontSize: 16, fontWeight: '800' }}>
+                {addressPickerType === 'region' && 'Select Philippine Region'}
+                {addressPickerType === 'province' && 'Select Province'}
+                {addressPickerType === 'city' && 'Select City / Municipality'}
+                {addressPickerType === 'barangay' && 'Select Barangay'}
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setAddressPickerType(null);
+                  setAddressSearchQuery('');
+                }}
+              >
+                <Ionicons name="close" size={22} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Search Input */}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: colors.background,
+                borderRadius: 12,
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                marginBottom: 12,
+                borderWidth: 1,
+                borderColor: colors.border,
+              }}
+            >
+              <Ionicons name="search" size={16} color={colors.textMuted} style={{ marginRight: 8 }} />
+              <TextInput
+                value={addressSearchQuery}
+                onChangeText={setAddressSearchQuery}
+                placeholder="Search location..."
+                placeholderTextColor={colors.textMuted}
+                style={{ flex: 1, color: colors.textPrimary, fontSize: 13, padding: 0 }}
+                autoCorrect={false}
+              />
+              {addressSearchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setAddressSearchQuery('')}>
+                  <Ionicons name="close-circle" size={16} color={colors.textMuted} />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Options List */}
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
+              {filteredAddressOptions.length === 0 ? (
+                <View style={{ paddingVertical: 24, alignItems: 'center' }}>
+                  <Text style={{ color: colors.textMuted, fontSize: 13 }}>No matching locations found.</Text>
+                </View>
+              ) : (
+                filteredAddressOptions.map((opt) => {
+                  const isSelected =
+                    (addressPickerType === 'region' && region === opt.value) ||
+                    (addressPickerType === 'province' && province === opt.value) ||
+                    (addressPickerType === 'city' && city === opt.value) ||
+                    (addressPickerType === 'barangay' && barangay === opt.value);
+
+                  return (
+                    <TouchableOpacity
+                      key={opt.value}
+                      onPress={async () => {
+                        await triggerLightHaptic();
+                        handleSelectAddressItem(opt.value);
+                      }}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        paddingVertical: 12,
+                        paddingHorizontal: 10,
+                        borderBottomWidth: 1,
+                        borderBottomColor: colors.border,
+                        backgroundColor: isSelected
+                          ? isDark
+                            ? 'rgba(99, 102, 241, 0.15)'
+                            : 'rgba(99, 102, 241, 0.08)'
+                          : 'transparent',
+                        borderRadius: 10,
+                      }}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: isSelected ? colors.primary : colors.textPrimary, fontSize: 13, fontWeight: isSelected ? '700' : '500' }}>
+                          {opt.label}
+                        </Text>
+                        {opt.hint && (
+                          <Text style={{ color: colors.textMuted, fontSize: 11, marginTop: 2 }}>{opt.hint}</Text>
+                        )}
+                      </View>
+                      {isSelected && <Ionicons name="checkmark" size={18} color={colors.primary} />}
+                    </TouchableOpacity>
+                  );
+                })
+              )}
+            </ScrollView>
+          </View>
         </View>
       </Modal>
     </View>

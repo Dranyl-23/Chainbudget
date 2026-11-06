@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import Image from "next/image";
 import { ethers } from "ethers";
-import { getAmoyProvider, rotateAmoyProvider } from "@/lib/rpcProvider";
+import { fetchAmoyBalance } from "@/lib/rpcProvider";
 import api from "@/lib/api";
 import { getExplorerAddressUrl } from "@/lib/config";
 import { getProvider, linkWallet } from "@/lib/wallet";
@@ -176,7 +176,7 @@ export default function SettingsPage() {
         setShowKeys(false);
         setAutoWalletKeys(null);
         setKeyCountdown(null);
-        toast("Keys auto-hidden for security.", { icon: "🔒" });
+        toast.success("Keys auto-hidden for security.");
       }, 0);
       return () => clearTimeout(timer);
     }
@@ -187,7 +187,7 @@ export default function SettingsPage() {
         if (prev <= 1) {
           setShowKeys(false);
           setAutoWalletKeys(null);
-          toast("Keys auto-hidden for security.", { icon: "🔒" });
+          toast.success("Keys auto-hidden for security.");
           return null;
         }
         return prev - 1;
@@ -211,14 +211,7 @@ export default function SettingsPage() {
     const fetchBalance = async () => {
       if (!user?.walletAddress) return;
       try {
-        let provider = getAmoyProvider();
-        let balance: bigint;
-        try {
-          balance = await provider.getBalance(user.walletAddress);
-        } catch {
-          provider = rotateAmoyProvider();
-          balance = await provider.getBalance(user.walletAddress);
-        }
+        const balance = await fetchAmoyBalance(user.walletAddress);
         const balanceInMatic = ethers.formatEther(balance);
         if (!isCancelled) {
           setWalletBalance(parseFloat(balanceInMatic).toFixed(4));

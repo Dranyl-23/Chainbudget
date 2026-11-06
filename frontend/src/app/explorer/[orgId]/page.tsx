@@ -6,7 +6,7 @@ import Link from "next/link";
 import { ArrowLeft, ShieldCheck, Activity, Link as LinkIcon, AlertTriangle, ExternalLink, Lock } from "lucide-react";
 import api from "@/lib/api";
 import { ethers } from "ethers";
-import { getAmoyProvider } from "@/lib/rpcProvider";
+import { fetchAmoyBalance } from "@/lib/rpcProvider";
 import { BACKEND_URL, getExplorerAddressUrl, getExplorerTxUrl } from "@/lib/config";
 
 interface Organization {
@@ -104,8 +104,7 @@ export default function PublicDashboardPage() {
 
         if (orgData.contractAddress) {
           try {
-            const provider = getAmoyProvider();
-            const balanceWei = await provider.getBalance(orgData.contractAddress);
+            const balanceWei = await fetchAmoyBalance(orgData.contractAddress);
             const balancePol = ethers.formatEther(balanceWei);
             setBalance(parseFloat(balancePol).toFixed(4));
           } catch (ethErr) {

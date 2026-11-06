@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import {
@@ -11,9 +11,56 @@ import {
   Send,
   CheckCircle2,
   Shield,
+  CreditCard,
+  BadgeCheck,
+  FileText,
+  GraduationCap,
 } from "lucide-react";
 import { useOrgRegistration } from "@/context/OrgRegistrationContext";
 import api from "@/lib/api";
+import CustomSelect, { CustomSelectOption } from "@/components/CustomSelect";
+
+const ID_TYPE_METADATA: Record<
+  string,
+  { hint: string; icon: React.ReactNode }
+> = {
+  philsys: {
+    hint: "PSA Philippine Identification System",
+    icon: <BadgeCheck className="w-4 h-4 text-emerald-400" />,
+  },
+  drivers_license: {
+    hint: "Land Transportation Office (LTO)",
+    icon: <CreditCard className="w-4 h-4 text-sky-400" />,
+  },
+  passport: {
+    hint: "Department of Foreign Affairs (DFA)",
+    icon: <FileText className="w-4 h-4 text-amber-400" />,
+  },
+  umid: {
+    hint: "Unified Multi-Purpose ID (SSS / GSIS)",
+    icon: <CreditCard className="w-4 h-4 text-indigo-400" />,
+  },
+  voters_id: {
+    hint: "Commission on Elections (COMELEC)",
+    icon: <FileText className="w-4 h-4 text-rose-400" />,
+  },
+  prc: {
+    hint: "Professional Regulation Commission",
+    icon: <BadgeCheck className="w-4 h-4 text-violet-400" />,
+  },
+  postal_id: {
+    hint: "Philippine Postal Corporation (PHLPost)",
+    icon: <CreditCard className="w-4 h-4 text-orange-400" />,
+  },
+  school_id: {
+    hint: "Officially Enrolled Student / Faculty ID",
+    icon: <GraduationCap className="w-4 h-4 text-teal-400" />,
+  },
+  other: {
+    hint: "Valid government-issued photo ID",
+    icon: <Shield className="w-4 h-4 text-zinc-400" />,
+  },
+};
 
 export default function RepresentativeStepPage() {
   const { application, requirements, saveStep, reload } = useOrgRegistration();
@@ -53,6 +100,21 @@ export default function RepresentativeStepPage() {
     }, 1000);
     return () => clearInterval(t);
   }, [cooldown]);
+
+  const idTypeOptions: CustomSelectOption[] = useMemo(() => {
+    return (requirements?.representative.idTypes || []).map((t) => {
+      const meta = ID_TYPE_METADATA[t.value] || {
+        hint: undefined,
+        icon: <CreditCard className="w-4 h-4 text-zinc-400" />,
+      };
+      return {
+        value: t.value,
+        label: t.label,
+        hint: meta.hint,
+        icon: meta.icon,
+      };
+    });
+  }, [requirements]);
 
   if (!application || !requirements) return null;
 
@@ -211,7 +273,7 @@ export default function RepresentativeStepPage() {
       {/* Representative Identity Card */}
       <form
         onSubmit={handleSaveIdentity}
-        className="bg-[#121215] border border-zinc-800 rounded-2xl p-6 space-y-5"
+        className="bg-surface border border-zinc-800 rounded-2xl p-6 space-y-5"
       >
         <div className="flex items-center gap-3 border-b border-zinc-800 pb-4">
           <div className="w-9 h-9 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
@@ -262,17 +324,12 @@ export default function RepresentativeStepPage() {
             <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
               Government-Issued ID Type *
             </label>
-            <select
+            <CustomSelect
               value={idType}
-              onChange={(e) => setIdType(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500"
-            >
-              {requirements.representative.idTypes.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
+              onChange={(val) => setIdType(val)}
+              options={idTypeOptions}
+              placeholder="Select Government ID Type"
+            />
             {err("idType")}
           </div>
 
@@ -350,7 +407,7 @@ export default function RepresentativeStepPage() {
       </form>
 
       {/* Official Email OTP Verification Card */}
-      <div className="bg-[#121215] border border-zinc-800 rounded-2xl p-6 space-y-4">
+      <div className="bg-surface border border-zinc-800 rounded-2xl p-6 space-y-4">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">

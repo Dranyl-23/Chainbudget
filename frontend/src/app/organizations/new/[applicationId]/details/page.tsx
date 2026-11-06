@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import toast from "react-hot-toast";
@@ -14,6 +14,13 @@ import {
 } from "lucide-react";
 import { useOrgRegistration } from "@/context/OrgRegistrationContext";
 import api from "@/lib/api";
+import CustomSelect, { CustomSelectOption } from "@/components/CustomSelect";
+import {
+  getPhilippineRegions,
+  getProvincesForRegion,
+  getCitiesForProvince,
+  findCity,
+} from "@/lib/philippineAddresses";
 
 export default function OrganizationDetailsStepPage() {
   const { application, requirements, saveStep } = useOrgRegistration();
@@ -45,6 +52,74 @@ export default function OrganizationDetailsStepPage() {
   const [extras, setExtras] = useState<Record<string, string>>(b.extras || {});
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+
+  // Philippine Cascading Address State
+  const [manualBarangay, setManualBarangay] = useState(false);
+
+  const regionOptions: CustomSelectOption[] = useMemo(() => {
+    return getPhilippineRegions().map((r) => ({
+      value: r.name,
+      label: r.name,
+      hint: r.code !== r.name && !r.name.startsWith(r.code) ? r.code : undefined,
+    }));
+  }, []);
+
+  const provinceOptions: CustomSelectOption[] = useMemo(() => {
+    if (!region) return [];
+    return getProvincesForRegion(region).map((p) => ({
+      value: p.name,
+      label: p.name,
+    }));
+  }, [region]);
+
+  const cityOptions: CustomSelectOption[] = useMemo(() => {
+    if (!region || !province) return [];
+    return getCitiesForProvince(region, province).map((c) => ({
+      value: c.name,
+      label: c.name,
+      hint: c.postalCode ? `ZIP ${c.postalCode}` : undefined,
+    }));
+  }, [region, province]);
+
+  const selectedCityData = useMemo(() => {
+    if (!region || !province || !city) return undefined;
+    return findCity(region, province, city);
+  }, [region, province, city]);
+
+  const barangayOptions: CustomSelectOption[] = useMemo(() => {
+    const list = selectedCityData?.barangays || [];
+    return list.map((brgy) => ({
+      value: brgy,
+      label: brgy,
+    }));
+  }, [selectedCityData]);
+
+  const handleRegionChange = (newRegion: string) => {
+    setRegion(newRegion);
+    const provinces = getProvincesForRegion(newRegion);
+    if (provinces.length === 1) {
+      setProvince(provinces[0].name);
+    } else {
+      setProvince("");
+    }
+    setCity("");
+    setBarangay("");
+  };
+
+  const handleProvinceChange = (newProvince: string) => {
+    setProvince(newProvince);
+    setCity("");
+    setBarangay("");
+  };
+
+  const handleCityChange = (newCity: string) => {
+    setCity(newCity);
+    setBarangay("");
+    const cityData = findCity(region, province, newCity);
+    if (cityData?.postalCode && !postalCode) {
+      setPostalCode(cityData.postalCode);
+    }
+  };
 
   if (!application || !requirements) return null;
 
@@ -163,7 +238,7 @@ export default function OrganizationDetailsStepPage() {
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {/* Legal Identity Card */}
-      <div className="bg-[#121215] border border-zinc-800 rounded-2xl p-6 space-y-5">
+      <div className="bg-surface border border-zinc-800 rounded-2xl p-6 space-y-5">
         <div className="flex items-center gap-3 border-b border-zinc-800 pb-4">
           <div className="w-9 h-9 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
             <Building2 className="w-4 h-4 text-indigo-400" />
@@ -370,7 +445,7 @@ export default function OrganizationDetailsStepPage() {
       </div>
 
       {/* Philippine Address Card */}
-      <div className="bg-[#121215] border border-zinc-800 rounded-2xl p-6 space-y-4">
+      <div className="bg-surface border border-zinc-800 rounded-2xl p-6 space-y-4">
         <div className="flex items-center gap-3 border-b border-zinc-800 pb-4">
           <div className="w-9 h-9 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
             <MapPin className="w-4 h-4 text-indigo-400" />
@@ -390,13 +465,12 @@ export default function OrganizationDetailsStepPage() {
             <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
               Region *
             </label>
-            <input
-              type="text"
-              required
+            <CustomSelect
               value={region}
-              onChange={(e) => setRegion(e.target.value)}
-              placeholder="e.g. NCR / Region VII"
-              className="w-full px-3.5 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500"
+              onChange={handleRegionChange}
+              options={regionOptions}
+              placeholder="Select Philippine Region"
+              searchable={true}
             />
             {err("address.region")}
           </div>
@@ -405,13 +479,13 @@ export default function OrganizationDetailsStepPage() {
             <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
               Province *
             </label>
-            <input
-              type="text"
-              required
+            <CustomSelect
               value={province}
-              onChange={(e) => setProvince(e.target.value)}
-              placeholder="e.g. Metro Manila / Cebu"
-              className="w-full px-3.5 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500"
+              onChange={handleProvinceChange}
+              options={provinceOptions}
+              placeholder={region ? "Select Province" : "Select Region first"}
+              disabled={!region || provinceOptions.length === 0}
+              searchable={true}
             />
             {err("address.province")}
           </div>
@@ -420,29 +494,52 @@ export default function OrganizationDetailsStepPage() {
             <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
               City / Municipality *
             </label>
-            <input
-              type="text"
-              required
+            <CustomSelect
               value={city}
-              onChange={(e) => setCity(e.target.value)}
-              placeholder="e.g. Quezon City / Cebu City"
-              className="w-full px-3.5 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500"
+              onChange={handleCityChange}
+              options={cityOptions}
+              placeholder={province ? "Select City / Municipality" : "Select Province first"}
+              disabled={!province || cityOptions.length === 0}
+              searchable={true}
             />
             {err("address.city")}
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
-              Barangay *
-            </label>
-            <input
-              type="text"
-              required
-              value={barangay}
-              onChange={(e) => setBarangay(e.target.value)}
-              placeholder="e.g. Barangay Loyola Heights"
-              className="w-full px-3.5 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500"
-            />
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-semibold text-zinc-300">
+                Barangay *
+              </label>
+              {barangayOptions.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setManualBarangay((prev) => !prev)}
+                  className="text-[11px] text-indigo-400 hover:text-indigo-300 transition-colors"
+                >
+                  {manualBarangay ? "Choose from list" : "Type manually"}
+                </button>
+              )}
+            </div>
+
+            {barangayOptions.length > 0 && !manualBarangay ? (
+              <CustomSelect
+                value={barangay}
+                onChange={(val) => setBarangay(val)}
+                options={barangayOptions}
+                placeholder={city ? "Select Barangay" : "Select City first"}
+                disabled={!city}
+                searchable={true}
+              />
+            ) : (
+              <input
+                type="text"
+                required
+                value={barangay}
+                onChange={(e) => setBarangay(e.target.value)}
+                placeholder={city ? "e.g. Barangay Loyola Heights" : "Enter Barangay name"}
+                className="w-full px-3.5 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500"
+              />
+            )}
             {err("address.barangay")}
           </div>
 

@@ -12,6 +12,7 @@ import {
 import api from "@/lib/api";
 import toast from "react-hot-toast";
 import AdminOrgVerificationsPanel from "@/components/AdminOrgVerificationsPanel";
+import CustomSelect from "@/components/CustomSelect";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface PlatformStats {
@@ -544,15 +545,21 @@ export default function AdminPage() {
                   onChange={(e) => { setOrgSearch(e.target.value); setOrgPage(1); }}
                 />
               </div>
-              <select
-                className="px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-white focus:outline-none focus:border-zinc-500 transition-colors appearance-none"
-                value={orgStatus}
-                onChange={(e) => { setOrgStatus(e.target.value); setOrgPage(1); }}
-              >
-                <option value="all" className="bg-zinc-900">All Status</option>
-                <option value="active" className="bg-zinc-900">Active</option>
-                <option value="suspended" className="bg-zinc-900">Suspended</option>
-              </select>
+              <div className="w-36">
+                <CustomSelect
+                  size="sm"
+                  value={orgStatus}
+                  onChange={(val) => {
+                    setOrgStatus(val);
+                    setOrgPage(1);
+                  }}
+                  options={[
+                    { value: "all", label: "All Status" },
+                    { value: "active", label: "Active" },
+                    { value: "suspended", label: "Suspended" },
+                  ]}
+                />
+              </div>
               <button onClick={refreshOrgs} className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-lg text-xs font-medium text-zinc-300 hover:text-white flex items-center gap-1.5 transition-colors">
                 <RefreshCw className="w-3.5 h-3.5" /> Refresh
               </button>

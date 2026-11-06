@@ -9,6 +9,14 @@ import TableSkeleton from "@/components/TableSkeleton";
 import axios from "axios";
 import ConfirmModal from "@/components/ConfirmModal";
 import { getErrorMessage } from "@/lib/utils";
+import CustomSelect, { CustomSelectOption } from "@/components/CustomSelect";
+
+const ACCESS_LEVEL_OPTIONS: CustomSelectOption[] = [
+  { value: "1", label: "Level 1: Executive Approver", hint: "Required for multi-sig approvals" },
+  { value: "2", label: "Level 2: Finance / Transaction Officer", hint: "Create and submit proposals" },
+  { value: "3", label: "Level 3: Member / Contributor", hint: "View & participate in discussions" },
+  { value: "4", label: "Level 4: Public Viewer", hint: "Read-only access" },
+];
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface UserOrgRef {
@@ -462,16 +470,11 @@ export default function TeamPage() {
               {/* Role Level */}
               <div>
                 <label className="block text-xs font-medium text-zinc-400 uppercase tracking-wider mb-1.5">Access Level</label>
-                <select
-                  className="w-full px-3.5 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-white focus:outline-none focus:border-zinc-500 transition-colors appearance-none"
-                  value={formData.roleLevel}
-                  onChange={(e) => setFormData({ ...formData, roleLevel: Number(e.target.value) })}
-                >
-                  <option value={1} className="bg-zinc-900">Level 1: Executive Approver</option>
-                  <option value={2} className="bg-zinc-900">Level 2: Finance / Transaction Officer</option>
-                  <option value={3} className="bg-zinc-900">Level 3: Member / Contributor</option>
-                  <option value={4} className="bg-zinc-900">Level 4: Public Viewer</option>
-                </select>
+                <CustomSelect
+                  value={String(formData.roleLevel)}
+                  onChange={(val) => setFormData({ ...formData, roleLevel: Number(val) })}
+                  options={ACCESS_LEVEL_OPTIONS}
+                />
                 <p className="text-[11px] text-zinc-500 mt-1">
                   Level 1 is required for multi-sig approvals.
                 </p>
@@ -539,16 +542,11 @@ export default function TeamPage() {
               {/* Role Level */}
               <div>
                 <label className="block text-xs font-medium text-zinc-400 uppercase tracking-wider mb-1.5">Access Level</label>
-                <select
-                  className="w-full px-3.5 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-white focus:outline-none focus:border-zinc-500 transition-colors appearance-none"
-                  value={editingMember.roleLevel}
-                  onChange={(e) => setEditingMember({ ...editingMember, roleLevel: Number(e.target.value) })}
-                >
-                  <option value={1} className="bg-zinc-900">Level 1: Executive Approver</option>
-                  <option value={2} className="bg-zinc-900">Level 2: Finance / Transaction Officer</option>
-                  <option value={3} className="bg-zinc-900">Level 3: Member / Contributor</option>
-                  <option value={4} className="bg-zinc-900">Level 4: Public Viewer</option>
-                </select>
+                <CustomSelect
+                  value={String(editingMember.roleLevel)}
+                  onChange={(val) => setEditingMember({ ...editingMember, roleLevel: Number(val) })}
+                  options={ACCESS_LEVEL_OPTIONS}
+                />
                 <p className="text-[11px] text-zinc-500 mt-1">
                   Level 1 is required for multi-sig approvals.
                 </p>

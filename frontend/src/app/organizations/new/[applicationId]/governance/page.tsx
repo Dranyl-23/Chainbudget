@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useOrgRegistration } from "@/context/OrgRegistrationContext";
 import { OrgOfficer } from "@/lib/orgApplications";
+import CustomSelect from "@/components/CustomSelect";
 
 export default function GovernanceStepPage() {
   const { application, requirements, saveStep } = useOrgRegistration();
@@ -37,6 +38,7 @@ export default function GovernanceStepPage() {
 
   if (!application || !requirements) return null;
 
+  const isFamily = application.type === "family";
   const minOfficersNeeded = Math.max(0, requiredApprovals - 1);
 
   const addOfficer = () => {
@@ -139,17 +141,19 @@ export default function GovernanceStepPage() {
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {/* Multi-Sig Rules Card */}
-      <div className="bg-[#121215] border border-zinc-800 rounded-2xl p-6 space-y-5">
+      <div className="bg-surface border border-zinc-800 rounded-2xl p-6 space-y-5">
         <div className="flex items-center gap-3 border-b border-zinc-800 pb-4">
           <div className="w-9 h-9 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
             <ShieldCheck className="w-4 h-4 text-indigo-400" />
           </div>
           <div>
             <h2 className="text-base font-bold text-white">
-              Step 4 · Treasury Governance & Multi-Sig Rules
+              Step 4 · {isFamily ? "Family Treasury Governance & Multi-Sig Rules" : "Treasury Governance & Multi-Sig Rules"}
             </h2>
             <p className="text-xs text-zinc-400">
-              Configure the approval quorum and high-value disbursement threshold.
+              {isFamily
+                ? "Configure how many family co-signers must approve household disbursements."
+                : "Configure the approval quorum and high-value disbursement threshold."}
             </p>
           </div>
         </div>
@@ -219,7 +223,7 @@ export default function GovernanceStepPage() {
       </div>
 
       {/* Initial Co-Officers Card */}
-      <div className="bg-[#121215] border border-zinc-800 rounded-2xl p-6 space-y-4">
+      <div className="bg-surface border border-zinc-800 rounded-2xl p-6 space-y-4">
         <div className="flex items-center justify-between gap-3 border-b border-zinc-800 pb-4">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
@@ -227,12 +231,14 @@ export default function GovernanceStepPage() {
             </div>
             <div>
               <h3 className="text-base font-bold text-white">
-                Initial Co-Officers & Approvers
+                {isFamily ? "Initial Family Approvers & Members" : "Initial Co-Officers & Approvers"}
               </h3>
               <p className="text-xs text-zinc-400">
                 You are automatically Approver #1 (Founder).{" "}
                 {minOfficersNeeded > 0
-                  ? `Add at least ${minOfficersNeeded} additional officer(s) to satisfy your ${requiredApprovals}-approval quorum.`
+                  ? `Add at least ${minOfficersNeeded} additional ${isFamily ? "family co-approver(s)" : "officer(s)"} to satisfy your ${requiredApprovals}-approval quorum.`
+                  : isFamily
+                  ? "You may optionally list additional family members to invite upon approval."
                   : "You may optionally list additional officers to invite upon approval."}
               </p>
             </div>
@@ -244,7 +250,7 @@ export default function GovernanceStepPage() {
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-colors shrink-0 cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
-            Add Officer
+            {isFamily ? "Add Family Member" : "Add Officer"}
           </button>
         </div>
 
@@ -252,10 +258,10 @@ export default function GovernanceStepPage() {
 
         {officers.length === 0 ? (
           <div className="p-6 rounded-xl bg-zinc-900/50 border border-dashed border-zinc-800 text-center text-xs text-zinc-400">
-            No additional officers listed yet.{" "}
+            {isFamily ? "No additional family members listed yet." : "No additional officers listed yet."}{" "}
             {minOfficersNeeded > 0 && (
               <span className="text-amber-300 font-medium">
-                Click &ldquo;Add Officer&rdquo; above to add at least {minOfficersNeeded}{" "}
+                Click &ldquo;{isFamily ? "Add Family Member" : "Add Officer"}&rdquo; above to add at least {minOfficersNeeded}{" "}
                 co-approver(s).
               </span>
             )}
@@ -269,7 +275,7 @@ export default function GovernanceStepPage() {
               >
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-zinc-300">
-                    Officer #{i + 2}
+                    {isFamily ? `Family Member #${i + 2}` : `Officer #${i + 2}`}
                   </span>
                   <button
                     type="button"
@@ -313,7 +319,7 @@ export default function GovernanceStepPage() {
                   <div>
                     <input
                       type="text"
-                      placeholder="Title (e.g. Treasurer)"
+                      placeholder={isFamily ? "Role in Family (e.g. Mother, Father, Spouse)" : "Title (e.g. Treasurer)"}
                       value={officer.roleLabel || ""}
                       onChange={(e) =>
                         updateOfficer(i, { roleLabel: e.target.value })
@@ -324,19 +330,17 @@ export default function GovernanceStepPage() {
                   </div>
 
                   <div>
-                    <select
-                      value={officer.roleLevel}
-                      onChange={(e) =>
-                        updateOfficer(i, { roleLevel: Number(e.target.value) })
+                    <CustomSelect
+                      size="sm"
+                      value={String(officer.roleLevel)}
+                      onChange={(val) =>
+                        updateOfficer(i, { roleLevel: Number(val) })
                       }
-                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-white"
-                    >
-                      {requirements.governance.officerRoles.map((r) => (
-                        <option key={r.level} value={r.level}>
-                          Level {r.level} · {r.label}
-                        </option>
-                      ))}
-                    </select>
+                      options={requirements.governance.officerRoles.map((r) => ({
+                        value: String(r.level),
+                        label: `Level ${r.level} · ${r.label}`,
+                      }))}
+                    />
                     {err(`officers.${i}.roleLevel`)}
                   </div>
                 </div>

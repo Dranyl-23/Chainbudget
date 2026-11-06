@@ -144,7 +144,7 @@ export default function DocumentsStepPage() {
   return (
     <div className="space-y-6">
       {/* Header & 3-Pillar Security Notice */}
-      <div className="bg-[#121215] border border-zinc-800 rounded-2xl p-6 space-y-5">
+      <div className="bg-surface border border-zinc-800 rounded-2xl p-6 space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800 pb-4">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
@@ -218,7 +218,7 @@ export default function DocumentsStepPage() {
           return (
             <div
               key={group.id}
-              className={`bg-[#121215] border rounded-2xl p-5 space-y-4 transition-colors ${
+              className={`bg-surface border rounded-2xl p-5 space-y-4 transition-colors ${
                 group.satisfied ? "border-emerald-500/30" : "border-zinc-800"
               }`}
             >
@@ -277,7 +277,9 @@ export default function DocumentsStepPage() {
                     >
                       <div className="min-w-0">
                         <div className="text-xs font-semibold text-zinc-200 truncate">
-                          {spec.label}
+                          {kind === "rep_id_front" && application.representative?.idType === "school_id"
+                            ? "Institutional / School ID (front)"
+                            : spec.label}
                         </div>
                         <div className="text-[11px] text-zinc-500 mt-0.5">
                           {spec.mimes
