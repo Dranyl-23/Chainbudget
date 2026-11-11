@@ -29,6 +29,11 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useAppLock } from '../context/AppLockContext';
 import {
+  PIN_LENGTH,
+  MAX_PIN_ATTEMPTS,
+  getPinLockoutState,
+} from '../lib/pinSecurity';
+import {
   triggerLightHaptic,
   triggerMediumHaptic,
   triggerErrorHaptic,
@@ -36,9 +41,7 @@ import {
 } from '../lib/biometrics';
 
 const { width } = Dimensions.get('window');
-const PIN_LENGTH = 6;
-const MAX_ATTEMPTS = 5;
-const LOCKOUT_SECONDS = 30;
+// PIN length, attempt limits, and exponential lockout persistence live in ../lib/pinSecurity.ts
 
 const KEYPAD_ROWS = [
   [
@@ -73,40 +76,71 @@ export default function AppLockOverlay() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [lockoutTimer, setLockoutTimer] = useState(0);
+  const [lockoutHydrated, setLockoutHydrated] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
 
   // Animations
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const lockedUntilRef = useRef<number>(0);
 
-  // Auto-prompt biometrics when screen is locked
+  // Hydrate persistent lockout state from SecureStore on mount / lock screen open (MOB-01)
   useEffect(() => {
-    if (isLocked && isBiometricEnabled && lockoutTimer === 0) {
+    let cancelled = false;
+    if (!isLocked) {
+      setLockoutHydrated(false);
+      return;
+    }
+
+    (async () => {
+      const state = await getPinLockoutState();
+      if (cancelled) return;
+      lockedUntilRef.current = state.lockedUntil;
+      setFailedAttempts(state.failedAttempts);
+      setLockoutTimer(state.remainingSeconds);
+      if (state.remainingSeconds > 0) {
+        setErrorMessage(`Too many failed attempts. Try again in ${state.remainingSeconds}s`);
+      } else {
+        setErrorMessage(null);
+      }
+      setLockoutHydrated(true);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isLocked]);
+
+  // Auto-prompt biometrics when screen is locked (only after persisted lockout state is checked)
+  useEffect(() => {
+    if (isLocked && lockoutHydrated && isBiometricEnabled && lockoutTimer === 0) {
       const timer = setTimeout(() => {
         unlockWithBiometrics().catch(() => {});
       }, 350);
       return () => clearTimeout(timer);
     }
-  }, [isLocked, isBiometricEnabled, lockoutTimer, unlockWithBiometrics]);
+  }, [isLocked, lockoutHydrated, isBiometricEnabled, lockoutTimer, unlockWithBiometrics]);
 
-  // Lockout countdown timer
+  // Wall-clock accurate lockout countdown timer
   useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-    if (lockoutTimer > 0) {
-      interval = setInterval(() => {
-        setLockoutTimer((prev) => {
-          if (prev <= 1) {
-            setErrorMessage(null);
-            setFailedAttempts(0);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
+    if (lockoutTimer <= 0) return;
+
+    const interval: ReturnType<typeof setInterval> = setInterval(() => {
+      const remaining =
+        lockedUntilRef.current > Date.now()
+          ? Math.ceil((lockedUntilRef.current - Date.now()) / 1000)
+          : 0;
+      setLockoutTimer(remaining);
+      if (remaining <= 0) {
+        lockedUntilRef.current = 0;
+        setErrorMessage(null);
+        setFailedAttempts(0);
+      } else {
+        setErrorMessage(`Too many failed attempts. Try again in ${remaining}s`);
+      }
+    }, 500);
+
+    return () => clearInterval(interval);
   }, [lockoutTimer]);
 
   // Logo gentle pulse animation
@@ -151,26 +185,38 @@ export default function AppLockOverlay() {
     if (newPin.length === PIN_LENGTH) {
       setIsVerifying(true);
       setTimeout(async () => {
-        const success = await unlockWithPin(newPin);
-        if (success) {
-          setPin('');
-          setErrorMessage(null);
-          setFailedAttempts(0);
-        } else {
-          await triggerErrorHaptic();
-          triggerShake();
-          const newFailed = failedAttempts + 1;
-          setFailedAttempts(newFailed);
-          setPin('');
-
-          if (newFailed >= MAX_ATTEMPTS) {
-            setLockoutTimer(LOCKOUT_SECONDS);
-            setErrorMessage(`Too many failed attempts. Try again in ${LOCKOUT_SECONDS}s`);
+        try {
+          const success = await unlockWithPin(newPin);
+          if (success) {
+            lockedUntilRef.current = 0;
+            setPin('');
+            setErrorMessage(null);
+            setFailedAttempts(0);
+            setLockoutTimer(0);
           } else {
-            setErrorMessage(`Incorrect PIN (${MAX_ATTEMPTS - newFailed} attempts left)`);
+            await triggerErrorHaptic();
+            triggerShake();
+            const lockoutState = await getPinLockoutState();
+            lockedUntilRef.current = lockoutState.lockedUntil;
+            setFailedAttempts(lockoutState.failedAttempts);
+            setPin('');
+
+            if (lockoutState.remainingSeconds > 0) {
+              setLockoutTimer(lockoutState.remainingSeconds);
+              setErrorMessage(
+                `Too many failed attempts. Try again in ${lockoutState.remainingSeconds}s`
+              );
+            } else {
+              const attemptsLeft = Math.max(
+                0,
+                MAX_PIN_ATTEMPTS - lockoutState.failedAttempts
+              );
+              setErrorMessage(`Incorrect PIN (${attemptsLeft} attempts left)`);
+            }
           }
+        } finally {
+          setIsVerifying(false);
         }
-        setIsVerifying(false);
       }, 150);
     }
   };

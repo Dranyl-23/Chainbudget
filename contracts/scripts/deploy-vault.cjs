@@ -8,22 +8,25 @@ async function deployVault() {
   console.log("Deploying fresh ChainBudget.sol to Polygon Amoy...");
   console.log("--------------------------------------------------");
 
-  const rpcUrl = "https://polygon-amoy-bor-rpc.publicnode.com";
-  const privateKey = process.env.BACKEND_WALLET_PRIVATE_KEY || "0xdd8432526fb22c2bc093f850d2410f63008b06405a2348f0d18545d0a3f2c921";
-  
+  const rpcUrl = process.env.AMOY_RPC_URL || "https://polygon-amoy-bor-rpc.publicnode.com";
+  const privateKey = process.env.DEPLOYER_PRIVATE_KEY || process.env.PRIVATE_KEY || process.env.BACKEND_WALLET_PRIVATE_KEY;
+  if (!privateKey || privateKey.includes("your_deployer_wallet")) {
+    throw new Error("Missing DEPLOYER_PRIVATE_KEY, PRIVATE_KEY, or BACKEND_WALLET_PRIVATE_KEY in environment.");
+  }
+
   const provider = new ethers.JsonRpcProvider(rpcUrl, 80002, { staticNetwork: true });
-  const deployer = new ethers.Wallet(privateKey, provider);
+  const normalizedKey = privateKey.startsWith("0x") ? privateKey : `0x${privateKey}`;
+  const deployer = new ethers.Wallet(normalizedKey, provider);
 
   console.log("Deployer Address (Owner):", deployer.address);
   const balance = await provider.getBalance(deployer.address);
   console.log("Deployer Balance:        ", ethers.formatEther(balance), "POL");
 
-  // Initial approvers: deployer + user's MetaMask wallet
-  const initialApprovers = [
-    deployer.address,
-    "0x3A9882B58f34a89c4A5CE0328222cDD8b8Cc6c85",
-  ];
-  const requiredApprovals = 1; // 1-of-N threshold so approvals succeed smoothly
+  const secondaryApprover = process.env.SECONDARY_APPROVER_ADDRESS;
+  const initialApprovers = secondaryApprover
+    ? [deployer.address, secondaryApprover]
+    : [deployer.address];
+  const requiredApprovals = Number(process.env.REQUIRED_APPROVALS || (initialApprovers.length >= 2 ? 2 : 1));
 
   console.log("Initial Approvers:       ", initialApprovers);
   console.log("Required Approvals:      ", requiredApprovals);

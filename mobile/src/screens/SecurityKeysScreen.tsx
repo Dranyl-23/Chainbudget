@@ -60,28 +60,35 @@ export default function SecurityKeysScreen() {
 
     setLoadingTarget(target);
     try {
-      // ── Step 2 (CRIT-3): Request a one-time challenge nonce from the backend ──
+      // ── Step 2 (MOB-03): Prefer reading keys directly from local hardware-backed SecureStore
+      // after biometric verification instead of transporting secrets over the network.
+      const [localMnemonic, localPrivateKey] = await Promise.all([
+        getMnemonic(),
+        getPrivateKey(),
+      ]);
+
+      const hasRequestedLocally =
+        (target === 'phrase' && Boolean(localMnemonic)) ||
+        (target === 'privateKey' && Boolean(localPrivateKey));
+
+      if (hasRequestedLocally) {
+        setKeys({
+          mnemonic: localMnemonic || '',
+          privateKey: localPrivateKey || '',
+        });
+        setActiveTab(target);
+        return;
+      }
+
+      // Fallback only when the requested key is absent from local SecureStore:
+      // request a one-time challenge nonce and verify device signature.
       const challengeRes = await api.post<{ challenge: string; walletAddress: string }>(
         '/auth/keys/challenge'
       );
       const { challenge } = challengeRes.data;
 
-      // ── Step 3: Sign the challenge with the device-secured private key ─────
-      const privateKeyForSigning = await getPrivateKey();
+      const privateKeyForSigning = localPrivateKey;
       if (!privateKeyForSigning) {
-        // If device has local mnemonic, derive private key or use local keys directly
-        const localMnemonic = await getMnemonic();
-        if (localMnemonic) {
-          setKeys({
-            mnemonic: localMnemonic,
-            privateKey: '',
-          });
-          if (target === 'phrase') {
-            setActiveTab('phrase');
-            return;
-          }
-        }
-
         Alert.alert(
           'Signing Failed',
           'Could not retrieve signing key from device secure storage.'
@@ -93,25 +100,14 @@ export default function SecurityKeysScreen() {
       const signerWallet = new ethers.Wallet(privateKeyForSigning);
       const signature = await signerWallet.signMessage(challenge);
 
-      // ── Step 4: Submit signature to backend for ECDSA verification ─────────
       const exportRes = await api.post<{ privateKey: string; mnemonic: string }>(
         '/auth/keys/export',
         { signature }
       );
       const { privateKey: serverPrivateKey, mnemonic: serverMnemonic } = exportRes.data;
 
-      // ── Step 5: Read local SecureStore for display fallback ────────────────
-      let displayMnemonic = serverMnemonic;
-      let displayPrivateKey = serverPrivateKey;
-
-      if (!displayMnemonic || !displayPrivateKey) {
-        const [localMnemonic, localPrivateKey] = await Promise.all([
-          getMnemonic(),
-          getPrivateKey(),
-        ]);
-        displayMnemonic = displayMnemonic || localMnemonic || '';
-        displayPrivateKey = displayPrivateKey || localPrivateKey || '';
-      }
+      const displayMnemonic = serverMnemonic || localMnemonic || '';
+      const displayPrivateKey = serverPrivateKey || localPrivateKey || '';
 
       if (target === 'phrase' && !displayMnemonic) {
         Alert.alert(

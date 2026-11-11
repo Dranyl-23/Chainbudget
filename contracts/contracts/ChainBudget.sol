@@ -93,9 +93,10 @@ contract ChainBudget is Ownable2Step, Pausable, ReentrancyGuard {
         return address(this).balance;
     }
 
-    /// @notice Returns the balance available for non-escrow disbursements
+    /// @notice Returns the balance available for new disbursements and escrows
     function getAvailableBalance() external view returns (uint256) {
-        return address(this).balance - totalLockedEscrow;
+        uint256 bal = address(this).balance;
+        return bal > totalLockedEscrow ? bal - totalLockedEscrow : 0;
     }
 
 
@@ -188,11 +189,10 @@ contract ChainBudget is Ownable2Step, Pausable, ReentrancyGuard {
         Transaction storage txn = transactions[txId];
         require(txn.isApproved, "ChainBudget: transaction not approved yet");
         require(!txn.executed, "ChainBudget: already executed");
-        if (txn.isEscrow) {
-            require(address(this).balance >= txn.amount, "ChainBudget: insufficient vault balance");
-        } else {
-            require(address(this).balance - totalLockedEscrow >= txn.amount, "ChainBudget: insufficient available balance (escrow funds reserved)");
-        }
+        require(
+            address(this).balance >= totalLockedEscrow + txn.amount,
+            "ChainBudget: insufficient available balance (escrow funds reserved)"
+        );
 
         txn.executed = true;
         
@@ -273,6 +273,7 @@ contract ChainBudget is Ownable2Step, Pausable, ReentrancyGuard {
         require(bytes(evidenceURI).length > 0, "ChainBudget: evidence URI required");
         require(txn.isEscrow, "ChainBudget: not an escrow transaction");
         require(esc.isFunded, "ChainBudget: escrow not funded yet");
+        require(esc.payerApproved, "ChainBudget: payer approval required before offchain confirmation");
         require(!esc.isReleased, "ChainBudget: escrow already released");
 
         esc.payeeApproved = true;

@@ -52,18 +52,10 @@ router.post("/:txId", authenticate, requireRole(2), requireIdempotency, async (r
       return res.status(403).json({ error: "Transaction does not belong to this organization" });
     }
 
-    // Maker-checker: the submitter of a transaction may not approve their own request.
-    // Safety valve: if the org has too few OTHER eligible approvers (L1/L2) to ever reach
-    // requiredApprovals, the rule is waived so the transaction can't be deadlocked.
+    // Maker-checker: the submitter of a transaction may NEVER approve their own request.
     if (action === "approved" && txn.submittedBy && txn.submittedBy.toString() === req.user._id.toString()) {
-      const otherApprovers = await User.countDocuments({
-        _id: { $ne: req.user._id },
-        memberships: { $elemMatch: { organization: txn.organization._id, roleLevel: { $lte: 2 }, isActive: true } },
-      }).session(session);
-      if (otherApprovers >= (txn.organization.requiredApprovals || 1)) {
-        await session.abortTransaction();
-        return res.status(403).json({ error: "You cannot approve a transaction you submitted. Another approver must sign it." });
-      }
+      await session.abortTransaction();
+      return res.status(403).json({ error: "You cannot approve a transaction you submitted. Another approver must sign it." });
     }
 
     // Prevent duplicate votes (within transaction lock)
@@ -76,29 +68,30 @@ router.post("/:txId", authenticate, requireRole(2), requireIdempotency, async (r
       return res.status(400).json({ error: "You have already voted on this transaction" });
     }
 
+    // Enforce approval window expiration (SC-05)
+    if (txn.approvalDeadline && Math.floor(Date.now() / 1000) > txn.approvalDeadline) {
+      await session.abortTransaction();
+      return res.status(400).json({ error: "Transaction approval window has expired." });
+    }
+
     // Verify EIP-712 Signature
-    // HIGH-4 FIX: The EIP-712 message must be reconstructed entirely from
-    // server-side trusted data (the stored txn document). The previous code
-    // accepted `signedAmountWei` and `signedTo` from the client body and
-    // included them in the recovered-signer message — an attacker could supply
-    // a manipulated amountWei that was different from the real transaction amount,
-    // obtain a valid signature over it, and pass verification.
-    //
-    // Fix: always use txn.amount for amountWei and derive `to` from the
-    // transaction's stored submittedBy wallet — never from the request body.
+    // HIGH-4 FIX: Reconstruct typed data strictly from server-side trusted data.
+    // Never trust client-supplied `to`, `amountWei`, or `deadline`.
     let recoveredAddress;
     try {
       const domain = { name: "ChainBudget", version: "1" };
-      const types = {
-        Approval: [
-          { name: "action", type: "string" },
-          { name: "txId", type: "string" },
-          { name: "amount", type: "string" },
-          { name: "description", type: "string" },
-          { name: "to", type: "address" },
-          { name: "amountWei", type: "uint256" }
-        ]
-      };
+      const approvalFields = [
+        { name: "action", type: "string" },
+        { name: "txId", type: "string" },
+        { name: "amount", type: "string" },
+        { name: "description", type: "string" },
+        { name: "to", type: "address" },
+        { name: "amountWei", type: "uint256" }
+      ];
+      if (txn.approvalDeadline) {
+        approvalFields.push({ name: "deadline", type: "uint256" });
+      }
+      const types = { Approval: approvalFields };
 
       // Resolve the canonical `to` address from the stored transaction submitter.
       // Never trust the client-supplied `to` field for signature verification.
@@ -119,6 +112,9 @@ router.post("/:txId", authenticate, requireRole(2), requireIdempotency, async (r
         to: canonicalTo,
         amountWei: txn.amount.toString(), // Server-sourced only — never from client
       };
+      if (txn.approvalDeadline) {
+        message.deadline = txn.approvalDeadline;
+      }
       
       recoveredAddress = ethers.verifyTypedData(domain, types, message, signature);
       console.log(`[Approval] Verification: Recovered=${recoveredAddress}, UserWallet=${req.user.walletAddress}`);
@@ -222,6 +218,7 @@ router.post("/:txId", authenticate, requireRole(2), requireIdempotency, async (r
                 // Demo/testnet only — amounts stored symbolically, not as real ETH value
                 const amountWei = txn.amount.toString();
                 
+                const deadline = txn.approvalDeadline || Math.floor(Date.now() / 1000) + 3600;
                 const txResponse = await contract.executeWithSignatures(
                   "approved",
                   txn._id.toString(),
@@ -229,6 +226,7 @@ router.post("/:txId", authenticate, requireRole(2), requireIdempotency, async (r
                   amountWei,
                   txn.description,
                   toAddress,
+                  deadline,
                   signatures
                 );
                 

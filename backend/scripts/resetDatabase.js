@@ -8,6 +8,16 @@ const mongoose = require("mongoose");
 
 const mongoUri = process.env.MONGO_URI || process.env.MONGODB_URI;
 
+if (process.env.NODE_ENV === "production") {
+  console.error("FATAL: Refusing to run database wipe in production (NODE_ENV=production).");
+  process.exit(1);
+}
+
+if (!process.argv.includes("--confirm-wipe")) {
+  console.error("FATAL: Destructive database reset requires the --confirm-wipe flag.");
+  process.exit(1);
+}
+
 if (!mongoUri) {
   console.error("FATAL: MONGO_URI is not set in backend/.env");
   process.exit(1);

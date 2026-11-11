@@ -26,7 +26,7 @@ contract ChainBudgetTreasury is Ownable2Step, Pausable, EIP712, ReentrancyGuard 
     mapping(string => bool) public executedTransactions;
 
     bytes32 private constant APPROVAL_TYPEHASH = keccak256(
-        "Approval(string action,string txId,string amount,string description,address to,uint256 amountWei)"
+        "Approval(string action,string txId,string amount,string description,address to,uint256 amountWei,uint256 deadline)"
     );
 
     // ────────────────────────────────────────────────────────────────────────
@@ -85,59 +85,33 @@ contract ChainBudgetTreasury is Ownable2Step, Pausable, EIP712, ReentrancyGuard 
     /// @notice Executes a transaction by verifying multiple EIP-712 signatures off-chain.
     /// @dev Called by the backend (relayer) paying the gas.
     function executeWithSignatures(
-        string calldata action,
-        string calldata txId,
-        string calldata amountStr,
+        string memory action,
+        string memory txId,
+        string memory amountStr,
         uint256 amountWei, // Actual uint256 amount to transfer
-        string calldata description,
+        string memory description,
         address payable to,
+        uint256 deadline,
         bytes[] calldata signatures
     ) external nonReentrant whenNotPaused {
+        require(block.timestamp <= deadline, "Treasury: signature expired");
         require(!executedTransactions[txId], "Treasury: Transaction already executed");
         require(to != address(0), "Treasury: zero address recipient");
         require(signatures.length >= requiredApprovals, "Treasury: Not enough signatures provided");
         require(address(this).balance >= amountWei, "Treasury: Insufficient vault balance");
 
-        // Hash the typed data payload exactly as signed in the frontend
-        bytes32 structHash = keccak256(
-            abi.encode(
-                APPROVAL_TYPEHASH,
+        bytes32 digest = _buildApprovalDigest(
+            [
                 keccak256(bytes(action)),
                 keccak256(bytes(txId)),
                 keccak256(bytes(amountStr)),
-                keccak256(bytes(description)),
-                to,
-                amountWei
-            )
+                keccak256(bytes(description))
+            ],
+            to,
+            amountWei,
+            deadline
         );
-        
-        bytes32 hash = _hashTypedDataV4(structHash);
-        
-        address[] memory recoveredAddresses = new address[](signatures.length);
-        uint256 validSignatureCount = 0;
-
-        for (uint256 i = 0; i < signatures.length; i++) {
-            address recovered = ECDSA.recover(hash, signatures[i]);
-            
-            // Check if recovered address is an authorized approver
-            if (isApprover[recovered]) {
-                // Ensure no duplicate signatures from the same approver
-                bool isDuplicate = false;
-                for (uint256 j = 0; j < validSignatureCount; j++) {
-                    if (recoveredAddresses[j] == recovered) {
-                        isDuplicate = true;
-                        break;
-                    }
-                }
-                
-                if (!isDuplicate) {
-                    recoveredAddresses[validSignatureCount] = recovered;
-                    validSignatureCount++;
-                }
-            }
-        }
-
-        require(validSignatureCount >= requiredApprovals, "Treasury: Not enough valid unique signatures from approvers");
+        _verifyApproverSignatures(digest, signatures);
 
         // Execute the transfer
         executedTransactions[txId] = true;
@@ -146,6 +120,54 @@ contract ChainBudgetTreasury is Ownable2Step, Pausable, EIP712, ReentrancyGuard 
         require(success, "Treasury: MATIC transfer failed");
 
         emit TransactionExecuted(txId, to, amountWei);
+    }
+
+    function _buildApprovalDigest(
+        bytes32[4] memory strHashes,
+        address to,
+        uint256 amountWei,
+        uint256 deadline
+    ) internal view returns (bytes32) {
+        return _hashTypedDataV4(
+            keccak256(
+                abi.encode(
+                    APPROVAL_TYPEHASH,
+                    strHashes[0],
+                    strHashes[1],
+                    strHashes[2],
+                    strHashes[3],
+                    to,
+                    amountWei,
+                    deadline
+                )
+            )
+        );
+    }
+
+    function _verifyApproverSignatures(bytes32 hash, bytes[] calldata signatures) internal view {
+        address[] memory recoveredAddresses = new address[](signatures.length);
+        uint256 validSignatureCount = 0;
+
+        for (uint256 i = 0; i < signatures.length; i++) {
+            address recovered = ECDSA.recover(hash, signatures[i]);
+
+            if (isApprover[recovered]) {
+                bool isDuplicate = false;
+                for (uint256 j = 0; j < validSignatureCount; j++) {
+                    if (recoveredAddresses[j] == recovered) {
+                        isDuplicate = true;
+                        break;
+                    }
+                }
+
+                if (!isDuplicate) {
+                    recoveredAddresses[validSignatureCount] = recovered;
+                    validSignatureCount++;
+                }
+            }
+        }
+
+        require(validSignatureCount >= requiredApprovals, "Treasury: Not enough valid unique signatures from approvers");
     }
 
     // ────────────────────────────────────────────────────────────────────────

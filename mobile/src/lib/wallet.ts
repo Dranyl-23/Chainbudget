@@ -130,7 +130,8 @@ export async function signApprovalAction(
   amount: string,
   description: string,
   to: string,
-  amountWei: string
+  amountWei: string,
+  deadline?: number
 ): Promise<string> {
   const privateKey = await getPrivateKey();
   if (!privateKey) {
@@ -140,25 +141,30 @@ export async function signApprovalAction(
   const wallet = new ethers.Wallet(privateKey);
 
   const domain = { name: 'ChainBudget', version: '1' };
+  const baseFields = [
+    { name: 'action',      type: 'string' },
+    { name: 'txId',        type: 'string' },
+    { name: 'amount',      type: 'string' },
+    { name: 'description', type: 'string' },
+    { name: 'to',          type: 'address' },
+    { name: 'amountWei',   type: 'uint256' },
+  ];
+  const hasDeadline = typeof deadline === 'number' && deadline > 0;
   const types = {
-    Approval: [
-      { name: 'action',      type: 'string' },
-      { name: 'txId',        type: 'string' },
-      { name: 'amount',      type: 'string' },
-      { name: 'description', type: 'string' },
-      { name: 'to',          type: 'address' },
-      { name: 'amountWei',   type: 'uint256' },
-    ],
+    Approval: hasDeadline
+      ? [...baseFields, { name: 'deadline', type: 'uint256' }]
+      : baseFields,
   };
 
   const safeTo = ethers.isAddress(to) ? ethers.getAddress(to) : ethers.ZeroAddress;
-  const message = {
+  const message: Record<string, unknown> = {
     action,
     txId: String(txId),
     amount: String(amount),
     description: String(description || ''),
     to: safeTo,
     amountWei: String(amountWei),
+    ...(hasDeadline ? { deadline } : {}),
   };
 
   const signature = await wallet.signTypedData(domain, types, message);

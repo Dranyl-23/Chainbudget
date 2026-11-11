@@ -20,18 +20,19 @@ describe("Maker-checker guard in approvals route", () => {
     assert.ok(guard < src.indexOf("Approval.create"));
   });
 
-  test("has deadlock safety valve based on other eligible L1/L2 approvers", () => {
-    assert.match(src, /otherApprovers >= \(txn\.organization\.requiredApprovals \|\| 1\)/);
-    assert.match(src, /roleLevel: \{ \$lte: 2 \}/);
+  test("strict maker-checker: submitter cannot approve own transaction regardless of org size", () => {
+    assert.doesNotMatch(src, /otherApprovers >= \(txn\.organization\.requiredApprovals \|\| 1\)/);
+    assert.match(src, /action === "approved" && txn\.submittedBy && txn\.submittedBy\.toString\(\) === req\.user\._id\.toString\(\)/);
+    const processSrc = read("src/routes/transactions.js");
+    assert.match(processSrc, /txn\.submittedBy\.toString\(\) === req\.user\._id\.toString\(\)/);
   });
 
-  test("guard simulation: self-approval blocked, others/rejections allowed, small orgs waived", () => {
-    const blocked = ({ action, submitter, voter, others, required }) =>
-      action === "approved" && submitter === voter && others >= (required || 1);
-    assert.strictEqual(blocked({ action: "approved", submitter: "a", voter: "a", others: 2, required: 2 }), true);
-    assert.strictEqual(blocked({ action: "approved", submitter: "a", voter: "b", others: 2, required: 2 }), false);
-    assert.strictEqual(blocked({ action: "rejected", submitter: "a", voter: "a", others: 2, required: 2 }), false);
-    assert.strictEqual(blocked({ action: "approved", submitter: "a", voter: "a", others: 1, required: 2 }), false);
+  test("guard simulation: self-approval always blocked, other L1/L2 approvers & self-rejection allowed", () => {
+    const blocked = ({ action, submitter, voter }) =>
+      action === "approved" && submitter === voter;
+    assert.strictEqual(blocked({ action: "approved", submitter: "a", voter: "a" }), true);
+    assert.strictEqual(blocked({ action: "approved", submitter: "a", voter: "b" }), false);
+    assert.strictEqual(blocked({ action: "rejected", submitter: "a", voter: "a" }), false);
   });
 });
 

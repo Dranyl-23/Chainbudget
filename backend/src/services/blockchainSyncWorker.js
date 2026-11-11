@@ -82,9 +82,17 @@ const syncPendingTransactions = async (io = null) => {
 
     for (const txn of pendingTxns) {
       try {
-        const recipientWallet =
-          (txn.submittedBy && txn.submittedBy.walletAddress) ||
-          "0x0000000000000000000000000000000000000000";
+        const recipientWallet = txn.submittedBy?.walletAddress;
+        if (
+          !recipientWallet ||
+          !ethers.isAddress(recipientWallet) ||
+          recipientWallet === ethers.ZeroAddress
+        ) {
+          console.warn(
+            `[syncWorker] Skipping on-chain sync for txn ${txn._id}: submitter has no valid linked wallet address.`
+          );
+          continue;
+        }
 
         const payload = JSON.stringify({
           orgId: txn.organization?.toString(),

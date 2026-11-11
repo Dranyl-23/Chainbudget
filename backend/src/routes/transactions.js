@@ -11,7 +11,7 @@ const { recordTransactionOnChain, releaseEscrowOnChain } = require("../services/
 const { authenticate, requireRole } = require("../middleware/auth");
 const { requireVerifiedOrg } = require("../middleware/orgVerification");
 const { requireIdempotency } = require("../middleware/idempotency");
-const { sendEmail } = require("../services/email");
+const { sendEmail, escapeHtml } = require("../services/email");
 const { ethers } = require("ethers");
 const { sendPushNotifications } = require("./users");
 
@@ -112,6 +112,7 @@ router.post("/", authenticate, requireRole(3), requireIdempotency, requireVerifi
       initialStatus = isHighValue ? "pending_approval" : "approved";
     }
 
+    const approvalDeadline = Math.floor(Date.now() / 1000) + 7 * 24 * 3600;
     const txn = new Transaction({
       organization: organizationId,
       submittedBy: req.user._id,
@@ -128,6 +129,7 @@ router.post("/", authenticate, requireRole(3), requireIdempotency, requireVerifi
       isEscrow: isEscrow === true,
       escrowStatus: "none",
       status: initialStatus,
+      approvalDeadline,
       urgency: urgency && urgency === "urgent" ? "urgent" : "normal",
     });
 
@@ -188,8 +190,8 @@ router.post("/", authenticate, requireRole(3), requireIdempotency, requireVerifi
                 <p>A new transaction requires your executive approval.</p>
                 <table style="width: 100%; max-width: 400px; border-collapse: collapse; margin-bottom: 20px;">
                   <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Amount:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">₱${amount.toLocaleString()}</td></tr>
-                  <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Description:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">${description}</td></tr>
-                  <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Requested By:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">${req.user.displayName}</td></tr>
+                  <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Description:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">${escapeHtml(description)}</td></tr>
+                  <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Requested By:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">${escapeHtml(req.user.displayName)}</td></tr>
                 </table>
                 <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard/approvals" style="display: inline-block; padding: 12px 24px; background-color: #4F46E5; color: white; text-decoration: none; border-radius: 8px; font-weight: bold;">Review in ChainBudget</a>
               </div>
@@ -512,6 +514,16 @@ router.patch("/:id/process-request", authenticate, async (req, res) => {
       return res.status(403).json({ error: "Insufficient permissions to process request" });
     }
 
+    // Maker-checker (API-01): Prevent an executive/finance officer from approving their own request
+    if (
+      action === "approve" &&
+      !req.user.isSuperAdmin &&
+      txn.submittedBy &&
+      txn.submittedBy.toString() === req.user._id.toString()
+    ) {
+      return res.status(403).json({ error: "Maker-checker violation: You cannot approve a request you submitted." });
+    }
+
     if (action === "reject") {
       txn.status = "rejected";
       await txn.save();
@@ -534,6 +546,9 @@ router.patch("/:id/process-request", authenticate, async (req, res) => {
     const isHighValue = txn.amount >= org.highValueThreshold;
     txn.isHighValue = isHighValue;
     txn.status = isHighValue ? "pending_approval" : "approved";
+    if (!txn.approvalDeadline) {
+      txn.approvalDeadline = Math.floor(Date.now() / 1000) + 7 * 24 * 3600;
+    }
 
     // Now record on blockchain
     let blockchainResult = null;
@@ -695,7 +710,7 @@ router.get("/public/:hash", async (req, res) => {
 });
 
 /// PATCH /api/transactions/:id/execute — Mark as executed (called by frontend after on-chain execute)
-router.patch("/:id/execute", authenticate, requireRole(2), async (req, res) => {
+router.patch("/:id/execute", authenticate, async (req, res) => {
   try {
     const txn = await Transaction.findById(req.params.id);
     if (!txn) return res.status(404).json({ error: "Transaction not found" });
@@ -764,6 +779,19 @@ router.post("/:id/release-escrow", authenticate, async (req, res) => {
       });
     }
 
+    // SC-04: Accept mobile's `signature` field or `payeeSig` and validate evidence before mutating state
+    const payeeSig = req.body?.payeeSig || req.body?.signature;
+    const rawEvidenceURI = typeof req.body?.evidenceURI === "string" ? req.body.evidenceURI.trim() : "";
+    const safeEvidenceURI = /^(https:\/\/|http:\/\/|ipfs:\/\/)/i.test(rawEvidenceURI)
+      ? rawEvidenceURI
+      : (txn.documentUrl && /^(https:\/\/|http:\/\/|ipfs:\/\/|\/uploads\/)/i.test(txn.documentUrl) ? txn.documentUrl : "");
+
+    if (txn.onChainTxId && isSupplier && !payeeSig && !safeEvidenceURI) {
+      return res.status(400).json({
+        error: "Payee cryptographic signature or verified delivery proof (evidenceURI / attached receipt) is required to release on-chain escrow."
+      });
+    }
+
     // Apply role-specific approvals
     if (isOrgAdmin) {
       txn.payerApproved = true;
@@ -798,26 +826,22 @@ router.post("/:id/release-escrow", authenticate, async (req, res) => {
           blockchainTxHash = receipt.hash;
         } else if (isSupplier && !isOrgAdmin) {
           let tx;
-          if (req.body?.payeeSig) {
-            tx = await contract.releaseEscrowWithPayeeSignature(txn.onChainTxId, req.body.payeeSig);
+          if (payeeSig) {
+            tx = await contract.releaseEscrowWithPayeeSignature(txn.onChainTxId, payeeSig);
           } else {
-            const evidenceURI = req.body?.evidenceURI || `chainbudget://escrow/release/${txn._id}`;
-            tx = await contract.recordOffchainPayeeConfirmation(txn.onChainTxId, evidenceURI);
+            tx = await contract.recordOffchainPayeeConfirmation(txn.onChainTxId, safeEvidenceURI);
           }
           const receipt = await waitWithTimeout(tx);
           blockchainTxHash = receipt.hash;
         } else {
-          // Admin is acting as both payer and payee (e.g. supplier account is
-          // the same as the org admin). Call payer release first, then record
-          // payee confirmation on-chain.
+          // Admin is acting as both payer and payee: payer release first, then signed/evidenced payee confirmation.
           const tx1 = await contract.releaseEscrow(txn.onChainTxId);
           await waitWithTimeout(tx1);
           let tx2;
-          if (req.body?.payeeSig) {
-            tx2 = await contract.releaseEscrowWithPayeeSignature(txn.onChainTxId, req.body.payeeSig);
+          if (payeeSig) {
+            tx2 = await contract.releaseEscrowWithPayeeSignature(txn.onChainTxId, payeeSig);
           } else {
-            const evidenceURI = req.body?.evidenceURI || `chainbudget://escrow/release/${txn._id}`;
-            tx2 = await contract.recordOffchainPayeeConfirmation(txn.onChainTxId, evidenceURI);
+            tx2 = await contract.recordOffchainPayeeConfirmation(txn.onChainTxId, safeEvidenceURI);
           }
           const receipt = await waitWithTimeout(tx2);
           blockchainTxHash = receipt.hash;
@@ -932,16 +956,20 @@ router.patch("/:id/receipt", authenticate, async (req, res) => {
 });
 
 /// POST /api/transactions/:id/retry-sync — Manually retry blockchain recording
-router.post("/:id/retry-sync", authenticate, requireRole(2), async (req, res) => {
+router.post("/:id/retry-sync", authenticate, async (req, res) => {
   try {
     const txn = await Transaction.findById(req.params.id);
     if (!txn) return res.status(404).json({ error: "Transaction not found" });
 
+    const orgId = txn.organization.toString();
+    const roleLevel = req.user.getRoleInOrg(orgId);
+    if (!req.user.isSuperAdmin && (roleLevel === null || roleLevel > 2)) {
+      return res.status(403).json({ error: "Access denied. You are not an admin of this organization." });
+    }
+
     if (txn.isRecordedOnChain && txn.blockchainTxHash) {
       return res.status(400).json({ error: "Transaction is already recorded on chain" });
     }
-
-    const orgId = txn.organization.toString();
 
     const payload = JSON.stringify({
       orgId,

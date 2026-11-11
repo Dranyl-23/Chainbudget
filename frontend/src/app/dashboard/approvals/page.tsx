@@ -52,6 +52,7 @@ interface TransactionApiItem {
   urgency?: "normal" | "urgent";
   documentUrl?: string;
   to?: string;
+  approvalDeadline?: number;
 }
 
 interface TransactionsResponse {
@@ -77,6 +78,7 @@ interface Approval {
   documentUrl?: string;
   urgency?: "normal" | "urgent";
   to?: string;
+  approvalDeadline?: number;
 }
 
 interface BudgetItem {
@@ -167,6 +169,7 @@ export default function ApprovalsPage() {
         urgency: tx.urgency || "normal",
         documentUrl: tx.documentUrl,
         to: tx.to,
+        approvalDeadline: tx.approvalDeadline,
       };
     });
   };
@@ -279,27 +282,32 @@ export default function ApprovalsPage() {
     }
     
     const domain = { name: "ChainBudget", version: "1" };
+    const baseFields = [
+      { name: "action", type: "string" },
+      { name: "txId", type: "string" },
+      { name: "amount", type: "string" },
+      { name: "description", type: "string" },
+      { name: "to", type: "address" },
+      { name: "amountWei", type: "uint256" }
+    ];
+    const hasDeadline = typeof req.approvalDeadline === "number" && req.approvalDeadline > 0;
     const types = {
-      Approval: [
-        { name: "action", type: "string" },
-        { name: "txId", type: "string" },
-        { name: "amount", type: "string" },
-        { name: "description", type: "string" },
-        { name: "to", type: "address" },
-        { name: "amountWei", type: "uint256" }
-      ]
+      Approval: hasDeadline
+        ? [...baseFields, { name: "deadline", type: "uint256" }]
+        : baseFields
     };
 
     const candidateTo = req.to || req.submittedBy?.walletAddress || "";
     const safeTo = ethers.isAddress(candidateTo) ? ethers.getAddress(candidateTo) : ethers.ZeroAddress;
 
-    const message = {
+    const message: Record<string, unknown> = {
       action,
       txId: req._id,
       amount: req.amount.toString(),
       description: req.description || "",
       to: safeTo,
-      amountWei: req.amount.toString()
+      amountWei: req.amount.toString(),
+      ...(hasDeadline ? { deadline: req.approvalDeadline } : {})
     };
     
     toast.loading(`Please sign the ${action} action in MetaMask...`, { id: "txToast" });

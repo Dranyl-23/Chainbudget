@@ -37,6 +37,7 @@ const TransactionSchema = new mongoose.Schema(
       enum: ["requested", "pending_approval", "approved", "rejected", "cancelled"],
       default: "pending_approval",
     },
+    approvalDeadline: { type: Number }, // Unix timestamp (seconds) after which EIP-712 approvals expire
     urgency: {
       type: String,
       enum: ["normal", "urgent"],

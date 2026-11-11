@@ -23,6 +23,7 @@ contract ChainBudgetDAO is Ownable2Step {
         uint256 noVotes;
         uint256 startTime;
         uint256 endTime;
+        uint256 snapshotBlock;
         bool executed;
         bool cancelled;
         bool passed;
@@ -32,8 +33,9 @@ contract ChainBudgetDAO is Ownable2Step {
     // proposalId => voter => hasVoted
     mapping(uint256 => mapping(address => bool)) public hasVoted;
     
-    // Membership tracking for DAO voting eligibility
+    // Membership tracking for DAO voting eligibility (with snapshot block against sybil additions)
     mapping(address => bool) public isMember;
+    mapping(address => uint256) public memberSinceBlock;
 
     // ────────────────────────────────────────────────────────────────────────
     // Events
@@ -72,12 +74,14 @@ contract ChainBudgetDAO is Ownable2Step {
         require(_member != address(0), "DAO: zero address");
         require(!isMember[_member], "DAO: already a member");
         isMember[_member] = true;
+        memberSinceBlock[_member] = block.number;
         emit MemberAdded(_member);
     }
 
     function removeMember(address _member) external onlyOwner {
         require(isMember[_member], "DAO: not a member");
         isMember[_member] = false;
+        delete memberSinceBlock[_member];
         emit MemberRemoved(_member);
     }
 
@@ -115,6 +119,7 @@ contract ChainBudgetDAO is Ownable2Step {
             noVotes: 0,
             startTime: block.timestamp,
             endTime: block.timestamp + _durationSeconds,
+            snapshotBlock: block.number,
             executed: false,
             cancelled: false,
             passed: false
@@ -130,6 +135,10 @@ contract ChainBudgetDAO is Ownable2Step {
         require(!p.cancelled, "DAO: proposal is cancelled");
         require(block.timestamp < p.endTime, "DAO: voting period has ended");
         require(!hasVoted[_proposalId][msg.sender], "DAO: already voted on this proposal");
+        require(
+            msg.sender == owner() || (memberSinceBlock[msg.sender] > 0 && memberSinceBlock[msg.sender] <= p.snapshotBlock),
+            "DAO: membership postdates proposal snapshot"
+        );
 
         hasVoted[_proposalId][msg.sender] = true;
 
@@ -142,13 +151,16 @@ contract ChainBudgetDAO is Ownable2Step {
         emit Voted(_proposalId, msg.sender, _support, p.yesVotes, p.noVotes);
     }
 
-    /// @notice Cancels a proposal before voting ends (only creator or owner)
+    /// @notice Cancels a proposal before voting starts (creators) or anytime before end (owner)
     function cancelProposal(uint256 _proposalId) external proposalExists(_proposalId) {
         Proposal storage p = proposals[_proposalId];
         require(msg.sender == p.creator || msg.sender == owner(), "DAO: not authorized to cancel");
         require(!p.executed, "DAO: already executed");
         require(!p.cancelled, "DAO: already cancelled");
         require(block.timestamp < p.endTime, "DAO: voting has ended");
+        if (msg.sender != owner()) {
+            require(p.yesVotes + p.noVotes == 0, "DAO: cannot cancel after voting has started");
+        }
 
         p.cancelled = true;
         emit ProposalCancelled(_proposalId);

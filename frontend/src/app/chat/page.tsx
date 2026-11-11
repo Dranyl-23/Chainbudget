@@ -958,23 +958,10 @@ export default function StandaloneChatPage() {
     let isCancelled = false;
 
     const setupSocket = async () => {
-      let token = authToken;
-      if (!token) {
-        try {
-          const tokenRes = await fetch("/api/auth/token", { cache: "no-store" });
-          if (tokenRes.ok) {
-            const data = await tokenRes.json();
-            token = data.token || undefined;
-          }
-        } catch {
-          // Continue with undefined token (read-only broadcast fallback)
-        }
-      }
-
       if (isCancelled) return;
 
       socket = io(BACKEND_URL, {
-        auth: { token },
+        ...(authToken ? { auth: { token: authToken } } : {}),
         withCredentials: true,
         transports: ["websocket", "polling"],
         reconnection: true,
@@ -989,8 +976,8 @@ export default function StandaloneChatPage() {
         setIsSocketConnected(true);
         socket?.emit("join_org", activeOrgId);
         socket?.emit("get_org_online", activeOrgId);
-        if (token) {
-          socket?.emit("authenticate", { token });
+        if (authToken) {
+          socket?.emit("authenticate", { token: authToken });
         }
         void flushOutbox();
       });
@@ -1003,8 +990,8 @@ export default function StandaloneChatPage() {
         setIsSocketConnected(true);
         socket?.emit("join_org", activeOrgId);
         socket?.emit("get_org_online", activeOrgId);
-        if (token) {
-          socket?.emit("authenticate", { token });
+        if (authToken) {
+          socket?.emit("authenticate", { token: authToken });
         }
         void flushOutbox();
       });

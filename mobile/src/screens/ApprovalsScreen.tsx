@@ -308,7 +308,8 @@ export default function ApprovalsScreen() {
         amountWei,
         tx.description || '',
         toAddress,
-        amountWei
+        amountWei,
+        typeof tx.approvalDeadline === 'number' ? tx.approvalDeadline : undefined
       );
 
       await api.post(`/approvals/${tx._id}`, {

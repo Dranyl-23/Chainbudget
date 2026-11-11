@@ -409,7 +409,7 @@ export default function NetworkStatusScreen() {
             <View style={{ flex: 1, marginRight: 8 }}>
               <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '700' }}>{c.label}</Text>
               <Text style={{ color: colors.textMuted, fontSize: 11, fontFamily: 'monospace', marginTop: 2 }}>
-                {c.address.slice(0, 10)}...{c.address.slice(-8)}
+                {c.address ? `${c.address.slice(0, 10)}...${c.address.slice(-8)}` : 'Not configured'}
               </Text>
             </View>
             <Ionicons name="open-outline" size={16} color={colors.primary} />

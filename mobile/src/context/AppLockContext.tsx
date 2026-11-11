@@ -9,8 +9,12 @@ import React, { createContext, useContext, useState, useEffect, useRef, useCallb
 import { AppState, AppStateStatus } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Crypto from 'expo-crypto';
 import { useAuth } from './AuthContext';
+import {
+  attemptPinVerification,
+  clearPinLockout,
+  hashPinWithSalt,
+} from '../lib/pinSecurity';
 import {
   authenticateWithBiometrics,
   triggerLightHaptic,
@@ -70,11 +74,7 @@ export function useAppLock() {
   return useContext(AppLockContext);
 }
 
-// Native fast SHA-256 salt & hash helper for hardware PIN verification
-async function hashPin(pin: string): Promise<string> {
-  const salt = 'chainbudget_secure_pin_salt_2026';
-  return Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, salt + pin);
-}
+// Salted PBKDF2-HMAC-SHA256 & persistent lockout enforcement live in ../lib/pinSecurity.ts
 
 export function AppLockProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -183,8 +183,9 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
   const setPin = useCallback(async (pin: string): Promise<boolean> => {
     if (pin.length !== 6) return false;
     try {
-      const hashed = await hashPin(pin);
+      const hashed = await hashPinWithSalt(pin);
       await SecureStore.setItemAsync(PIN_STORE_KEY, hashed);
+      await clearPinLockout();
       await AsyncStorage.setItem(APP_LOCK_ENABLED_KEY, 'true');
       setHasPinSet(true);
       setIsAppLockEnabledState(true);
@@ -201,8 +202,11 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
     try {
       const storedHash = await SecureStore.getItemAsync(PIN_STORE_KEY);
       if (!storedHash) return false;
-      const inputHash = await hashPin(pin);
-      return storedHash === inputHash;
+      const result = await attemptPinVerification(pin, storedHash);
+      if (result.success && result.upgradedHash) {
+        await SecureStore.setItemAsync(PIN_STORE_KEY, result.upgradedHash);
+      }
+      return result.success;
     } catch (err) {
       console.error('[AppLockContext] Error verifying PIN:', err);
       return false;
@@ -212,6 +216,7 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
   const removePin = useCallback(async (): Promise<void> => {
     try {
       await SecureStore.deleteItemAsync(PIN_STORE_KEY);
+      await clearPinLockout();
       await AsyncStorage.setItem(APP_LOCK_ENABLED_KEY, 'false');
       setHasPinSet(false);
       setIsAppLockEnabledState(false);
@@ -270,6 +275,7 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
     try {
       const result = await authenticateWithBiometrics('Unlock ChainBudget with Biometrics');
       if (result.success) {
+        await clearPinLockout();
         setIsLocked(false);
         await triggerSuccessHaptic();
         return true;

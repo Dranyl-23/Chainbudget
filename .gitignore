@@ -92,3 +92,5 @@ coverage/
 lcov.info
 scratch/
 docs/
+.vercel
+.env*

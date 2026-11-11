@@ -3,12 +3,17 @@ import autoTable, { RowInput } from "jspdf-autotable";
 
 export type ExportCellValue = string | number | boolean | null | undefined;
 
+const sanitizeCsvCell = (value: ExportCellValue): string => {
+  const raw = String(value ?? "");
+  // Prefix spreadsheet formula triggers (CWE-1236) including leading whitespace before =,+,-,@
+  const neutralized = /^[=+\-@\t\r]|^\s+[=+\-@]/.test(raw) ? `'${raw}` : raw;
+  return `"${neutralized.replace(/"/g, '""')}"`;
+};
+
 export const exportToCSV = (headers: string[], data: ExportCellValue[][], filename: string) => {
   const csvContent = [
-    headers.join(","),
-    ...data.map((row) =>
-      row.map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(",")
-    ),
+    headers.map((header) => sanitizeCsvCell(header)).join(","),
+    ...data.map((row) => row.map((cell) => sanitizeCsvCell(cell)).join(",")),
   ].join("\n");
 
   const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });

@@ -149,6 +149,19 @@ describe("ChainBudget System Suite", function () {
         sbt.connect(approver1).transferFrom(approver1.address, approver2.address, 0)
       ).to.be.revertedWith("MembershipSBT: This token is soulbound and cannot be transferred.");
     });
+
+    it("Should return valid Base64-encoded JSON metadata and SVG in tokenURI (SC-02)", async function () {
+      await sbt.mintMembership(approver1.address, "org-alpha");
+      const uri = await sbt.tokenURI(0);
+      expect(uri).to.match(/^data:application\/json;base64,/);
+      const b64Json = uri.replace("data:application/json;base64,", "");
+      const parsed = JSON.parse(Buffer.from(b64Json, "base64").toString("utf8"));
+      expect(parsed.name).to.equal("ChainBudget Membership #0");
+      expect(parsed.image).to.match(/^data:image\/svg\+xml;base64,/);
+      const svg = Buffer.from(parsed.image.replace("data:image/svg+xml;base64,", ""), "base64").toString("utf8");
+      expect(svg).to.include("<svg");
+      expect(svg).to.include("org-alpha");
+    });
   });
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -198,6 +211,27 @@ describe("ChainBudget System Suite", function () {
       await expect(
         dao.executeProposal(1)
       ).to.be.revertedWith("DAO: minimum quorum not reached");
+    });
+
+    it("Should block sybil members added after proposal snapshot and prevent creator cancellation after votes (SC-03)", async function () {
+      const dataHash = ethers.keccak256(ethers.toUtf8Bytes("dao-snapshot-test"));
+      await dao.connect(approver1).createProposal("Snapshot Guard", dataHash, 3600);
+
+      // Add a new member after proposal creation
+      await dao.addMember(nonApprover.address);
+
+      // Post-snapshot member cannot vote on the existing proposal
+      await expect(
+        dao.connect(nonApprover).castVote(1, true)
+      ).to.be.revertedWith("DAO: membership postdates proposal snapshot");
+
+      // Existing snapshot member casts vote
+      await dao.connect(approver2).castVote(1, false);
+
+      // Creator cannot cancel after voting has started
+      await expect(
+        dao.connect(approver1).cancelProposal(1)
+      ).to.be.revertedWith("DAO: cannot cancel after voting has started");
     });
   });
 
@@ -309,7 +343,12 @@ describe("ChainBudget System Suite", function () {
       ).to.be.revertedWith("ChainBudget: not authorized to release this escrow");
     });
 
-    it("Auditable override: recordOffchainPayeeConfirmation requires evidence URI and records audit event", async function () {
+    it("Auditable override: recordOffchainPayeeConfirmation requires payer approval first and evidence URI", async function () {
+      // Cannot record offchain payee confirmation prior to formal payer approval (SC-04)
+      await expect(
+        chainBudget.connect(owner).recordOffchainPayeeConfirmation(escrowTxId, "ipfs://QmEarlyProof")
+      ).to.be.revertedWith("ChainBudget: payer approval required before offchain confirmation");
+
       // Payer approves
       await chainBudget.connect(owner).releaseEscrow(escrowTxId);
 
@@ -394,6 +433,25 @@ describe("ChainBudget System Suite", function () {
 
       expect(await chainBudget.totalLockedEscrow()).to.equal(0);
     });
+
+    it("Should reject escrow funding that would double-allocate beyond vault balance (SC-01)", async function () {
+      await owner.sendTransaction({
+        to: await chainBudget.getAddress(),
+        value: ethers.parseEther("5.0"),
+      });
+
+      const h1 = ethers.keccak256(ethers.toUtf8Bytes("escrow-double-1"));
+      await chainBudget.recordTransaction(h1, ethers.parseEther("4.0"), supplier.address, false, true);
+      await chainBudget.executeTransaction(1);
+
+      const h2 = ethers.keccak256(ethers.toUtf8Bytes("escrow-double-2"));
+      await chainBudget.recordTransaction(h2, ethers.parseEther("3.0"), supplier.address, false, true);
+      await expect(
+        chainBudget.executeTransaction(2)
+      ).to.be.revertedWith("ChainBudget: insufficient available balance (escrow funds reserved)");
+
+      expect(await chainBudget.getAvailableBalance()).to.equal(ethers.parseEther("1.0"));
+    });
   });
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -447,6 +505,7 @@ describe("ChainBudget System Suite", function () {
         { name: "description", type: "string" },
         { name: "to", type: "address" },
         { name: "amountWei", type: "uint256" },
+        { name: "deadline", type: "uint256" },
       ],
     };
 
@@ -478,6 +537,8 @@ describe("ChainBudget System Suite", function () {
       const amountStr = "25000";
       const amountWei = ethers.parseEther("0.5");
       const description = "Equipment purchase";
+      const block = await ethers.provider.getBlock("latest");
+      const deadline = block.timestamp + 3600;
 
       const value = {
         action: "APPROVED",
@@ -486,6 +547,7 @@ describe("ChainBudget System Suite", function () {
         description,
         to: supplier.address,
         amountWei,
+        deadline,
       };
 
       const sig1 = await approver1.signTypedData(domain, types, value);
@@ -499,6 +561,7 @@ describe("ChainBudget System Suite", function () {
           amountWei,
           description,
           supplier.address,
+          deadline,
           [sig1, sig2]
         )
       ).to.emit(treasury, "TransactionExecuted");
@@ -514,6 +577,7 @@ describe("ChainBudget System Suite", function () {
           amountWei,
           description,
           supplier.address,
+          deadline,
           [sig1, sig2]
         )
       ).to.be.revertedWith("Treasury: Transaction already executed");
@@ -524,6 +588,8 @@ describe("ChainBudget System Suite", function () {
       const amountStr = "25000";
       const amountWei = ethers.parseEther("0.5");
       const description = "Equipment purchase";
+      const block = await ethers.provider.getBlock("latest");
+      const deadline = block.timestamp + 3600;
 
       const value = {
         action: "APPROVED",
@@ -532,6 +598,7 @@ describe("ChainBudget System Suite", function () {
         description,
         to: supplier.address,
         amountWei,
+        deadline,
       };
 
       const sig1 = await approver1.signTypedData(domain, types, value);
@@ -544,9 +611,45 @@ describe("ChainBudget System Suite", function () {
           amountWei,
           description,
           supplier.address,
+          deadline,
           [sig1, sig1]
         )
       ).to.be.revertedWith("Treasury: Not enough valid unique signatures from approvers");
+    });
+
+    it("Should reject expired EIP-712 signatures (SC-05)", async function () {
+      const txId = "66c000000000000000000997";
+      const amountStr = "25000";
+      const amountWei = ethers.parseEther("0.5");
+      const description = "Expired transfer";
+      const block = await ethers.provider.getBlock("latest");
+      const deadline = block.timestamp - 10;
+
+      const value = {
+        action: "APPROVED",
+        txId,
+        amount: amountStr,
+        description,
+        to: supplier.address,
+        amountWei,
+        deadline,
+      };
+
+      const sig1 = await approver1.signTypedData(domain, types, value);
+      const sig2 = await approver2.signTypedData(domain, types, value);
+
+      await expect(
+        treasury.executeWithSignatures(
+          "APPROVED",
+          txId,
+          amountStr,
+          amountWei,
+          description,
+          supplier.address,
+          deadline,
+          [sig1, sig2]
+        )
+      ).to.be.revertedWith("Treasury: signature expired");
     });
   });
 });

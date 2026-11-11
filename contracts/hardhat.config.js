@@ -7,27 +7,40 @@ dotenv.config();
 
 const require = createRequire(import.meta.url);
 
-// Use local bundled solc from node_modules/solc when available (enables offline builds & tests)
+// Use local bundled solc from node_modules/solc when it matches the configured version (enables offline builds & tests)
 subtask(TASK_COMPILE_SOLIDITY_GET_SOLC_BUILD, async (args, _hre, runSuper) => {
   try {
     const compilerPath = require.resolve("solc/soljson.js");
     const solc = require("solc");
     const longVersion = typeof solc.version === "function" ? solc.version() : args.solcVersion;
-    return {
-      compilerPath,
-      isSolcJs: true,
-      version: args.solcVersion,
-      longVersion,
-    };
+    const shortVersion = longVersion.split("+")[0];
+    if (shortVersion === args.solcVersion) {
+      return {
+        compilerPath,
+        isSolcJs: true,
+        version: shortVersion,
+        longVersion,
+      };
+    }
   } catch {
-    return runSuper();
+    // Fall back to Hardhat's default compiler downloader when bundled solc is unavailable
   }
+  return runSuper();
 });
+
+const normalizePrivateKey = (raw) => {
+  if (!raw) return null;
+  const cleaned = raw.trim().replace(/^["']|["']$/g, "");
+  const prefixed = cleaned.startsWith("0x") ? cleaned : `0x${cleaned}`;
+  return /^0x[0-9a-fA-F]{64}$/.test(prefixed) ? prefixed : null;
+};
+
+const amoyPrivateKey = normalizePrivateKey(process.env.PRIVATE_KEY);
 
 /** @type import('hardhat/config').HardhatUserConfig */
 export default {
   solidity: {
-    version: "0.8.24",
+    version: "0.8.26",
     settings: {
       evmVersion: "cancun",
       optimizer: {
@@ -42,29 +55,17 @@ export default {
     },
     amoy: {
       url: process.env.AMOY_RPC_URL || "https://rpc-amoy.polygon.technology/",
-      accounts:
-        process.env.PRIVATE_KEY &&
-        process.env.PRIVATE_KEY.startsWith("0x") &&
-        process.env.PRIVATE_KEY.length === 66
-          ? [process.env.PRIVATE_KEY]
-          : [],
+      accounts: amoyPrivateKey ? [amoyPrivateKey] : [],
       chainId: 80002,
     },
   },
   etherscan: {
-    apiKey: {
-      polygonAmoy: process.env.POLYGONSCAN_API_KEY || "",
-    },
-    customChains: [
-      {
-        network: "polygonAmoy",
-        chainId: 80002,
-        urls: {
-          apiURL: "https://api-amoy.polygonscan.com/api",
-          browserURL: "https://amoy.polygonscan.com",
-        },
-      },
-    ],
+    // Single Etherscan API V2 key works across all supported chains (including Polygon Amoy 80002).
+    apiKey: (
+      process.env.ETHERSCAN_API_KEY ||
+      process.env.POLYGONSCAN_API_KEY ||
+      ""
+    ).trim(),
   },
   paths: {
     sources: "./contracts",

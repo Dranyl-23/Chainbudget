@@ -17,9 +17,9 @@ export const TARGET_CHAIN_ID_HEX =
 export const EXPLORER_BASE_URL =
   process.env.NEXT_PUBLIC_EXPLORER_URL || "https://amoy.polygonscan.com";
 
-/** Master ChainBudget Smart Contract Address */
+/** Master ChainBudget Smart Contract Address (configured via NEXT_PUBLIC_CONTRACT_ADDRESS) */
 export const MASTER_CONTRACT_ADDRESS =
-  process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "0xf1f8F195963586E01Abb7516ACBe9572D7514C41";
+  process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
 
 /**
  * Generates an explorer link for any smart contract or wallet address
@@ -29,7 +29,7 @@ export function getExplorerAddressUrl(address?: string | null): string {
     address && address !== "0x0000000000000000000000000000000000000000"
       ? address
       : MASTER_CONTRACT_ADDRESS;
-  return `${EXPLORER_BASE_URL}/address/${cleanAddr}`;
+  return cleanAddr ? `${EXPLORER_BASE_URL}/address/${cleanAddr}` : EXPLORER_BASE_URL;
 }
 
 /**

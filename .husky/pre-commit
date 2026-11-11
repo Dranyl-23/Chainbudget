@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env sh
+#!/usr/bin/env sh
 # .husky/pre-commit
 #
 # Runs gitleaks against staged files before every commit.
